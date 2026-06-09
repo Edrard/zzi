@@ -2,11 +2,127 @@
 
 namespace App\Filament\Pages;
 
+use App\Models\Setting;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
+use Filament\Forms\Concerns\InteractsWithForms;
+use Filament\Forms\Contracts\HasForms;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
+use Illuminate\Support\Str;
 
-class Settings extends Page
+class Settings extends Page implements HasForms
 {
-    protected static string|\UnitEnum|null $navigationGroup = 'Administration';
+    use InteractsWithForms;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-cog-6-tooth';
 
     protected string $view = 'filament.pages.settings';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Administration';
+
+    protected static ?string $navigationLabel = 'Settings';
+
+    protected static ?string $title = 'Settings';
+
+    public ?array $data = [];
+
+    public static function canAccess(): bool
+    {
+        return in_array(auth()->user()->role, ['admin', 'operator'], true);
+    }
+
+    public function mount(): void
+    {
+        $settings = Setting::query()->orderBy('key')->get();
+        $initialData = [];
+
+        foreach ($settings as $setting) {
+            if ($setting->type === 'boolean') {
+                $initialData[$setting->key] = $setting->value === 'true';
+            } else {
+                $initialData[$setting->key] = $setting->value;
+            }
+        }
+
+        $this->form->fill($initialData);
+    }
+
+    public function form(Schema $schema): Schema
+    {
+        $settings = Setting::query()->orderBy('key')->get();
+        $components = [];
+
+        foreach ($settings as $setting) {
+            $label = Str::title(str_replace('_', ' ', $setting->key));
+
+            if ($setting->type === 'boolean') {
+                $components[] = Toggle::make($setting->key)
+                    ->label($label)
+                    ->helperText($setting->description)
+                    ->required();
+            } elseif ($setting->type === 'integer') {
+                $min = 0;
+                if ($setting->key === 'cleanup_batch_size') {
+                    $min = 1;
+                }
+
+                $components[] = TextInput::make($setting->key)
+                    ->label($label)
+                    ->helperText($setting->description)
+                    ->numeric()
+                    ->integer()
+                    ->minValue($min)
+                    ->required();
+            } elseif ($setting->type === 'json') {
+                $components[] = Textarea::make($setting->key)
+                    ->label($label)
+                    ->helperText($setting->description)
+                    ->rule('json')
+                    ->required();
+            } else {
+                $components[] = TextInput::make($setting->key)
+                    ->label($label)
+                    ->helperText($setting->description)
+                    ->required();
+            }
+        }
+
+        return $schema
+            ->components([
+                Section::make('System settings')
+                    ->description('Configure application behavior and retention limits.')
+                    ->schema($components)
+                    ->columns(1),
+            ])
+            ->statePath('data');
+    }
+
+    public function save(): void
+    {
+        $data = $this->form->getState();
+        $settings = Setting::query()->orderBy('key')->get();
+
+        foreach ($settings as $setting) {
+            if (array_key_exists($setting->key, $data)) {
+                $newValue = $data[$setting->key];
+
+                if ($setting->type === 'boolean') {
+                    $newValue = $newValue ? 'true' : 'false';
+                } else {
+                    $newValue = (string) $newValue;
+                }
+
+                $setting->update(['value' => $newValue]);
+            }
+        }
+
+        Notification::make()
+            ->title('Settings saved successfully.')
+            ->success()
+            ->send();
+    }
 }
