@@ -2,7 +2,7 @@
 
 namespace App\Filament\Resources\DailyStatistics\Schemas;
 
-use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
 
 class DailyStatisticInfolist
@@ -11,17 +11,17 @@ class DailyStatisticInfolist
     {
         return $schema
             ->components([
-                TextInput::make('date')->disabled(),
-                TextInput::make('zabbix_problems_seen')->disabled(),
-                TextInput::make('tickets_created')->disabled(),
-                TextInput::make('tickets_reopened')->disabled(),
-                TextInput::make('tickets_auto_closed')->disabled(),
-                TextInput::make('tickets_manual_created')->disabled(),
-                TextInput::make('pattern_matched')->disabled(),
-                TextInput::make('pattern_unmatched')->disabled(),
-                TextInput::make('failed_actions')->disabled(),
-                TextInput::make('created_at')->disabled(),
-                TextInput::make('updated_at')->disabled(),
+                TextEntry::make('date')->date(),
+                TextEntry::make('zabbix_problems_seen')->numeric(),
+                TextEntry::make('tickets_created')->numeric(),
+                TextEntry::make('tickets_reopened')->numeric(),
+                TextEntry::make('tickets_auto_closed')->numeric(),
+                TextEntry::make('tickets_manual_created')->numeric(),
+                TextEntry::make('pattern_matched')->numeric(),
+                TextEntry::make('pattern_unmatched')->numeric(),
+                TextEntry::make('failed_actions')->numeric(),
+                TextEntry::make('created_at')->dateTime(),
+                TextEntry::make('updated_at')->dateTime(),
             ]);
     }
 }

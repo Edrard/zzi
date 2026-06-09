@@ -3,6 +3,8 @@
 namespace App\Filament\Pages;
 
 use App\Models\Setting;
+use App\Services\AuditLogger;
+use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -10,6 +12,7 @@ use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Str;
@@ -33,6 +36,15 @@ class Settings extends Page implements HasForms
     public static function canAccess(): bool
     {
         return in_array(auth()->user()->role, ['admin', 'operator'], true);
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('save')
+                ->label('Save settings')
+                ->action('save'),
+        ];
     }
 
     public function mount(): void
@@ -97,6 +109,12 @@ class Settings extends Page implements HasForms
                     ->description('Configure application behavior and retention limits.')
                     ->schema($components)
                     ->columns(1),
+
+                Actions::make([
+                    Action::make('saveBottom')
+                        ->label('Save settings')
+                        ->action('save'),
+                ])->alignEnd(),
             ])
             ->statePath('data');
     }
@@ -105,6 +123,7 @@ class Settings extends Page implements HasForms
     {
         $data = $this->form->getState();
         $settings = Setting::query()->orderBy('key')->get();
+        $changedSettings = [];
 
         foreach ($settings as $setting) {
             if (array_key_exists($setting->key, $data)) {
@@ -116,8 +135,24 @@ class Settings extends Page implements HasForms
                     $newValue = (string) $newValue;
                 }
 
-                $setting->update(['value' => $newValue]);
+                if ($setting->value !== $newValue) {
+                    $changedSettings[] = [
+                        'key' => $setting->key,
+                        'old_value' => $setting->value,
+                        'new_value' => $newValue,
+                    ];
+                    $setting->update(['value' => $newValue]);
+                }
             }
+        }
+
+        if (! empty($changedSettings)) {
+            AuditLogger::log(
+                action: 'settings.updated',
+                entityType: 'settings',
+                entityId: null,
+                context: ['changes' => $changedSettings]
+            );
         }
 
         Notification::make()
