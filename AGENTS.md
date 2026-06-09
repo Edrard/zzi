@@ -53,6 +53,19 @@ Before running migrations, explain what tables or columns will be created or cha
 
 After making code changes, report the changed files and suggest verification commands using `php84`.
 
+## Filament Rules
+
+- This project uses Filament v4.
+- Always use Filament v4 APIs and namespaces.
+- Do not use Filament v3 examples, namespaces, or Blade components.
+- Custom Filament page `form()` methods must use `Filament\Schemas\Schema`, not `Filament\Forms\Form`.
+- Use `Filament\Schemas\Components\Section` for schema sections, not `Filament\Forms\Components\Section`.
+- Do not use the Blade component `<x-filament-panels::form>`; it does not exist in this project.
+- For custom Filament page forms, use a normal HTML form with `wire:submit` and render `{{ $this->form }}` inside it.
+- Example custom page form structure: `<x-filament-panels::page>` containing `<form wire:submit="save">`, then `{{ $this->form }}`, then the submit button.
+- Before creating or modifying Filament resources/pages, inspect existing generated Filament v4 files in this project and follow their structure.
+- When unsure about a Filament class namespace, verify it in `vendor/filament/` before using it.
+
 === end project-specific server rules ===
 
 === foundation rules ===
