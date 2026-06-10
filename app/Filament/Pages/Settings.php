@@ -13,7 +13,8 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Actions;
-use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Str;
 
@@ -66,13 +67,21 @@ class Settings extends Page implements HasForms
     public function form(Schema $schema): Schema
     {
         $settings = Setting::query()->orderBy('key')->get();
-        $components = [];
+
+        $groups = [
+            'General' => [],
+            'Retention' => [],
+            'Zabbix' => [],
+            'Automation' => [],
+            'Other' => [],
+        ];
 
         foreach ($settings as $setting) {
             $label = Str::title(str_replace('_', ' ', $setting->key));
+            $component = null;
 
             if ($setting->type === 'boolean') {
-                $components[] = Toggle::make($setting->key)
+                $component = Toggle::make($setting->key)
                     ->label($label)
                     ->helperText($setting->description)
                     ->required();
@@ -82,7 +91,7 @@ class Settings extends Page implements HasForms
                     $min = 1;
                 }
 
-                $components[] = TextInput::make($setting->key)
+                $component = TextInput::make($setting->key)
                     ->label($label)
                     ->helperText($setting->description)
                     ->numeric()
@@ -90,7 +99,7 @@ class Settings extends Page implements HasForms
                     ->minValue($min)
                     ->required();
             } elseif ($setting->type === 'json') {
-                $components[] = Textarea::make($setting->key)
+                $component = Textarea::make($setting->key)
                     ->label($label)
                     ->helperText($setting->description)
                     ->rule('json')
@@ -105,15 +114,34 @@ class Settings extends Page implements HasForms
                     $input->password()->revealable();
                 }
 
-                $components[] = $input;
+                $component = $input;
+            }
+
+            if (in_array($setting->key, ['cleanup_enabled', 'cleanup_batch_size'])) {
+                $groups['General'][] = $component;
+            } elseif (in_array($setting->key, ['retention_action_logs_days', 'retention_closed_tickets_days', 'retention_failed_jobs_days', 'retention_resolved_days', 'retention_statistics_days'])) {
+                $groups['Retention'][] = $component;
+            } elseif (in_array($setting->key, ['zabbix_api_url', 'zabbix_api_token', 'zabbix_api_timeout', 'zabbix_api_verify_ssl', 'zabbix_poll_interval_minutes', 'zabbix_problem_cache_ttl_minutes', 'zabbix_problem_limit', 'zabbix_exclude_suppressed_problems'])) {
+                $groups['Zabbix'][] = $component;
+            } elseif (in_array($setting->key, ['default_close_delay_hours', 'default_reopen_window_hours'])) {
+                $groups['Automation'][] = $component;
+            } else {
+                $groups['Other'][] = $component;
+            }
+        }
+
+        $tabs = [];
+        foreach ($groups as $groupName => $components) {
+            if (! empty($components)) {
+                $tabs[] = Tab::make($groupName)
+                    ->schema($components)
+                    ->columns(1);
             }
         }
 
         $formComponents = [
-            Section::make('System settings')
-                ->description('Configure application behavior and retention limits.')
-                ->schema($components)
-                ->columns(1),
+            Tabs::make('SettingsTabs')
+                ->tabs($tabs),
             Actions::make([
                 Action::make('saveBottom')
                     ->label('Save settings')

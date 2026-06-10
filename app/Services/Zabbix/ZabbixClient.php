@@ -110,6 +110,8 @@ class ZabbixClient
      */
     public function getProblems(array $params = []): array
     {
+        $excludeSuppressed = SettingsService::bool('zabbix_exclude_suppressed_problems', true);
+
         $defaultParams = [
             'recent' => true,
             'output' => 'extend',
@@ -119,6 +121,10 @@ class ZabbixClient
             'sortfield' => 'eventid',
             'sortorder' => 'DESC',
         ];
+
+        if ($excludeSuppressed) {
+            $defaultParams['suppressed'] = false;
+        }
 
         $result = $this->request('problem.get', array_merge($defaultParams, $params));
 

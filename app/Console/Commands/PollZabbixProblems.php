@@ -60,6 +60,10 @@ class PollZabbixProblems extends Command
 
             $this->info("Successfully fetched and cached {$problemCount} problems.");
 
+            if ($problemCount === $limit) {
+                $this->warn('Fetched problem count equals configured limit. There may be more non-suppressed problems in Zabbix.');
+            }
+
             if ($lastPoll && isset($lastPoll['status']) && $lastPoll['status'] === 'failed') {
                 AuditLogger::log(
                     action: 'zabbix.problems_poll_recovered',
