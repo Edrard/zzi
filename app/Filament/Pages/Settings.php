@@ -35,15 +35,11 @@ class Settings extends Page implements HasForms
 
     public static function canAccess(): bool
     {
-        return in_array(auth()->user()->role, ['admin', 'operator', 'viewer'], true);
+        return auth()->user()->role === 'admin';
     }
 
     protected function getHeaderActions(): array
     {
-        if (auth()->user()->role === 'viewer') {
-            return [];
-        }
-
         return [
             Action::make('save')
                 ->label('Save settings')
@@ -71,7 +67,6 @@ class Settings extends Page implements HasForms
     {
         $settings = Setting::query()->orderBy('key')->get();
         $components = [];
-        $isViewer = auth()->user()->role === 'viewer';
 
         foreach ($settings as $setting) {
             $label = Str::title(str_replace('_', ' ', $setting->key));
@@ -80,7 +75,6 @@ class Settings extends Page implements HasForms
                 $components[] = Toggle::make($setting->key)
                     ->label($label)
                     ->helperText($setting->description)
-                    ->disabled($isViewer)
                     ->required();
             } elseif ($setting->type === 'integer') {
                 $min = 0;
@@ -94,21 +88,24 @@ class Settings extends Page implements HasForms
                     ->numeric()
                     ->integer()
                     ->minValue($min)
-                    ->disabled($isViewer)
                     ->required();
             } elseif ($setting->type === 'json') {
                 $components[] = Textarea::make($setting->key)
                     ->label($label)
                     ->helperText($setting->description)
                     ->rule('json')
-                    ->disabled($isViewer)
                     ->required();
             } else {
-                $components[] = TextInput::make($setting->key)
+                $input = TextInput::make($setting->key)
                     ->label($label)
                     ->helperText($setting->description)
-                    ->disabled($isViewer)
                     ->required();
+
+                if ($setting->key === 'zabbix_api_token') {
+                    $input->password()->revealable();
+                }
+
+                $components[] = $input;
             }
         }
 
@@ -117,15 +114,12 @@ class Settings extends Page implements HasForms
                 ->description('Configure application behavior and retention limits.')
                 ->schema($components)
                 ->columns(1),
-        ];
-
-        if (! $isViewer) {
-            $formComponents[] = Actions::make([
+            Actions::make([
                 Action::make('saveBottom')
                     ->label('Save settings')
                     ->action('save'),
-            ])->alignEnd();
-        }
+            ])->alignEnd(),
+        ];
 
         return $schema
             ->components($formComponents)
@@ -134,8 +128,8 @@ class Settings extends Page implements HasForms
 
     public function save(): void
     {
-        if (auth()->user()->role === 'viewer') {
-            abort(403, 'Viewers cannot modify settings.');
+        if (auth()->user()->role !== 'admin') {
+            abort(403, 'Only admins can modify settings.');
         }
 
         $data = $this->form->getState();
@@ -164,11 +158,30 @@ class Settings extends Page implements HasForms
         }
 
         if (! empty($changedSettings)) {
+            $sensitiveKeywords = ['token', 'password', 'secret', 'api_key'];
+
+            $sanitizedChanges = array_map(function ($change) use ($sensitiveKeywords) {
+                $isSensitive = false;
+                foreach ($sensitiveKeywords as $keyword) {
+                    if (str_contains(strtolower($change['key']), $keyword)) {
+                        $isSensitive = true;
+                        break;
+                    }
+                }
+
+                if ($isSensitive) {
+                    $change['old_value'] = '[redacted]';
+                    $change['new_value'] = '[redacted]';
+                }
+
+                return $change;
+            }, $changedSettings);
+
             AuditLogger::log(
                 action: 'settings.updated',
                 entityType: 'settings',
                 entityId: null,
-                context: ['changes' => $changedSettings]
+                context: ['changes' => $sanitizedChanges]
             );
         }
 
