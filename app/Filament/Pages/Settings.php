@@ -35,11 +35,15 @@ class Settings extends Page implements HasForms
 
     public static function canAccess(): bool
     {
-        return in_array(auth()->user()->role, ['admin', 'operator'], true);
+        return in_array(auth()->user()->role, ['admin', 'operator', 'viewer'], true);
     }
 
     protected function getHeaderActions(): array
     {
+        if (auth()->user()->role === 'viewer') {
+            return [];
+        }
+
         return [
             Action::make('save')
                 ->label('Save settings')
@@ -67,6 +71,7 @@ class Settings extends Page implements HasForms
     {
         $settings = Setting::query()->orderBy('key')->get();
         $components = [];
+        $isViewer = auth()->user()->role === 'viewer';
 
         foreach ($settings as $setting) {
             $label = Str::title(str_replace('_', ' ', $setting->key));
@@ -75,6 +80,7 @@ class Settings extends Page implements HasForms
                 $components[] = Toggle::make($setting->key)
                     ->label($label)
                     ->helperText($setting->description)
+                    ->disabled($isViewer)
                     ->required();
             } elseif ($setting->type === 'integer') {
                 $min = 0;
@@ -88,39 +94,50 @@ class Settings extends Page implements HasForms
                     ->numeric()
                     ->integer()
                     ->minValue($min)
+                    ->disabled($isViewer)
                     ->required();
             } elseif ($setting->type === 'json') {
                 $components[] = Textarea::make($setting->key)
                     ->label($label)
                     ->helperText($setting->description)
                     ->rule('json')
+                    ->disabled($isViewer)
                     ->required();
             } else {
                 $components[] = TextInput::make($setting->key)
                     ->label($label)
                     ->helperText($setting->description)
+                    ->disabled($isViewer)
                     ->required();
             }
         }
 
-        return $schema
-            ->components([
-                Section::make('System settings')
-                    ->description('Configure application behavior and retention limits.')
-                    ->schema($components)
-                    ->columns(1),
+        $formComponents = [
+            Section::make('System settings')
+                ->description('Configure application behavior and retention limits.')
+                ->schema($components)
+                ->columns(1),
+        ];
 
-                Actions::make([
-                    Action::make('saveBottom')
-                        ->label('Save settings')
-                        ->action('save'),
-                ])->alignEnd(),
-            ])
+        if (! $isViewer) {
+            $formComponents[] = Actions::make([
+                Action::make('saveBottom')
+                    ->label('Save settings')
+                    ->action('save'),
+            ])->alignEnd();
+        }
+
+        return $schema
+            ->components($formComponents)
             ->statePath('data');
     }
 
     public function save(): void
     {
+        if (auth()->user()->role === 'viewer') {
+            abort(403, 'Viewers cannot modify settings.');
+        }
+
         $data = $this->form->getState();
         $settings = Setting::query()->orderBy('key')->get();
         $changedSettings = [];
