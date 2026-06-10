@@ -6,6 +6,7 @@ use App\Services\AuditLogger;
 use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixClient;
 use App\Services\Zabbix\ZabbixProblemCache;
+use App\Services\Zabbix\ZabbixProblemFilterMatcher;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Console\Command;
@@ -52,24 +53,85 @@ class PollZabbixProblems extends Command
         $this->info('Polling Zabbix problems...');
 
         try {
-            $problems = $client->getProblems(['limit' => $limit]);
-            $problemCount = count($problems);
+            $rawProblems = $client->getProblems(['limit' => $limit]);
+            $fetchedCount = count($rawProblems);
 
-            $cache->putMany($problems, $ttlSeconds);
-            $cache->markLastPollSuccess($problemCount, $ttlSeconds, $limit);
+            $eventIds = array_column($rawProblems, 'eventid');
+            $hostMap = $client->getEventHosts($eventIds);
 
-            $this->info("Successfully fetched and cached {$problemCount} problems.");
+            $matcher = ZabbixProblemFilterMatcher::load();
 
-            if ($problemCount === $limit) {
+            $cachedCount = 0;
+            $excludedCount = 0;
+            $normalizedProblems = [];
+
+            $labels = [
+                0 => 'Not classified',
+                1 => 'Information',
+                2 => 'Warning',
+                3 => 'Average',
+                4 => 'High',
+                5 => 'Disaster',
+            ];
+
+            foreach ($rawProblems as $problem) {
+                $eventId = $problem['eventid'];
+                $severity = (int) ($problem['severity'] ?? 0);
+
+                $eventHosts = $hostMap[$eventId] ?? [];
+                $hostNames = [];
+                foreach ($eventHosts as $h) {
+                    $hostNames[] = $h['name'] ?? $h['host'] ?? $h['hostid'] ?? 'Unknown host';
+                }
+
+                $hostNameStr = empty($hostNames) ? 'Unknown host' : implode(', ', $hostNames);
+                $clock = $problem['clock'] ?? null;
+                $startedAt = $clock ? Carbon::createFromTimestamp($clock)->toIso8601String() : null;
+                $ageSeconds = $clock ? max(0, time() - $clock) : 0;
+
+                $normalized = [
+                    'eventid' => $eventId,
+                    'objectid' => $problem['objectid'] ?? $problem['triggerid'] ?? null,
+                    'name' => $problem['name'] ?? null,
+                    'severity' => $severity,
+                    'severity_label' => $labels[$severity] ?? 'Unknown',
+                    'clock' => $clock,
+                    'started_at' => $startedAt,
+                    'age_seconds' => $ageSeconds,
+                    'acknowledged' => $problem['acknowledged'] ?? null,
+                    'tags' => $problem['tags'] ?? [],
+                    'hosts' => $eventHosts,
+                    'host_name' => $hostNameStr,
+                    'cached_at' => now()->toIso8601String(),
+                ];
+
+                if ($matcher->exclude($normalized)) {
+                    $excludedCount++;
+
+                    continue;
+                }
+
+                $normalizedProblems[] = $normalized;
+                $cachedCount++;
+            }
+
+            $cache->putMany($normalizedProblems, $ttlSeconds);
+            $cache->markLastPollSuccess($cachedCount, $ttlSeconds, $limit, $fetchedCount, $excludedCount);
+
+            $this->info("Fetched {$fetchedCount} problems from Zabbix.");
+            $this->info("Excluded {$excludedCount} problems by filters.");
+            $this->info("Successfully cached {$cachedCount} problems.");
+
+            if ($fetchedCount === $limit) {
                 $this->warn('Fetched problem count equals configured limit. There may be more non-suppressed problems in Zabbix.');
             }
 
             if ($lastPoll && isset($lastPoll['status']) && $lastPoll['status'] === 'failed') {
                 AuditLogger::log(
-                    action: 'zabbix.problems_poll_recovered',
-                    entityType: 'system',
-                    entityId: null,
-                    context: ['problem_count' => $problemCount]
+                    'zabbix.problems_poll_recovered',
+                    'system',
+                    null,
+                    ['cached_count' => $cachedCount, 'fetched_count' => $fetchedCount]
                 );
                 $this->info('Logged poll recovery to audit.');
             }
@@ -92,10 +154,10 @@ class PollZabbixProblems extends Command
 
             if (! $wasPreviouslyFailed) {
                 AuditLogger::log(
-                    action: 'zabbix.problems_poll_failed',
-                    entityType: 'system',
-                    entityId: null,
-                    context: ['error' => $errorMessage]
+                    'zabbix.problems_poll_failed',
+                    'system',
+                    null,
+                    ['error' => $errorMessage]
                 );
             }
 

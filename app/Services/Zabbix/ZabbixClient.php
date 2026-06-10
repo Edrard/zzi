@@ -130,4 +130,37 @@ class ZabbixClient
 
         return is_array($result) ? $result : [];
     }
+
+    /**
+     * @param  array<int, string|int>  $eventIds
+     * @return array<string, array<int, mixed>>
+     *
+     * @throws Exception
+     */
+    public function getEventHosts(array $eventIds): array
+    {
+        if (empty($eventIds)) {
+            return [];
+        }
+
+        $result = $this->request('event.get', [
+            'eventids' => array_values(array_unique($eventIds)),
+            'selectHosts' => ['hostid', 'host', 'name'],
+            'output' => ['eventid'],
+        ]);
+
+        if (! is_array($result)) {
+            return [];
+        }
+
+        $map = [];
+        foreach ($result as $event) {
+            if (isset($event['eventid'])) {
+                $eventId = (string) $event['eventid'];
+                $map[$eventId] = isset($event['hosts']) && is_array($event['hosts']) ? $event['hosts'] : [];
+            }
+        }
+
+        return $map;
+    }
 }

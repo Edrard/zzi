@@ -21,29 +21,14 @@ class ZabbixProblemCache
         }
 
         $eventIds = [];
-        $now = now()->toIso8601String();
 
-        Redis::pipeline(function ($pipe) use ($problems, $ttl, &$eventIds, $now) {
+        Redis::pipeline(function ($pipe) use ($problems, $ttl, &$eventIds) {
             foreach ($problems as $problem) {
                 $eventId = $problem['eventid'];
                 $eventIds[] = $eventId;
 
-                $normalized = [
-                    'eventid' => $eventId,
-                    'name' => $problem['name'] ?? null,
-                    'severity' => $problem['severity'] ?? null,
-                    'clock' => $problem['clock'] ?? null,
-                    'acknowledged' => $problem['acknowledged'] ?? null,
-                    'objectid' => $problem['objectid'] ?? null,
-                    'r_eventid' => $problem['r_eventid'] ?? null,
-                    'tags' => $problem['tags'] ?? [],
-                    'acknowledges' => $problem['acknowledges'] ?? [],
-                    'cached_at' => $now,
-                    'raw' => $problem,
-                ];
-
                 $key = "zabbix:problem:{$eventId}";
-                $pipe->setex($key, $ttl, json_encode($normalized, JSON_THROW_ON_ERROR));
+                $pipe->setex($key, $ttl, json_encode($problem, JSON_THROW_ON_ERROR));
             }
         });
 
@@ -144,11 +129,13 @@ class ZabbixProblemCache
      *
      * @param  int  $ttl  Seconds
      */
-    public function markLastPollSuccess(int $problemCount, int $ttl, ?int $limit = null): void
+    public function markLastPollSuccess(int $problemCount, int $ttl, ?int $limit = null, int $fetchedCount = 0, int $excludedCount = 0): void
     {
         $payload = [
             'status' => 'success',
-            'problem_count' => $problemCount,
+            'cached_count' => $problemCount,
+            'fetched_count' => $fetchedCount,
+            'excluded_count' => $excludedCount,
             'polled_at' => now()->toIso8601String(),
             'ttl_minutes' => (int) round($ttl / 60),
             'ttl_seconds' => $ttl,
