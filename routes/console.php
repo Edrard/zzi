@@ -13,6 +13,6 @@ Artisan::command('inspire', function () {
  * * * * * cd /var/www/work.vamark.com/http && php84 artisan schedule:run >> /dev/null 2>&1
  */
 
-Schedule::command('app:poll-problems')->everyMinute();
+Schedule::command('app:poll-zabbix-problems')->everyMinute();
 Schedule::command('app:cleanup')->dailyAt('02:30');
 Schedule::command('app:collect-daily-statistics')->dailyAt('23:55');
