@@ -13,6 +13,7 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Actions;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
@@ -54,6 +55,12 @@ class Settings extends Page implements HasForms
         $initialData = [];
 
         foreach ($settings as $setting) {
+            if (in_array($setting->key, ['zabbix_api_token', 'znuny_password'])) {
+                $initialData[$setting->key] = '';
+
+                continue;
+            }
+
             if ($setting->type === 'boolean') {
                 $initialData[$setting->key] = $setting->value === 'true';
             } else {
@@ -72,6 +79,7 @@ class Settings extends Page implements HasForms
             'General' => [],
             'Retention' => [],
             'Zabbix' => [],
+            'Znuny' => [],
             'Automation' => [],
             'Other' => [],
         ];
@@ -110,8 +118,11 @@ class Settings extends Page implements HasForms
                     ->helperText($setting->description)
                     ->required();
 
-                if ($setting->key === 'zabbix_api_token') {
-                    $input->password()->revealable();
+                if (in_array($setting->key, ['zabbix_api_token', 'znuny_password'])) {
+                    $input->password()
+                        ->revealable()
+                        ->placeholder('Leave empty to keep current password')
+                        ->required(false);
                 }
 
                 $component = $input;
@@ -123,10 +134,45 @@ class Settings extends Page implements HasForms
                 $groups['Retention'][] = $component;
             } elseif (in_array($setting->key, ['zabbix_api_url', 'zabbix_api_token', 'zabbix_api_timeout', 'zabbix_api_verify_ssl', 'zabbix_poll_interval_minutes', 'zabbix_problem_cache_ttl_minutes', 'zabbix_problem_limit', 'zabbix_exclude_suppressed_problems'])) {
                 $groups['Zabbix'][] = $component;
+            } elseif (str_starts_with($setting->key, 'znuny_')) {
+                $groups['Znuny'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['default_close_delay_hours', 'default_reopen_window_hours'])) {
                 $groups['Automation'][] = $component;
             } else {
                 $groups['Other'][] = $component;
+            }
+        }
+
+        if (! empty($groups['Znuny'])) {
+            $z = $groups['Znuny'];
+
+            $groups['Znuny'] = [
+                Section::make('Credentials')
+                    ->schema(array_filter([
+                        $z['znuny_username'] ?? null,
+                        $z['znuny_password'] ?? null,
+                    ]))->columns(1),
+
+                Section::make('Endpoints')
+                    ->schema(array_filter([
+                        $z['znuny_api_url'] ?? null,
+                        $z['znuny_web_url'] ?? null,
+                        $z['znuny_ticket_url_template'] ?? null,
+                    ]))->columns(1),
+
+                Section::make('Connection')
+                    ->schema(array_filter([
+                        $z['znuny_api_verify_ssl'] ?? null,
+                        $z['znuny_api_timeout'] ?? null,
+                    ]))->columns(1),
+            ];
+
+            $knownKeys = ['znuny_username', 'znuny_password', 'znuny_api_url', 'znuny_web_url', 'znuny_ticket_url_template', 'znuny_api_verify_ssl', 'znuny_api_timeout'];
+            $unknownComponents = array_diff_key($z, array_flip($knownKeys));
+
+            if (! empty($unknownComponents)) {
+                $groups['Znuny'][] = Section::make('Other')
+                    ->schema(array_values($unknownComponents))->columns(1);
             }
         }
 
@@ -174,6 +220,11 @@ class Settings extends Page implements HasForms
                     $newValue = (string) $newValue;
                 }
 
+                // Skip updating if a password field is submitted as empty
+                if ($newValue === '' && in_array($setting->key, ['zabbix_api_token', 'znuny_password'])) {
+                    continue;
+                }
+
                 if ($setting->value !== $newValue) {
                     $changedSettings[] = [
                         'key' => $setting->key,
@@ -186,7 +237,7 @@ class Settings extends Page implements HasForms
         }
 
         if (! empty($changedSettings)) {
-            $sensitiveKeywords = ['token', 'password', 'secret', 'api_key'];
+            $sensitiveKeywords = ['token', 'password', 'secret', 'api_key', 'session'];
 
             $sanitizedChanges = array_map(function ($change) use ($sensitiveKeywords) {
                 $isSensitive = false;
