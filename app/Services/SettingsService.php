@@ -3,9 +3,53 @@
 namespace App\Services;
 
 use App\Models\Setting;
+use Illuminate\Support\Facades\Crypt;
 
 class SettingsService
 {
+    private const SECRET_KEYS = [
+        'zabbix_api_token',
+        'znuny_password',
+    ];
+
+    public static function isSecretKey(string $key): bool
+    {
+        return in_array($key, self::SECRET_KEYS, true);
+    }
+
+    public static function isEncryptedValue(string $value): bool
+    {
+        return str_starts_with($value, 'enc:v1:');
+    }
+
+    public static function encryptForStorage(string $key, string $plaintext): string
+    {
+        if (! self::isSecretKey($key)) {
+            return $plaintext;
+        }
+
+        return 'enc:v1:'.Crypt::encryptString($plaintext);
+    }
+
+    public static function decryptStoredSecret(string $key, string $value): string
+    {
+        if (! self::isSecretKey($key)) {
+            return $value;
+        }
+
+        if (self::isEncryptedValue($value)) {
+            try {
+                $payload = substr($value, 7);
+
+                return Crypt::decryptString($payload);
+            } catch (\Exception $e) {
+                throw new \RuntimeException("Failed to decrypt sensitive setting for key: {$key}");
+            }
+        }
+
+        return $value;
+    }
+
     public static function get(string $key, mixed $default = null): mixed
     {
         $setting = Setting::where('key', $key)->first();
@@ -18,7 +62,7 @@ class SettingsService
             'boolean' => static::parseBool($setting->value, $default),
             'integer' => static::parseInt($setting->value, $default),
             'json' => static::parseJson($setting->value, $default),
-            default => $setting->value ?? $default,
+            default => static::decryptStoredSecret($setting->key, $setting->value ?? $default),
         };
     }
 
@@ -30,7 +74,7 @@ class SettingsService
             return $default;
         }
 
-        return (string) $setting->value;
+        return static::decryptStoredSecret($key, (string) $setting->value);
     }
 
     public static function int(string $key, ?int $default = null): ?int

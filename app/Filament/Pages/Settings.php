@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Models\Setting;
 use App\Services\AuditLogger;
+use App\Services\SettingsService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -220,18 +221,32 @@ class Settings extends Page implements HasForms
                     $newValue = (string) $newValue;
                 }
 
+                $isSecretKey = SettingsService::isSecretKey($setting->key);
+
                 // Skip updating if a password field is submitted as empty
-                if ($newValue === '' && in_array($setting->key, ['zabbix_api_token', 'znuny_password'])) {
+                if ($newValue === '' && $isSecretKey) {
                     continue;
                 }
 
-                if ($setting->value !== $newValue) {
+                $currentPlaintext = SettingsService::string($setting->key);
+
+                if ($currentPlaintext !== $newValue) {
+                    $oldValueToLog = $setting->value;
+                    $newValueToLog = $newValue;
+                    $valueToStore = $newValue;
+
+                    if ($isSecretKey) {
+                        $oldValueToLog = '[redacted]';
+                        $newValueToLog = '[redacted]';
+                        $valueToStore = SettingsService::encryptForStorage($setting->key, $newValue);
+                    }
+
                     $changedSettings[] = [
                         'key' => $setting->key,
-                        'old_value' => $setting->value,
-                        'new_value' => $newValue,
+                        'old_value' => $oldValueToLog,
+                        'new_value' => $newValueToLog,
                     ];
-                    $setting->update(['value' => $newValue]);
+                    $setting->update(['value' => $valueToStore]);
                 }
             }
         }
