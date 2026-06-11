@@ -132,6 +132,30 @@ class ZabbixClient
     }
 
     /**
+     * @param  array<string, mixed>  $params
+     * @return array<int, mixed>
+     *
+     * @throws Exception
+     */
+    public function getProblemsForPolling(array $params = []): array
+    {
+        $defaultParams = [
+            'recent' => true,
+            'output' => 'extend',
+            'selectAcknowledges' => 'extend',
+            'selectTags' => 'extend',
+            'selectSuppressionData' => 'extend', // useful if not already returned
+            'limit' => 20,
+            'sortfield' => 'eventid',
+            'sortorder' => 'DESC',
+        ];
+
+        $result = $this->request('problem.get', array_merge($defaultParams, $params));
+
+        return is_array($result) ? $result : [];
+    }
+
+    /**
      * @param  array<int, string|int>  $eventIds
      * @return array<string, array<int, mixed>>
      *
@@ -145,7 +169,7 @@ class ZabbixClient
 
         $result = $this->request('event.get', [
             'eventids' => array_values(array_unique($eventIds)),
-            'selectHosts' => ['hostid', 'host', 'name'],
+            'selectHosts' => ['hostid', 'host', 'name', 'status'],
             'output' => ['eventid'],
         ]);
 
@@ -158,6 +182,47 @@ class ZabbixClient
             if (isset($event['eventid'])) {
                 $eventId = (string) $event['eventid'];
                 $map[$eventId] = isset($event['hosts']) && is_array($event['hosts']) ? $event['hosts'] : [];
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param  array<int, string|int>  $triggerIds
+     * @return array<string, array<string, mixed>>
+     *
+     * @throws Exception
+     */
+    public function getTriggersForProblems(array $triggerIds): array
+    {
+        if (empty($triggerIds)) {
+            return [];
+        }
+
+        $result = $this->request('trigger.get', [
+            'triggerids' => array_values(array_unique($triggerIds)),
+            'output' => ['triggerid', 'description', 'status', 'priority'],
+            'selectItems' => ['itemid', 'name', 'key_', 'status'],
+            'selectDependencies' => ['triggerid', 'description', 'status'],
+        ]);
+
+        if (! is_array($result)) {
+            return [];
+        }
+
+        $map = [];
+        foreach ($result as $trigger) {
+            if (isset($trigger['triggerid'])) {
+                $triggerId = (string) $trigger['triggerid'];
+                $map[$triggerId] = [
+                    'triggerid' => $triggerId,
+                    'description' => $trigger['description'] ?? null,
+                    'status' => $trigger['status'] ?? null,
+                    'priority' => $trigger['priority'] ?? null,
+                    'items' => isset($trigger['items']) && is_array($trigger['items']) ? $trigger['items'] : [],
+                    'dependencies' => isset($trigger['dependencies']) && is_array($trigger['dependencies']) ? $trigger['dependencies'] : [],
+                ];
             }
         }
 

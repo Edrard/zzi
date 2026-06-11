@@ -129,16 +129,32 @@ class ZabbixProblemCache
      *
      * @param  int  $ttl  Seconds
      */
-    public function markLastPollSuccess(int $problemCount, int $ttl, ?int $limit = null, int $fetchedCount = 0, int $excludedCount = 0): void
-    {
+    public function markLastPollSuccess(
+        int $problemCount,
+        int $ttl,
+        ?int $limit = null,
+        int $fetchedCount = 0,
+        int $excludedCount = 0,
+        int $disabledHostsExcludedCount = 0,
+        int $disabledTriggersExcludedCount = 0,
+        int $disabledItemsExcludedCount = 0,
+        int $dependencyCoveredExcludedCount = 0,
+        int $suppressedExcludedCount = 0
+    ): void {
         $payload = [
             'status' => 'success',
             'cached_count' => $problemCount,
             'fetched_count' => $fetchedCount,
             'excluded_count' => $excludedCount,
+            'disabled_hosts_excluded_count' => $disabledHostsExcludedCount,
+            'disabled_triggers_excluded_count' => $disabledTriggersExcludedCount,
+            'disabled_items_excluded_count' => $disabledItemsExcludedCount,
+            'dependency_covered_excluded_count' => $dependencyCoveredExcludedCount,
+            'suppressed_excluded_count' => $suppressedExcludedCount,
             'polled_at' => now()->toIso8601String(),
             'ttl_minutes' => (int) round($ttl / 60),
             'ttl_seconds' => $ttl,
+            'limit' => $limit,
         ];
 
         if ($limit !== null) {

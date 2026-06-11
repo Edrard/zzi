@@ -53,16 +53,44 @@ class PollZabbixProblems extends Command
         $this->info('Polling Zabbix problems...');
 
         try {
-            $rawProblems = $client->getProblems(['limit' => $limit]);
+            $rawProblems = $client->getProblemsForPolling(['limit' => $limit]);
             $fetchedCount = count($rawProblems);
 
             $eventIds = array_column($rawProblems, 'eventid');
             $hostMap = $client->getEventHosts($eventIds);
 
+            // Fetch trigger map
+            $triggerIds = [];
+            foreach ($rawProblems as $p) {
+                $tId = $p['objectid'] ?? $p['triggerid'] ?? null;
+                if ($tId) {
+                    $triggerIds[] = $tId;
+                }
+            }
+            $triggerMap = $client->getTriggersForProblems($triggerIds);
+
+            // Build active trigger map for dependency resolution
+            $activeTriggers = [];
+            foreach ($rawProblems as $p) {
+                // Count as active only if unresolved
+                if ((string) ($p['r_eventid'] ?? '0') === '0') {
+                    $tId = $p['objectid'] ?? $p['triggerid'] ?? null;
+                    if ($tId) {
+                        $activeTriggers[(string) $tId] = true;
+                    }
+                }
+            }
+
             $matcher = ZabbixProblemFilterMatcher::load();
+            $excludeSuppressed = SettingsService::bool('zabbix_exclude_suppressed_problems', true);
 
             $cachedCount = 0;
             $excludedCount = 0;
+            $disabledHostsExcludedCount = 0;
+            $disabledTriggersExcludedCount = 0;
+            $disabledItemsExcludedCount = 0;
+            $dependencyCoveredExcludedCount = 0;
+            $suppressedExcludedCount = 0;
             $normalizedProblems = [];
 
             $labels = [
@@ -79,6 +107,24 @@ class PollZabbixProblems extends Command
                 $severity = (int) ($problem['severity'] ?? 0);
 
                 $eventHosts = $hostMap[$eventId] ?? [];
+
+                $allHostsDisabled = false;
+                if (! empty($eventHosts)) {
+                    $allHostsDisabled = true;
+                    foreach ($eventHosts as $h) {
+                        if (! isset($h['status']) || (int) $h['status'] !== 1) {
+                            $allHostsDisabled = false;
+                            break;
+                        }
+                    }
+                }
+
+                if ($allHostsDisabled) {
+                    $disabledHostsExcludedCount++;
+
+                    continue;
+                }
+
                 $hostNames = [];
                 foreach ($eventHosts as $h) {
                     $hostNames[] = $h['name'] ?? $h['host'] ?? $h['hostid'] ?? 'Unknown host';
@@ -89,9 +135,60 @@ class PollZabbixProblems extends Command
                 $startedAt = $clock ? Carbon::createFromTimestamp($clock)->toIso8601String() : null;
                 $ageSeconds = $clock ? max(0, time() - $clock) : 0;
 
+                $triggerId = $problem['objectid'] ?? $problem['triggerid'] ?? null;
+                $triggerData = $triggerId ? ($triggerMap[(string) $triggerId] ?? null) : null;
+
+                if ($triggerData) {
+                    if (isset($triggerData['status']) && (int) $triggerData['status'] === 1) {
+                        $disabledTriggersExcludedCount++;
+
+                        continue;
+                    }
+
+                    if (! empty($triggerData['items'])) {
+                        $anyItemDisabled = false;
+                        foreach ($triggerData['items'] as $item) {
+                            if (isset($item['status']) && (int) $item['status'] === 1) {
+                                $anyItemDisabled = true;
+                                break;
+                            }
+                        }
+                        if ($anyItemDisabled) {
+                            $disabledItemsExcludedCount++;
+
+                            continue;
+                        }
+                    }
+                }
+
+                $isDependencyCovered = false;
+                if ($triggerData && ! empty($triggerData['dependencies'])) {
+                    foreach ($triggerData['dependencies'] as $dep) {
+                        $depId = $dep['triggerid'] ?? null;
+                        if ($depId && isset($activeTriggers[(string) $depId])) {
+                            $isDependencyCovered = true;
+                            break;
+                        }
+                    }
+                }
+
+                if ($isDependencyCovered) {
+                    $dependencyCoveredExcludedCount++;
+
+                    continue;
+                }
+
+                $isSuppressed = (isset($problem['suppressed']) && (int) $problem['suppressed'] === 1);
+                if ($excludeSuppressed && $isSuppressed) {
+                    $suppressedExcludedCount++;
+
+                    continue;
+                }
+
                 $normalized = [
                     'eventid' => $eventId,
-                    'objectid' => $problem['objectid'] ?? $problem['triggerid'] ?? null,
+                    'objectid' => $triggerId,
+                    'triggerid' => $triggerId,
                     'name' => $problem['name'] ?? null,
                     'severity' => $severity,
                     'severity_label' => $labels[$severity] ?? 'Unknown',
@@ -99,9 +196,15 @@ class PollZabbixProblems extends Command
                     'started_at' => $startedAt,
                     'age_seconds' => $ageSeconds,
                     'acknowledged' => $problem['acknowledged'] ?? null,
+                    'suppressed' => $problem['suppressed'] ?? 0,
+                    'r_eventid' => $problem['r_eventid'] ?? '0',
                     'tags' => $problem['tags'] ?? [],
                     'hosts' => $eventHosts,
                     'host_name' => $hostNameStr,
+                    'trigger_status' => $triggerData['status'] ?? null,
+                    'trigger_description' => $triggerData['description'] ?? null,
+                    'trigger_items' => $triggerData['items'] ?? [],
+                    'trigger_dependencies' => $triggerData['dependencies'] ?? [],
                     'cached_at' => now()->toIso8601String(),
                 ];
 
@@ -116,9 +219,25 @@ class PollZabbixProblems extends Command
             }
 
             $cache->putMany($normalizedProblems, $ttlSeconds);
-            $cache->markLastPollSuccess($cachedCount, $ttlSeconds, $limit, $fetchedCount, $excludedCount);
+            $cache->markLastPollSuccess(
+                $cachedCount,
+                $ttlSeconds,
+                $limit,
+                $fetchedCount,
+                $excludedCount,
+                $disabledHostsExcludedCount,
+                $disabledTriggersExcludedCount,
+                $disabledItemsExcludedCount,
+                $dependencyCoveredExcludedCount,
+                $suppressedExcludedCount
+            );
 
             $this->info("Fetched {$fetchedCount} problems from Zabbix.");
+            $this->info("Excluded {$disabledHostsExcludedCount} problems from disabled hosts.");
+            $this->info("Excluded {$disabledTriggersExcludedCount} problems from disabled triggers.");
+            $this->info("Excluded {$disabledItemsExcludedCount} problems from disabled items.");
+            $this->info("Excluded {$dependencyCoveredExcludedCount} dependency-covered problems.");
+            $this->info("Excluded {$suppressedExcludedCount} suppressed problems.");
             $this->info("Excluded {$excludedCount} problems by filters.");
             $this->info("Successfully cached {$cachedCount} problems.");
 
