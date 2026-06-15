@@ -415,6 +415,11 @@
         </div>
 
         {{-- Table --}}
+        @php
+            $eventIds = collect($problems)->pluck('eventid')->filter()->toArray();
+            $linkedTickets = \App\Models\ZabbixTicket::whereIn('zabbix_event_id', $eventIds)->get()->keyBy('zabbix_event_id');
+            $canCreateTicket = in_array(auth()->user()->role, ['admin', 'operator'], true);
+        @endphp
         <div class="zbx-table-container">
             @if(empty($problems))
                 <div class="zbx-empty-state">
@@ -589,6 +594,31 @@
                                             @endif
                                         </div>
 
+                                        <div class="zbx-detail-block" style="grid-column: 1 / -1;">
+                                            @php
+                                                $linkedTicket = $linkedTickets[$problem['eventid'] ?? ''] ?? null;
+                                            @endphp
+                                            @if($linkedTicket)
+                                                <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center justify-between">
+                                                    <div>
+                                                        <span class="font-medium text-blue-900 dark:text-blue-200">Ticket already linked:</span>
+                                                        <a href="{{ app(\App\Services\Znuny\ZnunyClient::class)->ticketUrl($linkedTicket->znuny_ticket_id) }}" target="_blank" class="text-blue-700 dark:text-blue-400 hover:underline font-bold ml-1">
+                                                            {{ $linkedTicket->znuny_ticket_number }}
+                                                        </a>
+                                                    </div>
+                                                    <x-filament::button tag="a" href="{{ app(\App\Services\Znuny\ZnunyClient::class)->ticketUrl($linkedTicket->znuny_ticket_id) }}" target="_blank" color="info" size="sm" icon="heroicon-o-arrow-top-right-on-square">
+                                                        Open Ticket
+                                                    </x-filament::button>
+                                                </div>
+                                            @elseif($canCreateTicket)
+                                                <div class="mt-2">
+                                                    <x-filament::button wire:click="openCreateTicketModal('{{ $problem['eventid'] }}')" icon="heroicon-o-ticket">
+                                                        Create ticket
+                                                    </x-filament::button>
+                                                </div>
+                                            @endif
+                                        </div>
+
                                     </div>
                                 </td>
                             </tr>
@@ -598,4 +628,126 @@
             @endif
         </div>
     </div>
+
+    <x-filament::modal id="create-ticket-modal" width="2xl">
+        <x-slot name="heading">
+            Create Znuny Ticket
+        </x-slot>
+        <x-slot name="description">
+            Preflight check and validation before creating a ticket for this Zabbix problem.
+        </x-slot>
+
+        @if($ticketModalProblem)
+            <div class="mb-6 space-y-3">
+                <div class="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-800 text-sm">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><strong class="text-gray-700 dark:text-gray-300">Host:</strong> {{ $ticketModalProblem['host_name'] ?? 'N/A' }}</div>
+                        <div><strong class="text-gray-700 dark:text-gray-300">Event ID:</strong> {{ $ticketModalProblem['eventid'] ?? 'N/A' }}</div>
+                        <div class="col-span-2"><strong class="text-gray-700 dark:text-gray-300">Problem:</strong> {{ $ticketModalProblem['name'] ?? 'N/A' }}</div>
+                        <div><strong class="text-gray-700 dark:text-gray-300">Severity:</strong> {{ $ticketModalProblem['severity'] ?? 'N/A' }}</div>
+                        <div><strong class="text-gray-700 dark:text-gray-300">Started:</strong> {{ $ticketModalProblem['started_at'] ?? 'N/A' }}</div>
+                    </div>
+                </div>
+
+                @if(!empty($ticketDefaultWarnings))
+                    <div class="bg-warning-50 dark:bg-warning-900/20 p-3 rounded border border-warning-200 dark:border-warning-800 text-warning-700 dark:text-warning-400 text-sm">
+                        <strong class="font-medium">Candidate Warnings:</strong>
+                        <ul class="list-disc pl-5 mt-1">
+                            @foreach($ticketDefaultWarnings as $warn)
+                                <li>{{ $warn }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+
+                @if($ticketValidationStatus === 'success')
+                    <div class="bg-success-50 dark:bg-success-900/20 p-3 rounded border border-success-200 dark:border-success-800 text-success-700 dark:text-success-400 text-sm flex items-center gap-2">
+                        <x-filament::icon icon="heroicon-o-check-circle" class="w-5 h-5" />
+                        <span class="font-medium">Ticket data is valid and ready to be created.</span>
+                    </div>
+                @elseif($ticketValidationStatus === 'error')
+                    <div class="bg-danger-50 dark:bg-danger-900/20 p-3 rounded border border-danger-200 dark:border-danger-800 text-danger-700 dark:text-danger-400 text-sm">
+                        <strong class="font-medium">Validation Errors:</strong>
+                        <ul class="list-disc pl-5 mt-1">
+                            @foreach($ticketValidationErrors as $err)
+                                <li>{{ $err }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+
+                @if(!empty($ticketValidationWarnings))
+                    <div class="bg-warning-50 dark:bg-warning-900/20 p-3 rounded border border-warning-200 dark:border-warning-800 text-warning-700 dark:text-warning-400 text-sm mt-2">
+                        <strong class="font-medium">Validation Warnings:</strong>
+                        <ul class="list-disc pl-5 mt-1">
+                            @foreach($ticketValidationWarnings as $warn)
+                                <li>{{ $warn }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+
+                <div class="space-y-4 pt-2">
+                    <x-filament::input.wrapper label="Owner" class="flex flex-col">
+                        <span class="text-sm font-medium mb-1">Owner <span class="text-danger-600">*</span></span>
+                        <x-filament::input.select wire:model="ticketOwnerId">
+                            <option value="">Select an owner</option>
+                            @foreach($ticketOwnerOptions as $id => $label)
+                                <option value="{{ $id }}">{{ $label }}</option>
+                            @endforeach
+                        </x-filament::input.select>
+                    </x-filament::input.wrapper>
+
+                    <x-filament::input.wrapper label="Queue" class="flex flex-col">
+                        <span class="text-sm font-medium mb-1">Queue <span class="text-danger-600">*</span></span>
+                        <x-filament::input.select wire:model="ticketQueue">
+                            <option value="">Select a queue</option>
+                            @foreach($ticketQueueOptions as $name => $label)
+                                <option value="{{ $name }}">{{ $label }}</option>
+                            @endforeach
+                        </x-filament::input.select>
+                    </x-filament::input.wrapper>
+
+                    <div class="flex flex-col gap-1">
+                        <span class="text-sm font-medium">CustomerUser <span class="text-danger-600">*</span></span>
+                        <div class="flex gap-2">
+                            <x-filament::input.wrapper class="flex-1">
+                                <x-filament::input type="text" wire:model="ticketCustomerUserSearch" placeholder="Search CustomerUser..." wire:keydown.enter="searchTicketCustomerUsers" />
+                            </x-filament::input.wrapper>
+                            <x-filament::button color="gray" wire:click="searchTicketCustomerUsers">Search</x-filament::button>
+                        </div>
+                        <x-filament::input.wrapper class="mt-2">
+                            <x-filament::input.select wire:model="ticketCustomerUser">
+                                <option value="">Select a customer user</option>
+                                @foreach($ticketCustomerUserOptions as $login => $label)
+                                    <option value="{{ $login }}">{{ $label }}</option>
+                                @endforeach
+                            </x-filament::input.select>
+                        </x-filament::input.wrapper>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 mt-2">
+                        <div class="flex flex-col">
+                            <span class="text-sm font-medium mb-1 text-gray-500">State</span>
+                            <div class="px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 text-sm">new</div>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-sm font-medium mb-1 text-gray-500">Lock</span>
+                            <div class="px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 text-sm">lock</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        <x-slot name="footer">
+            <x-filament::button color="gray" wire:click="closeCreateTicketModal">
+                Cancel
+            </x-filament::button>
+            <x-filament::button wire:click="validateTicketData" wire:loading.attr="disabled" wire:target="validateTicketData">
+                <span wire:loading.remove wire:target="validateTicketData">Validate ticket data</span>
+                <span wire:loading wire:target="validateTicketData">Validating...</span>
+            </x-filament::button>
+        </x-slot>
+    </x-filament::modal>
 </x-filament-panels::page>

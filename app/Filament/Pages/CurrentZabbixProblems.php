@@ -4,6 +4,10 @@ namespace App\Filament\Pages;
 
 use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixProblemCache;
+use App\Services\Znuny\ZabbixTicketLinkService;
+use App\Services\Znuny\ZnunyAgentService;
+use App\Services\Znuny\ZnunyClient;
+use App\Services\Znuny\ZnunyLookupService;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
@@ -29,6 +33,34 @@ class CurrentZabbixProblems extends Page
     public string $sortDirection = 'asc';
 
     public int $totalCachedCount = 0;
+
+    public bool $isTicketModalOpen = false;
+
+    public ?string $ticketModalEventId = null;
+
+    public ?array $ticketModalProblem = null;
+
+    public ?string $ticketOwnerId = null;
+
+    public ?string $ticketQueue = null;
+
+    public ?string $ticketCustomerUser = null;
+
+    public string $ticketCustomerUserSearch = '';
+
+    public array $ticketQueueOptions = [];
+
+    public array $ticketOwnerOptions = [];
+
+    public array $ticketCustomerUserOptions = [];
+
+    public array $ticketDefaultWarnings = [];
+
+    public array $ticketValidationErrors = [];
+
+    public array $ticketValidationWarnings = [];
+
+    public ?string $ticketValidationStatus = null;
 
     public static function canAccess(): bool
     {
@@ -266,5 +298,143 @@ class CurrentZabbixProblems extends Page
             5 => 'Disaster',
             default => 'Unknown',
         };
+    }
+
+    public function openCreateTicketModal(string $eventId): void
+    {
+        abort_unless(in_array(auth()->user()->role, ['admin', 'operator'], true), 403);
+
+        $linkService = app(ZabbixTicketLinkService::class);
+        $existing = $linkService->findByEventId($eventId);
+        if ($existing) {
+            Notification::make()
+                ->title("Ticket already linked: {$existing->znuny_ticket_number}")
+                ->info()
+                ->send();
+
+            return;
+        }
+
+        $problems = $this->getProblemsProperty();
+        $problem = collect($problems)->firstWhere('eventid', $eventId);
+
+        if (! $problem) {
+            Notification::make()->title('Problem not found')->danger()->send();
+
+            return;
+        }
+
+        $this->ticketModalEventId = $eventId;
+        $this->ticketModalProblem = $problem;
+        $this->ticketValidationErrors = [];
+        $this->ticketValidationWarnings = [];
+        $this->ticketValidationStatus = null;
+        $this->ticketCustomerUserSearch = '';
+        $this->ticketCustomerUserOptions = [];
+
+        $hostName = $problem['host_name'] ?? '';
+
+        $lookup = app(ZnunyLookupService::class);
+        $agentService = app(ZnunyAgentService::class);
+        $client = app(ZnunyClient::class);
+
+        $this->ticketOwnerOptions = collect($agentService->getSelectableAgents())
+            ->mapWithKeys(fn (array $agent) => [(string) $agent['id'] => $agent['label']])
+            ->toArray();
+
+        $queues = [];
+        try {
+            $queues = $client->getQueues();
+        } catch (\Throwable $e) {
+            // skip
+        }
+        $this->ticketQueueOptions = collect($queues)->pluck('label', 'name')->toArray();
+
+        $this->ticketOwnerId = null;
+        $this->ticketQueue = null;
+        $this->ticketCustomerUser = null;
+        $this->ticketDefaultWarnings = [];
+
+        try {
+            $candidates = $lookup->resolveTicketDefaultCandidates($hostName);
+            if ($candidates['queue']['found']) {
+                $this->ticketQueue = $candidates['queue']['name'];
+            }
+            if ($candidates['customer_user']['found']) {
+                $this->ticketCustomerUser = $candidates['customer_user']['login'];
+                $this->ticketCustomerUserOptions[$this->ticketCustomerUser] = $candidates['customer_user']['login'];
+            }
+            $this->ticketDefaultWarnings = $candidates['warnings'] ?? [];
+        } catch (\Throwable $e) {
+            $this->ticketDefaultWarnings[] = 'Lookup failed: '.$e->getMessage();
+        }
+
+        $this->isTicketModalOpen = true;
+        $this->dispatch('open-modal', id: 'create-ticket-modal');
+    }
+
+    public function closeCreateTicketModal(): void
+    {
+        $this->isTicketModalOpen = false;
+        $this->dispatch('close-modal', id: 'create-ticket-modal');
+    }
+
+    public function searchTicketCustomerUsers(): void
+    {
+        $search = $this->ticketCustomerUserSearch;
+        if (empty(trim($search))) {
+            return;
+        }
+
+        try {
+            $client = app(ZnunyClient::class);
+            $results = $client->searchCustomerUsers($search, 20);
+            $options = [];
+            foreach ($results as $res) {
+                $options[$res['login']] = $res['label'];
+            }
+            $this->ticketCustomerUserOptions = $options;
+        } catch (\Throwable $e) {
+            // ignore
+        }
+    }
+
+    public function validateTicketData(): void
+    {
+        abort_unless(in_array(auth()->user()->role, ['admin', 'operator'], true), 403);
+
+        if (! $this->ticketOwnerId || ! $this->ticketQueue || ! $this->ticketCustomerUser) {
+            Notification::make()->title('Missing required fields')->danger()->send();
+
+            return;
+        }
+
+        $this->ticketValidationErrors = [];
+        $this->ticketValidationWarnings = [];
+        $this->ticketValidationStatus = 'validating';
+
+        try {
+            $client = app(ZnunyClient::class);
+            $response = $client->validateTicketCreate([
+                'OwnerID' => (int) $this->ticketOwnerId,
+                'Queue' => $this->ticketQueue,
+                'CustomerUser' => $this->ticketCustomerUser,
+                'State' => 'new',
+                'Lock' => 'lock',
+            ]);
+
+            if ($response['valid']) {
+                $this->ticketValidationStatus = 'success';
+                $this->ticketValidationWarnings = $response['warnings'] ?? [];
+                Notification::make()->title('Validation successful')->success()->send();
+            } else {
+                $this->ticketValidationStatus = 'error';
+                $this->ticketValidationErrors = $response['errors'] ?? [];
+                $this->ticketValidationWarnings = $response['warnings'] ?? [];
+            }
+        } catch (\Throwable $e) {
+            $this->ticketValidationStatus = 'error';
+            $this->ticketValidationErrors = [$e->getMessage()];
+        }
     }
 }
