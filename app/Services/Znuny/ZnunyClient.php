@@ -232,6 +232,71 @@ class ZnunyClient
     }
 
     /**
+     * Get list of agents from Znuny Agent endpoint.
+     */
+    public function getAgents(bool $isRetry = false): array
+    {
+        try {
+            $session = $this->sessionId();
+            $response = $this->request()->get($this->apiUrl().'/Agent', [
+                'SessionID' => $session,
+            ]);
+
+            $data = $this->processResponse($response);
+
+            if (! isset($data['Agents']) || ! is_array($data['Agents'])) {
+                throw new Exception('Invalid Agents list returned from Znuny API.');
+            }
+
+            $normalized = [];
+            foreach ($data['Agents'] as $agent) {
+                if (! isset($agent['UserID']) || ! isset($agent['UserLogin'])) {
+                    continue;
+                }
+
+                $userIdStr = (string) $agent['UserID'];
+                if (! preg_match('/^[1-9]\d*$/', $userIdStr)) {
+                    continue; // Skip invalid UserID safely
+                }
+
+                $id = (int) $userIdStr;
+                $login = trim((string) $agent['UserLogin']);
+
+                if ($login === '') {
+                    continue; // Skip invalid UserLogin safely
+                }
+
+                $fullname = isset($agent['UserFullname']) ? trim((string) $agent['UserFullname']) : null;
+                if ($fullname === '') {
+                    $fullname = null;
+                }
+
+                $label = $fullname ? "{$fullname} <{$login}>" : $login;
+
+                $normalized[] = [
+                    'id' => $id,
+                    'login' => $login,
+                    'name' => $fullname,
+                    'label' => $label,
+                ];
+            }
+
+            usort($normalized, fn ($a, $b) => strcasecmp($a['label'], $b['label']));
+
+            return $normalized;
+
+        } catch (Throwable $e) {
+            if (! $isRetry && $this->isInvalidSessionError($e)) {
+                $this->cachedSessionId = null;
+
+                return $this->getAgents(true);
+            }
+
+            throw new Exception($this->sanitizeExceptionMessage($e->getMessage()));
+        }
+    }
+
+    /**
      * Search tickets through TicketSearch operation
      */
     public function searchTickets(array $filters = [], bool $isRetry = false): array

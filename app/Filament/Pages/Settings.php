@@ -5,7 +5,9 @@ namespace App\Filament\Pages;
 use App\Models\Setting;
 use App\Services\AuditLogger;
 use App\Services\SettingsService;
+use App\Services\Znuny\ZnunyAgentService;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -18,6 +20,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
 class Settings extends Page implements HasForms
@@ -86,10 +89,49 @@ class Settings extends Page implements HasForms
         ];
 
         foreach ($settings as $setting) {
+            if (in_array($setting->key, ['znuny_default_agent_login', 'znuny_default_agent_name'])) {
+                continue;
+            }
+
             $label = Str::title(str_replace('_', ' ', $setting->key));
             $component = null;
 
-            if ($setting->type === 'boolean') {
+            if ($setting->key === 'znuny_default_agent_id') {
+                $options = [];
+                $warning = null;
+
+                try {
+                    $agentService = app(ZnunyAgentService::class);
+                    $agents = $agentService->getAgents(failSilently: true);
+                    foreach ($agents as $agent) {
+                        $options[$agent['id']] = $agent['label'];
+                    }
+
+                    if ($agentService->lastError()) {
+                        $warning = 'Could not load active agents from Znuny API.';
+                    }
+                } catch (\Throwable $e) {
+                    $warning = 'Could not load active agents from Znuny API.';
+                }
+
+                $currentId = SettingsService::string('znuny_default_agent_id');
+                if ($currentId !== '' && ! isset($options[$currentId]) && empty($warning)) {
+                    $warning = "The currently selected agent (ID: {$currentId}) is no longer returned by the active agents list. Please select a valid agent.";
+                }
+
+                $helpText = 'Used only by future automatic ticket creation. Manual ticket creation will still require the operator to choose an agent.';
+                if ($warning) {
+                    // We use native HTML support in Filament helperText
+                    $helpText = "<span style=\"color: #e11d48; font-weight: bold;\">Warning: {$warning}</span><br>".$helpText;
+                }
+
+                $component = Select::make($setting->key)
+                    ->label('Default agent for automatic ticket creation')
+                    ->helperText(new HtmlString($helpText))
+                    ->options($options)
+                    ->searchable()
+                    ->required(false);
+            } elseif ($setting->type === 'boolean') {
                 $component = Toggle::make($setting->key)
                     ->label($label)
                     ->helperText($setting->description)
@@ -231,6 +273,53 @@ class Settings extends Page implements HasForms
                 $currentPlaintext = SettingsService::string($setting->key);
 
                 if ($currentPlaintext !== $newValue) {
+                    if ($setting->key === 'znuny_default_agent_id') {
+                        $agentService = app(ZnunyAgentService::class);
+                        $agents = $agentService->getAgents(failSilently: true);
+
+                        if ($newValue === '') {
+                            // Clear values
+                            $selectedAgent = null;
+                        } else {
+                            if ($agentService->lastError()) {
+                                // Agent loading failed, do not destroy the existing stored value/snapshot
+                                continue;
+                            }
+
+                            $selectedAgent = collect($agents)->firstWhere('id', (int) $newValue);
+                            if (! $selectedAgent) {
+                                // Invalid selection, do not silently save it
+                                continue;
+                            }
+                        }
+
+                        $newLogin = $selectedAgent ? $selectedAgent['login'] : '';
+                        $newName = $selectedAgent ? (string) $selectedAgent['name'] : '';
+
+                        // Track changes for ID
+                        $changedSettings[] = [
+                            'key' => 'znuny_default_agent_id',
+                            'old_value' => $currentPlaintext,
+                            'new_value' => $newValue,
+                        ];
+                        $setting->update(['value' => $newValue]);
+
+                        // Update login and name
+                        foreach (['znuny_default_agent_login' => $newLogin, 'znuny_default_agent_name' => $newName] as $k => $v) {
+                            $subSetting = $settings->firstWhere('key', $k);
+                            if ($subSetting && $subSetting->value !== $v) {
+                                $changedSettings[] = [
+                                    'key' => $k,
+                                    'old_value' => $subSetting->value,
+                                    'new_value' => $v,
+                                ];
+                                $subSetting->update(['value' => $v]);
+                            }
+                        }
+
+                        continue; // Skip the default save logic for this key
+                    }
+
                     $oldValueToLog = $setting->value;
                     $newValueToLog = $newValue;
                     $valueToStore = $newValue;
