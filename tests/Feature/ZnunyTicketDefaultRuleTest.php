@@ -27,25 +27,25 @@ class ZnunyTicketDefaultRuleTest extends TestCase
     public function test_default_regex_detects_first_word_as_queue()
     {
         $service = new ZnunyTicketDefaultRuleService;
-        $this->assertEquals('Simplegroup', $service->detectQueueFromHost('Simplegroup swiss test01'));
-        $this->assertEquals('Vamark', $service->detectQueueFromHost('Vamark swiss ipmi01'));
+        $this->assertEquals('TestCompany', $service->detectQueueFromHost('TestCompany swiss test01'));
+        $this->assertEquals('ExampleCompany', $service->detectQueueFromHost('ExampleCompany swiss ipmi01'));
     }
 
     public function test_default_template_builds_customer_user()
     {
         $service = new ZnunyTicketDefaultRuleService;
-        $this->assertEquals('SimplegroupClients', $service->customerUserFromQueue('Simplegroup'));
+        $this->assertEquals('TestCompanyClients', $service->customerUserFromQueue('TestCompany'));
     }
 
     public function test_resolve_candidates_for_valid_host()
     {
         $service = new ZnunyTicketDefaultRuleService;
-        $result = $service->resolveCandidates('Simplegroup swiss test01');
+        $result = $service->resolveCandidates('TestCompany swiss test01');
 
         $this->assertEquals([
-            'host_name' => 'Simplegroup swiss test01',
-            'queue' => 'Simplegroup',
-            'customer_user' => 'SimplegroupClients',
+            'host_name' => 'TestCompany swiss test01',
+            'queue' => 'TestCompany',
+            'customer_user' => 'TestCompanyClients',
             'warnings' => [],
         ], $result);
     }
@@ -54,10 +54,10 @@ class ZnunyTicketDefaultRuleTest extends TestCase
     {
         Setting::where('key', 'znuny_queue_from_host_regex')->update(['value' => '^(?<queue>[0-9]+)$']); // Force to expect numbers
         $service = new ZnunyTicketDefaultRuleService;
-        $result = $service->resolveCandidates('Simplegroup swiss test01');
+        $result = $service->resolveCandidates('TestCompany swiss test01');
 
         $this->assertEquals([
-            'host_name' => 'Simplegroup swiss test01',
+            'host_name' => 'TestCompany swiss test01',
             'queue' => null,
             'customer_user' => null,
             'warnings' => ['Queue could not be detected from host name.'],
@@ -68,10 +68,10 @@ class ZnunyTicketDefaultRuleTest extends TestCase
     {
         Setting::where('key', 'znuny_queue_from_host_regex')->update(['value' => '^(?<queue>[unclosed']);
         $service = new ZnunyTicketDefaultRuleService;
-        $result = $service->resolveCandidates('Simplegroup swiss test01');
+        $result = $service->resolveCandidates('TestCompany swiss test01');
 
         $this->assertEquals([
-            'host_name' => 'Simplegroup swiss test01',
+            'host_name' => 'TestCompany swiss test01',
             'queue' => null,
             'customer_user' => null,
             'warnings' => ['Queue could not be detected from host name.'],
