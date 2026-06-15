@@ -21,24 +21,26 @@ class AuditLogInfolist
                 TextEntry::make('ip_address'),
                 TextEntry::make('user_agent'),
                 TextEntry::make('context')
+                    ->state(fn ($record) => json_encode($record->context ?? []))
                     ->formatStateUsing(function ($state) {
-                        if (is_array($state) && isset($state['changes'])) {
-                            $output = [];
-                            foreach ($state['changes'] as $change) {
+                        $context = json_decode($state, true) ?? [];
+
+                        if (isset($context['changes']) && is_array($context['changes'])) {
+                            $lines = [];
+                            foreach ($context['changes'] as $change) {
                                 $key = $change['key'] ?? '';
-                                $old = $change['old_value'] ?? 'null';
-                                $new = $change['new_value'] ?? 'null';
-                                $output[] = "{$key}: {$old} → {$new}";
+                                $old = is_string($change['old_value'] ?? null) ? ($change['old_value'] ?? 'null') : json_encode($change['old_value'] ?? 'null', JSON_UNESCAPED_UNICODE);
+                                $new = is_string($change['new_value'] ?? null) ? ($change['new_value'] ?? 'null') : json_encode($change['new_value'] ?? 'null', JSON_UNESCAPED_UNICODE);
+                                $lines[] = "{$key}: {$old} → {$new}";
                             }
 
-                            return $output;
+                            return new HtmlString(implode('<br>', array_map('e', $lines)));
                         }
 
-                        $json = is_array($state) ? json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) : $state;
+                        $json = json_encode($context, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
                         return new HtmlString('<pre style="margin: 0; white-space: pre-wrap;">'.e($json).'</pre>');
                     })
-                    ->listWithLineBreaks()
                     ->fontFamily('mono'),
             ]);
     }
