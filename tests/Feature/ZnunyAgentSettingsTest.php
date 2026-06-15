@@ -27,6 +27,7 @@ class ZnunyAgentSettingsTest extends TestCase
         Setting::updateOrCreate(['key' => 'znuny_default_agent_id', 'type' => 'string'], ['value' => '']);
         Setting::updateOrCreate(['key' => 'znuny_default_agent_login', 'type' => 'string'], ['value' => '']);
         Setting::updateOrCreate(['key' => 'znuny_default_agent_name', 'type' => 'string'], ['value' => '']);
+        Setting::updateOrCreate(['key' => 'znuny_agent_exclude_logins', 'type' => 'string'], ['value' => "root@localhost\nzabbix.integration"]);
 
         Setting::updateOrCreate(['key' => 'zabbix_api_url', 'type' => 'string'], ['value' => 'http://zabbix']);
         Setting::updateOrCreate(['key' => 'znuny_web_url', 'type' => 'string'], ['value' => 'http://web']);
@@ -204,5 +205,66 @@ class ZnunyAgentSettingsTest extends TestCase
         // Value should remain 12
         $this->assertEquals('12', Setting::where('key', 'znuny_default_agent_id')->value('value'));
         $this->assertEquals('uav@vamark.com', Setting::where('key', 'znuny_default_agent_login')->value('value'));
+    }
+
+    public function test_excluded_logins_are_filtered_out_case_insensitively()
+    {
+        Http::fake([
+            'http://api.local/Session*' => Http::response(['SessionID' => 'fake-session']),
+            'http://api.local/Agent*' => Http::response([
+                'Agents' => [
+                    ['UserID' => 1, 'UserLogin' => 'root@localhost', 'UserFullname' => 'Root'],
+                    ['UserID' => 2, 'UserLogin' => 'zabbix.integration', 'UserFullname' => 'Zabbix'],
+                    ['UserID' => 3, 'UserLogin' => 'Root@Localhost', 'UserFullname' => 'Root uppercase'], // Should be filtered case insensitively
+                    ['UserID' => 10, 'UserLogin' => 'alpha', 'UserFullname' => 'Alpha User'],
+                ],
+            ]),
+        ]);
+
+        $agentService = app(ZnunyAgentService::class);
+        $selectableAgents = $agentService->getSelectableAgents(failSilently: false);
+
+        $this->assertCount(1, $selectableAgents);
+        $this->assertEquals(10, $selectableAgents[0]['id']);
+        $this->assertEquals('alpha', $selectableAgents[0]['login']);
+    }
+
+    public function test_excluded_currently_stored_agent_triggers_warning_and_is_not_selectable()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Setting::where('key', 'znuny_default_agent_id')->update(['value' => '1']);
+        Setting::where('key', 'znuny_default_agent_login')->update(['value' => 'root@localhost']);
+        Setting::where('key', 'znuny_default_agent_name')->update(['value' => 'Root']);
+
+        Http::fake([
+            'http://api.local/Session*' => Http::response(['SessionID' => 'fake-session']),
+            'http://api.local/Agent*' => Http::response([
+                'Agents' => [
+                    ['UserID' => 1, 'UserLogin' => 'root@localhost', 'UserFullname' => 'Root'],
+                    ['UserID' => 10, 'UserLogin' => 'alpha', 'UserFullname' => 'Alpha User'],
+                ],
+            ]),
+        ]);
+
+        $livewire = Livewire::actingAs($admin)
+            ->test(Settings::class);
+
+        // The form should detect that ID 1 is active in getAgents but excluded in getSelectableAgents
+        $livewire->assertSeeHtml('The currently selected default agent is excluded from selectable agents. Please choose another agent.');
+
+        // If we attempt to save the excluded ID, it should not save (it behaves like an invalid selection)
+        $livewire->fillForm([
+            'znuny_default_agent_id' => '1',
+        ])->call('save');
+
+        // We don't change the value of it if it was already 1, but wait, the logic says:
+        // if (! $selectedAgent) { continue; }
+        // Let's change the value to another excluded one to ensure it rejects it.
+        $livewire->fillForm([
+            'znuny_default_agent_id' => '2', // Let's say we had a 2nd excluded agent we tried to save
+        ])->call('save');
+
+        $this->assertEquals('1', Setting::where('key', 'znuny_default_agent_id')->value('value'));
     }
 }

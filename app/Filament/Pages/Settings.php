@@ -102,8 +102,8 @@ class Settings extends Page implements HasForms
 
                 try {
                     $agentService = app(ZnunyAgentService::class);
-                    $agents = $agentService->getAgents(failSilently: true);
-                    foreach ($agents as $agent) {
+                    $selectableAgents = $agentService->getSelectableAgents(failSilently: true);
+                    foreach ($selectableAgents as $agent) {
                         $options[$agent['id']] = $agent['label'];
                     }
 
@@ -116,12 +116,19 @@ class Settings extends Page implements HasForms
 
                 $currentId = SettingsService::string('znuny_default_agent_id');
                 if ($currentId !== '' && ! isset($options[$currentId]) && empty($warning)) {
-                    $warning = "The currently selected agent (ID: {$currentId}) is no longer returned by the active agents list. Please select a valid agent.";
+                    // Check if it's excluded or completely inactive
+                    $allAgents = $agentService->getAgents(failSilently: true);
+                    $isActive = collect($allAgents)->contains('id', (int) $currentId);
+
+                    if ($isActive) {
+                        $warning = 'The currently selected default agent is excluded from selectable agents. Please choose another agent.';
+                    } else {
+                        $warning = "The currently selected agent (ID: {$currentId}) is no longer returned by the active agents list. Please select a valid agent.";
+                    }
                 }
 
                 $helpText = 'Used only by future automatic ticket creation. Manual ticket creation will still require the operator to choose an agent.';
                 if ($warning) {
-                    // We use native HTML support in Filament helperText
                     $helpText = "<span style=\"color: #e11d48; font-weight: bold;\">Warning: {$warning}</span><br>".$helpText;
                 }
 
@@ -131,6 +138,12 @@ class Settings extends Page implements HasForms
                     ->options($options)
                     ->searchable()
                     ->required(false);
+            } elseif ($setting->key === 'znuny_agent_exclude_logins') {
+                $component = Textarea::make($setting->key)
+                    ->label($label)
+                    ->helperText($setting->description)
+                    ->required(false)
+                    ->rows(4);
             } elseif ($setting->type === 'boolean') {
                 $component = Toggle::make($setting->key)
                     ->label($label)
@@ -275,7 +288,7 @@ class Settings extends Page implements HasForms
                 if ($currentPlaintext !== $newValue) {
                     if ($setting->key === 'znuny_default_agent_id') {
                         $agentService = app(ZnunyAgentService::class);
-                        $agents = $agentService->getAgents(failSilently: true);
+                        $selectableAgents = $agentService->getSelectableAgents(failSilently: true);
 
                         if ($newValue === '') {
                             // Clear values
@@ -286,7 +299,7 @@ class Settings extends Page implements HasForms
                                 continue;
                             }
 
-                            $selectedAgent = collect($agents)->firstWhere('id', (int) $newValue);
+                            $selectedAgent = collect($selectableAgents)->firstWhere('id', (int) $newValue);
                             if (! $selectedAgent) {
                                 // Invalid selection, do not silently save it
                                 continue;

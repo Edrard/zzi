@@ -2,6 +2,7 @@
 
 namespace App\Services\Znuny;
 
+use App\Services\SettingsService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -51,5 +52,31 @@ class ZnunyAgentService
 
             return [];
         }
+    }
+
+    /**
+     * Get active agents excluding technical/service logins.
+     * Use this for future manual ticket creation modals and ticket owner selection.
+     */
+    public function getSelectableAgents(bool $failSilently = true, bool $forceRefresh = false): array
+    {
+        $agents = $this->getAgents($failSilently, $forceRefresh);
+
+        if (empty($agents)) {
+            return [];
+        }
+
+        $excludedSetting = SettingsService::string('znuny_agent_exclude_logins', '');
+        $lines = explode("\n", $excludedSetting);
+
+        $excludedLogins = collect($lines)
+            ->map(fn ($line) => trim($line))
+            ->filter(fn ($line) => $line !== '')
+            ->map(fn ($line) => strtolower($line))
+            ->all();
+
+        return array_values(array_filter($agents, function ($agent) use ($excludedLogins) {
+            return ! in_array(strtolower($agent['login']), $excludedLogins, true);
+        }));
     }
 }
