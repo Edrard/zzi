@@ -144,6 +144,39 @@ class Settings extends Page implements HasForms
                     ->helperText($setting->description)
                     ->required(false)
                     ->rows(4);
+            } elseif ($setting->key === 'znuny_queue_from_host_regex') {
+                $component = TextInput::make($setting->key)
+                    ->label('Queue detection regex from Zabbix host')
+                    ->helperText($setting->description)
+                    ->required()
+                    ->rules([
+                        function () {
+                            return function (string $attribute, $value, \Closure $fail) {
+                                if (! str_contains($value, '(?<queue>')) {
+                                    $fail('The regex must contain the named capture group (?<queue>...).');
+                                }
+
+                                $pattern = '~'.str_replace('~', '\~', $value).'~u';
+                                if (@preg_match($pattern, '') === false) {
+                                    $fail('The regex pattern is invalid.');
+                                }
+                            };
+                        },
+                    ]);
+            } elseif ($setting->key === 'znuny_customer_user_from_queue_template') {
+                $component = TextInput::make($setting->key)
+                    ->label('CustomerUser template from Queue')
+                    ->helperText($setting->description)
+                    ->required()
+                    ->rules([
+                        function () {
+                            return function (string $attribute, $value, \Closure $fail) {
+                                if (! str_contains($value, '<queue>')) {
+                                    $fail('The template must contain the <queue> placeholder.');
+                                }
+                            };
+                        },
+                    ]);
             } elseif ($setting->type === 'boolean') {
                 $component = Toggle::make($setting->key)
                     ->label($label)
