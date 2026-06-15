@@ -147,7 +147,7 @@ class Settings extends Page implements HasForms
             } elseif ($setting->key === 'znuny_queue_from_host_regex') {
                 $component = TextInput::make($setting->key)
                     ->label('Queue detection regex from Zabbix host')
-                    ->helperText($setting->description)
+                    ->helperText('Regular expression used to detect the default Znuny Queue from the Zabbix host name. It must contain the named capture group (?<queue>...). Default takes the first word of the host name. Example: "ExampleCompany swiss test01" → "ExampleCompany".')
                     ->required()
                     ->rules([
                         function () {
@@ -166,7 +166,7 @@ class Settings extends Page implements HasForms
             } elseif ($setting->key === 'znuny_customer_user_from_queue_template') {
                 $component = TextInput::make($setting->key)
                     ->label('CustomerUser template from Queue')
-                    ->helperText($setting->description)
+                    ->helperText('Template used to generate the default Znuny CustomerUser login from the detected Queue. Use <queue> as placeholder. Default: <queue>Clients. Example: Queue "ExampleCompany" → "ExampleCompanyClients".')
                     ->required()
                     ->rules([
                         function () {
@@ -235,7 +235,7 @@ class Settings extends Page implements HasForms
         if (! empty($groups['Znuny'])) {
             $z = $groups['Znuny'];
 
-            $groups['Znuny'] = [
+            $znunyGroups = [
                 Section::make('Credentials')
                     ->schema(array_filter([
                         $z['znuny_username'] ?? null,
@@ -256,13 +256,34 @@ class Settings extends Page implements HasForms
                     ]))->columns(1),
             ];
 
-            $knownKeys = ['znuny_username', 'znuny_password', 'znuny_api_url', 'znuny_web_url', 'znuny_ticket_url_template', 'znuny_api_verify_ssl', 'znuny_api_timeout'];
+            if (isset($z['znuny_default_agent_id'])) {
+                $znunyGroups[] = $z['znuny_default_agent_id'];
+            }
+            if (isset($z['znuny_agent_exclude_logins'])) {
+                $znunyGroups[] = $z['znuny_agent_exclude_logins'];
+            }
+
+            if (isset($z['znuny_queue_from_host_regex']) || isset($z['znuny_customer_user_from_queue_template'])) {
+                $znunyGroups[] = Section::make('Ticket default rules')
+                    ->description('These rules only generate default suggestions for manual ticket creation. The operator will still be able to override Queue and CustomerUser before creating a ticket.')
+                    ->schema(array_filter([
+                        $z['znuny_queue_from_host_regex'] ?? null,
+                        $z['znuny_customer_user_from_queue_template'] ?? null,
+                    ]))->columns(1);
+            }
+
+            $knownKeys = [
+                'znuny_username', 'znuny_password', 'znuny_api_url', 'znuny_web_url', 'znuny_ticket_url_template', 'znuny_api_verify_ssl', 'znuny_api_timeout',
+                'znuny_default_agent_id', 'znuny_agent_exclude_logins', 'znuny_queue_from_host_regex', 'znuny_customer_user_from_queue_template',
+            ];
             $unknownComponents = array_diff_key($z, array_flip($knownKeys));
 
             if (! empty($unknownComponents)) {
-                $groups['Znuny'][] = Section::make('Other')
+                $znunyGroups[] = Section::make('Other')
                     ->schema(array_values($unknownComponents))->columns(1);
             }
+
+            $groups['Znuny'] = $znunyGroups;
         }
 
         $tabs = [];
