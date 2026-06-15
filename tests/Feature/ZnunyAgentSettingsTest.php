@@ -102,7 +102,7 @@ class ZnunyAgentSettingsTest extends TestCase
             'http://api.local/Session*' => Http::response(['SessionID' => 'fake-session']),
             'http://api.local/Agent*' => Http::response([
                 'Agents' => [
-                    ['UserID' => 12, 'UserLogin' => 'uav@vamark.com', 'UserFullname' => 'UAV Vamark'],
+                    ['UserID' => 12, 'UserLogin' => 'uav@example.invalid', 'UserFullname' => 'UAV ExampleCompany'],
                 ],
             ]),
         ]);
@@ -116,8 +116,8 @@ class ZnunyAgentSettingsTest extends TestCase
             ->assertHasNoFormErrors();
 
         $this->assertEquals('12', Setting::where('key', 'znuny_default_agent_id')->value('value'));
-        $this->assertEquals('uav@vamark.com', Setting::where('key', 'znuny_default_agent_login')->value('value'));
-        $this->assertEquals('UAV Vamark', Setting::where('key', 'znuny_default_agent_name')->value('value'));
+        $this->assertEquals('uav@example.invalid', Setting::where('key', 'znuny_default_agent_login')->value('value'));
+        $this->assertEquals('UAV ExampleCompany', Setting::where('key', 'znuny_default_agent_name')->value('value'));
 
         $log = AuditLog::where('action', 'settings.updated')->latest('id')->first();
         $this->assertNotNull($log);
@@ -138,7 +138,7 @@ class ZnunyAgentSettingsTest extends TestCase
             'http://api.local/Session*' => Http::response(['SessionID' => 'fake-session']),
             'http://api.local/Agent*' => Http::response([
                 'Agents' => [
-                    ['UserID' => 12, 'UserLogin' => 'uav@vamark.com', 'UserFullname' => 'UAV Vamark'],
+                    ['UserID' => 12, 'UserLogin' => 'uav@example.invalid', 'UserFullname' => 'UAV ExampleCompany'],
                 ],
             ]),
         ]);
@@ -190,7 +190,7 @@ class ZnunyAgentSettingsTest extends TestCase
             'http://api.local/Session*' => Http::response(['SessionID' => 'fake-session']),
             'http://api.local/Agent*' => Http::response([
                 'Agents' => [
-                    ['UserID' => 12, 'UserLogin' => 'uav@vamark.com', 'UserFullname' => 'UAV Vamark'],
+                    ['UserID' => 12, 'UserLogin' => 'uav@example.invalid', 'UserFullname' => 'UAV ExampleCompany'],
                 ],
             ]),
         ]);

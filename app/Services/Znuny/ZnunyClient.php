@@ -349,4 +349,357 @@ class ZnunyClient
             ];
         }
     }
+
+    /**
+     * Execute an API call with automatic session retry.
+     */
+    protected function withSessionRetry(\Closure $callback, bool $isRetry = false): mixed
+    {
+        try {
+            return $callback($this->sessionId());
+        } catch (Throwable $e) {
+            if (! $isRetry && $this->isInvalidSessionError($e)) {
+                $this->cachedSessionId = null;
+
+                return $this->withSessionRetry($callback, true);
+            }
+
+            throw new Exception($this->sanitizeExceptionMessage($e->getMessage()));
+        }
+    }
+
+    /**
+     * Call /Health
+     */
+    public function health(): array
+    {
+        return $this->withSessionRetry(function ($session) {
+            $response = $this->request()->get($this->apiUrl().'/Health', [
+                'SessionID' => $session,
+            ]);
+
+            $data = $this->processResponse($response);
+
+            return [
+                'success' => (bool) ($data['Success'] ?? false),
+                'plugin' => $data['Plugin'] ?? 'ZnunyAgentList',
+                'version' => $data['Version'] ?? '1.1.0',
+                'time' => $data['Time'] ?? now()->toIso8601String(),
+            ];
+        });
+    }
+
+    /**
+     * Call /SystemConfig
+     */
+    public function systemConfig(): array
+    {
+        return $this->withSessionRetry(function ($session) {
+            $response = $this->request()->get($this->apiUrl().'/SystemConfig', [
+                'SessionID' => $session,
+            ]);
+
+            $data = $this->processResponse($response);
+
+            $features = [];
+            if (isset($data['Features']) && is_array($data['Features'])) {
+                foreach ($data['Features'] as $k => $v) {
+                    $features[$k] = (bool) $v;
+                }
+            }
+
+            return [
+                'plugin' => $data['Plugin'] ?? 'ZnunyAgentList',
+                'version' => $data['Version'] ?? '1.1.0',
+                'znuny_version' => $data['Znuny']['Version'] ?? null,
+                'features' => $features,
+            ];
+        });
+    }
+
+    /**
+     * Call /Queue
+     */
+    public function getQueues(): array
+    {
+        return $this->withSessionRetry(function ($session) {
+            $response = $this->request()->get($this->apiUrl().'/Queue', [
+                'SessionID' => $session,
+            ]);
+
+            $data = $this->processResponse($response);
+            $normalized = [];
+
+            if (! empty($data['Queues']) && is_array($data['Queues'])) {
+                foreach ($data['Queues'] as $q) {
+                    $id = $q['QueueID'] ?? null;
+                    $name = trim((string) ($q['Name'] ?? ''));
+
+                    if (! is_numeric($id) || $id <= 0 || $name === '') {
+                        continue;
+                    }
+
+                    $fullName = isset($q['FullName']) ? trim((string) $q['FullName']) : $name;
+
+                    $normalized[] = [
+                        'id' => (int) $id,
+                        'name' => $name,
+                        'full_name' => $fullName,
+                        'valid_id' => (int) ($q['ValidID'] ?? 1),
+                        'label' => $name,
+                    ];
+                }
+            }
+
+            usort($normalized, fn ($a, $b) => strcasecmp($a['label'], $b['label']));
+
+            return $normalized;
+        });
+    }
+
+    /**
+     * Call /Queue/{QueueID}
+     */
+    public function getQueue(int|string $queueId): array
+    {
+        return $this->withSessionRetry(function ($session) use ($queueId) {
+            $response = $this->request()->get($this->apiUrl().'/Queue/'.rawurlencode((string) $queueId), [
+                'SessionID' => $session,
+            ]);
+
+            $data = $this->processResponse($response);
+
+            if (empty($data['Queue']) || empty($data['Queue']['QueueID'])) {
+                return [
+                    'found' => false,
+                    'warnings' => $data['Warnings'] ?? ['Queue not found.'],
+                ];
+            }
+
+            $q = $data['Queue'];
+            $name = trim((string) ($q['Name'] ?? ''));
+            $id = $q['QueueID'] ?? null;
+
+            if (! is_numeric($id) || $id <= 0 || $name === '') {
+                return [
+                    'found' => false,
+                    'warnings' => $data['Warnings'] ?? ['Queue data invalid.'],
+                ];
+            }
+
+            return [
+                'found' => true,
+                'id' => (int) $id,
+                'name' => $name,
+                'full_name' => isset($q['FullName']) ? trim((string) $q['FullName']) : $name,
+                'valid_id' => (int) ($q['ValidID'] ?? 1),
+                'label' => $name,
+                'warnings' => $data['Warnings'] ?? [],
+            ];
+        });
+    }
+
+    /**
+     * Call /QueueByName/{Name}
+     */
+    public function getQueueByName(string $name): array
+    {
+        return $this->withSessionRetry(function ($session) use ($name) {
+            $response = $this->request()->get($this->apiUrl().'/QueueByName/'.rawurlencode($name), [
+                'SessionID' => $session,
+            ]);
+
+            $data = $this->processResponse($response);
+
+            if (empty($data['Queue']) || empty($data['Queue']['QueueID'])) {
+                return [
+                    'found' => false,
+                    'warnings' => $data['Warnings'] ?? ['Queue not found.'],
+                ];
+            }
+
+            $q = $data['Queue'];
+            $qName = trim((string) ($q['Name'] ?? ''));
+            $id = $q['QueueID'] ?? null;
+
+            if (! is_numeric($id) || $id <= 0 || $qName === '') {
+                return [
+                    'found' => false,
+                    'warnings' => $data['Warnings'] ?? ['Queue data invalid.'],
+                ];
+            }
+
+            return [
+                'found' => true,
+                'id' => (int) $id,
+                'name' => $qName,
+                'full_name' => isset($q['FullName']) ? trim((string) $q['FullName']) : $qName,
+                'valid_id' => (int) ($q['ValidID'] ?? 1),
+                'label' => $qName,
+                'warnings' => $data['Warnings'] ?? [],
+            ];
+        });
+    }
+
+    /**
+     * Call /CustomerUser?Search=...&Limit=...
+     */
+    public function searchCustomerUsers(string $search, int $limit = 20): array
+    {
+        return $this->withSessionRetry(function ($session) use ($search, $limit) {
+            $safeLimit = max(1, min(50, $limit));
+
+            $response = $this->request()->get($this->apiUrl().'/CustomerUser', [
+                'SessionID' => $session,
+                'Search' => $search,
+                'Limit' => $safeLimit,
+            ]);
+
+            $data = $this->processResponse($response);
+            $normalized = [];
+
+            if (! empty($data['CustomerUsers']) && is_array($data['CustomerUsers'])) {
+                foreach ($data['CustomerUsers'] as $u) {
+                    $login = trim((string) ($u['UserLogin'] ?? ''));
+                    if ($login === '') {
+                        continue;
+                    }
+
+                    $firstName = isset($u['UserFirstname']) ? trim((string) $u['UserFirstname']) : '';
+                    $lastName = isset($u['UserLastname']) ? trim((string) $u['UserLastname']) : '';
+
+                    $fullNameParts = array_filter([$firstName, $lastName]);
+                    $fullName = implode(' ', $fullNameParts);
+                    $label = $fullName ? "{$fullName} <{$login}>" : $login;
+
+                    $normalized[] = [
+                        'login' => $login,
+                        'customer_id' => trim((string) ($u['UserCustomerID'] ?? '')),
+                        'first_name' => $firstName,
+                        'last_name' => $lastName,
+                        'email' => trim((string) ($u['UserEmail'] ?? '')),
+                        'label' => $label,
+                    ];
+                }
+            }
+
+            usort($normalized, fn ($a, $b) => strcasecmp($a['label'], $b['label']));
+
+            return $normalized;
+        });
+    }
+
+    /**
+     * Call /CustomerUser/{UserLogin}
+     */
+    public function getCustomerUser(string $userLogin): array
+    {
+        return $this->withSessionRetry(function ($session) use ($userLogin) {
+            $response = $this->request()->get($this->apiUrl().'/CustomerUser/'.rawurlencode($userLogin), [
+                'SessionID' => $session,
+            ]);
+
+            $data = $this->processResponse($response);
+
+            if (empty($data['CustomerUser']) || empty($data['CustomerUser']['UserLogin'])) {
+                return [
+                    'found' => false,
+                    'warnings' => $data['Warnings'] ?? ['CustomerUser not found.'],
+                ];
+            }
+
+            $u = $data['CustomerUser'];
+            $login = trim((string) $u['UserLogin']);
+
+            if ($login === '') {
+                return [
+                    'found' => false,
+                    'warnings' => $data['Warnings'] ?? ['CustomerUser login invalid.'],
+                ];
+            }
+
+            $firstName = isset($u['UserFirstname']) ? trim((string) $u['UserFirstname']) : '';
+            $lastName = isset($u['UserLastname']) ? trim((string) $u['UserLastname']) : '';
+
+            $fullNameParts = array_filter([$firstName, $lastName]);
+            $fullName = implode(' ', $fullNameParts);
+            $label = $fullName ? "{$fullName} <{$login}>" : $login;
+
+            return [
+                'found' => true,
+                'login' => $login,
+                'customer_id' => trim((string) ($u['UserCustomerID'] ?? '')),
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'email' => trim((string) ($u['UserEmail'] ?? '')),
+                'label' => $label,
+                'warnings' => $data['Warnings'] ?? [],
+            ];
+        });
+    }
+
+    /**
+     * Call /ResolveTicketDefaults?HostName=...
+     */
+    public function resolveTicketDefaults(string $hostName): array
+    {
+        return $this->withSessionRetry(function ($session) use ($hostName) {
+            $response = $this->request()->get($this->apiUrl().'/ResolveTicketDefaults', [
+                'SessionID' => $session,
+                'HostName' => $hostName,
+            ]);
+
+            $data = $this->processResponse($response);
+
+            $result = [
+                'input' => [
+                    'host_name' => $hostName,
+                ],
+                'detected' => [
+                    'queue_name' => $data['Detected']['QueueName'] ?? null,
+                    'customer_user_login' => $data['Detected']['CustomerUserLogin'] ?? null,
+                ],
+                'queue' => [
+                    'found' => ! empty($data['Queue']['Found']),
+                ],
+                'customer_user' => [
+                    'found' => ! empty($data['CustomerUser']['Found']),
+                ],
+                'warnings' => $data['Warnings'] ?? [],
+            ];
+
+            if ($result['queue']['found']) {
+                $result['queue']['id'] = (int) ($data['Queue']['QueueID'] ?? 0);
+                $result['queue']['name'] = trim((string) ($data['Queue']['Name'] ?? ''));
+                $result['queue']['full_name'] = trim((string) ($data['Queue']['FullName'] ?? ''));
+            }
+
+            if ($result['customer_user']['found']) {
+                $result['customer_user']['login'] = trim((string) ($data['CustomerUser']['UserLogin'] ?? ''));
+                $result['customer_user']['customer_id'] = trim((string) ($data['CustomerUser']['UserCustomerID'] ?? ''));
+            }
+
+            return $result;
+        });
+    }
+
+    /**
+     * Call POST /ValidateTicketCreate
+     */
+    public function validateTicketCreate(array $payload): array
+    {
+        return $this->withSessionRetry(function ($session) use ($payload) {
+            $payload['SessionID'] = $session;
+
+            $response = $this->request()->post($this->apiUrl().'/ValidateTicketCreate', $payload);
+
+            $data = $this->processResponse($response);
+
+            return [
+                'valid' => ! empty($data['Valid']),
+                'errors' => $data['Errors'] ?? [],
+                'warnings' => $data['Warnings'] ?? [],
+            ];
+        });
+    }
 }
