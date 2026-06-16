@@ -3,7 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Models\Setting;
-use App\Services\AuditLogger;
+use App\Services\SettingsAuditLogService;
 use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyAgentService;
 use App\Services\Znuny\ZnunyDefaultAgentSchemaBuilder;
@@ -307,7 +307,7 @@ class Settings extends Page implements HasForms
             }
         }
 
-        $this->logChanges($changedSettings);
+        app(SettingsAuditLogService::class)->logChanges($changedSettings);
 
         Notification::make()
             ->title('Settings saved successfully.')
@@ -357,39 +357,6 @@ class Settings extends Page implements HasForms
                 $subSetting->update(['value' => $v]);
             }
         }
-    }
-
-    private function logChanges(array $changedSettings): void
-    {
-        if (empty($changedSettings)) {
-            return;
-        }
-
-        $sensitiveKeywords = ['token', 'password', 'secret', 'api_key', 'session'];
-
-        $sanitizedChanges = array_map(function ($change) use ($sensitiveKeywords) {
-            $isSensitive = false;
-            foreach ($sensitiveKeywords as $keyword) {
-                if (str_contains(strtolower($change['key']), $keyword)) {
-                    $isSensitive = true;
-                    break;
-                }
-            }
-
-            if ($isSensitive) {
-                $change['old_value'] = '[redacted]';
-                $change['new_value'] = '[redacted]';
-            }
-
-            return $change;
-        }, $changedSettings);
-
-        AuditLogger::log(
-            action: 'settings.updated',
-            entityType: 'settings',
-            entityId: null,
-            context: ['changes' => $sanitizedChanges]
-        );
     }
 
     private function buildZnunyTabGroups(array $z): array
