@@ -22,6 +22,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
@@ -97,6 +98,9 @@ class Settings extends Page implements HasForms
             'Other' => [],
         ];
 
+        // Ensure we pass the form's initial data state to components that need it (like Repeater keys)
+        $initialData = $this->data ?? [];
+
         foreach ($settings as $setting) {
             if (in_array($setting->key, ['znuny_default_agent_login', 'znuny_default_agent_name'])) {
                 continue;
@@ -106,47 +110,7 @@ class Settings extends Page implements HasForms
             $component = null;
 
             if ($setting->key === 'znuny_default_agent_id') {
-                $options = [];
-                $warning = null;
-
-                try {
-                    $agentService = app(ZnunyAgentService::class);
-                    $selectableAgents = $agentService->getSelectableAgents(failSilently: true);
-                    foreach ($selectableAgents as $agent) {
-                        $options[$agent['id']] = $agent['label'];
-                    }
-
-                    if ($agentService->lastError()) {
-                        $warning = 'Could not load active agents from Znuny API.';
-                    }
-                } catch (\Throwable $e) {
-                    $warning = 'Could not load active agents from Znuny API.';
-                }
-
-                $currentId = SettingsService::string('znuny_default_agent_id');
-                if ($currentId !== '' && ! isset($options[$currentId]) && empty($warning)) {
-                    // Check if it's excluded or completely inactive
-                    $allAgents = $agentService->getAgents(failSilently: true);
-                    $isActive = collect($allAgents)->contains('id', (int) $currentId);
-
-                    if ($isActive) {
-                        $warning = 'The currently selected default agent is excluded from selectable agents. Please choose another agent.';
-                    } else {
-                        $warning = "The currently selected agent (ID: {$currentId}) is no longer returned by the active agents list. Please select a valid agent.";
-                    }
-                }
-
-                $helpText = 'Used only by future automatic ticket creation. Manual ticket creation requires the operator to choose an owner.';
-                if ($warning) {
-                    $helpText = "<span style=\"color: #e11d48; font-weight: bold;\">Warning: {$warning}</span><br>".$helpText;
-                }
-
-                $component = Select::make($setting->key)
-                    ->label('Default agent for automatic ticket creation')
-                    ->helperText(new HtmlString($helpText))
-                    ->options($options)
-                    ->searchable()
-                    ->required(false);
+                $component = $this->getZnunyDefaultAgentIdComponent($setting);
             } elseif ($setting->key === 'znuny_agent_exclude_logins') {
                 $component = Textarea::make($setting->key)
                     ->label($label)
@@ -205,47 +169,7 @@ class Settings extends Page implements HasForms
                     ->minValue($min)
                     ->required();
             } elseif ($setting->key === 'znuny_queue_host_mappings') {
-                $mappingService = app(ZnunyQueueHostMappingService::class);
-                $qResult = $mappingService->getSelectableQueuesResult();
-                $queueOptions = $qResult['options'] ?? [];
-                $queueError = $qResult['error'] ?? null;
-
-                $savedMappings = $initialData['znuny_queue_host_mappings'] ?? [];
-                if (is_string($savedMappings)) {
-                    $savedMappings = json_decode($savedMappings, true) ?? [];
-                }
-
-                if (is_array($savedMappings)) {
-                    foreach ($savedMappings as $m) {
-                        $qName = $m['queue_name'] ?? null;
-                        if ($qName && ! isset($queueOptions[$qName])) {
-                            $queueOptions[$qName] = $qName.($queueError ? ' (Saved)' : '');
-                        }
-                    }
-                }
-
-                $component = Repeater::make($setting->key)
-                    ->label('Queue host prefix mappings')
-                    ->helperText(new HtmlString('Maps primary Zabbix host prefixes to existing Znuny queues. Used only when the primary queue candidate is not found in Znuny.'.($queueError ? '<br><span style="color: #e11d48; font-weight: bold;">'.$queueError.'</span>' : '')))
-                    ->schema([
-                        TextInput::make('host_prefix')
-                            ->label('Host prefix')
-                            ->helperText('Example: TestCompany')
-                            ->dehydrateStateUsing(fn ($state) => trim($state))
-                            ->distinct()
-                            ->required(false),
-                        Select::make('queue_name')
-                            ->label('Queue name')
-                            ->options($queueOptions)
-                            ->searchable()
-                            ->required(false),
-                        TextInput::make('note')
-                            ->label('Note')
-                            ->required(false),
-                    ])
-                    ->columns(3)
-                    ->defaultItems(0)
-                    ->reorderable(false);
+                $component = $this->getZnunyQueueHostMappingsComponent($setting, $initialData);
             } elseif ($setting->type === 'json') {
                 $component = Textarea::make($setting->key)
                     ->label($label)
@@ -344,8 +268,6 @@ class Settings extends Page implements HasForms
             }
 
             if (isset($zd['znuny_queue_host_mappings'])) {
-                $mappingService = app(ZnunyQueueHostMappingService::class);
-
                 $zdGroups[] = Section::make('Queue host prefix mappings')
                     ->description('Fallback Queue mapping for standardized Zabbix host prefixes. CustomerUser is still generated from the original host prefix.')
                     ->schema([
@@ -353,54 +275,8 @@ class Settings extends Page implements HasForms
                     ])
                     ->columns(1)
                     ->headerActions([
-                        Action::make('saveMappings')
-                            ->label('Save queue mappings')
-                            ->icon('heroicon-o-check')
-                            ->color('success')
-                            ->action(function (Settings $livewire) use ($mappingService) {
-                                if (auth()->user()->role !== 'admin') {
-                                    abort(403, 'Only admins can modify settings.');
-                                }
-                                $state = $livewire->data['znuny_queue_host_mappings'] ?? [];
-                                $mappingService->saveMappings($state);
-
-                                Notification::make()
-                                    ->title('Queue mappings saved successfully.')
-                                    ->success()
-                                    ->send();
-                            }),
-                        Action::make('scanMissing')
-                            ->label('Scan current problems for missing queue mappings')
-                            ->button()
-                            ->action(function (Settings $livewire) use ($mappingService) {
-                                $fullState = $livewire->form->getRawState();
-                                $currentState = $fullState['znuny_queue_host_mappings'] ?? [];
-                                $result = $mappingService->scanMissingMappings($currentState);
-
-                                $drafts = $result['drafts'];
-                                $stats = $result['stats'];
-
-                                if (! empty($drafts)) {
-                                    $newState = $currentState;
-                                    foreach ($drafts as $draft) {
-                                        $newState[(string) Str::uuid()] = $draft;
-                                    }
-                                    $fullState['znuny_queue_host_mappings'] = $newState;
-                                    $livewire->form->fill($fullState);
-                                }
-
-                                $message = "Scanned {$stats['scanned']} problems ({$stats['unique_prefixes']} unique prefixes).\n"
-                                    ."Added {$stats['added']} draft mappings.\n"
-                                    ."Skipped {$stats['skipped_existing_queue']} existing queues.\n"
-                                    ."Skipped {$stats['skipped_existing_mapping']} existing mappings.\n"
-                                    ."Failed API checks: {$stats['failed_api']}.";
-
-                                Notification::make()
-                                    ->title('Scan Complete')
-                                    ->body($message)
-                                    ->success()
-                                    ->send();
-                            }),
+                        $this->getSaveMappingsAction(),
+                        $this->getScanMissingAction(),
                     ]);
             }
 
@@ -473,48 +349,7 @@ class Settings extends Page implements HasForms
 
                 if ($currentPlaintext !== $newValue) {
                     if ($setting->key === 'znuny_default_agent_id') {
-                        $agentService = app(ZnunyAgentService::class);
-                        $selectableAgents = $agentService->getSelectableAgents(failSilently: true);
-
-                        if ($newValue === '') {
-                            // Clear values
-                            $selectedAgent = null;
-                        } else {
-                            if ($agentService->lastError()) {
-                                // Agent loading failed, do not destroy the existing stored value/snapshot
-                                continue;
-                            }
-
-                            $selectedAgent = collect($selectableAgents)->firstWhere('id', (int) $newValue);
-                            if (! $selectedAgent) {
-                                // Invalid selection, do not silently save it
-                                continue;
-                            }
-                        }
-
-                        $newLogin = $selectedAgent ? $selectedAgent['login'] : '';
-                        $newName = $selectedAgent ? (string) $selectedAgent['name'] : '';
-
-                        // Track changes for ID
-                        $changedSettings[] = [
-                            'key' => 'znuny_default_agent_id',
-                            'old_value' => $currentPlaintext,
-                            'new_value' => $newValue,
-                        ];
-                        $setting->update(['value' => $newValue]);
-
-                        // Update login and name
-                        foreach (['znuny_default_agent_login' => $newLogin, 'znuny_default_agent_name' => $newName] as $k => $v) {
-                            $subSetting = $settings->firstWhere('key', $k);
-                            if ($subSetting && $subSetting->value !== $v) {
-                                $changedSettings[] = [
-                                    'key' => $k,
-                                    'old_value' => $subSetting->value,
-                                    'new_value' => $v,
-                                ];
-                                $subSetting->update(['value' => $v]);
-                            }
-                        }
+                        $this->saveZnunyDefaultAgent($setting, $newValue, $currentPlaintext, $changedSettings, $settings);
 
                         continue; // Skip the default save logic for this key
                     }
@@ -539,37 +374,238 @@ class Settings extends Page implements HasForms
             }
         }
 
-        if (! empty($changedSettings)) {
-            $sensitiveKeywords = ['token', 'password', 'secret', 'api_key', 'session'];
-
-            $sanitizedChanges = array_map(function ($change) use ($sensitiveKeywords) {
-                $isSensitive = false;
-                foreach ($sensitiveKeywords as $keyword) {
-                    if (str_contains(strtolower($change['key']), $keyword)) {
-                        $isSensitive = true;
-                        break;
-                    }
-                }
-
-                if ($isSensitive) {
-                    $change['old_value'] = '[redacted]';
-                    $change['new_value'] = '[redacted]';
-                }
-
-                return $change;
-            }, $changedSettings);
-
-            AuditLogger::log(
-                action: 'settings.updated',
-                entityType: 'settings',
-                entityId: null,
-                context: ['changes' => $sanitizedChanges]
-            );
-        }
+        $this->logChanges($changedSettings);
 
         Notification::make()
             ->title('Settings saved successfully.')
             ->success()
             ->send();
+    }
+
+    private function getZnunyDefaultAgentIdComponent(Setting $setting): Select
+    {
+        $options = [];
+        $warning = null;
+
+        try {
+            $agentService = app(ZnunyAgentService::class);
+            $selectableAgents = $agentService->getSelectableAgents(failSilently: true);
+            foreach ($selectableAgents as $agent) {
+                $options[$agent['id']] = $agent['label'];
+            }
+
+            if ($agentService->lastError()) {
+                $warning = 'Could not load active agents from Znuny API.';
+            }
+        } catch (\Throwable $e) {
+            $warning = 'Could not load active agents from Znuny API.';
+        }
+
+        $currentId = SettingsService::string('znuny_default_agent_id');
+        if ($currentId !== '' && ! isset($options[$currentId]) && empty($warning)) {
+            // Check if it's excluded or completely inactive
+            $allAgents = $agentService->getAgents(failSilently: true);
+            $isActive = collect($allAgents)->contains('id', (int) $currentId);
+
+            if ($isActive) {
+                $warning = 'The currently selected default agent is excluded from selectable agents. Please choose another agent.';
+            } else {
+                $warning = "The currently selected agent (ID: {$currentId}) is no longer returned by the active agents list. Please select a valid agent.";
+            }
+        }
+
+        $helpText = 'Used only by future automatic ticket creation. Manual ticket creation requires the operator to choose an owner.';
+        if ($warning) {
+            $helpText = "<span style=\"color: #e11d48; font-weight: bold;\">Warning: {$warning}</span><br>".$helpText;
+        }
+
+        return Select::make($setting->key)
+            ->label('Default agent for automatic ticket creation')
+            ->helperText(new HtmlString($helpText))
+            ->options($options)
+            ->searchable()
+            ->required(false);
+    }
+
+    private function getZnunyQueueHostMappingsComponent(Setting $setting, array $initialData): Repeater
+    {
+        $mappingService = app(ZnunyQueueHostMappingService::class);
+        $qResult = $mappingService->getSelectableQueuesResult();
+        $queueOptions = $qResult['options'] ?? [];
+        $queueError = $qResult['error'] ?? null;
+
+        $savedMappings = $initialData['znuny_queue_host_mappings'] ?? [];
+        if (is_string($savedMappings)) {
+            $savedMappings = json_decode($savedMappings, true) ?? [];
+        }
+
+        if (is_array($savedMappings)) {
+            foreach ($savedMappings as $m) {
+                $qName = $m['queue_name'] ?? null;
+                if ($qName && ! isset($queueOptions[$qName])) {
+                    $queueOptions[$qName] = $qName.($queueError ? ' (Saved)' : '');
+                }
+            }
+        }
+
+        return Repeater::make($setting->key)
+            ->label('Queue host prefix mappings')
+            ->helperText(new HtmlString('Maps primary Zabbix host prefixes to existing Znuny queues. Used only when the primary queue candidate is not found in Znuny.'.($queueError ? '<br><span style="color: #e11d48; font-weight: bold;">'.$queueError.'</span>' : '')))
+            ->schema([
+                TextInput::make('host_prefix')
+                    ->label('Host prefix')
+                    ->helperText('Example: TestCompany')
+                    ->dehydrateStateUsing(fn ($state) => trim($state))
+                    ->distinct()
+                    ->required(false),
+                Select::make('queue_name')
+                    ->label('Queue name')
+                    ->options($queueOptions)
+                    ->searchable()
+                    ->required(false),
+                TextInput::make('note')
+                    ->label('Note')
+                    ->required(false),
+            ])
+            ->columns(3)
+            ->defaultItems(0)
+            ->reorderable(false);
+    }
+
+    private function getSaveMappingsAction(): Action
+    {
+        return Action::make('saveMappings')
+            ->label('Save queue mappings')
+            ->icon('heroicon-o-check')
+            ->color('success')
+            ->action(function (Settings $livewire) {
+                if (auth()->user()->role !== 'admin') {
+                    abort(403, 'Only admins can modify settings.');
+                }
+
+                $mappingService = app(ZnunyQueueHostMappingService::class);
+                $state = $livewire->data['znuny_queue_host_mappings'] ?? [];
+                $mappingService->saveMappings($state);
+
+                Notification::make()
+                    ->title('Queue mappings saved successfully.')
+                    ->success()
+                    ->send();
+            });
+    }
+
+    private function getScanMissingAction(): Action
+    {
+        return Action::make('scanMissing')
+            ->label('Scan current problems for missing queue mappings')
+            ->button()
+            ->action(function (Settings $livewire) {
+                $mappingService = app(ZnunyQueueHostMappingService::class);
+
+                $fullState = $livewire->form->getRawState();
+                $currentState = $fullState['znuny_queue_host_mappings'] ?? [];
+                $result = $mappingService->scanMissingMappings($currentState);
+
+                $drafts = $result['drafts'];
+                $stats = $result['stats'];
+
+                if (! empty($drafts)) {
+                    $newState = $currentState;
+                    foreach ($drafts as $draft) {
+                        $newState[(string) Str::uuid()] = $draft;
+                    }
+                    $fullState['znuny_queue_host_mappings'] = $newState;
+                    $livewire->form->fill($fullState);
+                }
+
+                $message = "Scanned {$stats['scanned']} problems ({$stats['unique_prefixes']} unique prefixes).\n"
+                    ."Added {$stats['added']} draft mappings.\n"
+                    ."Skipped {$stats['skipped_existing_queue']} existing queues.\n"
+                    ."Skipped {$stats['skipped_existing_mapping']} existing mappings.\n"
+                    ."Failed API checks: {$stats['failed_api']}.";
+
+                Notification::make()
+                    ->title('Scan Complete')
+                    ->body($message)
+                    ->success()
+                    ->send();
+            });
+    }
+
+    private function saveZnunyDefaultAgent(Setting $setting, $newValue, string $currentPlaintext, array &$changedSettings, Collection $settings): void
+    {
+        $agentService = app(ZnunyAgentService::class);
+        $selectableAgents = $agentService->getSelectableAgents(failSilently: true);
+        $selectedAgent = null;
+
+        if ($newValue !== '') {
+            if ($agentService->lastError()) {
+                // Agent loading failed, do not destroy the existing stored value/snapshot
+                return;
+            }
+
+            $selectedAgent = collect($selectableAgents)->firstWhere('id', (int) $newValue);
+            if (! $selectedAgent) {
+                // Invalid selection, do not silently save it
+                return;
+            }
+        }
+
+        $newLogin = $selectedAgent ? $selectedAgent['login'] : '';
+        $newName = $selectedAgent ? (string) $selectedAgent['name'] : '';
+
+        // Track changes for ID
+        $changedSettings[] = [
+            'key' => 'znuny_default_agent_id',
+            'old_value' => $currentPlaintext,
+            'new_value' => $newValue,
+        ];
+        $setting->update(['value' => $newValue]);
+
+        // Update login and name
+        foreach (['znuny_default_agent_login' => $newLogin, 'znuny_default_agent_name' => $newName] as $k => $v) {
+            $subSetting = $settings->firstWhere('key', $k);
+            if ($subSetting && $subSetting->value !== $v) {
+                $changedSettings[] = [
+                    'key' => $k,
+                    'old_value' => $subSetting->value,
+                    'new_value' => $v,
+                ];
+                $subSetting->update(['value' => $v]);
+            }
+        }
+    }
+
+    private function logChanges(array $changedSettings): void
+    {
+        if (empty($changedSettings)) {
+            return;
+        }
+
+        $sensitiveKeywords = ['token', 'password', 'secret', 'api_key', 'session'];
+
+        $sanitizedChanges = array_map(function ($change) use ($sensitiveKeywords) {
+            $isSensitive = false;
+            foreach ($sensitiveKeywords as $keyword) {
+                if (str_contains(strtolower($change['key']), $keyword)) {
+                    $isSensitive = true;
+                    break;
+                }
+            }
+
+            if ($isSensitive) {
+                $change['old_value'] = '[redacted]';
+                $change['new_value'] = '[redacted]';
+            }
+
+            return $change;
+        }, $changedSettings);
+
+        AuditLogger::log(
+            action: 'settings.updated',
+            entityType: 'settings',
+            entityId: null,
+            context: ['changes' => $sanitizedChanges]
+        );
     }
 }
