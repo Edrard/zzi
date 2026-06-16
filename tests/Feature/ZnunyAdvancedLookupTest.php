@@ -355,4 +355,168 @@ class ZnunyAdvancedLookupTest extends TestCase
         $this->assertFalse($response['customer_user']['found']);
         $this->assertContains('Queue could not be detected from host name.', $response['warnings']);
     }
+
+    public function test_lookup_service_mapping_exact_match()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], ['value' => json_encode([
+            [
+                'enabled' => true,
+                'host_prefix' => 'TestCompany',
+                'queue_name' => 'MappedQueue',
+            ],
+        ]), 'type' => 'json']);
+
+        Http::fake([
+            'https://example.invalid/api/QueueByName/TestCompany*' => Http::response(['Queue' => []], 200),
+            'https://example.invalid/api/CustomerUser/TestCompanyClients*' => Http::response(['CustomerUser' => []], 200),
+            'https://example.invalid/api/QueueByName/MappedQueue*' => Http::response([
+                'Queue' => ['QueueID' => 99, 'Name' => 'MappedQueue', 'FullName' => 'Mapped Queue', 'ValidID' => 1],
+            ], 200),
+        ]);
+
+        $service = new ZnunyLookupService(new ZnunyTicketDefaultRuleService, new ZnunyClient);
+        $response = $service->resolveTicketDefaultCandidates('TestCompany swiss test01');
+
+        $this->assertTrue($response['queue']['found']);
+        $this->assertEquals('MappedQueue', $response['queue']['name']);
+        $this->assertFalse($response['customer_user']['found']);
+    }
+
+    public function test_lookup_service_mapping_disabled_ignored()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], ['value' => json_encode([
+            [
+                'enabled' => false,
+                'host_prefix' => 'TestCompany',
+                'queue_name' => 'DisabledQueue',
+            ],
+        ]), 'type' => 'json']);
+
+        Http::fake([
+            'https://example.invalid/api/QueueByName/TestCompany*' => Http::response(['Queue' => []], 200),
+            'https://example.invalid/api/CustomerUser/TestCompanyClients*' => Http::response(['CustomerUser' => []], 200),
+        ]);
+
+        $service = new ZnunyLookupService(new ZnunyTicketDefaultRuleService, new ZnunyClient);
+        $response = $service->resolveTicketDefaultCandidates('TestCompany');
+
+        $this->assertFalse($response['queue']['found']);
+    }
+
+    public function test_lookup_service_mapping_customer_user_is_not_fallback()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], ['value' => json_encode([
+            [
+                'enabled' => true,
+                'host_prefix' => 'TestCompany',
+                'queue_name' => 'ExampleCompany',
+            ],
+        ]), 'type' => 'json']);
+
+        Http::fake([
+            'https://example.invalid/api/QueueByName/TestCompany*' => Http::response(['Queue' => []], 200),
+            'https://example.invalid/api/CustomerUser/TestCompanyClients*' => Http::response([
+                'CustomerUser' => [
+                    'UserLogin' => 'TestCompanyClients',
+                    'UserCustomerID' => 'testcompany',
+                ],
+            ], 200),
+            'https://example.invalid/api/QueueByName/ExampleCompany*' => Http::response([
+                'Queue' => ['QueueID' => 103, 'Name' => 'ExampleCompany', 'FullName' => 'Example Company', 'ValidID' => 1],
+            ], 200),
+        ]);
+
+        $service = new ZnunyLookupService(new ZnunyTicketDefaultRuleService, new ZnunyClient);
+        // "TestCompany kyiv sw01" -> Primary queue prefix "TestCompany" -> Mapped to "ExampleCompany"
+        // Primary CU -> "TestCompanyClients" -> Which exists, so it stays TestCompanyClients.
+        $response = $service->resolveTicketDefaultCandidates('TestCompany kyiv sw01');
+
+        $this->assertTrue($response['queue']['found']);
+        $this->assertEquals('ExampleCompany', $response['queue']['name']);
+        $this->assertTrue($response['customer_user']['found']);
+        $this->assertEquals('TestCompanyClients', $response['customer_user']['login']);
+    }
+
+    public function test_lookup_service_mapping_mapped_queue_not_found()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], ['value' => json_encode([
+            [
+                'enabled' => true,
+                'host_prefix' => 'BadQueueHost',
+                'queue_name' => 'NonExistentQueue',
+            ],
+        ]), 'type' => 'json']);
+
+        Http::fake([
+            'https://example.invalid/api/QueueByName/BadQueueHost*' => Http::response(['Queue' => []], 200),
+            'https://example.invalid/api/CustomerUser/BadQueueHostClients*' => Http::response(['CustomerUser' => []], 200),
+            'https://example.invalid/api/QueueByName/NonExistentQueue*' => Http::response(['Queue' => []], 200),
+        ]);
+
+        $service = new ZnunyLookupService(new ZnunyTicketDefaultRuleService, new ZnunyClient);
+        $response = $service->resolveTicketDefaultCandidates('BadQueueHost router01');
+
+        $this->assertFalse($response['queue']['found']);
+        $this->assertContains('Mapped queue not found in Znuny: NonExistentQueue', $response['warnings']);
+    }
+
+    public function test_lookup_service_mapping_ignored_if_primary_found()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], ['value' => json_encode([
+            [
+                'enabled' => true,
+                'host_prefix' => 'TestCompany',
+                'queue_name' => 'MappedQueue',
+            ],
+        ]), 'type' => 'json']);
+
+        Http::fake([
+            'https://example.invalid/api/QueueByName/TestCompany*' => Http::response([
+                'Queue' => ['QueueID' => 85, 'Name' => 'TestCompany', 'FullName' => 'TestCompany Full', 'ValidID' => 1],
+            ], 200),
+            'https://example.invalid/api/CustomerUser/TestCompanyClients*' => Http::response(['CustomerUser' => []], 200),
+        ]);
+
+        $service = new ZnunyLookupService(new ZnunyTicketDefaultRuleService, new ZnunyClient);
+        $response = $service->resolveTicketDefaultCandidates('TestCompany swiss test01');
+
+        $this->assertTrue($response['queue']['found']);
+        $this->assertEquals('TestCompany', $response['queue']['name']);
+        $this->assertFalse($response['customer_user']['found']);
+    }
+
+    public function test_lookup_service_mapping_first_enabled_match_wins()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], ['value' => json_encode([
+            [
+                'enabled' => false,
+                'host_prefix' => 'MatchHost',
+                'queue_name' => 'ShouldBeIgnored',
+            ],
+            [
+                'enabled' => true,
+                'host_prefix' => 'MatchHost',
+                'queue_name' => 'FirstWinnerQueue',
+            ],
+            [
+                'enabled' => true,
+                'host_prefix' => 'MatchHost',
+                'queue_name' => 'SecondQueue',
+            ],
+        ]), 'type' => 'json']);
+
+        Http::fake([
+            'https://example.invalid/api/QueueByName/MatchHost*' => Http::response(['Queue' => []], 200),
+            'https://example.invalid/api/CustomerUser/MatchHostClients*' => Http::response(['CustomerUser' => []], 200),
+            'https://example.invalid/api/QueueByName/FirstWinnerQueue*' => Http::response([
+                'Queue' => ['QueueID' => 200, 'Name' => 'FirstWinnerQueue', 'FullName' => 'First Winner', 'ValidID' => 1],
+            ], 200),
+        ]);
+
+        $service = new ZnunyLookupService(new ZnunyTicketDefaultRuleService, new ZnunyClient);
+        $response = $service->resolveTicketDefaultCandidates('MatchHost firewall');
+
+        $this->assertTrue($response['queue']['found']);
+        $this->assertEquals('FirstWinnerQueue', $response['queue']['name']);
+    }
 }

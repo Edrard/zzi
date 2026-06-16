@@ -7,6 +7,7 @@ use App\Services\AuditLogger;
 use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyAgentService;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -61,6 +62,12 @@ class Settings extends Page implements HasForms
         foreach ($settings as $setting) {
             if (in_array($setting->key, ['zabbix_api_token', 'znuny_password'])) {
                 $initialData[$setting->key] = '';
+
+                continue;
+            }
+
+            if ($setting->type === 'json' && $setting->key === 'znuny_queue_host_mappings') {
+                $initialData[$setting->key] = json_decode($setting->value, true) ?? [];
 
                 continue;
             }
@@ -195,6 +202,28 @@ class Settings extends Page implements HasForms
                     ->integer()
                     ->minValue($min)
                     ->required();
+            } elseif ($setting->key === 'znuny_queue_host_mappings') {
+                $component = Repeater::make($setting->key)
+                    ->label('Queue host prefix mappings')
+                    ->helperText('Mapping of primary host prefixes to Znuny queues. Evaluated if the primary queue candidate does not exist.')
+                    ->schema([
+                        Toggle::make('enabled')
+                            ->label('Enabled')
+                            ->default(true),
+                        TextInput::make('host_prefix')
+                            ->label('Host prefix')
+                            ->helperText('Example: TestCompany')
+                            ->required(),
+                        TextInput::make('queue_name')
+                            ->label('Queue name')
+                            ->helperText('Example: ExampleCompany')
+                            ->required(),
+                        TextInput::make('note')
+                            ->label('Note')
+                            ->required(false),
+                    ])
+                    ->columns(4)
+                    ->defaultItems(0);
             } elseif ($setting->type === 'json') {
                 $component = Textarea::make($setting->key)
                     ->label($label)
@@ -272,9 +301,15 @@ class Settings extends Page implements HasForms
                     ]))->columns(1);
             }
 
+            if (isset($z['znuny_queue_host_mappings'])) {
+                $znunyGroups[] = Section::make('Queue host prefix mappings')
+                    ->description('Used as a fallback when the primary queue candidate from the Zabbix host prefix is not found in Znuny.')
+                    ->schema([$z['znuny_queue_host_mappings']])->columns(1);
+            }
+
             $knownKeys = [
                 'znuny_username', 'znuny_password', 'znuny_api_url', 'znuny_web_url', 'znuny_ticket_url_template', 'znuny_api_verify_ssl', 'znuny_api_timeout',
-                'znuny_default_agent_id', 'znuny_agent_exclude_logins', 'znuny_queue_from_host_regex', 'znuny_customer_user_from_queue_template',
+                'znuny_default_agent_id', 'znuny_agent_exclude_logins', 'znuny_queue_from_host_regex', 'znuny_customer_user_from_queue_template', 'znuny_queue_host_mappings',
             ];
             $unknownComponents = array_diff_key($z, array_flip($knownKeys));
 
@@ -324,7 +359,9 @@ class Settings extends Page implements HasForms
             if (array_key_exists($setting->key, $data)) {
                 $newValue = $data[$setting->key];
 
-                if ($setting->type === 'boolean') {
+                if ($setting->type === 'json' && $setting->key === 'znuny_queue_host_mappings') {
+                    $newValue = json_encode($newValue);
+                } elseif ($setting->type === 'boolean') {
                     $newValue = $newValue ? 'true' : 'false';
                 } else {
                     $newValue = (string) $newValue;
