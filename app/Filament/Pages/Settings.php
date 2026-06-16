@@ -5,8 +5,8 @@ namespace App\Filament\Pages;
 use App\Models\Setting;
 use App\Services\SettingsAuditLogService;
 use App\Services\SettingsService;
-use App\Services\Znuny\ZnunyAgentService;
 use App\Services\Znuny\ZnunyDefaultAgentSchemaBuilder;
+use App\Services\Znuny\ZnunyDefaultAgentSettingsService;
 use App\Services\Znuny\ZnunyQueueHostMappingSchemaBuilder;
 use App\Services\Znuny\ZnunyQueueHostMappingService;
 use Filament\Actions\Action;
@@ -22,7 +22,6 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
 
 class Settings extends Page implements HasForms
@@ -282,7 +281,7 @@ class Settings extends Page implements HasForms
 
                 if ($currentPlaintext !== $newValue) {
                     if ($setting->key === 'znuny_default_agent_id') {
-                        $this->saveZnunyDefaultAgent($setting, $newValue, $currentPlaintext, $changedSettings, $settings);
+                        app(ZnunyDefaultAgentSettingsService::class)->saveDefaultAgent($setting, $newValue, $currentPlaintext, $changedSettings, $settings);
 
                         continue; // Skip the default save logic for this key
                     }
@@ -313,50 +312,6 @@ class Settings extends Page implements HasForms
             ->title('Settings saved successfully.')
             ->success()
             ->send();
-    }
-
-    private function saveZnunyDefaultAgent(Setting $setting, $newValue, string $currentPlaintext, array &$changedSettings, Collection $settings): void
-    {
-        $agentService = app(ZnunyAgentService::class);
-        $selectableAgents = $agentService->getSelectableAgents(failSilently: true);
-        $selectedAgent = null;
-
-        if ($newValue !== '') {
-            if ($agentService->lastError()) {
-                // Agent loading failed, do not destroy the existing stored value/snapshot
-                return;
-            }
-
-            $selectedAgent = collect($selectableAgents)->firstWhere('id', (int) $newValue);
-            if (! $selectedAgent) {
-                // Invalid selection, do not silently save it
-                return;
-            }
-        }
-
-        $newLogin = $selectedAgent ? $selectedAgent['login'] : '';
-        $newName = $selectedAgent ? (string) $selectedAgent['name'] : '';
-
-        // Track changes for ID
-        $changedSettings[] = [
-            'key' => 'znuny_default_agent_id',
-            'old_value' => $currentPlaintext,
-            'new_value' => $newValue,
-        ];
-        $setting->update(['value' => $newValue]);
-
-        // Update login and name
-        foreach (['znuny_default_agent_login' => $newLogin, 'znuny_default_agent_name' => $newName] as $k => $v) {
-            $subSetting = $settings->firstWhere('key', $k);
-            if ($subSetting && $subSetting->value !== $v) {
-                $changedSettings[] = [
-                    'key' => $k,
-                    'old_value' => $subSetting->value,
-                    'new_value' => $v,
-                ];
-                $subSetting->update(['value' => $v]);
-            }
-        }
     }
 
     private function buildZnunyTabGroups(array $z): array
