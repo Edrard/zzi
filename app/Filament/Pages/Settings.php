@@ -6,6 +6,7 @@ use App\Models\Setting;
 use App\Services\AuditLogger;
 use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyAgentService;
+use App\Services\Znuny\ZnunyDefaultAgentSchemaBuilder;
 use App\Services\Znuny\ZnunyQueueHostMappingService;
 use App\Services\Znuny\ZnunyQueueService;
 use Filament\Actions\Action;
@@ -111,7 +112,7 @@ class Settings extends Page implements HasForms
             $component = null;
 
             if ($setting->key === 'znuny_default_agent_id') {
-                $component = $this->getZnunyDefaultAgentIdComponent($setting);
+                $component = app(ZnunyDefaultAgentSchemaBuilder::class)->build($setting);
             } elseif ($setting->key === 'znuny_agent_exclude_logins') {
                 $component = Textarea::make($setting->key)
                     ->label($label)
@@ -381,51 +382,6 @@ class Settings extends Page implements HasForms
             ->title('Settings saved successfully.')
             ->success()
             ->send();
-    }
-
-    private function getZnunyDefaultAgentIdComponent(Setting $setting): Select
-    {
-        $options = [];
-        $warning = null;
-
-        try {
-            $agentService = app(ZnunyAgentService::class);
-            $selectableAgents = $agentService->getSelectableAgents(failSilently: true);
-            foreach ($selectableAgents as $agent) {
-                $options[$agent['id']] = $agent['label'];
-            }
-
-            if ($agentService->lastError()) {
-                $warning = 'Could not load active agents from Znuny API.';
-            }
-        } catch (\Throwable $e) {
-            $warning = 'Could not load active agents from Znuny API.';
-        }
-
-        $currentId = SettingsService::string('znuny_default_agent_id');
-        if ($currentId !== '' && ! isset($options[$currentId]) && empty($warning)) {
-            // Check if it's excluded or completely inactive
-            $allAgents = $agentService->getAgents(failSilently: true);
-            $isActive = collect($allAgents)->contains('id', (int) $currentId);
-
-            if ($isActive) {
-                $warning = 'The currently selected default agent is excluded from selectable agents. Please choose another agent.';
-            } else {
-                $warning = "The currently selected agent (ID: {$currentId}) is no longer returned by the active agents list. Please select a valid agent.";
-            }
-        }
-
-        $helpText = 'Used only by future automatic ticket creation. Manual ticket creation requires the operator to choose an owner.';
-        if ($warning) {
-            $helpText = "<span style=\"color: #e11d48; font-weight: bold;\">Warning: {$warning}</span><br>".$helpText;
-        }
-
-        return Select::make($setting->key)
-            ->label('Default agent for automatic ticket creation')
-            ->helperText(new HtmlString($helpText))
-            ->options($options)
-            ->searchable()
-            ->required(false);
     }
 
     private function getZnunyQueueHostMappingsComponent(Setting $setting, array $initialData): Repeater
