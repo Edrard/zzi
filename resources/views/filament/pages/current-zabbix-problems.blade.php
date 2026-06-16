@@ -130,6 +130,10 @@
             box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
             overflow-x: auto;
         }
+        :is(.dark) .zbx-table-container {
+            --bg-color: #111827;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
 
         .zbx-table {
             width: 100%;
