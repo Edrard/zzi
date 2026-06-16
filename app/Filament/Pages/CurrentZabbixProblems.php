@@ -4,11 +4,11 @@ namespace App\Filament\Pages;
 
 use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixProblemCache;
+use App\Services\Zabbix\ZabbixProblemFormatter;
 use App\Services\Znuny\ZabbixTicketLinkService;
 use App\Services\Znuny\ZnunyAgentService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyLookupService;
-use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -230,80 +230,22 @@ class CurrentZabbixProblems extends Page
 
     public function getProblemAgeSeconds(array $problem): int
     {
-        if (! empty($problem['clock'])) {
-            return max(0, time() - (int) $problem['clock']);
-        }
-
-        if (! empty($problem['started_at'])) {
-            try {
-                return max(0, Carbon::parse($problem['started_at'])->diffInSeconds(now()));
-            } catch (\Exception $e) {
-                // fall through
-            }
-        }
-
-        if (isset($problem['age_seconds'])) {
-            return (int) $problem['age_seconds'];
-        }
-
-        return 0;
+        return app(ZabbixProblemFormatter::class)->getProblemAgeSeconds($problem);
     }
 
     public function formatAge(int $seconds): string
     {
-        if ($seconds < 60) {
-            return '<1m';
-        }
-
-        $minutes = floor($seconds / 60);
-        $hours = floor($minutes / 60);
-        $days = floor($hours / 24);
-
-        $parts = [];
-
-        if ($days > 0) {
-            $parts[] = "{$days}d";
-            $hours %= 24;
-            if ($hours > 0) {
-                $parts[] = "{$hours}h";
-            }
-        } elseif ($hours > 0) {
-            $parts[] = "{$hours}h";
-            $minutes %= 60;
-            if ($minutes > 0) {
-                $parts[] = "{$minutes}m";
-            }
-        } else {
-            $parts[] = "{$minutes}m";
-        }
-
-        return implode(' ', $parts);
+        return app(ZabbixProblemFormatter::class)->formatAge($seconds);
     }
 
     public function getSeverityColor(int $severity): string
     {
-        return match ($severity) {
-            0 => 'gray',
-            1 => 'info',
-            2 => 'warning',
-            3 => 'warning',
-            4 => 'danger',
-            5 => 'danger',
-            default => 'gray',
-        };
+        return app(ZabbixProblemFormatter::class)->getSeverityColor($severity);
     }
 
     public function getSeverityFallback(int $severity): string
     {
-        return match ($severity) {
-            0 => 'Not classified',
-            1 => 'Information',
-            2 => 'Warning',
-            3 => 'Average',
-            4 => 'High',
-            5 => 'Disaster',
-            default => 'Unknown',
-        };
+        return app(ZabbixProblemFormatter::class)->getSeverityFallback($severity);
     }
 
     public function openCreateTicketModal(string $eventId): void
