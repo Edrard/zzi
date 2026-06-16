@@ -6,6 +6,7 @@ use App\Models\Setting;
 use App\Services\AuditLogger;
 use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyAgentService;
+use App\Services\Znuny\ZnunyQueueHostMappingService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -91,6 +92,7 @@ class Settings extends Page implements HasForms
             'Retention' => [],
             'Zabbix' => [],
             'Znuny' => [],
+            'Znuny Ticket Defaults' => [],
             'Automation' => [],
             'Other' => [],
         ];
@@ -134,7 +136,7 @@ class Settings extends Page implements HasForms
                     }
                 }
 
-                $helpText = 'Used only by future automatic ticket creation. Manual ticket creation will still require the operator to choose an agent.';
+                $helpText = 'Used only by future automatic ticket creation. Manual ticket creation requires the operator to choose an owner.';
                 if ($warning) {
                     $helpText = "<span style=\"color: #e11d48; font-weight: bold;\">Warning: {$warning}</span><br>".$helpText;
                 }
@@ -148,13 +150,13 @@ class Settings extends Page implements HasForms
             } elseif ($setting->key === 'znuny_agent_exclude_logins') {
                 $component = Textarea::make($setting->key)
                     ->label($label)
-                    ->helperText($setting->description)
+                    ->helperText('Znuny agent logins that must not be selectable as ticket owners in the manual ticket creation modal. Put one login per line.')
                     ->required(false)
                     ->rows(4);
             } elseif ($setting->key === 'znuny_queue_from_host_regex') {
                 $component = TextInput::make($setting->key)
                     ->label('Queue detection regex from Zabbix host')
-                    ->helperText('Regular expression used to detect the default Znuny Queue from the Zabbix host name. It must contain the named capture group (?<queue>...). Default takes the first word of the host name. Example: "ExampleCompany swiss test01" → "ExampleCompany".')
+                    ->helperText('Extracts the primary queue/customer prefix from the Zabbix host name. It must contain the named capture group (?<queue>...). Default takes the first word of the host name. Example: "ExampleCompany swiss test01" → "ExampleCompany".')
                     ->required()
                     ->rules([
                         function () {
@@ -173,7 +175,7 @@ class Settings extends Page implements HasForms
             } elseif ($setting->key === 'znuny_customer_user_from_queue_template') {
                 $component = TextInput::make($setting->key)
                     ->label('CustomerUser template from Queue')
-                    ->helperText('Template used to generate the default Znuny CustomerUser login from the detected Queue. Use <queue> as placeholder. Default: <queue>Clients. Example: Queue "ExampleCompany" → "ExampleCompanyClients".')
+                    ->helperText('Generates the default Znuny CustomerUser login from the primary prefix extracted from the Zabbix host name. Use <queue> as placeholder. Default: <queue>Clients. Example: primary prefix "ExampleCompany" → "ExampleCompanyClients". This does not use Queue host prefix mappings.')
                     ->required()
                     ->rules([
                         function () {
@@ -203,27 +205,47 @@ class Settings extends Page implements HasForms
                     ->minValue($min)
                     ->required();
             } elseif ($setting->key === 'znuny_queue_host_mappings') {
+                $mappingService = app(ZnunyQueueHostMappingService::class);
+                $qResult = $mappingService->getSelectableQueuesResult();
+                $queueOptions = $qResult['options'] ?? [];
+                $queueError = $qResult['error'] ?? null;
+
+                $savedMappings = $initialData['znuny_queue_host_mappings'] ?? [];
+                if (is_string($savedMappings)) {
+                    $savedMappings = json_decode($savedMappings, true) ?? [];
+                }
+
+                if (is_array($savedMappings)) {
+                    foreach ($savedMappings as $m) {
+                        $qName = $m['queue_name'] ?? null;
+                        if ($qName && ! isset($queueOptions[$qName])) {
+                            $queueOptions[$qName] = $qName.($queueError ? ' (Saved)' : '');
+                        }
+                    }
+                }
+
                 $component = Repeater::make($setting->key)
                     ->label('Queue host prefix mappings')
-                    ->helperText('Mapping of primary host prefixes to Znuny queues. Evaluated if the primary queue candidate does not exist.')
+                    ->helperText(new HtmlString('Maps primary Zabbix host prefixes to existing Znuny queues. Used only when the primary queue candidate is not found in Znuny.'.($queueError ? '<br><span style="color: #e11d48; font-weight: bold;">'.$queueError.'</span>' : '')))
                     ->schema([
-                        Toggle::make('enabled')
-                            ->label('Enabled')
-                            ->default(true),
                         TextInput::make('host_prefix')
                             ->label('Host prefix')
                             ->helperText('Example: TestCompany')
-                            ->required(),
-                        TextInput::make('queue_name')
+                            ->dehydrateStateUsing(fn ($state) => trim($state))
+                            ->distinct()
+                            ->required(false),
+                        Select::make('queue_name')
                             ->label('Queue name')
-                            ->helperText('Example: ExampleCompany')
-                            ->required(),
+                            ->options($queueOptions)
+                            ->searchable()
+                            ->required(false),
                         TextInput::make('note')
                             ->label('Note')
                             ->required(false),
                     ])
-                    ->columns(4)
-                    ->defaultItems(0);
+                    ->columns(3)
+                    ->defaultItems(0)
+                    ->reorderable(false);
             } elseif ($setting->type === 'json') {
                 $component = Textarea::make($setting->key)
                     ->label($label)
@@ -252,6 +274,8 @@ class Settings extends Page implements HasForms
                 $groups['Retention'][] = $component;
             } elseif (in_array($setting->key, ['zabbix_api_url', 'zabbix_api_token', 'zabbix_api_timeout', 'zabbix_api_verify_ssl', 'zabbix_poll_interval_minutes', 'zabbix_problem_cache_ttl_minutes', 'zabbix_problem_limit', 'zabbix_exclude_suppressed_problems'])) {
                 $groups['Zabbix'][] = $component;
+            } elseif (in_array($setting->key, ['znuny_queue_from_host_regex', 'znuny_customer_user_from_queue_template', 'znuny_queue_host_mappings'])) {
+                $groups['Znuny Ticket Defaults'][$setting->key] = $component;
             } elseif (str_starts_with($setting->key, 'znuny_')) {
                 $groups['Znuny'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['default_close_delay_hours', 'default_reopen_window_hours'])) {
@@ -292,24 +316,9 @@ class Settings extends Page implements HasForms
                 $znunyGroups[] = $z['znuny_agent_exclude_logins'];
             }
 
-            if (isset($z['znuny_queue_from_host_regex']) || isset($z['znuny_customer_user_from_queue_template'])) {
-                $znunyGroups[] = Section::make('Ticket default rules')
-                    ->description('These rules only generate default suggestions for manual ticket creation. The operator will still be able to override Queue and CustomerUser before creating a ticket.')
-                    ->schema(array_filter([
-                        $z['znuny_queue_from_host_regex'] ?? null,
-                        $z['znuny_customer_user_from_queue_template'] ?? null,
-                    ]))->columns(1);
-            }
-
-            if (isset($z['znuny_queue_host_mappings'])) {
-                $znunyGroups[] = Section::make('Queue host prefix mappings')
-                    ->description('Used as a fallback when the primary queue candidate from the Zabbix host prefix is not found in Znuny.')
-                    ->schema([$z['znuny_queue_host_mappings']])->columns(1);
-            }
-
             $knownKeys = [
                 'znuny_username', 'znuny_password', 'znuny_api_url', 'znuny_web_url', 'znuny_ticket_url_template', 'znuny_api_verify_ssl', 'znuny_api_timeout',
-                'znuny_default_agent_id', 'znuny_agent_exclude_logins', 'znuny_queue_from_host_regex', 'znuny_customer_user_from_queue_template', 'znuny_queue_host_mappings',
+                'znuny_default_agent_id', 'znuny_agent_exclude_logins',
             ];
             $unknownComponents = array_diff_key($z, array_flip($knownKeys));
 
@@ -319,6 +328,91 @@ class Settings extends Page implements HasForms
             }
 
             $groups['Znuny'] = $znunyGroups;
+        }
+
+        if (! empty($groups['Znuny Ticket Defaults'])) {
+            $zd = $groups['Znuny Ticket Defaults'];
+            $zdGroups = [];
+
+            if (isset($zd['znuny_queue_from_host_regex']) || isset($zd['znuny_customer_user_from_queue_template'])) {
+                $zdGroups[] = Section::make('Ticket default rules')
+                    ->description('These rules only generate default suggestions for manual ticket creation. The operator will still be able to override Queue and CustomerUser before creating a ticket.')
+                    ->schema(array_filter([
+                        $zd['znuny_queue_from_host_regex'] ?? null,
+                        $zd['znuny_customer_user_from_queue_template'] ?? null,
+                    ]))->columns(1);
+            }
+
+            if (isset($zd['znuny_queue_host_mappings'])) {
+                $mappingService = app(ZnunyQueueHostMappingService::class);
+
+                $zdGroups[] = Section::make('Queue host prefix mappings')
+                    ->description('Fallback Queue mapping for standardized Zabbix host prefixes. CustomerUser is still generated from the original host prefix.')
+                    ->schema([
+                        $zd['znuny_queue_host_mappings'],
+                    ])
+                    ->columns(1)
+                    ->headerActions([
+                        Action::make('saveMappings')
+                            ->label('Save queue mappings')
+                            ->icon('heroicon-o-check')
+                            ->color('success')
+                            ->action(function (Settings $livewire) use ($mappingService) {
+                                if (auth()->user()->role !== 'admin') {
+                                    abort(403, 'Only admins can modify settings.');
+                                }
+                                $state = $livewire->data['znuny_queue_host_mappings'] ?? [];
+                                $mappingService->saveMappings($state);
+
+                                Notification::make()
+                                    ->title('Queue mappings saved successfully.')
+                                    ->success()
+                                    ->send();
+                            }),
+                        Action::make('scanMissing')
+                            ->label('Scan current problems for missing queue mappings')
+                            ->button()
+                            ->action(function (Settings $livewire) use ($mappingService) {
+                                $fullState = $livewire->form->getRawState();
+                                $currentState = $fullState['znuny_queue_host_mappings'] ?? [];
+                                $result = $mappingService->scanMissingMappings($currentState);
+
+                                $drafts = $result['drafts'];
+                                $stats = $result['stats'];
+
+                                if (! empty($drafts)) {
+                                    $newState = $currentState;
+                                    foreach ($drafts as $draft) {
+                                        $newState[(string) Str::uuid()] = $draft;
+                                    }
+                                    $fullState['znuny_queue_host_mappings'] = $newState;
+                                    $livewire->form->fill($fullState);
+                                }
+
+                                $message = "Scanned {$stats['scanned']} problems ({$stats['unique_prefixes']} unique prefixes).\n"
+                                    ."Added {$stats['added']} draft mappings.\n"
+                                    ."Skipped {$stats['skipped_existing_queue']} existing queues.\n"
+                                    ."Skipped {$stats['skipped_existing_mapping']} existing mappings.\n"
+                                    ."Failed API checks: {$stats['failed_api']}.";
+
+                                Notification::make()
+                                    ->title('Scan Complete')
+                                    ->body($message)
+                                    ->success()
+                                    ->send();
+                            }),
+                    ]);
+            }
+
+            $groups['Znuny Ticket Defaults'] = $zdGroups;
+        }
+
+        if (! empty($groups['Retention'])) {
+            $retentionSection = Section::make('Retention Settings')
+                ->description('Controls how long this Laravel integration app keeps local logs, statistics, cached/resolved history, closed ticket links, and failed job records. These settings do not delete data from Zabbix or Znuny.')
+                ->schema($groups['Retention'])
+                ->columns(1);
+            $groups['Retention'] = [$retentionSection];
         }
 
         $tabs = [];
@@ -360,7 +454,8 @@ class Settings extends Page implements HasForms
                 $newValue = $data[$setting->key];
 
                 if ($setting->type === 'json' && $setting->key === 'znuny_queue_host_mappings') {
-                    $newValue = json_encode($newValue);
+                    $mappingService = app(ZnunyQueueHostMappingService::class);
+                    $newValue = json_encode($mappingService->normalizeMappings($newValue));
                 } elseif ($setting->type === 'boolean') {
                     $newValue = $newValue ? 'true' : 'false';
                 } else {

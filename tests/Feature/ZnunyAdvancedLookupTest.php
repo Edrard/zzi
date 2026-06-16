@@ -360,7 +360,7 @@ class ZnunyAdvancedLookupTest extends TestCase
     {
         Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], ['value' => json_encode([
             [
-                'enabled' => true,
+
                 'host_prefix' => 'TestCompany',
                 'queue_name' => 'MappedQueue',
             ],
@@ -382,13 +382,12 @@ class ZnunyAdvancedLookupTest extends TestCase
         $this->assertFalse($response['customer_user']['found']);
     }
 
-    public function test_lookup_service_mapping_disabled_ignored()
+    public function test_lookup_service_mapping_ignored_if_queue_empty()
     {
         Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], ['value' => json_encode([
             [
-                'enabled' => false,
                 'host_prefix' => 'TestCompany',
-                'queue_name' => 'DisabledQueue',
+                'queue_name' => '', // Empty queue should be ignored
             ],
         ]), 'type' => 'json']);
 
@@ -407,7 +406,6 @@ class ZnunyAdvancedLookupTest extends TestCase
     {
         Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], ['value' => json_encode([
             [
-                'enabled' => true,
                 'host_prefix' => 'TestCompany',
                 'queue_name' => 'ExampleCompany',
             ],
@@ -427,8 +425,6 @@ class ZnunyAdvancedLookupTest extends TestCase
         ]);
 
         $service = new ZnunyLookupService(new ZnunyTicketDefaultRuleService, new ZnunyClient);
-        // "TestCompany kyiv sw01" -> Primary queue prefix "TestCompany" -> Mapped to "ExampleCompany"
-        // Primary CU -> "TestCompanyClients" -> Which exists, so it stays TestCompanyClients.
         $response = $service->resolveTicketDefaultCandidates('TestCompany kyiv sw01');
 
         $this->assertTrue($response['queue']['found']);
@@ -441,7 +437,6 @@ class ZnunyAdvancedLookupTest extends TestCase
     {
         Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], ['value' => json_encode([
             [
-                'enabled' => true,
                 'host_prefix' => 'BadQueueHost',
                 'queue_name' => 'NonExistentQueue',
             ],
@@ -464,7 +459,6 @@ class ZnunyAdvancedLookupTest extends TestCase
     {
         Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], ['value' => json_encode([
             [
-                'enabled' => true,
                 'host_prefix' => 'TestCompany',
                 'queue_name' => 'MappedQueue',
             ],
@@ -485,21 +479,14 @@ class ZnunyAdvancedLookupTest extends TestCase
         $this->assertFalse($response['customer_user']['found']);
     }
 
-    public function test_lookup_service_mapping_first_enabled_match_wins()
+    public function test_lookup_service_mapping_first_match_wins()
     {
         Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], ['value' => json_encode([
             [
-                'enabled' => false,
-                'host_prefix' => 'MatchHost',
-                'queue_name' => 'ShouldBeIgnored',
-            ],
-            [
-                'enabled' => true,
                 'host_prefix' => 'MatchHost',
                 'queue_name' => 'FirstWinnerQueue',
             ],
             [
-                'enabled' => true,
                 'host_prefix' => 'MatchHost',
                 'queue_name' => 'SecondQueue',
             ],

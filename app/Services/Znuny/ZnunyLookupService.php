@@ -56,7 +56,7 @@ class ZnunyLookupService
         if (! $primaryQueueFound && $local['queue']) {
             $mappings = json_decode(SettingsService::string('znuny_queue_host_mappings'), true) ?? [];
             foreach ($mappings as $mapping) {
-                if (! isset($mapping['enabled']) || ! $mapping['enabled']) {
+                if (($mapping['host_prefix'] ?? '') === '') {
                     continue;
                 }
 
