@@ -8,6 +8,7 @@ use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyLookupService;
 use App\Services\Znuny\ZnunyTicketDefaultRuleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -18,6 +19,8 @@ class ZnunyAdvancedLookupTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        Cache::flush();
 
         Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
         Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
@@ -30,6 +33,15 @@ class ZnunyAdvancedLookupTest extends TestCase
                 'SessionID' => 'fake_session_123',
             ], 200),
         ]);
+    }
+
+    private function getLookupService(): ZnunyLookupService
+    {
+        $mockQueueService = \Mockery::mock(\App\Services\Znuny\ZnunyQueueService::class);
+        $mockQueueService->shouldReceive('findQueueByName')->andReturnUsing(function($name) {
+            return (new ZnunyClient)->getQueueByName($name);
+        });
+        return new ZnunyLookupService(new ZnunyTicketDefaultRuleService, new ZnunyClient, $mockQueueService);
     }
 
     public function test_health_normalization()
@@ -307,7 +319,7 @@ class ZnunyAdvancedLookupTest extends TestCase
             ], 200),
         ]);
 
-        $service = new ZnunyLookupService(new ZnunyTicketDefaultRuleService, new ZnunyClient);
+        $service = $this->getLookupService();
         $response = $service->resolveTicketDefaultCandidates('TestCompany swiss test01');
 
         $this->assertEquals('TestCompany', $response['detected']['queue_name']);
@@ -332,7 +344,7 @@ class ZnunyAdvancedLookupTest extends TestCase
             ], 200),
         ]);
 
-        $service = new ZnunyLookupService(new ZnunyTicketDefaultRuleService, new ZnunyClient);
+        $service = $this->getLookupService();
         $response = $service->resolveTicketDefaultCandidates('TestCompany swiss test01');
 
         $this->assertFalse($response['queue']['found']);
@@ -346,7 +358,7 @@ class ZnunyAdvancedLookupTest extends TestCase
         Setting::updateOrCreate(['key' => 'znuny_queue_from_host_regex'], ['value' => '^(?<queue>[0-9]+)$']);
 
         // No Http fakes needed as API shouldn't be called if detection fails
-        $service = new ZnunyLookupService(new ZnunyTicketDefaultRuleService, new ZnunyClient);
+        $service = $this->getLookupService();
         $response = $service->resolveTicketDefaultCandidates('TestCompany swiss test01');
 
         $this->assertNull($response['detected']['queue_name']);
@@ -374,7 +386,7 @@ class ZnunyAdvancedLookupTest extends TestCase
             ], 200),
         ]);
 
-        $service = new ZnunyLookupService(new ZnunyTicketDefaultRuleService, new ZnunyClient);
+        $service = $this->getLookupService();
         $response = $service->resolveTicketDefaultCandidates('TestCompany swiss test01');
 
         $this->assertTrue($response['queue']['found']);
@@ -396,7 +408,7 @@ class ZnunyAdvancedLookupTest extends TestCase
             'https://example.invalid/api/CustomerUser/TestCompanyClients*' => Http::response(['CustomerUser' => []], 200),
         ]);
 
-        $service = new ZnunyLookupService(new ZnunyTicketDefaultRuleService, new ZnunyClient);
+        $service = $this->getLookupService();
         $response = $service->resolveTicketDefaultCandidates('TestCompany');
 
         $this->assertFalse($response['queue']['found']);
@@ -424,7 +436,7 @@ class ZnunyAdvancedLookupTest extends TestCase
             ], 200),
         ]);
 
-        $service = new ZnunyLookupService(new ZnunyTicketDefaultRuleService, new ZnunyClient);
+        $service = $this->getLookupService();
         $response = $service->resolveTicketDefaultCandidates('TestCompany kyiv sw01');
 
         $this->assertTrue($response['queue']['found']);
@@ -448,7 +460,7 @@ class ZnunyAdvancedLookupTest extends TestCase
             'https://example.invalid/api/QueueByName/NonExistentQueue*' => Http::response(['Queue' => []], 200),
         ]);
 
-        $service = new ZnunyLookupService(new ZnunyTicketDefaultRuleService, new ZnunyClient);
+        $service = $this->getLookupService();
         $response = $service->resolveTicketDefaultCandidates('BadQueueHost router01');
 
         $this->assertFalse($response['queue']['found']);
@@ -471,7 +483,7 @@ class ZnunyAdvancedLookupTest extends TestCase
             'https://example.invalid/api/CustomerUser/TestCompanyClients*' => Http::response(['CustomerUser' => []], 200),
         ]);
 
-        $service = new ZnunyLookupService(new ZnunyTicketDefaultRuleService, new ZnunyClient);
+        $service = $this->getLookupService();
         $response = $service->resolveTicketDefaultCandidates('TestCompany swiss test01');
 
         $this->assertTrue($response['queue']['found']);
@@ -500,7 +512,7 @@ class ZnunyAdvancedLookupTest extends TestCase
             ], 200),
         ]);
 
-        $service = new ZnunyLookupService(new ZnunyTicketDefaultRuleService, new ZnunyClient);
+        $service = $this->getLookupService();
         $response = $service->resolveTicketDefaultCandidates('MatchHost firewall');
 
         $this->assertTrue($response['queue']['found']);

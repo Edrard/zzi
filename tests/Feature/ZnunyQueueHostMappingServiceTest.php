@@ -4,8 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Setting;
 use App\Services\Zabbix\ZabbixProblemCache;
-use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyQueueHostMappingService;
+use App\Services\Znuny\ZnunyQueueService;
 use App\Services\Znuny\ZnunyTicketDefaultRuleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -42,12 +42,12 @@ class ZnunyQueueHostMappingServiceTest extends TestCase
         ];
 
         // API Mocks
-        $client = $this->mock(ZnunyClient::class);
-        $client->shouldReceive('getQueues')->andReturn([
+        $queueService = $this->mock(ZnunyQueueService::class);
+        $queueService->shouldReceive('getQueues')->andReturn([
             ['id' => 10, 'name' => 'ExistingQueueHost', 'full_name' => 'Parent::ExistingQueueHost'],
         ]);
 
-        $service = new ZnunyQueueHostMappingService($client, new ZnunyTicketDefaultRuleService, $mockCache);
+        $service = new ZnunyQueueHostMappingService($queueService, new ZnunyTicketDefaultRuleService, $mockCache);
 
         $result = $service->scanMissingMappings($currentMappings);
 
@@ -69,40 +69,11 @@ class ZnunyQueueHostMappingServiceTest extends TestCase
         $this->assertEquals(0, $stats['failed_api']);
     }
 
-    public function test_get_selectable_queues_result_success()
-    {
-        $client = $this->mock(ZnunyClient::class);
-        $client->shouldReceive('getQueues')->andReturn([
-            ['id' => 1, 'name' => 'QueueA', 'full_name' => 'Parent::QueueA'],
-        ]);
-
-        $mockCache = $this->mock(ZabbixProblemCache::class);
-        $service = new ZnunyQueueHostMappingService($client, new ZnunyTicketDefaultRuleService, $mockCache);
-
-        $result = $service->getSelectableQueuesResult();
-        $this->assertNull($result['error']);
-        $this->assertArrayHasKey('QueueA', $result['options']);
-        $this->assertEquals('Parent::QueueA', $result['options']['QueueA']);
-    }
-
-    public function test_get_selectable_queues_result_failure()
-    {
-        $client = $this->mock(ZnunyClient::class);
-        $client->shouldReceive('getQueues')->andThrow(new \Exception('API Error'));
-
-        $mockCache = $this->mock(ZabbixProblemCache::class);
-        $service = new ZnunyQueueHostMappingService($client, new ZnunyTicketDefaultRuleService, $mockCache);
-
-        $result = $service->getSelectableQueuesResult();
-        $this->assertNotNull($result['error']);
-        $this->assertEmpty($result['options']);
-    }
-
     public function test_save_mappings_normalizes_and_saves()
     {
         $mockCache = $this->mock(ZabbixProblemCache::class);
-        $client = $this->mock(ZnunyClient::class);
-        $service = new ZnunyQueueHostMappingService($client, new ZnunyTicketDefaultRuleService, $mockCache);
+        $queueService = $this->mock(ZnunyQueueService::class);
+        $service = new ZnunyQueueHostMappingService($queueService, new ZnunyTicketDefaultRuleService, $mockCache);
 
         $raw = [
             ['host_prefix' => '  Prefix1  ', 'queue_name' => '  Queue1  ', 'note' => '  Note  '],

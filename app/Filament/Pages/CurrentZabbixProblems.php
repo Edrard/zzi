@@ -7,10 +7,8 @@ use App\Services\Zabbix\ZabbixProblemCache;
 use App\Services\Zabbix\ZabbixProblemFormatter;
 use App\Services\Zabbix\ZabbixProblemQueryService;
 use App\Services\Znuny\ZabbixTicketLinkService;
-use App\Services\Znuny\ZnunyAgentService;
 use App\Services\Znuny\ZnunyClient;
-use App\Services\Znuny\ZnunyLookupService;
-use App\Services\Znuny\ZnunyQueueService;
+use App\Services\Znuny\ZnunyTicketModalStateBuilder;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -214,38 +212,16 @@ class CurrentZabbixProblems extends Page
         $this->ticketCustomerUserSearch = '';
         $this->ticketCustomerUserOptions = [];
 
-        $hostName = $problem['host_name'] ?? '';
+        $stateBuilder = app(ZnunyTicketModalStateBuilder::class);
+        $state = $stateBuilder->buildState($problem['host_name'] ?? '');
 
-        $lookup = app(ZnunyLookupService::class);
-        $agentService = app(ZnunyAgentService::class);
-        $client = app(ZnunyClient::class);
-
-        $this->ticketOwnerOptions = collect($agentService->getSelectableAgents())
-            ->mapWithKeys(fn (array $agent) => [(string) $agent['id'] => $agent['label']])
-            ->toArray();
-
-        $queueService = app(ZnunyQueueService::class);
-        $queueResult = $queueService->getSelectableQueuesResult();
-        $this->ticketQueueOptions = $queueResult['options'];
-
-        $this->ticketOwnerId = null;
-        $this->ticketQueue = null;
-        $this->ticketCustomerUser = null;
-        $this->ticketDefaultWarnings = [];
-
-        try {
-            $candidates = $lookup->resolveTicketDefaultCandidates($hostName);
-            if ($candidates['queue']['found']) {
-                $this->ticketQueue = $candidates['queue']['name'];
-            }
-            if ($candidates['customer_user']['found']) {
-                $this->ticketCustomerUser = $candidates['customer_user']['login'];
-                $this->ticketCustomerUserOptions[$this->ticketCustomerUser] = $candidates['customer_user']['login'];
-            }
-            $this->ticketDefaultWarnings = $candidates['warnings'] ?? [];
-        } catch (\Throwable $e) {
-            $this->ticketDefaultWarnings[] = 'Lookup failed: '.$e->getMessage();
-        }
+        $this->ticketOwnerOptions = $state['agent_options'];
+        $this->ticketQueueOptions = $state['queue_options'];
+        $this->ticketOwnerId = $state['default_owner_id'];
+        $this->ticketQueue = $state['default_queue'];
+        $this->ticketCustomerUser = $state['default_customer_user'];
+        $this->ticketCustomerUserOptions = $state['customer_user_options'];
+        $this->ticketDefaultWarnings = $state['warnings'];
 
         $this->isTicketModalOpen = true;
         $this->dispatch('open-modal', id: 'create-ticket-modal');
