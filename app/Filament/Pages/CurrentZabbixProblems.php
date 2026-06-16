@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixProblemCache;
 use App\Services\Zabbix\ZabbixProblemFormatter;
+use App\Services\Zabbix\ZabbixProblemQueryService;
 use App\Services\Znuny\ZabbixTicketLinkService;
 use App\Services\Znuny\ZnunyAgentService;
 use App\Services\Znuny\ZnunyClient;
@@ -135,80 +136,12 @@ class CurrentZabbixProblems extends Page
 
     public function getProblemsProperty(): array
     {
-        $cache = app(ZabbixProblemCache::class);
-        $problems = $cache->all();
-        $this->totalCachedCount = count($problems);
+        $queryService = app(ZabbixProblemQueryService::class);
+        $result = $queryService->query($this->search, $this->sortField, $this->sortDirection);
 
-        if (! empty($this->search)) {
-            $term = mb_strtolower($this->search);
-            $problems = array_filter($problems, function ($problem) use ($term) {
-                $hostMatch = mb_stripos($problem['host_name'] ?? '', $term) !== false;
-                $nameMatch = mb_stripos($problem['name'] ?? '', $term) !== false;
+        $this->totalCachedCount = $result['total_cached_count'];
 
-                return $hostMatch || $nameMatch;
-            });
-        }
-
-        $direction = $this->sortDirection === 'asc' ? 1 : -1;
-
-        usort($problems, function ($a, $b) use ($direction) {
-            $sevA = (int) ($a['severity'] ?? 0);
-            $sevB = (int) ($b['severity'] ?? 0);
-
-            $ageA = $this->getProblemAgeSeconds($a);
-            $ageB = $this->getProblemAgeSeconds($b);
-
-            $hostA = mb_strtolower($a['host_name'] ?? '');
-            $hostB = mb_strtolower($b['host_name'] ?? '');
-
-            $probA = mb_strtolower($a['name'] ?? '');
-            $probB = mb_strtolower($b['name'] ?? '');
-
-            $idA = $a['eventid'] ?? '';
-            $idB = $b['eventid'] ?? '';
-
-            if ($this->sortField === 'severity') {
-                if ($sevA !== $sevB) {
-                    return ($sevA <=> $sevB) * $direction;
-                }
-
-                return $ageB <=> $ageA; // fallback age desc
-            }
-
-            if ($this->sortField === 'age') {
-                if ($ageA !== $ageB) {
-                    return ($ageA <=> $ageB) * $direction;
-                }
-
-                return $sevB <=> $sevA; // fallback sev desc
-            }
-
-            if ($this->sortField === 'host') {
-                if ($hostA !== $hostB) {
-                    return strcmp($hostA, $hostB) * $direction;
-                }
-                if ($sevA !== $sevB) {
-                    return $sevB <=> $sevA;
-                }
-
-                return strcmp($idA, $idB);
-            }
-
-            if ($this->sortField === 'problem') {
-                if ($probA !== $probB) {
-                    return strcmp($probA, $probB) * $direction;
-                }
-                if ($sevA !== $sevB) {
-                    return $sevB <=> $sevA;
-                }
-
-                return strcmp($idA, $idB);
-            }
-
-            return 0;
-        });
-
-        return $problems;
+        return $result['problems'];
     }
 
     public function getLastPollProperty(): ?array
