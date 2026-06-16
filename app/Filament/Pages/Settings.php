@@ -7,11 +7,10 @@ use App\Services\AuditLogger;
 use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyAgentService;
 use App\Services\Znuny\ZnunyDefaultAgentSchemaBuilder;
+use App\Services\Znuny\ZnunyQueueHostMappingSchemaBuilder;
 use App\Services\Znuny\ZnunyQueueHostMappingService;
-use App\Services\Znuny\ZnunyQueueService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Repeater;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -25,7 +24,6 @@ use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
 class Settings extends Page implements HasForms
@@ -171,7 +169,7 @@ class Settings extends Page implements HasForms
                     ->minValue($min)
                     ->required();
             } elseif ($setting->key === 'znuny_queue_host_mappings') {
-                $component = $this->getZnunyQueueHostMappingsComponent($setting, $initialData);
+                $component = app(ZnunyQueueHostMappingSchemaBuilder::class)->buildRepeater($setting, $initialData);
             } elseif ($setting->type === 'json') {
                 $component = Textarea::make($setting->key)
                     ->label($label)
@@ -277,8 +275,8 @@ class Settings extends Page implements HasForms
                     ])
                     ->columns(1)
                     ->headerActions([
-                        $this->getSaveMappingsAction(),
-                        $this->getScanMissingAction(),
+                        app(ZnunyQueueHostMappingSchemaBuilder::class)->getSaveAction(),
+                        app(ZnunyQueueHostMappingSchemaBuilder::class)->getScanMissingAction(),
                     ]);
             }
 
@@ -382,111 +380,6 @@ class Settings extends Page implements HasForms
             ->title('Settings saved successfully.')
             ->success()
             ->send();
-    }
-
-    private function getZnunyQueueHostMappingsComponent(Setting $setting, array $initialData): Repeater
-    {
-        $queueService = app(ZnunyQueueService::class);
-        $qResult = $queueService->getSelectableQueuesResult();
-        $queueOptions = $qResult['options'] ?? [];
-        $queueError = $qResult['error'] ?? null;
-
-        $savedMappings = $initialData['znuny_queue_host_mappings'] ?? [];
-        if (is_string($savedMappings)) {
-            $savedMappings = json_decode($savedMappings, true) ?? [];
-        }
-
-        if (is_array($savedMappings)) {
-            foreach ($savedMappings as $m) {
-                $qName = $m['queue_name'] ?? null;
-                if ($qName && ! isset($queueOptions[$qName])) {
-                    $queueOptions[$qName] = $qName.($queueError ? ' (Saved)' : '');
-                }
-            }
-        }
-
-        return Repeater::make($setting->key)
-            ->label('Queue host prefix mappings')
-            ->helperText(new HtmlString('Maps primary Zabbix host prefixes to existing Znuny queues. Used only when the primary queue candidate is not found in Znuny.'.($queueError ? '<br><span style="color: #e11d48; font-weight: bold;">'.$queueError.'</span>' : '')))
-            ->schema([
-                TextInput::make('host_prefix')
-                    ->label('Host prefix')
-                    ->helperText('Example: TestCompany')
-                    ->dehydrateStateUsing(fn ($state) => trim($state))
-                    ->distinct()
-                    ->required(false),
-                Select::make('queue_name')
-                    ->label('Queue name')
-                    ->options($queueOptions)
-                    ->searchable()
-                    ->required(false),
-                TextInput::make('note')
-                    ->label('Note')
-                    ->required(false),
-            ])
-            ->columns(3)
-            ->defaultItems(0)
-            ->reorderable(false);
-    }
-
-    private function getSaveMappingsAction(): Action
-    {
-        return Action::make('saveMappings')
-            ->label('Save queue mappings')
-            ->icon('heroicon-o-check')
-            ->color('success')
-            ->action(function (Settings $livewire) {
-                if (auth()->user()->role !== 'admin') {
-                    abort(403, 'Only admins can modify settings.');
-                }
-
-                $mappingService = app(ZnunyQueueHostMappingService::class);
-                $state = $livewire->data['znuny_queue_host_mappings'] ?? [];
-                $mappingService->saveMappings($state);
-
-                Notification::make()
-                    ->title('Queue mappings saved successfully.')
-                    ->success()
-                    ->send();
-            });
-    }
-
-    private function getScanMissingAction(): Action
-    {
-        return Action::make('scanMissing')
-            ->label('Scan current problems for missing queue mappings')
-            ->button()
-            ->action(function (Settings $livewire) {
-                $mappingService = app(ZnunyQueueHostMappingService::class);
-
-                $fullState = $livewire->form->getRawState();
-                $currentState = $fullState['znuny_queue_host_mappings'] ?? [];
-                $result = $mappingService->scanMissingMappings($currentState);
-
-                $drafts = $result['drafts'];
-                $stats = $result['stats'];
-
-                if (! empty($drafts)) {
-                    $newState = $currentState;
-                    foreach ($drafts as $draft) {
-                        $newState[(string) Str::uuid()] = $draft;
-                    }
-                    $fullState['znuny_queue_host_mappings'] = $newState;
-                    $livewire->form->fill($fullState);
-                }
-
-                $message = "Scanned {$stats['scanned']} problems ({$stats['unique_prefixes']} unique prefixes).\n"
-                    ."Added {$stats['added']} draft mappings.\n"
-                    ."Skipped {$stats['skipped_existing_queue']} existing queues.\n"
-                    ."Skipped {$stats['skipped_existing_mapping']} existing mappings.\n"
-                    ."Failed API checks: {$stats['failed_api']}.";
-
-                Notification::make()
-                    ->title('Scan Complete')
-                    ->body($message)
-                    ->success()
-                    ->send();
-            });
     }
 
     private function saveZnunyDefaultAgent(Setting $setting, $newValue, string $currentPlaintext, array &$changedSettings, Collection $settings): void
