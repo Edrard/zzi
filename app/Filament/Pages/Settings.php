@@ -10,7 +10,6 @@ use App\Services\Znuny\ZnunyDefaultAgentSchemaBuilder;
 use App\Services\Znuny\ZnunyQueueHostMappingSchemaBuilder;
 use App\Services\Znuny\ZnunyQueueHostMappingService;
 use Filament\Actions\Action;
-use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -210,77 +209,11 @@ class Settings extends Page implements HasForms
         }
 
         if (! empty($groups['Znuny'])) {
-            $z = $groups['Znuny'];
-
-            $znunyGroups = [
-                Section::make('Credentials')
-                    ->schema(array_filter([
-                        $z['znuny_username'] ?? null,
-                        $z['znuny_password'] ?? null,
-                    ]))->columns(1),
-
-                Section::make('Endpoints')
-                    ->schema(array_filter([
-                        $z['znuny_api_url'] ?? null,
-                        $z['znuny_web_url'] ?? null,
-                        $z['znuny_ticket_url_template'] ?? null,
-                    ]))->columns(1),
-
-                Section::make('Connection')
-                    ->schema(array_filter([
-                        $z['znuny_api_verify_ssl'] ?? null,
-                        $z['znuny_api_timeout'] ?? null,
-                    ]))->columns(1),
-            ];
-
-            if (isset($z['znuny_default_agent_id'])) {
-                $znunyGroups[] = $z['znuny_default_agent_id'];
-            }
-            if (isset($z['znuny_agent_exclude_logins'])) {
-                $znunyGroups[] = $z['znuny_agent_exclude_logins'];
-            }
-
-            $knownKeys = [
-                'znuny_username', 'znuny_password', 'znuny_api_url', 'znuny_web_url', 'znuny_ticket_url_template', 'znuny_api_verify_ssl', 'znuny_api_timeout',
-                'znuny_default_agent_id', 'znuny_agent_exclude_logins',
-            ];
-            $unknownComponents = array_diff_key($z, array_flip($knownKeys));
-
-            if (! empty($unknownComponents)) {
-                $znunyGroups[] = Section::make('Other')
-                    ->schema(array_values($unknownComponents))->columns(1);
-            }
-
-            $groups['Znuny'] = $znunyGroups;
+            $groups['Znuny'] = $this->buildZnunyTabGroups($groups['Znuny']);
         }
 
         if (! empty($groups['Znuny Ticket Defaults'])) {
-            $zd = $groups['Znuny Ticket Defaults'];
-            $zdGroups = [];
-
-            if (isset($zd['znuny_queue_from_host_regex']) || isset($zd['znuny_customer_user_from_queue_template'])) {
-                $zdGroups[] = Section::make('Ticket default rules')
-                    ->description('These rules only generate default suggestions for manual ticket creation. The operator will still be able to override Queue and CustomerUser before creating a ticket.')
-                    ->schema(array_filter([
-                        $zd['znuny_queue_from_host_regex'] ?? null,
-                        $zd['znuny_customer_user_from_queue_template'] ?? null,
-                    ]))->columns(1);
-            }
-
-            if (isset($zd['znuny_queue_host_mappings'])) {
-                $zdGroups[] = Section::make('Queue host prefix mappings')
-                    ->description('Fallback Queue mapping for standardized Zabbix host prefixes. CustomerUser is still generated from the original host prefix.')
-                    ->schema([
-                        $zd['znuny_queue_host_mappings'],
-                    ])
-                    ->columns(1)
-                    ->headerActions([
-                        app(ZnunyQueueHostMappingSchemaBuilder::class)->getSaveAction(),
-                        app(ZnunyQueueHostMappingSchemaBuilder::class)->getScanMissingAction(),
-                    ]);
-            }
-
-            $groups['Znuny Ticket Defaults'] = $zdGroups;
+            $groups['Znuny Ticket Defaults'] = $this->buildZnunyTicketDefaultsTabGroups($groups['Znuny Ticket Defaults']);
         }
 
         if (! empty($groups['Retention'])) {
@@ -457,5 +390,78 @@ class Settings extends Page implements HasForms
             entityId: null,
             context: ['changes' => $sanitizedChanges]
         );
+    }
+
+    private function buildZnunyTabGroups(array $z): array
+    {
+        $znunyGroups = [
+            Section::make('Credentials')
+                ->schema(array_filter([
+                    $z['znuny_username'] ?? null,
+                    $z['znuny_password'] ?? null,
+                ]))->columns(1),
+
+            Section::make('Endpoints')
+                ->schema(array_filter([
+                    $z['znuny_api_url'] ?? null,
+                    $z['znuny_web_url'] ?? null,
+                    $z['znuny_ticket_url_template'] ?? null,
+                ]))->columns(1),
+
+            Section::make('Connection')
+                ->schema(array_filter([
+                    $z['znuny_api_verify_ssl'] ?? null,
+                    $z['znuny_api_timeout'] ?? null,
+                ]))->columns(1),
+        ];
+
+        if (isset($z['znuny_default_agent_id'])) {
+            $znunyGroups[] = $z['znuny_default_agent_id'];
+        }
+        if (isset($z['znuny_agent_exclude_logins'])) {
+            $znunyGroups[] = $z['znuny_agent_exclude_logins'];
+        }
+
+        $knownKeys = [
+            'znuny_username', 'znuny_password', 'znuny_api_url', 'znuny_web_url', 'znuny_ticket_url_template', 'znuny_api_verify_ssl', 'znuny_api_timeout',
+            'znuny_default_agent_id', 'znuny_agent_exclude_logins',
+        ];
+        $unknownComponents = array_diff_key($z, array_flip($knownKeys));
+
+        if (! empty($unknownComponents)) {
+            $znunyGroups[] = Section::make('Other')
+                ->schema(array_values($unknownComponents))->columns(1);
+        }
+
+        return $znunyGroups;
+    }
+
+    private function buildZnunyTicketDefaultsTabGroups(array $zd): array
+    {
+        $zdGroups = [];
+
+        if (isset($zd['znuny_queue_from_host_regex']) || isset($zd['znuny_customer_user_from_queue_template'])) {
+            $zdGroups[] = Section::make('Ticket default rules')
+                ->description('These rules only generate default suggestions for manual ticket creation. The operator will still be able to override Queue and CustomerUser before creating a ticket.')
+                ->schema(array_filter([
+                    $zd['znuny_queue_from_host_regex'] ?? null,
+                    $zd['znuny_customer_user_from_queue_template'] ?? null,
+                ]))->columns(1);
+        }
+
+        if (isset($zd['znuny_queue_host_mappings'])) {
+            $zdGroups[] = Section::make('Queue host prefix mappings')
+                ->description('Fallback Queue mapping for standardized Zabbix host prefixes. CustomerUser is still generated from the original host prefix.')
+                ->schema([
+                    $zd['znuny_queue_host_mappings'],
+                ])
+                ->columns(1)
+                ->headerActions([
+                    app(ZnunyQueueHostMappingSchemaBuilder::class)->getSaveAction(),
+                    app(ZnunyQueueHostMappingSchemaBuilder::class)->getScanMissingAction(),
+                ]);
+        }
+
+        return $zdGroups;
     }
 }
