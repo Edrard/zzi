@@ -7,6 +7,7 @@ use App\Services\AuditLogger;
 use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyAgentService;
 use App\Services\Znuny\ZnunyQueueHostMappingService;
+use App\Services\Znuny\ZnunyQueueService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -429,8 +430,8 @@ class Settings extends Page implements HasForms
 
     private function getZnunyQueueHostMappingsComponent(Setting $setting, array $initialData): Repeater
     {
-        $mappingService = app(ZnunyQueueHostMappingService::class);
-        $qResult = $mappingService->getSelectableQueuesResult();
+        $queueService = app(ZnunyQueueService::class);
+        $qResult = $queueService->getSelectableQueuesResult();
         $queueOptions = $qResult['options'] ?? [];
         $queueError = $qResult['error'] ?? null;
 
