@@ -469,33 +469,7 @@ class ZnunyClient
 
             $data = $this->processResponse($response);
 
-            if (empty($data['Queue']) || empty($data['Queue']['QueueID'])) {
-                return [
-                    'found' => false,
-                    'warnings' => $data['Warnings'] ?? ['Queue not found.'],
-                ];
-            }
-
-            $q = $data['Queue'];
-            $name = trim((string) ($q['Name'] ?? ''));
-            $id = $q['QueueID'] ?? null;
-
-            if (! is_numeric($id) || $id <= 0 || $name === '') {
-                return [
-                    'found' => false,
-                    'warnings' => $data['Warnings'] ?? ['Queue data invalid.'],
-                ];
-            }
-
-            return [
-                'found' => true,
-                'id' => (int) $id,
-                'name' => $name,
-                'full_name' => isset($q['FullName']) ? trim((string) $q['FullName']) : $name,
-                'valid_id' => (int) ($q['ValidID'] ?? 1),
-                'label' => $name,
-                'warnings' => $data['Warnings'] ?? [],
-            ];
+            return $this->normalizeQueueResponse($data);
         });
     }
 
@@ -511,34 +485,42 @@ class ZnunyClient
 
             $data = $this->processResponse($response);
 
-            if (empty($data['Queue']) || empty($data['Queue']['QueueID'])) {
-                return [
-                    'found' => false,
-                    'warnings' => $data['Warnings'] ?? ['Queue not found.'],
-                ];
-            }
-
-            $q = $data['Queue'];
-            $qName = trim((string) ($q['Name'] ?? ''));
-            $id = $q['QueueID'] ?? null;
-
-            if (! is_numeric($id) || $id <= 0 || $qName === '') {
-                return [
-                    'found' => false,
-                    'warnings' => $data['Warnings'] ?? ['Queue data invalid.'],
-                ];
-            }
-
-            return [
-                'found' => true,
-                'id' => (int) $id,
-                'name' => $qName,
-                'full_name' => isset($q['FullName']) ? trim((string) $q['FullName']) : $qName,
-                'valid_id' => (int) ($q['ValidID'] ?? 1),
-                'label' => $qName,
-                'warnings' => $data['Warnings'] ?? [],
-            ];
+            return $this->normalizeQueueResponse($data);
         });
+    }
+
+    /**
+     * Normalize Queue response data into standard array shape.
+     */
+    private function normalizeQueueResponse(array $data): array
+    {
+        if (empty($data['Queue']) || empty($data['Queue']['QueueID'])) {
+            return [
+                'found' => false,
+                'warnings' => $data['Warnings'] ?? ['Queue not found.'],
+            ];
+        }
+
+        $q = $data['Queue'];
+        $name = trim((string) ($q['Name'] ?? ''));
+        $id = $q['QueueID'] ?? null;
+
+        if (! is_numeric($id) || $id <= 0 || $name === '') {
+            return [
+                'found' => false,
+                'warnings' => $data['Warnings'] ?? ['Queue data invalid.'],
+            ];
+        }
+
+        return [
+            'found' => true,
+            'id' => (int) $id,
+            'name' => $name,
+            'full_name' => isset($q['FullName']) ? trim((string) $q['FullName']) : $name,
+            'valid_id' => (int) ($q['ValidID'] ?? 1),
+            'label' => $name,
+            'warnings' => $data['Warnings'] ?? [],
+        ];
     }
 
     /**
