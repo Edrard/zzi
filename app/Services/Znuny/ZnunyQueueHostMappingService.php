@@ -5,54 +5,14 @@ namespace App\Services\Znuny;
 use App\Models\Setting;
 use App\Services\AuditLogger;
 use App\Services\Zabbix\ZabbixProblemCache;
-use Illuminate\Support\Facades\Cache;
 
 class ZnunyQueueHostMappingService
 {
     public function __construct(
-        protected ZnunyClient $client,
+        protected ZnunyQueueService $queueService,
         protected ZnunyTicketDefaultRuleService $ruleService,
         protected ZabbixProblemCache $problemCache
     ) {}
-
-    public function getCachedQueues(bool $failSilently = false): array
-    {
-        try {
-            return Cache::remember('znuny_queues_list', now()->addMinutes(15), function () {
-                return $this->client->getQueues();
-            });
-        } catch (\Throwable $e) {
-            if ($failSilently) {
-                return [];
-            }
-            throw $e;
-        }
-    }
-
-    public function getSelectableQueuesResult(): array
-    {
-        try {
-            $queues = $this->getCachedQueues();
-            $options = collect($queues)->pluck('full_name', 'name')->toArray();
-
-            return [
-                'options' => $options,
-                'error' => null,
-            ];
-        } catch (\Throwable $e) {
-            return [
-                'options' => [],
-                'error' => 'Could not load queues from Znuny API. You can try again later.',
-            ];
-        }
-    }
-
-    public function getSelectableQueues(bool $failSilently = false): array
-    {
-        $queues = $this->getCachedQueues($failSilently);
-
-        return collect($queues)->pluck('full_name', 'name')->toArray();
-    }
 
     public function normalizeMappings(array $rawMappings): array
     {
@@ -131,7 +91,7 @@ class ZnunyQueueHostMappingService
 
         $existingZnunyQueues = [];
         try {
-            $queues = $this->getCachedQueues(true);
+            $queues = $this->queueService->getQueues();
             $existingZnunyQueues = collect($queues)->pluck('name')->map(fn ($n) => strtolower($n))->toArray();
         } catch (\Throwable $e) {
             $stats['failed_api']++;

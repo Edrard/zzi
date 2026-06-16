@@ -10,6 +10,7 @@ use App\Services\Znuny\ZabbixTicketLinkService;
 use App\Services\Znuny\ZnunyAgentService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyLookupService;
+use App\Services\Znuny\ZnunyQueueService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -223,13 +224,9 @@ class CurrentZabbixProblems extends Page
             ->mapWithKeys(fn (array $agent) => [(string) $agent['id'] => $agent['label']])
             ->toArray();
 
-        $queues = [];
-        try {
-            $queues = $client->getQueues();
-        } catch (\Throwable $e) {
-            // skip
-        }
-        $this->ticketQueueOptions = collect($queues)->pluck('label', 'name')->toArray();
+        $queueService = app(ZnunyQueueService::class);
+        $queueResult = $queueService->getSelectableQueuesResult();
+        $this->ticketQueueOptions = $queueResult['options'];
 
         $this->ticketOwnerId = null;
         $this->ticketQueue = null;

@@ -8,7 +8,8 @@ class ZnunyLookupService
 {
     public function __construct(
         protected ZnunyTicketDefaultRuleService $ruleService,
-        protected ZnunyClient $client
+        protected ZnunyClient $client,
+        protected ZnunyQueueService $queueService
     ) {}
 
     public function resolveTicketDefaultCandidates(string $hostName): array
@@ -36,7 +37,7 @@ class ZnunyLookupService
 
         if ($local['queue']) {
             try {
-                $qResponse = $this->client->getQueueByName($local['queue']);
+                $qResponse = $this->queueService->findQueueByName($local['queue']);
                 if ($qResponse['found']) {
                     $result['queue'] = [
                         'found' => true,
@@ -66,7 +67,7 @@ class ZnunyLookupService
                 if (strtolower($prefix) === strtolower($local['queue'])) {
                     $result['warnings'][] = "Queue mapping matched prefix: {$prefix} -> {$qName}";
                     try {
-                        $qResponse = $this->client->getQueueByName($qName);
+                        $qResponse = $this->queueService->findQueueByName($qName);
                         if ($qResponse['found']) {
                             $result['queue'] = [
                                 'found' => true,
