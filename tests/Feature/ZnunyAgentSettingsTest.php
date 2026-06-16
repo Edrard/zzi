@@ -127,7 +127,7 @@ class ZnunyAgentSettingsTest extends TestCase
         $this->assertEquals('12', $idChange['new_value']);
 
         $loginChange = $changes->firstWhere('key', 'znuny_default_agent_login');
-        $this->assertEquals('uav@vamark.com', $loginChange['new_value']);
+        $this->assertEquals('uav@example.invalid', $loginChange['new_value']);
     }
 
     public function test_empty_default_agent_is_allowed()

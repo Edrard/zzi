@@ -8,6 +8,7 @@ use App\Services\Zabbix\ZabbixProblemFormatter;
 use App\Services\Zabbix\ZabbixProblemQueryService;
 use App\Services\Znuny\ZabbixTicketLinkService;
 use App\Services\Znuny\ZnunyClient;
+use App\Services\Znuny\ZnunyTicketCreationService;
 use App\Services\Znuny\ZnunyTicketModalStateBuilder;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
@@ -267,28 +268,21 @@ class CurrentZabbixProblems extends Page
         $this->ticketValidationWarnings = [];
         $this->ticketValidationStatus = 'validating';
 
-        try {
-            $client = app(ZnunyClient::class);
-            $response = $client->validateTicketCreate([
-                'OwnerID' => (int) $this->ticketOwnerId,
-                'Queue' => $this->ticketQueue,
-                'CustomerUser' => $this->ticketCustomerUser,
-                'State' => 'new',
-                'Lock' => 'lock',
-            ]);
+        $service = app(ZnunyTicketCreationService::class);
+        $result = $service->validateTicketPayload(
+            $this->ticketOwnerId,
+            $this->ticketQueue,
+            $this->ticketCustomerUser
+        );
 
-            if ($response['valid']) {
-                $this->ticketValidationStatus = 'success';
-                $this->ticketValidationWarnings = $response['warnings'] ?? [];
-                Notification::make()->title('Validation successful')->success()->send();
-            } else {
-                $this->ticketValidationStatus = 'error';
-                $this->ticketValidationErrors = $response['errors'] ?? [];
-                $this->ticketValidationWarnings = $response['warnings'] ?? [];
-            }
-        } catch (\Throwable $e) {
+        if ($result['valid']) {
+            $this->ticketValidationStatus = 'success';
+            $this->ticketValidationWarnings = $result['warnings'];
+            Notification::make()->title('Validation successful')->success()->send();
+        } else {
             $this->ticketValidationStatus = 'error';
-            $this->ticketValidationErrors = [$e->getMessage()];
+            $this->ticketValidationErrors = $result['errors'];
+            $this->ticketValidationWarnings = $result['warnings'];
         }
     }
 }

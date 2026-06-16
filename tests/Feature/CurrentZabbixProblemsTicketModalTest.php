@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\ZabbixTicket;
 use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixProblemCache;
+use App\Services\Znuny\ZnunyClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -161,5 +162,43 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->call('validateTicketData')
             ->assertSet('ticketValidationStatus', 'error')
             ->assertSet('ticketValidationErrors', ['CustomerUser not found.']);
+    }
+
+    public function test_validate_ticket_missing_fields()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            // intentionally leaving fields empty
+            ->call('validateTicketData')
+            ->assertNotSet('ticketValidationStatus', 'validating') // should return early
+            ->assertNotified(); // should have danger notification
+    }
+
+    public function test_validate_ticket_exception()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
+        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
+
+        // Mock an exception on ValidateTicketCreate
+        $clientMock = $this->mock(ZnunyClient::class);
+        $clientMock->shouldReceive('validateTicketCreate')
+            ->andThrow(new \Exception('Connection timeout'));
+
+        // ensure other HTTP requests needed for boot aren't broken by our mocking just the validate call
+        // well we mocked the whole client, so other calls on client might fail if not mocked, but we only hit validate in this action.
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->set('ticketOwnerId', '10')
+            ->set('ticketQueue', 'TestCompany')
+            ->set('ticketCustomerUser', 'TestCompanyClients')
+            ->call('validateTicketData')
+            ->assertSet('ticketValidationStatus', 'error')
+            ->assertSet('ticketValidationErrors', ['Connection timeout']);
     }
 }
