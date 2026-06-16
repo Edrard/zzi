@@ -1,7 +1,26 @@
-<x-filament-panels::page>
+<x-filament-panels::page class="zbx-current-problems-page" max-width="full">
     <style>
         [x-cloak] { display: none !important; }
-        
+
+        /* Page Width overrides */
+        .zbx-current-problems-page {
+            width: 100%;
+        }
+
+        .fi-main:has(.zbx-current-problems-page) .fi-page-content {
+            max-width: none !important;
+        }
+
+        .zbx-current-problems-page .zbx-page-stack,
+        .zbx-current-problems-page .zbx-table-container,
+        .zbx-current-problems-page .zbx-status-section,
+        .zbx-current-problems-page .zbx-toolbar {
+            width: 100%;
+            max-width: none;
+        }
+
+
+
         .zbx-page-stack {
             display: flex;
             flex-direction: column;
@@ -13,14 +32,14 @@
             background-color: var(--bg-color, #ffffff);
             border: 1px solid var(--border-color, #e5e7eb);
             border-radius: 12px;
-            padding: 18px 24px;
+            padding: 12px 18px;
             box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
         }
         :is(.dark) .zbx-status-section {
             --bg-color: #111827;
             --border-color: rgba(255, 255, 255, 0.1);
         }
-        
+
         .zbx-status-grid {
             display: flex;
             flex-wrap: wrap;
@@ -53,7 +72,7 @@
 
         .zbx-status-success { color: #059669; }
         :is(.dark) .zbx-status-success { color: #34d399; }
-        
+
         .zbx-status-danger { color: #dc2626; }
         :is(.dark) .zbx-status-danger { color: #f87171; }
 
@@ -87,7 +106,7 @@
                 justify-content: space-between;
             }
         }
-        
+
         .zbx-toolbar-search {
             flex: 1;
             max-width: 400px;
@@ -116,14 +135,14 @@
             width: 100%;
             border-collapse: collapse;
             text-align: left;
-            font-size: 0.875rem;
+            font-size: 0.8125rem;
         }
 
         .zbx-table th {
             background-color: #f9fafb;
             color: #374151;
             font-weight: 500;
-            padding: 14px 16px;
+            padding: 5px 10px;
             border-bottom: 1px solid var(--border-color, #e5e7eb);
             white-space: nowrap;
         }
@@ -166,20 +185,20 @@
         }
 
         .zbx-problem-row {
-            background-color: transparent;
-            transition: background-color 0.15s ease-in-out;
             cursor: pointer;
         }
-        .zbx-problem-row:hover {
-            background-color: #f9fafb;
-        }
-        :is(.dark) .zbx-problem-row:hover {
-            background-color: rgba(255, 255, 255, 0.05);
-        }
-
         .zbx-problem-row td {
-            padding: 14px 16px;
+            padding: 2px 10px;
             color: #4b5563;
+        }
+        .zbx-problem-row > td {
+            transition: background-color 0.12s ease-in-out;
+        }
+        .zbx-table tbody tr.zbx-problem-row:hover > td {
+            background-color: #eaf3ff !important;
+        }
+        :is(.dark) .zbx-table tbody tr.zbx-problem-row:hover > td {
+            background-color: rgba(59, 130, 246, 0.14) !important;
         }
         :is(.dark) .zbx-problem-row td {
             color: #d1d5db;
@@ -201,10 +220,10 @@
         }
 
         .zbx-details {
-            padding: 24px;
+            padding: 12px 16px;
             display: grid;
             grid-template-columns: 1fr;
-            gap: 24px;
+            gap: 16px;
         }
         @media (min-width: 1024px) {
             .zbx-details {
@@ -228,8 +247,8 @@
             margin: 0;
             display: flex;
             flex-direction: column;
-            gap: 4px;
-            font-size: 0.875rem;
+            gap: 2px;
+            font-size: 0.8125rem;
         }
 
         .zbx-detail-list li {
@@ -275,6 +294,183 @@
             color: #f9fafb;
         }
 
+                /* Ticket Actions */
+        .zbx-ticket-panel {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color, #e5e7eb);
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+        :is(.dark) .zbx-ticket-panel {
+            border-top-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .zbx-ticket-linked {
+            background-color: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+        }
+        :is(.dark) .zbx-ticket-linked {
+            background-color: rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.2);
+        }
+
+                /* Severity Pills */
+        .zbx-severity {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            line-height: 1.25;
+            white-space: nowrap;
+        }
+        .zbx-severity-0 { background: #f3f4f6; color: #4b5563; border: 1px solid #e5e7eb; } /* Not classified */
+        .zbx-severity-1 { background: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe; } /* Information */
+        .zbx-severity-2 { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; } /* Warning */
+        .zbx-severity-3 { background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; } /* Average */
+        .zbx-severity-4 { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; } /* High */
+        .zbx-severity-5 { background: #fecaca; color: #7f1d1d; border: 1px solid #fca5a5; } /* Disaster */
+
+        :is(.dark) .zbx-severity-0 { background: #374151; color: #d1d5db; border-color: #4b5563; }
+        :is(.dark) .zbx-severity-1 { background: #1e3a8a; color: #bfdbfe; border-color: #1e40af; }
+        :is(.dark) .zbx-severity-2 { background: #78350f; color: #fde68a; border-color: #92400e; }
+        :is(.dark) .zbx-severity-3 { background: #7c2d12; color: #fed7aa; border-color: #9a3412; }
+        :is(.dark) .zbx-severity-4 { background: #7f1d1d; color: #fecaca; border-color: #991b1b; }
+        :is(.dark) .zbx-severity-5 { background: #450a0a; color: #fca5a5; border-color: #7f1d1d; }
+
+        /* Modal specific styles */
+        .zbx-ticket-modal-section {
+            margin-bottom: 24px;
+        }
+        .zbx-ticket-modal-section-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        :is(.dark) .zbx-ticket-modal-section-title {
+            color: #9ca3af;
+        }
+        .zbx-ticket-summary-card {
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            font-size: 0.875rem;
+        }
+        :is(.dark) .zbx-ticket-summary-card {
+            background-color: rgba(255, 255, 255, 0.02);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        .zbx-ticket-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px 24px;
+        }
+        .zbx-ticket-summary-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .zbx-ticket-summary-item.full-width {
+            grid-column: 1 / -1;
+        }
+        .zbx-ticket-summary-label {
+            color: #6b7280;
+            font-weight: 500;
+        }
+        :is(.dark) .zbx-ticket-summary-label {
+            color: #9ca3af;
+        }
+        .zbx-ticket-summary-value {
+            color: #111827;
+        }
+        :is(.dark) .zbx-ticket-summary-value {
+            color: #f9fafb;
+        }
+
+                /* Form fields spacing */
+        .zbx-ticket-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .zbx-ticket-label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        :is(.dark) .zbx-ticket-label {
+            color: #d1d5db;
+        }
+
+        .zbx-ticket-field-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .zbx-ticket-search-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: flex-start;
+        }
+        .zbx-ticket-search-input {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .zbx-ticket-fixed-values {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 8px;
+        }
+        .zbx-ticket-chip {
+            display: inline-flex;
+            align-items: center;
+            background-color: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            border-radius: 9999px;
+            padding: 2px 10px;
+            font-size: 0.75rem;
+        }
+        :is(.dark) .zbx-ticket-chip {
+            background-color: #374151;
+            border-color: #4b5563;
+        }
+        .zbx-ticket-chip-label {
+            color: #6b7280;
+            margin-right: 6px;
+        }
+        :is(.dark) .zbx-ticket-chip-label {
+            color: #9ca3af;
+        }
+        .zbx-ticket-chip-value {
+            color: #111827;
+            font-weight: 500;
+        }
+        :is(.dark) .zbx-ticket-chip-value {
+            color: #f9fafb;
+        }
+
         /* Empty states */
         .zbx-empty-state {
             padding: 48px 24px;
@@ -305,7 +501,7 @@
     </style>
 
     <div wire:poll.{{ $this->getRefreshIntervalString() }} class="zbx-page-stack">
-        
+
         {{-- Status Section --}}
         @php
             $lastPoll = $this->lastPoll;
@@ -316,16 +512,16 @@
             $ttl = $lastPoll['ttl_seconds'] ?? 0;
             $limit = $lastPoll['limit'] ?? 'N/A';
             $error = $lastPoll['error'] ?? null;
-            
+
             $excludedFilters = $lastPoll['excluded_count'] ?? 0;
             $excludedHosts = $lastPoll['disabled_hosts_excluded_count'] ?? 0;
             $excludedTriggers = $lastPoll['disabled_triggers_excluded_count'] ?? 0;
             $excludedItems = $lastPoll['disabled_items_excluded_count'] ?? 0;
             $excludedDeps = $lastPoll['dependency_covered_excluded_count'] ?? 0;
             $excludedSupp = $lastPoll['suppressed_excluded_count'] ?? 0;
-            
+
             $totalExcluded = $excludedFilters + $excludedHosts + $excludedTriggers + $excludedItems + $excludedDeps + $excludedSupp;
-            
+
             $polledAt = $lastPoll['polled_at'] ?? null;
             $ageText = 'N/A';
             if ($polledAt) {
@@ -371,14 +567,14 @@
                     <span class="zbx-metric-value">{{ $ttl }}s</span>
                 </div>
             </div>
-            
+
             <div class="zbx-exclusion-breakdown">
-                <strong>Excluded Breakdown:</strong> 
-                Hosts {{ $excludedHosts }} &middot; 
-                Triggers {{ $excludedTriggers }} &middot; 
-                Items {{ $excludedItems }} &middot; 
-                Dependencies {{ $excludedDeps }} &middot; 
-                Suppressed {{ $excludedSupp }} &middot; 
+                <strong>Excluded Breakdown:</strong>
+                Hosts {{ $excludedHosts }} &middot;
+                Triggers {{ $excludedTriggers }} &middot;
+                Items {{ $excludedItems }} &middot;
+                Dependencies {{ $excludedDeps }} &middot;
+                Suppressed {{ $excludedSupp }} &middot;
                 Filters {{ $excludedFilters }}
             </div>
 
@@ -438,7 +634,7 @@
                     @endif
                 </div>
             @else
-                <table class="zbx-table">
+                <table class="zbx-table" x-data="{ expandedEventIds: [] }">
                     <thead>
                         <tr>
                             <th style="width: 42px;"></th>
@@ -476,26 +672,35 @@
                             </th>
                         </tr>
                     </thead>
-                    
+
                     @foreach($problems as $problem)
                         @php
                             $severityValue = (int) ($problem['severity'] ?? 0);
                             $severityColor = $this->getSeverityColor($severityValue);
                             $severityLabel = $problem['severity_label'] ?? $this->getSeverityFallback($severityValue);
                             $ageSeconds = $this->getProblemAgeSeconds($problem);
+                            $eventId = (string) ($problem['eventid'] ?? $problem['objectid'] ?? $problem['triggerid'] ?? $loop->index);
                         @endphp
-                        <tbody x-data="{ expanded: false }">
-                            <tr class="zbx-problem-row" @click="expanded = !expanded">
+                        <tbody wire:key="zbx-problem-{{ $eventId }}">
+                            <tr class="zbx-problem-row" @click="
+                                expandedEventIds.includes('{{ $eventId }}')
+                                    ? expandedEventIds = expandedEventIds.filter(id => id !== '{{ $eventId }}')
+                                    : expandedEventIds.push('{{ $eventId }}')
+                            ">
                                 <td>
-                                    <button @click.stop="expanded = !expanded" type="button" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none">
-                                        <x-filament::icon x-show="!expanded" icon="heroicon-m-chevron-right" class="w-5 h-5" />
-                                        <x-filament::icon x-show="expanded" icon="heroicon-m-chevron-down" class="w-5 h-5" x-cloak />
+                                    <button @click.stop="
+                                        expandedEventIds.includes('{{ $eventId }}')
+                                            ? expandedEventIds = expandedEventIds.filter(id => id !== '{{ $eventId }}')
+                                            : expandedEventIds.push('{{ $eventId }}')
+                                    " type="button" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none">
+                                        <x-filament::icon x-show="!expandedEventIds.includes('{{ $eventId }}')" icon="heroicon-m-chevron-right" class="w-5 h-5" />
+                                        <x-filament::icon x-show="expandedEventIds.includes('{{ $eventId }}')" icon="heroicon-m-chevron-down" class="w-5 h-5" x-cloak />
                                     </button>
                                 </td>
                                 <td>
-                                    <x-filament::badge :color="$severityColor">
+                                    <span class="zbx-severity zbx-severity-{{ $severityValue }}">
                                         {{ $severityLabel }}
-                                    </x-filament::badge>
+                                    </span>
                                 </td>
                                 <td class="zbx-host-col">
                                     {{ $problem['host_name'] ?? 'Unknown host' }}
@@ -507,11 +712,11 @@
                                     {{ $this->formatAge($ageSeconds) }}
                                 </td>
                             </tr>
-                            
-                            <tr class="zbx-details-row" x-show="expanded" x-cloak>
+
+                            <tr class="zbx-details-row" x-show="expandedEventIds.includes('{{ $eventId }}')" x-cloak>
                                 <td colspan="5" style="padding: 0;">
                                     <div class="zbx-details">
-                                        
+
                                         <div class="zbx-detail-block">
                                             <h4>Problem</h4>
                                             <ul class="zbx-detail-list">
@@ -521,7 +726,7 @@
                                                 <li><strong>Current Age:</strong> {{ $this->formatAge($ageSeconds) }}</li>
                                                 <li><strong>Acknowledged:</strong> {{ !empty($problem['acknowledged']) && $problem['acknowledged'] != 0 ? 'Yes' : 'No' }}</li>
                                                 <li><strong>Suppressed:</strong> {{ !empty($problem['suppressed']) && $problem['suppressed'] != 0 ? 'Yes' : 'No' }}</li>
-                                                <li><strong>Severity:</strong> {{ $severityValue }}</li>
+                                                <li><strong>Severity:</strong> <span class="zbx-severity zbx-severity-{{ $severityValue }}">{{ $severityLabel }}</span></li>
                                             </ul>
                                         </div>
 
@@ -541,65 +746,12 @@
                                             @endif
                                         </div>
 
-                                        <div class="zbx-detail-block">
-                                            <h4>Trigger</h4>
-                                            <ul class="zbx-detail-list">
-                                                @if(isset($problem['triggerid']))
-                                                    <li><strong>Trigger ID:</strong> {{ $problem['triggerid'] }}</li>
-                                                    <li><strong>Description:</strong> {{ $problem['trigger_description'] ?? 'N/A' }}</li>
-                                                    <li><strong>Status:</strong> {{ isset($problem['trigger_status']) ? ($problem['trigger_status'] == 0 ? 'Enabled (0)' : 'Disabled (1)') : 'N/A' }}</li>
-                                                    
-                                                    @if(!empty($problem['trigger_dependencies']))
-                                                        <li style="margin-top: 8px;"><strong>Dependencies:</strong></li>
-                                                        <ul class="zbx-detail-list" style="padding-left: 12px;">
-                                                            @foreach($problem['trigger_dependencies'] as $dep)
-                                                                <li>ID {{ $dep['triggerid'] ?? '?' }} - {{ $dep['description'] ?? 'Unknown' }}</li>
-                                                            @endforeach
-                                                        </ul>
-                                                    @endif
-
-                                                    @if(!empty($problem['trigger_items']))
-                                                        <li style="margin-top: 8px;"><strong>Related Items:</strong></li>
-                                                        <ul class="zbx-detail-list" style="padding-left: 12px;">
-                                                            @foreach($problem['trigger_items'] as $item)
-                                                                <li>
-                                                                    ID {{ $item['itemid'] ?? '?' }} - {{ $item['name'] ?? '?' }}
-                                                                    (Status: {{ $item['status'] ?? '?' }})
-                                                                    <div style="font-size: 0.75rem; color: #9ca3af;">Key: {{ $item['key_'] ?? '?' }}</div>
-                                                                </li>
-                                                            @endforeach
-                                                        </ul>
-                                                    @endif
-                                                @else
-                                                    <li>No trigger data available</li>
-                                                @endif
-                                            </ul>
-                                        </div>
-
-                                        <div class="zbx-detail-block">
-                                            <h4>Tags</h4>
-                                            @if(!empty($problem['tags']))
-                                                <div>
-                                                    @foreach($problem['tags'] as $tag)
-                                                        <div class="zbx-tag">
-                                                            {{ $tag['tag'] ?? '' }}
-                                                            @if(!empty($tag['value']))
-                                                                <span class="zbx-tag-value">{{ $tag['value'] }}</span>
-                                                            @endif
-                                                        </div>
-                                                    @endforeach
-                                                </div>
-                                            @else
-                                                <div class="text-sm text-gray-500">No tags available</div>
-                                            @endif
-                                        </div>
-
-                                        <div class="zbx-detail-block" style="grid-column: 1 / -1;">
+                                        <div class="zbx-ticket-panel" style="grid-column: 1 / -1;">
                                             @php
                                                 $linkedTicket = $linkedTickets[$problem['eventid'] ?? ''] ?? null;
                                             @endphp
                                             @if($linkedTicket)
-                                                <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center justify-between">
+                                                <div class="zbx-ticket-linked">
                                                     <div>
                                                         <span class="font-medium text-blue-900 dark:text-blue-200">Ticket already linked:</span>
                                                         <a href="{{ app(\App\Services\Znuny\ZnunyClient::class)->ticketUrl($linkedTicket->znuny_ticket_id) }}" target="_blank" class="text-blue-700 dark:text-blue-400 hover:underline font-bold ml-1">
@@ -611,11 +763,9 @@
                                                     </x-filament::button>
                                                 </div>
                                             @elseif($canCreateTicket)
-                                                <div class="mt-2">
-                                                    <x-filament::button wire:click="openCreateTicketModal('{{ $problem['eventid'] }}')" icon="heroicon-o-ticket">
-                                                        Create ticket
-                                                    </x-filament::button>
-                                                </div>
+                                                <x-filament::button wire:click="openCreateTicketModal('{{ $problem['eventid'] }}')" icon="heroicon-o-ticket">
+                                                    Create ticket
+                                                </x-filament::button>
                                             @endif
                                         </div>
 
@@ -638,116 +788,183 @@
         </x-slot>
 
         @if($ticketModalProblem)
-            <div class="mb-6 space-y-3">
-                <div class="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-800 text-sm">
-                    <div class="grid grid-cols-2 gap-4">
-                        <div><strong class="text-gray-700 dark:text-gray-300">Host:</strong> {{ $ticketModalProblem['host_name'] ?? 'N/A' }}</div>
-                        <div><strong class="text-gray-700 dark:text-gray-300">Event ID:</strong> {{ $ticketModalProblem['eventid'] ?? 'N/A' }}</div>
-                        <div class="col-span-2"><strong class="text-gray-700 dark:text-gray-300">Problem:</strong> {{ $ticketModalProblem['name'] ?? 'N/A' }}</div>
-                        <div><strong class="text-gray-700 dark:text-gray-300">Severity:</strong> {{ $ticketModalProblem['severity'] ?? 'N/A' }}</div>
-                        <div><strong class="text-gray-700 dark:text-gray-300">Started:</strong> {{ $ticketModalProblem['started_at'] ?? 'N/A' }}</div>
+            <div class="mb-2">
+                @php
+                    $modalSevValue = (int) ($ticketModalProblem['severity'] ?? 0);
+                    $modalSevColor = $this->getSeverityColor($modalSevValue);
+                    $modalSevLabel = $ticketModalProblem['severity_label'] ?? $this->getSeverityFallback($modalSevValue);
+                @endphp
+
+                {{-- Problem summary --}}
+                <div class="zbx-ticket-modal-section">
+                    <div class="zbx-ticket-modal-section-title">Problem summary</div>
+                    <div class="zbx-ticket-summary-card">
+                        <div class="zbx-ticket-summary-grid">
+                            <div class="zbx-ticket-summary-item">
+                                <span class="zbx-ticket-summary-label">Host</span>
+                                <span class="zbx-ticket-summary-value">{{ $ticketModalProblem['host_name'] ?? 'N/A' }}</span>
+                            </div>
+                            <div class="zbx-ticket-summary-item">
+                                <span class="zbx-ticket-summary-label">Event ID</span>
+                                <span class="zbx-ticket-summary-value">{{ $ticketModalProblem['eventid'] ?? 'N/A' }}</span>
+                            </div>
+                            <div class="zbx-ticket-summary-item full-width">
+                                <span class="zbx-ticket-summary-label">Problem</span>
+                                <span class="zbx-ticket-summary-value">{{ $ticketModalProblem['name'] ?? 'N/A' }}</span>
+                            </div>
+                            <div class="zbx-ticket-summary-item">
+                                <span class="zbx-ticket-summary-label">Severity</span>
+                                <span class="zbx-ticket-summary-value">
+                                    <x-filament::badge :color="$modalSevColor">
+                                        {{ $modalSevLabel }}
+                                    </x-filament::badge>
+                                </span>
+                            </div>
+                            <div class="zbx-ticket-summary-item">
+                                <span class="zbx-ticket-summary-label">Started</span>
+                                <span class="zbx-ticket-summary-value">{{ $ticketModalProblem['started_at'] ?? 'N/A' }}</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
+                {{-- Default resolution --}}
                 @if(!empty($ticketDefaultWarnings))
-                    <div class="bg-warning-50 dark:bg-warning-900/20 p-3 rounded border border-warning-200 dark:border-warning-800 text-warning-700 dark:text-warning-400 text-sm">
-                        <strong class="font-medium">Candidate Warnings:</strong>
-                        <ul class="list-disc pl-5 mt-1">
-                            @foreach($ticketDefaultWarnings as $warn)
-                                <li>{{ $warn }}</li>
-                            @endforeach
-                        </ul>
-                    </div>
-                @endif
-
-                @if($ticketValidationStatus === 'success')
-                    <div class="bg-success-50 dark:bg-success-900/20 p-3 rounded border border-success-200 dark:border-success-800 text-success-700 dark:text-success-400 text-sm flex items-center gap-2">
-                        <x-filament::icon icon="heroicon-o-check-circle" class="w-5 h-5" />
-                        <span class="font-medium">Ticket data is valid and ready to be created.</span>
-                    </div>
-                @elseif($ticketValidationStatus === 'error')
-                    <div class="bg-danger-50 dark:bg-danger-900/20 p-3 rounded border border-danger-200 dark:border-danger-800 text-danger-700 dark:text-danger-400 text-sm">
-                        <strong class="font-medium">Validation Errors:</strong>
-                        <ul class="list-disc pl-5 mt-1">
-                            @foreach($ticketValidationErrors as $err)
-                                <li>{{ $err }}</li>
-                            @endforeach
-                        </ul>
-                    </div>
-                @endif
-
-                @if(!empty($ticketValidationWarnings))
-                    <div class="bg-warning-50 dark:bg-warning-900/20 p-3 rounded border border-warning-200 dark:border-warning-800 text-warning-700 dark:text-warning-400 text-sm mt-2">
-                        <strong class="font-medium">Validation Warnings:</strong>
-                        <ul class="list-disc pl-5 mt-1">
-                            @foreach($ticketValidationWarnings as $warn)
-                                <li>{{ $warn }}</li>
-                            @endforeach
-                        </ul>
-                    </div>
-                @endif
-
-                <div class="space-y-4 pt-2">
-                    <x-filament::input.wrapper label="Owner" class="flex flex-col">
-                        <span class="text-sm font-medium mb-1">Owner <span class="text-danger-600">*</span></span>
-                        <x-filament::input.select wire:model="ticketOwnerId">
-                            <option value="">Select an owner</option>
-                            @foreach($ticketOwnerOptions as $id => $label)
-                                <option value="{{ $id }}">{{ $label }}</option>
-                            @endforeach
-                        </x-filament::input.select>
-                    </x-filament::input.wrapper>
-
-                    <x-filament::input.wrapper label="Queue" class="flex flex-col">
-                        <span class="text-sm font-medium mb-1">Queue <span class="text-danger-600">*</span></span>
-                        <x-filament::input.select wire:model="ticketQueue">
-                            <option value="">Select a queue</option>
-                            @foreach($ticketQueueOptions as $name => $label)
-                                <option value="{{ $name }}">{{ $label }}</option>
-                            @endforeach
-                        </x-filament::input.select>
-                    </x-filament::input.wrapper>
-
-                    <div class="flex flex-col gap-1">
-                        <span class="text-sm font-medium">CustomerUser <span class="text-danger-600">*</span></span>
-                        <div class="flex gap-2">
-                            <x-filament::input.wrapper class="flex-1">
-                                <x-filament::input type="text" wire:model="ticketCustomerUserSearch" placeholder="Search CustomerUser..." wire:keydown.enter="searchTicketCustomerUsers" />
-                            </x-filament::input.wrapper>
-                            <x-filament::button color="gray" wire:click="searchTicketCustomerUsers">Search</x-filament::button>
-                        </div>
-                        <x-filament::input.wrapper class="mt-2">
-                            <x-filament::input.select wire:model="ticketCustomerUser">
-                                <option value="">Select a customer user</option>
-                                @foreach($ticketCustomerUserOptions as $login => $label)
-                                    <option value="{{ $login }}">{{ $label }}</option>
+                    <div class="zbx-ticket-modal-section">
+                        <div class="zbx-ticket-modal-section-title">Default resolution warnings</div>
+                        <div class="bg-warning-50 dark:bg-warning-900/20 p-4 rounded-lg border border-warning-200 dark:border-warning-800 text-warning-700 dark:text-warning-400 text-sm">
+                            <ul class="list-disc pl-5">
+                                @foreach($ticketDefaultWarnings as $warn)
+                                    <li>{{ $warn }}</li>
                                 @endforeach
-                            </x-filament::input.select>
-                        </x-filament::input.wrapper>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4 mt-2">
-                        <div class="flex flex-col">
-                            <span class="text-sm font-medium mb-1 text-gray-500">State</span>
-                            <div class="px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 text-sm">new</div>
+                            </ul>
                         </div>
-                        <div class="flex flex-col">
-                            <span class="text-sm font-medium mb-1 text-gray-500">Lock</span>
-                            <div class="px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 text-sm">lock</div>
+                    </div>
+                @endif
+
+                {{-- Ticket fields --}}
+                <div class="zbx-ticket-modal-section">
+                    <div class="zbx-ticket-modal-section-title">Ticket fields</div>
+                    <div class="zbx-ticket-field-stack">
+                        <div class="zbx-ticket-field">
+                            <label class="zbx-ticket-label">Owner <span class="text-danger-600">*</span></label>
+                            <x-filament::input.wrapper>
+                                <x-filament::input.select wire:model="ticketOwnerId">
+                                    <option value="">Select an owner</option>
+                                    @foreach($ticketOwnerOptions as $id => $label)
+                                        <option value="{{ $id }}">{{ $label }}</option>
+                                    @endforeach
+                                </x-filament::input.select>
+                            </x-filament::input.wrapper>
+                        </div>
+
+                        <div class="zbx-ticket-field">
+                            <label class="zbx-ticket-label">Queue <span class="text-danger-600">*</span></label>
+                            <x-filament::input.wrapper>
+                                <x-filament::input.select wire:model="ticketQueue">
+                                    <option value="">Select a queue</option>
+                                    @foreach($ticketQueueOptions as $name => $label)
+                                        <option value="{{ $name }}">{{ $label }}</option>
+                                    @endforeach
+                                </x-filament::input.select>
+                            </x-filament::input.wrapper>
+                        </div>
+
+                        <div class="zbx-ticket-field">
+                            <label class="zbx-ticket-label">CustomerUser <span class="text-danger-600">*</span></label>
+
+                            <div class="zbx-ticket-search-row">
+                                <x-filament::input.wrapper class="zbx-ticket-search-input">
+                                    <x-filament::input type="text" wire:model="ticketCustomerUserSearch" placeholder="Search CustomerUser..." wire:keydown.enter="searchTicketCustomerUsers" />
+                                </x-filament::input.wrapper>
+                                <x-filament::button color="gray" wire:click="searchTicketCustomerUsers">Search</x-filament::button>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1 mb-2">Search by login, customer ID, name, or email.</div>
+
+                            @if(!empty($ticketCustomerUserSearch) && empty($ticketCustomerUserOptions))
+                                <div class="text-sm text-gray-500 mb-2">No matching CustomerUser found.</div>
+                            @endif
+
+                            <x-filament::input.wrapper>
+                                <x-filament::input.select wire:model="ticketCustomerUser">
+                                    <option value="">Select a customer user</option>
+                                    @foreach($ticketCustomerUserOptions as $login => $label)
+                                        <option value="{{ $login }}">{{ $label }}</option>
+                                    @endforeach
+                                </x-filament::input.select>
+                            </x-filament::input.wrapper>
+                        </div>
+
+                        <div class="zbx-ticket-fixed-values">
+                            <span class="text-sm font-medium text-gray-500">Fixed ticket values:</span>
+                            <div class="zbx-ticket-chip">
+                                <span class="zbx-ticket-chip-label">State</span>
+                                <span class="zbx-ticket-chip-value">new</span>
+                            </div>
+                            <div class="zbx-ticket-chip">
+                                <span class="zbx-ticket-chip-label">Lock</span>
+                                <span class="zbx-ticket-chip-value">lock</span>
+                            </div>
                         </div>
                     </div>
                 </div>
+
+                {{-- Preflight result --}}
+                @if($ticketValidationStatus === 'success' || $ticketValidationStatus === 'error' || !empty($ticketValidationWarnings))
+                    <div class="zbx-ticket-modal-section">
+                        <div class="zbx-ticket-modal-section-title">Preflight result</div>
+
+                        @if($ticketValidationStatus === 'success')
+                            <div class="bg-success-50 dark:bg-success-900/20 p-4 rounded-lg border border-success-200 dark:border-success-800 text-success-700 dark:text-success-400 text-sm">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <x-filament::icon icon="heroicon-o-check-circle" class="w-5 h-5" />
+                                    <strong class="font-medium text-base">Ticket data is valid</strong>
+                                </div>
+                                <p class="ml-7">The selected Owner, Queue and CustomerUser passed Znuny preflight validation.</p>
+                            </div>
+                        @elseif($ticketValidationStatus === 'error')
+                            <div class="bg-danger-50 dark:bg-danger-900/20 p-4 rounded-lg border border-danger-200 dark:border-danger-800 text-danger-700 dark:text-danger-400 text-sm">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <x-filament::icon icon="heroicon-o-x-circle" class="w-5 h-5" />
+                                    <strong class="font-medium text-base">Validation Errors</strong>
+                                </div>
+                                <ul class="list-disc pl-9 mt-1">
+                                    @foreach($ticketValidationErrors as $err)
+                                        <li>{{ $err }}</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
+
+                        @if(!empty($ticketValidationWarnings))
+                            <div class="bg-warning-50 dark:bg-warning-900/20 p-4 rounded-lg border border-warning-200 dark:border-warning-800 text-warning-700 dark:text-warning-400 text-sm mt-3">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-5 h-5" />
+                                    <strong class="font-medium text-base">Validation Warnings</strong>
+                                </div>
+                                <ul class="list-disc pl-9 mt-1">
+                                    @foreach($ticketValidationWarnings as $warn)
+                                        <li>{{ $warn }}</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
+                    </div>
+                @endif
             </div>
         @endif
 
+        {{-- Actions --}}
         <x-slot name="footer">
-            <x-filament::button color="gray" wire:click="closeCreateTicketModal">
-                Cancel
-            </x-filament::button>
-            <x-filament::button wire:click="validateTicketData" wire:loading.attr="disabled" wire:target="validateTicketData">
-                <span wire:loading.remove wire:target="validateTicketData">Validate ticket data</span>
-                <span wire:loading wire:target="validateTicketData">Validating...</span>
-            </x-filament::button>
+            <div class="flex justify-between items-center w-full">
+                <x-filament::button color="gray" wire:click="closeCreateTicketModal">
+                    Cancel
+                </x-filament::button>
+                <x-filament::button wire:click="validateTicketData" wire:loading.attr="disabled" wire:target="validateTicketData">
+                    <span wire:loading.remove wire:target="validateTicketData">Validate ticket data</span>
+                    <span wire:loading wire:target="validateTicketData">Validating...</span>
+                </x-filament::button>
+            </div>
         </x-slot>
     </x-filament::modal>
 </x-filament-panels::page>

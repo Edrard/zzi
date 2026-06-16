@@ -12,10 +12,16 @@ use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Support\Enums\Width;
 use Illuminate\Support\Facades\Artisan;
 
 class CurrentZabbixProblems extends Page
 {
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::Full;
+    }
+
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-server';
 
     protected string $view = 'filament.pages.current-zabbix-problems';
