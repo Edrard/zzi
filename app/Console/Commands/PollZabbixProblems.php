@@ -59,6 +59,30 @@ class PollZabbixProblems extends Command
             $eventIds = array_column($rawProblems, 'eventid');
             $hostMap = $client->getEventHosts($eventIds);
 
+            // Fetch host interfaces for IP enrichment
+            $uniqueHostIds = [];
+            foreach ($hostMap as $hosts) {
+                foreach ($hosts as $h) {
+                    if (isset($h['hostid'])) {
+                        $uniqueHostIds[(string) $h['hostid']] = true;
+                    }
+                }
+            }
+
+            $interfacesMap = [];
+            if (! empty($uniqueHostIds)) {
+                try {
+                    $interfacesResult = $client->getHostInterfaces(array_keys($uniqueHostIds));
+                    foreach ($interfacesResult as $interface) {
+                        if (isset($interface['hostid'])) {
+                            $interfacesMap[(string) $interface['hostid']][] = $interface;
+                        }
+                    }
+                } catch (Exception $e) {
+                    $this->warn('Failed to fetch host interfaces for IP enrichment: '.$e->getMessage());
+                }
+            }
+
             // Fetch trigger map
             $triggerIds = [];
             foreach ($rawProblems as $p) {
@@ -131,6 +155,41 @@ class PollZabbixProblems extends Command
                 }
 
                 $hostNameStr = empty($hostNames) ? 'Unknown host' : implode(', ', $hostNames);
+
+                $hostIp = null;
+                foreach ($eventHosts as $h) {
+                    $hId = (string) ($h['hostid'] ?? '');
+                    if (isset($interfacesMap[$hId])) {
+                        $bestIp = null;
+                        foreach ($interfacesMap[$hId] as $iface) {
+                            $ip = trim((string) ($iface['ip'] ?? ''));
+                            if ($ip === '') {
+                                continue;
+                            }
+
+                            $isMain = ((string) ($iface['main'] ?? '0') === '1');
+                            $isLoopback = ($ip === '127.0.0.1');
+
+                            if ($bestIp === null) {
+                                $bestIp = $ip;
+                            }
+
+                            if ($isMain && ! $isLoopback) {
+                                $bestIp = $ip;
+                                break;
+                            }
+
+                            if (! $isLoopback && $bestIp === '127.0.0.1') {
+                                $bestIp = $ip;
+                            }
+                        }
+
+                        if ($bestIp !== null) {
+                            $hostIp = $bestIp;
+                            break;
+                        }
+                    }
+                }
                 $clock = $problem['clock'] ?? null;
                 $startedAt = $clock ? Carbon::createFromTimestamp($clock)->toIso8601String() : null;
                 $ageSeconds = $clock ? max(0, time() - $clock) : 0;
@@ -201,6 +260,7 @@ class PollZabbixProblems extends Command
                     'tags' => $problem['tags'] ?? [],
                     'hosts' => $eventHosts,
                     'host_name' => $hostNameStr,
+                    'host_ip' => $hostIp,
                     'trigger_status' => $triggerData['status'] ?? null,
                     'trigger_description' => $triggerData['description'] ?? null,
                     'trigger_items' => $triggerData['items'] ?? [],

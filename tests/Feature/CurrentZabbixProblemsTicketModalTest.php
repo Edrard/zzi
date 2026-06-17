@@ -35,8 +35,56 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
                 'name' => 'TestCompany CPU Load',
                 'host_name' => 'TestCompany swiss test01',
                 'severity' => 4,
+                'host_ip' => '192.168.1.10',
+                'hosts' => [
+                    [
+                        'name' => 'TestCompany swiss test01 Display',
+                        'host' => 'TestCompany swiss test01',
+                        'hostid' => '2001',
+                        'status' => '0',
+                    ],
+                ],
+            ],
+            [
+                'eventid' => '1002',
+                'name' => 'No IP problem',
+                'host_name' => 'TestCompany swiss test02',
+                'severity' => 4,
+                'host_ip' => null,
+                'hosts' => [
+                    [
+                        'name' => 'TestCompany swiss test02 Display',
+                        'host' => 'TestCompany swiss test02',
+                        'hostid' => '2002',
+                        'status' => '0',
+                    ],
+                ],
             ],
         ], 3600);
+    }
+
+    public function test_expanded_problem_shows_ip_address_when_exists()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->assertSeeHtml('IP Address:</strong> 192.168.1.10');
+    }
+
+    public function test_expanded_problem_hides_ip_address_when_missing()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class);
+
+        // It should NOT see an IP Address row for event 1002
+        // Since we assert the HTML output, we know '192.168.1.10' is there, but for 1002 it's absent.
+        // We can't strictly assert the absence of a specific row easily without parsing, but we can assure
+        // 'IP Address:' is only present once.
+        $html = $component->html();
+        $this->assertEquals(1, substr_count($html, 'IP Address:'));
     }
 
     public function test_viewer_cannot_open_modal()

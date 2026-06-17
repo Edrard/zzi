@@ -228,4 +228,24 @@ class ZabbixClient
 
         return $map;
     }
+
+    /**
+     * @param  array<int, string|int>  $hostIds
+     * @return array<int, array<string, mixed>>
+     *
+     * @throws Exception
+     */
+    public function getHostInterfaces(array $hostIds): array
+    {
+        if (empty($hostIds)) {
+            return [];
+        }
+
+        $result = $this->request('hostinterface.get', [
+            'hostids' => array_values(array_unique($hostIds)),
+            'output' => ['hostid', 'ip', 'main', 'type'],
+        ]);
+
+        return is_array($result) ? $result : [];
+    }
 }

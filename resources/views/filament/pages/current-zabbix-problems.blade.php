@@ -741,6 +741,9 @@
                                                     <ul class="zbx-detail-list" style="margin-bottom: 8px;">
                                                         <li><strong>Display Name:</strong> {{ $host['name'] ?? 'N/A' }}</li>
                                                         <li><strong>Technical Name:</strong> {{ $host['host'] ?? 'N/A' }}</li>
+                                                        @if(!empty($problem['host_ip']))
+                                                            <li><strong>IP Address:</strong> {{ $problem['host_ip'] }}</li>
+                                                        @endif
                                                         <li><strong>Host ID:</strong> {{ $host['hostid'] ?? 'N/A' }}</li>
                                                         <li><strong>Host Status:</strong> {{ isset($host['status']) ? ($host['status'] == 0 ? 'Monitored (0)' : 'Disabled (1)') : 'N/A' }}</li>
                                                     </ul>
