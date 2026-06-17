@@ -8,7 +8,7 @@ use App\Models\User;
 use App\Models\ZabbixTicket;
 use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixProblemCache;
-use App\Services\Znuny\ZnunyClient;
+use App\Services\Znuny\ZnunyTicketCreationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -97,6 +97,16 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_viewer_cannot_create_ticket()
+    {
+        $viewer = User::factory()->create(['role' => 'viewer']);
+
+        Livewire::actingAs($viewer)
+            ->test(CurrentZabbixProblems::class)
+            ->call('createZnunyTicket')
+            ->assertForbidden();
+    }
+
     public function test_admin_can_open_modal_and_see_defaults()
     {
         $admin = User::factory()->create(['role' => 'admin']);
@@ -158,105 +168,164 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->assertNotified();
     }
 
-    public function test_validate_ticket_success()
+    public function test_create_ticket_success()
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
-        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
-        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
-        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
-
-        Http::fake([
-            '*example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
-            '*example.invalid/api/ValidateTicketCreate*' => Http::response([
-                'Valid' => 1,
-                'Errors' => [],
-                'Warnings' => [],
-            ], 200),
-        ]);
+        // Since we are mocking the service directly, we don't need the client/fakes unless the modal boot requires it.
+        // Modal boot requires QueueByName, CustomerUser, etc. But this test acts after boot when we already have state.
+        $serviceMock = $this->mock(ZnunyTicketCreationService::class);
+        $serviceMock->shouldReceive('createTicketForProblem')
+            ->once()
+            ->with(
+                '1001',
+                'TestCompany swiss test01',
+                'TestCompany CPU Load',
+                '10',
+                'TestCompany',
+                'TestCompanyClients',
+                'Test Title',
+                'Test Subject',
+                'Test Body'
+            )
+            ->andReturn([
+                'success' => true,
+                'ticket_id' => 12345,
+                'ticket_number' => 'TN123456',
+                'warnings' => ['Minor warning'],
+            ]);
 
         Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
+            // Initializing necessary state that would be populated by opening the modal
+            ->set('ticketModalEventId', '1001')
+            ->set('ticketModalProblem', [
+                'eventid' => '1001',
+                'host' => 'TestCompany swiss test01',
+                'name' => 'TestCompany CPU Load',
+            ])
             ->set('ticketOwnerId', '10')
             ->set('ticketQueue', 'TestCompany')
             ->set('ticketCustomerUser', 'TestCompanyClients')
             ->set('ticketTextTitle', 'Test Title')
             ->set('ticketTextArticleSubject', 'Test Subject')
             ->set('ticketTextArticleBody', 'Test Body')
-            ->call('validateTicketData')
+            ->set('isTicketTextModalOpen', true)
+            ->call('createZnunyTicket')
             ->assertSet('ticketValidationStatus', 'success')
+            ->assertSet('isTicketTextModalOpen', false)
             ->assertNotified();
     }
 
-    public function test_validate_ticket_error()
+    public function test_create_ticket_failure()
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
-        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
-        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
-        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
-
-        Http::fake([
-            '*example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
-            '*example.invalid/api/ValidateTicketCreate*' => Http::response([
-                'Valid' => 0,
-                'Errors' => ['CustomerUser not found.'],
-                'Warnings' => [],
-            ], 200),
-        ]);
+        $serviceMock = $this->mock(ZnunyTicketCreationService::class);
+        $serviceMock->shouldReceive('createTicketForProblem')
+            ->once()
+            ->andReturn([
+                'success' => false,
+                'errors' => ['CustomerUser not found.'],
+                'warnings' => [],
+            ]);
 
         Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
+            ->set('ticketModalEventId', '1001')
+            ->set('ticketModalProblem', [
+                'eventid' => '1001',
+                'host' => 'TestCompany swiss test01',
+                'name' => 'TestCompany CPU Load',
+            ])
             ->set('ticketOwnerId', '10')
             ->set('ticketQueue', 'TestCompany')
             ->set('ticketCustomerUser', 'InvalidClient')
             ->set('ticketTextTitle', 'Test Title')
             ->set('ticketTextArticleSubject', 'Test Subject')
             ->set('ticketTextArticleBody', 'Test Body')
-            ->call('validateTicketData')
+            ->set('isTicketTextModalOpen', true)
+            ->call('createZnunyTicket')
             ->assertSet('ticketValidationStatus', 'error')
-            ->assertSet('ticketValidationErrors', ['CustomerUser not found.']);
+            ->assertSet('ticketValidationErrors', ['CustomerUser not found.'])
+            ->assertSet('isTicketTextModalOpen', true) // Modal stays open on error
+            ->assertNotified();
     }
 
-    public function test_validate_ticket_missing_fields()
+    public function test_create_ticket_missing_fields()
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
         Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
-            // intentionally leaving fields empty
-            ->call('validateTicketData')
+            // intentionally leaving fields empty (no event ID)
+            ->call('createZnunyTicket')
             ->assertNotSet('ticketValidationStatus', 'validating') // should return early
             ->assertNotified(); // should have danger notification
     }
 
-    public function test_validate_ticket_exception()
+    public function test_create_ticket_duplicate()
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
-        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
-        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
-        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
-
-        // Mock an exception on ValidateTicketCreate
-        $clientMock = $this->mock(ZnunyClient::class);
-        $clientMock->shouldReceive('validateTicketCreate')
-            ->andThrow(new \Exception('Connection timeout'));
-
-        // ensure other HTTP requests needed for boot aren't broken by our mocking just the validate call
-        // well we mocked the whole client, so other calls on client might fail if not mocked, but we only hit validate in this action.
+        $serviceMock = $this->mock(ZnunyTicketCreationService::class);
+        $serviceMock->shouldReceive('createTicketForProblem')
+            ->once()
+            ->andReturn([
+                'success' => false,
+                'duplicate' => true,
+                'ticket_id' => 99,
+                'ticket_number' => 'TN99',
+                'errors' => ['A ticket is already linked to this Zabbix event.'],
+            ]);
 
         Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
+            ->set('ticketModalEventId', '1001')
+            ->set('ticketModalProblem', [
+                'eventid' => '1001',
+            ])
             ->set('ticketOwnerId', '10')
             ->set('ticketQueue', 'TestCompany')
             ->set('ticketCustomerUser', 'TestCompanyClients')
             ->set('ticketTextTitle', 'Test Title')
-            ->set('ticketTextArticleSubject', 'Test Subject')
             ->set('ticketTextArticleBody', 'Test Body')
-            ->call('validateTicketData')
+            ->call('createZnunyTicket')
             ->assertSet('ticketValidationStatus', 'error')
-            ->assertSet('ticketValidationErrors', ['Connection timeout']);
+            ->assertSet('ticketValidationErrors', ['A ticket is already linked to this Zabbix event.'])
+            ->assertNotified();
+    }
+
+    public function test_create_ticket_orphaned()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $serviceMock = $this->mock(ZnunyTicketCreationService::class);
+        $serviceMock->shouldReceive('createTicketForProblem')
+            ->once()
+            ->andReturn([
+                'success' => false,
+                'orphaned' => true,
+                'ticket_id' => 12345,
+                'ticket_number' => 'TN123456',
+                'errors' => ['Znuny ticket was created but linking to Zabbix problem failed locally.'],
+            ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->set('ticketModalEventId', '1001')
+            ->set('ticketModalProblem', [
+                'eventid' => '1001',
+            ])
+            ->set('ticketOwnerId', '10')
+            ->set('ticketQueue', 'TestCompany')
+            ->set('ticketCustomerUser', 'TestCompanyClients')
+            ->set('ticketTextTitle', 'Test Title')
+            ->set('ticketTextArticleBody', 'Test Body')
+            ->call('createZnunyTicket')
+            ->assertSet('ticketValidationStatus', 'error')
+            ->assertSet('ticketValidationErrors', ['Znuny ticket was created but linking to Zabbix problem failed locally.'])
+            ->assertNotified();
     }
 
     public function test_opening_create_ticket_modal_initializes_generated_ticket_text()

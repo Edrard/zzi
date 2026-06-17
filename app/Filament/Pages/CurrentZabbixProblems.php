@@ -302,12 +302,12 @@ class CurrentZabbixProblems extends Page
         }
     }
 
-    public function validateTicketData(): void
+    public function createZnunyTicket(): void
     {
         abort_unless(in_array(auth()->user()->role, ['admin', 'operator'], true), 403);
 
-        if (! $this->ticketOwnerId || ! $this->ticketQueue || ! $this->ticketCustomerUser) {
-            Notification::make()->title('Missing required fields')->danger()->send();
+        if (! $this->ticketModalProblem || ! $this->ticketModalEventId) {
+            Notification::make()->title('Missing event context')->danger()->send();
 
             return;
         }
@@ -317,23 +317,47 @@ class CurrentZabbixProblems extends Page
         $this->ticketValidationStatus = 'validating';
 
         $service = app(ZnunyTicketCreationService::class);
-        $result = $service->validateTicketPayload(
-            $this->ticketOwnerId,
-            $this->ticketQueue,
-            $this->ticketCustomerUser,
+        $result = $service->createTicketForProblem(
+            (string) $this->ticketModalEventId,
+            (string) ($this->ticketModalProblem['host'] ?? ''),
+            (string) ($this->ticketModalProblem['name'] ?? ''),
+            $this->ticketOwnerId ?? '',
+            (string) $this->ticketQueue,
+            (string) $this->ticketCustomerUser,
             (string) $this->ticketTextTitle,
             (string) $this->ticketTextArticleSubject,
             (string) $this->ticketTextArticleBody
         );
 
-        if ($result['valid']) {
+        if ($result['success']) {
             $this->ticketValidationStatus = 'success';
             $this->ticketValidationWarnings = $result['warnings'];
-            Notification::make()->title('Validation successful')->success()->send();
+
+            Notification::make()
+                ->title("Znuny ticket created: {$result['ticket_number']}")
+                ->success()
+                ->send();
+
+            $this->closeCreateTicketModal();
+            $this->isTicketTextModalOpen = false;
         } else {
             $this->ticketValidationStatus = 'error';
             $this->ticketValidationErrors = $result['errors'];
-            $this->ticketValidationWarnings = $result['warnings'];
+            $this->ticketValidationWarnings = $result['warnings'] ?? [];
+
+            if (! empty($result['orphaned'])) {
+                Notification::make()
+                    ->title("Znuny ticket was created but local link failed. Ticket: {$result['ticket_number']}. Check logs.")
+                    ->danger()
+                    ->persistent()
+                    ->send();
+            } else {
+                $mainError = $result['errors'][0] ?? 'Failed to create ticket.';
+                Notification::make()
+                    ->title($mainError)
+                    ->danger()
+                    ->send();
+            }
         }
     }
 }

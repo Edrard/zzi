@@ -1019,9 +1019,9 @@
                     <x-filament::button color="gray" wire:click="openEditTicketTextModal">
                         Edit ticket text
                     </x-filament::button>
-                    <x-filament::button wire:click="validateTicketData" wire:loading.attr="disabled" wire:target="validateTicketData">
-                        <span wire:loading.remove wire:target="validateTicketData">Validate ticket data</span>
-                        <span wire:loading wire:target="validateTicketData">Validating...</span>
+                    <x-filament::button wire:click="createZnunyTicket" wire:loading.attr="disabled" wire:target="createZnunyTicket">
+                        <span wire:loading.remove wire:target="createZnunyTicket">Create ticket</span>
+                        <span wire:loading wire:target="createZnunyTicket">Creating...</span>
                     </x-filament::button>
                 </div>
             </div>
