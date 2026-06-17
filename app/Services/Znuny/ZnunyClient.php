@@ -684,4 +684,38 @@ class ZnunyClient
             ];
         });
     }
+
+    /**
+     * Call POST /Ticket to create a new ticket in Znuny.
+     */
+    public function createTicket(array $payload): array
+    {
+        return $this->withSessionRetry(function ($session) use ($payload) {
+            $payload['SessionID'] = $session;
+
+            $response = $this->request()->post($this->apiUrl().'/Ticket', $payload);
+
+            $data = $this->processResponse($response);
+
+            if (empty($data['TicketID']) || empty($data['TicketNumber'])) {
+                return [
+                    'success' => false,
+                    'ticket_id' => null,
+                    'ticket_number' => null,
+                    'warnings' => $data['Warnings'] ?? [],
+                    'errors' => array_merge($data['Errors'] ?? [], ['Missing TicketID or TicketNumber in response']),
+                    'raw' => $data,
+                ];
+            }
+
+            return [
+                'success' => true,
+                'ticket_id' => $data['TicketID'],
+                'ticket_number' => $data['TicketNumber'],
+                'warnings' => $data['Warnings'] ?? [],
+                'errors' => $data['Errors'] ?? [],
+                'raw' => $data,
+            ];
+        });
+    }
 }

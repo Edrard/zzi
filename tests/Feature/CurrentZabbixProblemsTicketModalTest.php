@@ -180,6 +180,9 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->set('ticketOwnerId', '10')
             ->set('ticketQueue', 'TestCompany')
             ->set('ticketCustomerUser', 'TestCompanyClients')
+            ->set('ticketTextTitle', 'Test Title')
+            ->set('ticketTextArticleSubject', 'Test Subject')
+            ->set('ticketTextArticleBody', 'Test Body')
             ->call('validateTicketData')
             ->assertSet('ticketValidationStatus', 'success')
             ->assertNotified();
@@ -207,6 +210,9 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->set('ticketOwnerId', '10')
             ->set('ticketQueue', 'TestCompany')
             ->set('ticketCustomerUser', 'InvalidClient')
+            ->set('ticketTextTitle', 'Test Title')
+            ->set('ticketTextArticleSubject', 'Test Subject')
+            ->set('ticketTextArticleBody', 'Test Body')
             ->call('validateTicketData')
             ->assertSet('ticketValidationStatus', 'error')
             ->assertSet('ticketValidationErrors', ['CustomerUser not found.']);
@@ -245,6 +251,9 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->set('ticketOwnerId', '10')
             ->set('ticketQueue', 'TestCompany')
             ->set('ticketCustomerUser', 'TestCompanyClients')
+            ->set('ticketTextTitle', 'Test Title')
+            ->set('ticketTextArticleSubject', 'Test Subject')
+            ->set('ticketTextArticleBody', 'Test Body')
             ->call('validateTicketData')
             ->assertSet('ticketValidationStatus', 'error')
             ->assertSet('ticketValidationErrors', ['Connection timeout']);

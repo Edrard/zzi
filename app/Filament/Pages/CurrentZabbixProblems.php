@@ -320,7 +320,10 @@ class CurrentZabbixProblems extends Page
         $result = $service->validateTicketPayload(
             $this->ticketOwnerId,
             $this->ticketQueue,
-            $this->ticketCustomerUser
+            $this->ticketCustomerUser,
+            (string) $this->ticketTextTitle,
+            (string) $this->ticketTextArticleSubject,
+            (string) $this->ticketTextArticleBody
         );
 
         if ($result['valid']) {

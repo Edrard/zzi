@@ -15,11 +15,19 @@ class ZnunyTicketCreationServiceTest extends TestCase
         $clientMock->shouldReceive('validateTicketCreate')
             ->once()
             ->with([
-                'OwnerID' => 10,
-                'Queue' => 'TestQueue',
-                'CustomerUser' => 'testuser',
-                'State' => 'new',
-                'Lock' => 'lock',
+                'Ticket' => [
+                    'Title' => 'Test Title',
+                    'Queue' => 'TestQueue',
+                    'CustomerUser' => 'testuser',
+                    'State' => 'new',
+                    'Lock' => 'lock',
+                    'OwnerID' => 10,
+                ],
+                'Article' => [
+                    'Subject' => 'Test Subject',
+                    'Body' => 'Test Body',
+                    'ContentType' => 'text/plain; charset=utf8',
+                ],
             ])
             ->andReturn([
                 'valid' => 1,
@@ -29,7 +37,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
 
         $service = new ZnunyTicketCreationService($clientMock);
 
-        $result = $service->validateTicketPayload(10, 'TestQueue', 'testuser');
+        $result = $service->validateTicketPayload(10, 'TestQueue', 'testuser', 'Test Title', 'Test Subject', 'Test Body');
 
         $this->assertTrue($result['valid']);
         $this->assertEquals([], $result['errors']);
@@ -50,7 +58,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
 
         $service = new ZnunyTicketCreationService($clientMock);
 
-        $result = $service->validateTicketPayload('10', 'TestQueue', 'testuser');
+        $result = $service->validateTicketPayload('10', 'TestQueue', 'testuser', 'Title', 'Subj', 'Body');
 
         $this->assertFalse($result['valid']);
         $this->assertEquals(['Missing data'], $result['errors']);
@@ -67,10 +75,36 @@ class ZnunyTicketCreationServiceTest extends TestCase
 
         $service = new ZnunyTicketCreationService($clientMock);
 
-        $result = $service->validateTicketPayload(10, 'TestQueue', 'testuser');
+        $result = $service->validateTicketPayload(10, 'TestQueue', 'testuser', 'Title', 'Subj', 'Body');
 
         $this->assertFalse($result['valid']);
         $this->assertEquals(['API timeout'], $result['errors']);
         $this->assertEquals([], $result['warnings']);
+    }
+
+    public function test_validate_ticket_payload_missing_title()
+    {
+        $clientMock = $this->mock(ZnunyClient::class);
+        $clientMock->shouldNotReceive('validateTicketCreate');
+
+        $service = new ZnunyTicketCreationService($clientMock);
+
+        $result = $service->validateTicketPayload(10, 'TestQueue', 'testuser', '', 'Subj', 'Body');
+
+        $this->assertFalse($result['valid']);
+        $this->assertEquals(['Ticket title is required.'], $result['errors']);
+    }
+
+    public function test_validate_ticket_payload_missing_body()
+    {
+        $clientMock = $this->mock(ZnunyClient::class);
+        $clientMock->shouldNotReceive('validateTicketCreate');
+
+        $service = new ZnunyTicketCreationService($clientMock);
+
+        $result = $service->validateTicketPayload(10, 'TestQueue', 'testuser', 'Title', 'Subj', '');
+
+        $this->assertFalse($result['valid']);
+        $this->assertEquals(['Ticket article body is required.'], $result['errors']);
     }
 }
