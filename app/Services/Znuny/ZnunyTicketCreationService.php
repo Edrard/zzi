@@ -55,6 +55,45 @@ class ZnunyTicketCreationService
         }
     }
 
+    public function buildValidationPayload(
+        int|string $ownerId,
+        string $queue,
+        string $customerUser
+    ): array {
+        return [
+            'OwnerID' => (int) $ownerId,
+            'Queue' => $queue,
+            'CustomerUser' => $customerUser,
+            'State' => 'new',
+            'Lock' => 'lock',
+        ];
+    }
+
+    public function buildCreatePayload(
+        int|string $ownerId,
+        string $queue,
+        string $customerUser,
+        string $title,
+        string $articleSubject,
+        string $articleBody
+    ): array {
+        return [
+            'Ticket' => [
+                'Title' => $title,
+                'Queue' => $queue,
+                'CustomerUser' => $customerUser,
+                'State' => 'new',
+                'Lock' => 'lock',
+                'OwnerID' => (int) $ownerId,
+            ],
+            'Article' => [
+                'Subject' => $articleSubject,
+                'Body' => $articleBody,
+                'ContentType' => 'text/plain; charset=utf8',
+            ],
+        ];
+    }
+
     /**
      * @return array{
      *   valid: bool,
@@ -102,21 +141,7 @@ class ZnunyTicketCreationService
             ];
         }
 
-        $payload = [
-            'Ticket' => [
-                'Title' => $title,
-                'Queue' => $queue,
-                'CustomerUser' => $customerUser,
-                'State' => 'new',
-                'Lock' => 'lock',
-                'OwnerID' => (int) $ownerId,
-            ],
-            'Article' => [
-                'Subject' => $articleSubject,
-                'Body' => $articleBody,
-                'ContentType' => 'text/plain; charset=utf8',
-            ],
-        ];
+        $payload = $this->buildValidationPayload($ownerId, $queue, $customerUser);
 
         try {
             $response = $this->client->validateTicketCreate($payload);
@@ -233,21 +258,7 @@ class ZnunyTicketCreationService
                 return $result;
             }
 
-            $payload = [
-                'Ticket' => [
-                    'Title' => $title,
-                    'Queue' => $queue,
-                    'CustomerUser' => $customerUser,
-                    'State' => 'new',
-                    'Lock' => 'lock',
-                    'OwnerID' => (int) $ownerId,
-                ],
-                'Article' => [
-                    'Subject' => $articleSubject,
-                    'Body' => $articleBody,
-                    'ContentType' => 'text/plain; charset=utf8',
-                ],
-            ];
+            $payload = $this->buildCreatePayload($ownerId, $queue, $customerUser, $title, $articleSubject, $articleBody);
 
             try {
                 $createResponse = $this->client->createTicket($payload);

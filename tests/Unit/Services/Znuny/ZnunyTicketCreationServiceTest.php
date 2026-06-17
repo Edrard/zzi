@@ -18,19 +18,11 @@ class ZnunyTicketCreationServiceTest extends TestCase
         $clientMock->shouldReceive('validateTicketCreate')
             ->once()
             ->with([
-                'Ticket' => [
-                    'Title' => 'Test Title',
-                    'Queue' => 'TestQueue',
-                    'CustomerUser' => 'testuser',
-                    'State' => 'new',
-                    'Lock' => 'lock',
-                    'OwnerID' => 10,
-                ],
-                'Article' => [
-                    'Subject' => 'Test Subject',
-                    'Body' => 'Test Body',
-                    'ContentType' => 'text/plain; charset=utf8',
-                ],
+                'OwnerID' => 10,
+                'Queue' => 'TestQueue',
+                'CustomerUser' => 'testuser',
+                'State' => 'new',
+                'Lock' => 'lock',
             ])
             ->andReturn([
                 'valid' => 1,
@@ -46,6 +38,34 @@ class ZnunyTicketCreationServiceTest extends TestCase
         $this->assertTrue($result['valid']);
         $this->assertEquals([], $result['errors']);
         $this->assertEquals(['A warning'], $result['warnings']);
+    }
+
+    public function test_validate_ticket_payload_flat_regression()
+    {
+        $clientMock = $this->mock(ZnunyClient::class);
+
+        $clientMock->shouldReceive('validateTicketCreate')
+            ->once()
+            ->with([
+                'OwnerID' => 2,
+                'Queue' => 'Rental',
+                'CustomerUser' => 'RentalClients',
+                'State' => 'new',
+                'Lock' => 'lock',
+            ])
+            ->andReturn([
+                'valid' => 1,
+                'errors' => [],
+                'warnings' => [],
+            ]);
+
+        $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock);
+
+        $result = $service->validateTicketPayload(2, 'Rental', 'RentalClients', 'Title', 'Subject', 'Body');
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals([], $result['errors']);
     }
 
     public function test_validate_ticket_payload_failure()
