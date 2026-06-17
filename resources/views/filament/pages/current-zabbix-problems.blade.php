@@ -279,7 +279,7 @@
         }
         @media (min-width: 1024px) {
             .zbx-details {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             }
         }
 
@@ -698,6 +698,7 @@
                                     @endif
                                 </button>
                             </th>
+                            <th style="width: 24px;"></th>
                             <th>
                                 <button type="button" class="zbx-th-button" wire:click="sortBy('host')">
                                     Host
@@ -754,6 +755,11 @@
                                         {{ $severityLabel }}
                                     </span>
                                 </td>
+                                <td>
+                                    @if(isset($linkedTickets[$eventId]))
+                                        <x-filament::icon icon="heroicon-o-ticket" class="w-4 h-4 text-gray-500 dark:text-gray-400" title="Ticket already linked: {{ $linkedTickets[$eventId]->znuny_ticket_number }}" />
+                                    @endif
+                                </td>
                                 <td class="zbx-host-col">
                                     {{ $problem['host_name'] ?? 'Unknown host' }}
                                 </td>
@@ -766,7 +772,7 @@
                             </tr>
 
                             <tr class="zbx-details-row" x-show="expandedEventIds.includes('{{ $eventId }}')" x-cloak>
-                                <td colspan="5" style="padding: 0;">
+                                <td colspan="6" style="padding: 0;">
                                     <div class="zbx-details">
 
                                         <div class="zbx-detail-block">
@@ -801,28 +807,31 @@
                                             @endif
                                         </div>
 
-                                        <div class="zbx-ticket-panel" style="grid-column: 1 / -1;">
-                                            @php
-                                                $linkedTicket = $linkedTickets[$problem['eventid'] ?? ''] ?? null;
-                                            @endphp
-                                            @if($linkedTicket)
-                                                <div class="zbx-ticket-linked">
-                                                    <div>
-                                                        <span class="font-medium text-blue-900 dark:text-blue-200">Ticket already linked:</span>
-                                                        <a href="{{ app(\App\Services\Znuny\ZnunyClient::class)->ticketUrl($linkedTicket->znuny_ticket_id) }}" target="_blank" class="text-blue-700 dark:text-blue-400 hover:underline font-bold ml-1">
-                                                            {{ $linkedTicket->znuny_ticket_number }}
-                                                        </a>
-                                                    </div>
-                                                    <x-filament::button tag="a" href="{{ app(\App\Services\Znuny\ZnunyClient::class)->ticketUrl($linkedTicket->znuny_ticket_id) }}" target="_blank" color="info" size="sm" icon="heroicon-o-arrow-top-right-on-square">
-                                                        Open Ticket
-                                                    </x-filament::button>
-                                                </div>
-                                            @elseif($canCreateTicket)
+                                        @php
+                                            $linkedTicket = $linkedTickets[$problem['eventid'] ?? ''] ?? null;
+                                        @endphp
+                                        @if($linkedTicket)
+                                            <div class="zbx-detail-block">
+                                                <h4>Ticket</h4>
+                                                <ul class="zbx-detail-list" style="margin-bottom: 12px;">
+                                                    <li><strong>Ticket Number:</strong> {{ $linkedTicket->znuny_ticket_number }}</li>
+                                                    <li><strong>Queue:</strong> {{ $linkedTicket->znuny_queue_name ?: 'N/A' }}</li>
+                                                    <li><strong>Owner:</strong> {{ $this->getTicketOwnerDisplay($linkedTicket) }}</li>
+                                                    <li><strong>Ticket Age:</strong> {{ $this->formatAge((int) $linkedTicket->created_at->diffInSeconds()) }}</li>
+                                                </ul>
+                                            </div>
+                                            <div class="zbx-ticket-panel" style="grid-column: 1 / -1;">
+                                                <x-filament::button tag="a" href="{{ app(\App\Services\Znuny\ZnunyClient::class)->ticketUrl($linkedTicket->znuny_ticket_id) }}" target="_blank" color="info" size="sm" icon="heroicon-o-arrow-top-right-on-square">
+                                                    Open Ticket
+                                                </x-filament::button>
+                                            </div>
+                                        @elseif($canCreateTicket)
+                                            <div class="zbx-ticket-panel" style="grid-column: 1 / -1;">
                                                 <x-filament::button wire:click="openCreateTicketModal('{{ $problem['eventid'] }}')" icon="heroicon-o-ticket">
                                                     Create ticket
                                                 </x-filament::button>
-                                            @endif
-                                        </div>
+                                            </div>
+                                        @endif
 
                                     </div>
                                 </td>
@@ -1016,16 +1025,18 @@
         {{-- Actions --}}
         <x-slot name="footer">
             <div class="zbx-modal-footer-actions">
-                <x-filament::button color="gray" wire:click="closeCreateTicketModal">
+                <x-filament::button color="gray" wire:click="closeCreateTicketModal" wire:loading.attr="disabled" wire:target="createZnunyTicket">
                     Cancel
                 </x-filament::button>
                 <div class="zbx-modal-footer-right">
-                    <x-filament::button color="gray" wire:click="openEditTicketTextModal">
+                    <x-filament::button color="gray" wire:click="openEditTicketTextModal" wire:loading.attr="disabled" wire:target="createZnunyTicket">
                         Edit ticket text
                     </x-filament::button>
                     <x-filament::button wire:click="createZnunyTicket" wire:loading.attr="disabled" wire:target="createZnunyTicket">
                         <span wire:loading.remove wire:target="createZnunyTicket">Create ticket</span>
-                        <span wire:loading wire:target="createZnunyTicket">Creating...</span>
+                        <span wire:loading.flex wire:target="createZnunyTicket" class="items-center gap-2">
+                            <x-filament::loading-indicator class="w-4 h-4" /> Creating...
+                        </span>
                     </x-filament::button>
                 </div>
             </div>

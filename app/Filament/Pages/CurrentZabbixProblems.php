@@ -7,6 +7,7 @@ use App\Services\Zabbix\ZabbixProblemCache;
 use App\Services\Zabbix\ZabbixProblemFormatter;
 use App\Services\Zabbix\ZabbixProblemQueryService;
 use App\Services\Znuny\ZabbixTicketLinkService;
+use App\Services\Znuny\ZnunyAgentService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketCreationService;
 use App\Services\Znuny\ZnunyTicketModalStateBuilder;
@@ -194,6 +195,40 @@ class CurrentZabbixProblems extends Page
         return app(ZabbixProblemFormatter::class)->getSeverityFallback($severity);
     }
 
+    public function getAgentLabel(int|string $ownerId): ?string
+    {
+        static $agentMap = null;
+
+        if ($agentMap === null) {
+            try {
+                // failSilently = true, so no exceptions thrown to break UI
+                $agents = app(ZnunyAgentService::class)->getAgents();
+                $agentMap = collect($agents)
+                    ->mapWithKeys(fn (array $agent) => [(string) $agent['id'] => $agent['label'] ?? $agent['name'] ?? $agent['login'] ?? "Owner ID: {$agent['id']}"])
+                    ->toArray();
+            } catch (\Throwable $e) {
+                $agentMap = [];
+            }
+        }
+
+        return $agentMap[(string) $ownerId] ?? null;
+    }
+
+    public function getTicketOwnerDisplay($linkedTicket): string
+    {
+        if (! empty($linkedTicket->znuny_owner_name)) {
+            return $linkedTicket->znuny_owner_name;
+        }
+
+        if (! empty($linkedTicket->znuny_owner_id)) {
+            $label = $this->getAgentLabel($linkedTicket->znuny_owner_id);
+
+            return $label ?: "Owner ID: {$linkedTicket->znuny_owner_id}";
+        }
+
+        return 'N/A';
+    }
+
     public function openCreateTicketModal(string $eventId): void
     {
         abort_unless(in_array(auth()->user()->role, ['admin', 'operator'], true), 403);
@@ -319,9 +354,15 @@ class CurrentZabbixProblems extends Page
         return '';
     }
 
+    public bool $isCreatingTicket = false;
+
     public function createZnunyTicket(): void
     {
         abort_unless(in_array(auth()->user()->role, ['admin', 'operator'], true), 403);
+
+        if ($this->isCreatingTicket) {
+            return;
+        }
 
         if (! $this->ticketModalProblem || ! $this->ticketModalEventId) {
             Notification::make()->title('Missing event context')->danger()->send();
@@ -329,52 +370,58 @@ class CurrentZabbixProblems extends Page
             return;
         }
 
-        $this->ticketValidationErrors = [];
-        $this->ticketValidationWarnings = [];
-        $this->ticketValidationStatus = 'validating';
+        $this->isCreatingTicket = true;
 
-        $service = app(ZnunyTicketCreationService::class);
-        $result = $service->createTicketForProblem(
-            (string) $this->ticketModalEventId,
-            $this->getTicketModalHostName(),
-            (string) ($this->ticketModalProblem['name'] ?? ''),
-            $this->ticketOwnerId ?? '',
-            (string) $this->ticketQueue,
-            (string) $this->ticketCustomerUser,
-            (string) $this->ticketTextTitle,
-            (string) $this->ticketTextArticleSubject,
-            (string) $this->ticketTextArticleBody
-        );
+        try {
+            $this->ticketValidationErrors = [];
+            $this->ticketValidationWarnings = [];
+            $this->ticketValidationStatus = 'validating';
 
-        if ($result['success']) {
-            $this->ticketValidationStatus = 'success';
-            $this->ticketValidationWarnings = $result['warnings'];
+            $service = app(ZnunyTicketCreationService::class);
+            $result = $service->createTicketForProblem(
+                (string) $this->ticketModalEventId,
+                $this->getTicketModalHostName(),
+                (string) ($this->ticketModalProblem['name'] ?? ''),
+                $this->ticketOwnerId ?? '',
+                (string) $this->ticketQueue,
+                (string) $this->ticketCustomerUser,
+                (string) $this->ticketTextTitle,
+                (string) $this->ticketTextArticleSubject,
+                (string) $this->ticketTextArticleBody
+            );
 
-            Notification::make()
-                ->title("Znuny ticket created: {$result['ticket_number']}")
-                ->success()
-                ->send();
+            if ($result['success']) {
+                $this->ticketValidationStatus = 'success';
+                $this->ticketValidationWarnings = $result['warnings'];
 
-            $this->closeCreateTicketModal();
-            $this->isTicketTextModalOpen = false;
-        } else {
-            $this->ticketValidationStatus = 'error';
-            $this->ticketValidationErrors = $result['errors'];
-            $this->ticketValidationWarnings = $result['warnings'] ?? [];
-
-            if (! empty($result['orphaned'])) {
                 Notification::make()
-                    ->title("Znuny ticket was created but local link failed. Ticket: {$result['ticket_number']}. Check logs.")
-                    ->danger()
-                    ->persistent()
+                    ->title("Znuny ticket created: {$result['ticket_number']}")
+                    ->success()
                     ->send();
+
+                $this->closeCreateTicketModal();
+                $this->isTicketTextModalOpen = false;
             } else {
-                $mainError = $result['errors'][0] ?? 'Failed to create ticket.';
-                Notification::make()
-                    ->title($mainError)
-                    ->danger()
-                    ->send();
+                $this->ticketValidationStatus = 'error';
+                $this->ticketValidationErrors = $result['errors'];
+                $this->ticketValidationWarnings = $result['warnings'] ?? [];
+
+                if (! empty($result['orphaned'])) {
+                    Notification::make()
+                        ->title("Znuny ticket was created but local link failed. Ticket: {$result['ticket_number']}. Check logs.")
+                        ->danger()
+                        ->persistent()
+                        ->send();
+                } else {
+                    $mainError = $result['errors'][0] ?? 'Failed to create ticket.';
+                    Notification::make()
+                        ->title($mainError)
+                        ->danger()
+                        ->send();
+                }
             }
+        } finally {
+            $this->isCreatingTicket = false;
         }
     }
 }

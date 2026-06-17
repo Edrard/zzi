@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\ZabbixTicket;
 use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixProblemCache;
+use App\Services\Znuny\ZnunyAgentService;
 use App\Services\Znuny\ZnunyTicketCreationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -69,7 +70,8 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
-            ->assertSeeHtml('IP Address:</strong> 192.168.1.10');
+            ->assertSeeHtml('IP Address:')
+            ->assertSeeHtml('192.168.1.10');
     }
 
     public function test_expanded_problem_hides_ip_address_when_missing()
@@ -147,6 +149,74 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->assertSet('ticketQueue', 'TestCompany')
             ->assertSet('ticketCustomerUser', 'TestCompanyClients');
 
+    }
+
+    public function test_linked_ticket_owner_display_uses_name_if_present()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        ZabbixTicket::create([
+            'zabbix_event_id' => '1001',
+            'zabbix_host_name' => 'TestCompany',
+            'zabbix_problem_name' => 'CPU Load',
+            'znuny_ticket_id' => '1234',
+            'znuny_ticket_number' => '2026000000000000',
+            'znuny_owner_id' => 99,
+            'znuny_owner_name' => 'Jane Doe',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->assertSeeHtml('<strong>Owner:</strong> Jane Doe');
+    }
+
+    public function test_linked_ticket_owner_display_uses_cached_agent_label()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        // Mock the agent service to return known agents
+        $agentServiceMock = $this->mock(ZnunyAgentService::class);
+        $agentServiceMock->shouldReceive('getAgents')
+            ->andReturn([
+                ['id' => 55, 'login' => 'agent.smith', 'label' => 'Agent Smith'],
+            ]);
+
+        ZabbixTicket::create([
+            'zabbix_event_id' => '1001',
+            'zabbix_host_name' => 'TestCompany',
+            'zabbix_problem_name' => 'CPU Load',
+            'znuny_ticket_id' => '1234',
+            'znuny_ticket_number' => '2026000000000000',
+            'znuny_owner_id' => 55,
+            'znuny_owner_name' => null,
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->assertSeeHtml('<strong>Owner:</strong> Agent Smith');
+    }
+
+    public function test_linked_ticket_owner_display_falls_back_to_id()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        // Mock the agent service to return empty or missing agent
+        $agentServiceMock = $this->mock(ZnunyAgentService::class);
+        $agentServiceMock->shouldReceive('getAgents')->andReturn([]);
+
+        ZabbixTicket::create([
+            'zabbix_event_id' => '1001',
+            'zabbix_host_name' => 'TestCompany',
+            'zabbix_problem_name' => 'CPU Load',
+            'znuny_ticket_id' => '1234',
+            'znuny_ticket_number' => '2026000000000000',
+            'znuny_owner_id' => 99,
+            'znuny_owner_name' => null,
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->assertSeeHtml('<strong>Owner:</strong> Owner ID: 99');
     }
 
     public function test_existing_linked_ticket_blocks_create()
