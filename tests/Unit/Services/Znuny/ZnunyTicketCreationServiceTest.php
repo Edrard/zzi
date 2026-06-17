@@ -122,9 +122,10 @@ class ZnunyTicketCreationServiceTest extends TestCase
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
         $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock);
 
-        $result = $service->createTicketForProblem('', 'Host', 'Prob', 10, 'Q', 'CU', 'T', 'S', 'B');
+        $result = $service->createTicketForProblem('', '', '', 10, 'Q', 'CU', 'T', 'S', 'B');
         $this->assertFalse($result['success']);
-        $this->assertContains('Missing required fields for ticket creation.', $result['errors']);
+        $this->assertStringContainsString('Missing required fields for ticket creation:', $result['errors'][0]);
+        $this->assertStringContainsString('event ID', $result['errors'][0]);
     }
 
     public function test_create_ticket_lock_unavailable()
@@ -254,6 +255,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
         $linkServiceMock->shouldReceive('create')->once()->andThrow(new \Exception('DB failure'));
 
         Log::shouldReceive('critical')->once();
+        Log::shouldReceive('error')->zeroOrMoreTimes();
 
         $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock);
 

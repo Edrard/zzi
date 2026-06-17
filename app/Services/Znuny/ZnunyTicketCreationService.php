@@ -2,6 +2,7 @@
 
 namespace App\Services\Znuny;
 
+use App\Services\AuditLogger;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -11,6 +12,48 @@ class ZnunyTicketCreationService
         protected ZnunyClient $client,
         protected ZabbixTicketLinkService $linkService
     ) {}
+
+    private function auditLog(
+        string $action,
+        string $eventId,
+        string $hostName,
+        string $problemName,
+        string $queue,
+        string|int $ownerId,
+        string $customerUser,
+        ?int $ticketId = null,
+        ?string $ticketNumber = null,
+        array $errors = [],
+        array $warnings = [],
+        bool $duplicate = false,
+        bool $locked = false,
+        bool $orphaned = false
+    ): void {
+        try {
+            AuditLogger::log(
+                $action,
+                'zabbix_problem',
+                $eventId,
+                [
+                    'zabbix_event_id' => $eventId,
+                    'zabbix_host_name' => $hostName,
+                    'zabbix_problem_name' => $problemName,
+                    'znuny_queue_name' => $queue,
+                    'znuny_owner_id' => $ownerId,
+                    'customer_user' => $customerUser,
+                    'ticket_id' => $ticketId,
+                    'ticket_number' => $ticketNumber,
+                    'errors' => $errors,
+                    'warnings' => $warnings,
+                    'duplicate' => $duplicate,
+                    'locked' => $locked,
+                    'orphaned' => $orphaned,
+                ]
+            );
+        } catch (\Throwable $e) {
+            Log::error('Failed to write audit log for manual ticket creation: '.$e->getMessage());
+        }
+    }
 
     /**
      * @return array{
@@ -47,6 +90,14 @@ class ZnunyTicketCreationService
             return [
                 'valid' => false,
                 'errors' => ['Ticket article body is required.'],
+                'warnings' => [],
+            ];
+        }
+
+        if (empty(trim($articleSubject))) {
+            return [
+                'valid' => false,
+                'errors' => ['Ticket article subject is required.'],
                 'warnings' => [],
             ];
         }
@@ -106,11 +157,43 @@ class ZnunyTicketCreationService
             'orphaned' => false,
         ];
 
-        if (empty(trim($eventId)) || empty(trim($hostName)) || empty(trim($problemName)) || empty(trim((string) $ownerId)) || empty(trim($queue)) || empty(trim($customerUser)) || empty(trim($title)) || empty(trim($articleBody))) {
-            $result['errors'][] = 'Missing required fields for ticket creation.';
+        $missing = [];
+        if (empty(trim($eventId))) {
+            $missing[] = 'event ID';
+        }
+        if (empty(trim($hostName))) {
+            $missing[] = 'host name';
+        }
+        if (empty(trim($problemName))) {
+            $missing[] = 'problem name';
+        }
+        if (empty(trim((string) $ownerId))) {
+            $missing[] = 'owner';
+        }
+        if (empty(trim($queue))) {
+            $missing[] = 'queue';
+        }
+        if (empty(trim($customerUser))) {
+            $missing[] = 'customer user';
+        }
+        if (empty(trim($title))) {
+            $missing[] = 'title';
+        }
+        if (empty(trim($articleSubject))) {
+            $missing[] = 'article subject';
+        }
+        if (empty(trim($articleBody))) {
+            $missing[] = 'article body';
+        }
+
+        if (! empty($missing)) {
+            $result['errors'][] = 'Missing required fields for ticket creation: '.implode(', ', $missing).'.';
+            $this->auditLog('znuny.manual_ticket_create.failed', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, null, null, $result['errors'], [], false, false, false);
 
             return $result;
         }
+
+        $this->auditLog('znuny.manual_ticket_create.attempt', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser);
 
         $lockKey = "zbx_ticket_create:{$eventId}";
         $lock = Cache::lock($lockKey, 10);
@@ -118,6 +201,8 @@ class ZnunyTicketCreationService
         if (! $lock->get()) {
             $result['locked'] = true;
             $result['errors'][] = 'Ticket creation is already in progress for this Zabbix event.';
+
+            $this->auditLog('znuny.manual_ticket_create.locked', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, null, null, $result['errors'], [], false, true, false);
 
             return $result;
         }
@@ -132,6 +217,8 @@ class ZnunyTicketCreationService
                 }
                 $result['errors'][] = 'A ticket is already linked to this Zabbix event.';
 
+                $this->auditLog('znuny.manual_ticket_create.duplicate', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, $result['ticket_id'] ?? null, $result['ticket_number'] ?? null, $result['errors'], [], true, false, false);
+
                 return $result;
             }
 
@@ -140,6 +227,8 @@ class ZnunyTicketCreationService
             if (! $validation['valid']) {
                 $result['errors'] = $validation['errors'];
                 $result['warnings'] = $validation['warnings'];
+
+                $this->auditLog('znuny.manual_ticket_create.failed', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, null, null, $result['errors'], $result['warnings'], false, false, false);
 
                 return $result;
             }
@@ -165,12 +254,17 @@ class ZnunyTicketCreationService
             } catch (\Throwable $e) {
                 $result['errors'][] = $e->getMessage();
 
+                $this->auditLog('znuny.manual_ticket_create.failed', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, null, null, $result['errors'], [], false, false, false);
+
                 return $result;
             }
 
             if (! $createResponse['success']) {
                 $result['errors'] = $createResponse['errors'];
                 $result['warnings'] = $createResponse['warnings'] ?? [];
+
+                $this->auditLog('znuny.manual_ticket_create.failed', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, null, null, $result['errors'], $result['warnings'], false, false, false);
+
                 return $result;
             }
 
@@ -179,6 +273,8 @@ class ZnunyTicketCreationService
 
             if (empty($ticketId) || empty($ticketNumber)) {
                 $result['errors'][] = 'Ticket created but missing TicketID or TicketNumber in response.';
+
+                $this->auditLog('znuny.manual_ticket_create.failed', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, null, null, $result['errors'], [], false, false, false);
 
                 return $result;
             }
@@ -206,6 +302,8 @@ class ZnunyTicketCreationService
                 $result['ticket_number'] = $ticketNumber;
                 $result['errors'][] = 'Znuny ticket was created but linking to Zabbix problem failed locally.';
 
+                $this->auditLog('znuny.manual_ticket_create.orphaned', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, $ticketId, $ticketNumber, $result['errors'], [], false, false, true);
+
                 return $result;
             }
 
@@ -213,6 +311,8 @@ class ZnunyTicketCreationService
             $result['ticket_id'] = $ticketId;
             $result['ticket_number'] = $ticketNumber;
             $result['warnings'] = $createResponse['warnings'] ?? [];
+
+            $this->auditLog('znuny.manual_ticket_create.created', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, $ticketId, $ticketNumber, [], $result['warnings'], false, false, false);
 
             return $result;
 

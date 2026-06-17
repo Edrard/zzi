@@ -302,6 +302,23 @@ class CurrentZabbixProblems extends Page
         }
     }
 
+    private function getTicketModalHostName(): string
+    {
+        if (! empty($this->ticketModalProblem['host_name'])) {
+            return $this->ticketModalProblem['host_name'];
+        }
+
+        if (! empty($this->ticketModalProblem['hosts'][0]['host'])) {
+            return $this->ticketModalProblem['hosts'][0]['host'];
+        }
+
+        if (! empty($this->ticketModalProblem['hosts'][0]['name'])) {
+            return $this->ticketModalProblem['hosts'][0]['name'];
+        }
+
+        return '';
+    }
+
     public function createZnunyTicket(): void
     {
         abort_unless(in_array(auth()->user()->role, ['admin', 'operator'], true), 403);
@@ -319,7 +336,7 @@ class CurrentZabbixProblems extends Page
         $service = app(ZnunyTicketCreationService::class);
         $result = $service->createTicketForProblem(
             (string) $this->ticketModalEventId,
-            (string) ($this->ticketModalProblem['host'] ?? ''),
+            $this->getTicketModalHostName(),
             (string) ($this->ticketModalProblem['name'] ?? ''),
             $this->ticketOwnerId ?? '',
             (string) $this->ticketQueue,

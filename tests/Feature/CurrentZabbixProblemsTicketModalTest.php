@@ -201,7 +201,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->set('ticketModalEventId', '1001')
             ->set('ticketModalProblem', [
                 'eventid' => '1001',
-                'host' => 'TestCompany swiss test01',
+                'host_name' => 'TestCompany swiss test01',
                 'name' => 'TestCompany CPU Load',
             ])
             ->set('ticketOwnerId', '10')
