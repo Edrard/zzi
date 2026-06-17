@@ -1035,7 +1035,7 @@
                     <x-filament::button wire:click="createZnunyTicket" wire:loading.attr="disabled" wire:target="createZnunyTicket">
                         <span wire:loading.remove wire:target="createZnunyTicket">Create ticket</span>
                         <span wire:loading.flex wire:target="createZnunyTicket" class="items-center gap-2">
-                            <x-filament::loading-indicator class="w-4 h-4" /> Creating...
+                            Creating...
                         </span>
                     </x-filament::button>
                 </div>

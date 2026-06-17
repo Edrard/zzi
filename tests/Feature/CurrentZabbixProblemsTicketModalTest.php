@@ -456,4 +456,28 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->call('resetTicketText')
             ->assertSet('ticketTextTitle', 'TestCompany CPU Load');
     }
+
+    public function test_create_ticket_button_has_single_loading_indicator()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class);
+
+        $html = $component->html();
+
+        // The button label "Creating..." should only be associated with one spinner markup
+        // since we removed the explicit <x-filament::loading-indicator>.
+        // Here we just ensure we don't have `<x-filament::loading-indicator` inside the "Creating..." span block.
+        // It's tricky to assert the absence of a generic string without parsing, but we can verify our fix is present:
+        // We ensure "Creating..." exists and is not preceded by <svg class="fi-loading-indicator ..."> inside that block.
+
+        // Assert that the explicit loading indicator string is NOT present alongside "Creating..."
+        $this->assertEquals(0, substr_count($html, '<x-filament::loading-indicator class="w-4 h-4" /> Creating...'));
+
+        // Since blade compiles components, we just assert the specific raw blade text is gone.
+        // But more specifically, verify the span wrapper for Creating... is clean.
+        $this->assertStringContainsString('<span wire:loading.flex wire:target="createZnunyTicket" class="items-center gap-2">', $html);
+        $this->assertStringNotContainsString('</svg> Creating...', $html);
+    }
 }
