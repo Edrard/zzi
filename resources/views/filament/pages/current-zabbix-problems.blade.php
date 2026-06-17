@@ -960,6 +960,10 @@
                                 <span class="zbx-ticket-chip-label">Lock</span>
                                 <span class="zbx-ticket-chip-value">lock</span>
                             </div>
+                            <div class="zbx-ticket-chip">
+                                <span class="zbx-ticket-chip-label">Priority</span>
+                                <span class="zbx-ticket-chip-value">3 normal</span>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Log;
 
 class ZnunyTicketCreationService
 {
+    private const DEFAULT_PRIORITY = '3 normal';
+
     public function __construct(
         protected ZnunyClient $client,
         protected ZabbixTicketLinkService $linkService
@@ -66,6 +68,7 @@ class ZnunyTicketCreationService
             'CustomerUser' => $customerUser,
             'State' => 'new',
             'Lock' => 'lock',
+            'Priority' => self::DEFAULT_PRIORITY,
         ];
     }
 
@@ -85,6 +88,7 @@ class ZnunyTicketCreationService
                 'State' => 'new',
                 'Lock' => 'lock',
                 'OwnerID' => (int) $ownerId,
+                'Priority' => self::DEFAULT_PRIORITY,
             ],
             'Article' => [
                 'Subject' => $articleSubject,

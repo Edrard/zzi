@@ -23,6 +23,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
                 'CustomerUser' => 'testuser',
                 'State' => 'new',
                 'Lock' => 'lock',
+                'Priority' => '3 normal',
             ])
             ->andReturn([
                 'valid' => 1,
@@ -52,6 +53,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
                 'CustomerUser' => 'RentalClients',
                 'State' => 'new',
                 'Lock' => 'lock',
+                'Priority' => '3 normal',
             ])
             ->andReturn([
                 'valid' => 1,
