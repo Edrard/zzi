@@ -27,6 +27,54 @@
             gap: 24px;
         }
 
+        /* Ticket Modal Overrides */
+        .zbx-modal-footer-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            gap: 16px;
+        }
+        .zbx-modal-footer-right {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        /* Stack buttons gracefully only on very narrow mobile screens */
+        @media (max-width: 640px) {
+            .zbx-modal-footer-actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .zbx-modal-footer-right {
+                flex-direction: column;
+                width: 100%;
+            }
+            .zbx-modal-footer-actions button,
+            .zbx-modal-footer-right button {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+
+        .zbx-ticket-textarea {
+            width: 100%;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color, #e5e7eb);
+            background-color: transparent;
+            padding: 0.75rem 1rem;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            min-height: 24rem;
+            resize: vertical;
+        }
+        :is(.dark) .zbx-ticket-textarea {
+            color: #f9fafb;
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
         /* Status Section */
         .zbx-status-section {
             background-color: var(--bg-color, #ffffff);
@@ -963,14 +1011,62 @@
 
         {{-- Actions --}}
         <x-slot name="footer">
-            <div class="flex justify-between items-center w-full">
+            <div class="zbx-modal-footer-actions">
                 <x-filament::button color="gray" wire:click="closeCreateTicketModal">
                     Cancel
                 </x-filament::button>
-                <x-filament::button wire:click="validateTicketData" wire:loading.attr="disabled" wire:target="validateTicketData">
-                    <span wire:loading.remove wire:target="validateTicketData">Validate ticket data</span>
-                    <span wire:loading wire:target="validateTicketData">Validating...</span>
+                <div class="zbx-modal-footer-right">
+                    <x-filament::button color="gray" wire:click="openEditTicketTextModal">
+                        Edit ticket text
+                    </x-filament::button>
+                    <x-filament::button wire:click="validateTicketData" wire:loading.attr="disabled" wire:target="validateTicketData">
+                        <span wire:loading.remove wire:target="validateTicketData">Validate ticket data</span>
+                        <span wire:loading wire:target="validateTicketData">Validating...</span>
+                    </x-filament::button>
+                </div>
+            </div>
+        </x-slot>
+    </x-filament::modal>
+
+    <x-filament::modal id="edit-ticket-text-modal" width="3xl">
+        <x-slot name="heading">
+            Edit ticket text
+        </x-slot>
+        <x-slot name="description">
+            Edit the generated title and article body before creating the ticket.
+        </x-slot>
+
+        <div class="zbx-ticket-modal-section">
+            <div class="zbx-ticket-field-stack">
+                <div class="zbx-ticket-field">
+                    <label class="zbx-ticket-label">Title <span class="text-danger-600">*</span></label>
+                    <x-filament::input.wrapper>
+                        <x-filament::input type="text" wire:model="ticketTextTitle" />
+                    </x-filament::input.wrapper>
+                </div>
+
+                <div class="zbx-ticket-field">
+                    <label class="zbx-ticket-label">Article Body <span class="text-danger-600">*</span></label>
+                    <x-filament::input.wrapper>
+                        <textarea wire:model="ticketTextArticleBody" class="zbx-ticket-textarea" rows="18"></textarea>
+                    </x-filament::input.wrapper>
+                </div>
+            </div>
+        </div>
+
+        <x-slot name="footer">
+            <div class="zbx-modal-footer-actions">
+                <x-filament::button color="gray" wire:click="closeEditTicketTextModal">
+                    Cancel
                 </x-filament::button>
+                <div class="zbx-modal-footer-right">
+                    <x-filament::button color="warning" wire:click="resetTicketText">
+                        Reset to generated text
+                    </x-filament::button>
+                    <x-filament::button color="primary" wire:click="saveTicketText">
+                        Save changes
+                    </x-filament::button>
+                </div>
             </div>
         </x-slot>
     </x-filament::modal>

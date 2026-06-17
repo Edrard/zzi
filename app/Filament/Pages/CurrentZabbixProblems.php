@@ -10,6 +10,7 @@ use App\Services\Znuny\ZabbixTicketLinkService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketCreationService;
 use App\Services\Znuny\ZnunyTicketModalStateBuilder;
+use App\Services\Znuny\ZnunyTicketTextBuilder;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -68,6 +69,18 @@ class CurrentZabbixProblems extends Page
     public array $ticketValidationWarnings = [];
 
     public ?string $ticketValidationStatus = null;
+
+    public ?string $ticketTextTitle = null;
+
+    public ?string $ticketTextArticleSubject = null;
+
+    public ?string $ticketTextArticleBody = null;
+
+    public ?string $generatedTicketTextTitle = null;
+
+    public ?string $generatedTicketTextArticleBody = null;
+
+    public bool $isTicketTextModalOpen = false;
 
     public static function canAccess(): bool
     {
@@ -224,6 +237,16 @@ class CurrentZabbixProblems extends Page
         $this->ticketCustomerUserOptions = $state['customer_user_options'];
         $this->ticketDefaultWarnings = $state['warnings'];
 
+        $textBuilder = app(ZnunyTicketTextBuilder::class);
+        $text = $textBuilder->build($problem);
+
+        $this->generatedTicketTextTitle = $text['title'];
+        $this->generatedTicketTextArticleBody = $text['article_body'];
+
+        $this->ticketTextTitle = $text['title'];
+        $this->ticketTextArticleSubject = $text['article_subject'];
+        $this->ticketTextArticleBody = $text['article_body'];
+
         $this->isTicketModalOpen = true;
         $this->dispatch('open-modal', id: 'create-ticket-modal');
     }
@@ -232,6 +255,31 @@ class CurrentZabbixProblems extends Page
     {
         $this->isTicketModalOpen = false;
         $this->dispatch('close-modal', id: 'create-ticket-modal');
+    }
+
+    public function openEditTicketTextModal(): void
+    {
+        $this->isTicketTextModalOpen = true;
+        $this->dispatch('open-modal', id: 'edit-ticket-text-modal');
+    }
+
+    public function closeEditTicketTextModal(): void
+    {
+        $this->isTicketTextModalOpen = false;
+        $this->dispatch('close-modal', id: 'edit-ticket-text-modal');
+    }
+
+    public function resetTicketText(): void
+    {
+        $this->ticketTextTitle = $this->generatedTicketTextTitle;
+        $this->ticketTextArticleBody = $this->generatedTicketTextArticleBody;
+    }
+
+    public function saveTicketText(): void
+    {
+        // Actually, Livewire models already bind to ticketTextTitle and ticketTextArticleBody,
+        // so we just close the modal.
+        $this->closeEditTicketTextModal();
     }
 
     public function searchTicketCustomerUsers(): void

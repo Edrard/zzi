@@ -249,4 +249,63 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->assertSet('ticketValidationStatus', 'error')
             ->assertSet('ticketValidationErrors', ['Connection timeout']);
     }
+
+    public function test_opening_create_ticket_modal_initializes_generated_ticket_text()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        // Mock Agent
+        Http::fake([
+            '*example.invalid/api/Agent*' => Http::response(['Agents' => [['UserID' => 10, 'UserLogin' => 'agent1', 'UserFullname' => 'Agent One', 'ValidID' => 1]]], 200),
+            '*example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            '*example.invalid/api/QueueByName*' => Http::response(['Queue' => ['QueueID' => 1, 'Name' => 'TestCompany', 'FullName' => 'TestCompany']], 200),
+            '*example.invalid/api/Queue?*' => Http::response(['Queues' => [['QueueID' => 1, 'Name' => 'TestCompany', 'ValidID' => 1]]], 200),
+            '*example.invalid/api/CustomerUser*' => Http::response(['CustomerUser' => ['UserLogin' => 'TestCompanyClients', 'UserCustomerID' => 'testcompany']], 200),
+        ]);
+
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
+        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001');
+
+        $component->assertSet('generatedTicketTextTitle', 'TestCompany CPU Load')
+            ->assertSet('ticketTextTitle', 'TestCompany CPU Load')
+            ->assertSet('ticketTextArticleSubject', 'Zabbix problem details');
+
+        $this->assertStringContainsString('Problem: TestCompany CPU Load', $component->get('generatedTicketTextArticleBody'));
+    }
+
+    public function test_edit_ticket_text_modal_actions()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Http::fake([
+            '*example.invalid/api/Agent*' => Http::response(['Agents' => [['UserID' => 10, 'UserLogin' => 'agent1', 'UserFullname' => 'Agent One', 'ValidID' => 1]]], 200),
+            '*example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            '*example.invalid/api/QueueByName*' => Http::response(['Queue' => ['QueueID' => 1, 'Name' => 'TestCompany', 'FullName' => 'TestCompany']], 200),
+            '*example.invalid/api/Queue?*' => Http::response(['Queues' => [['QueueID' => 1, 'Name' => 'TestCompany', 'ValidID' => 1]]], 200),
+            '*example.invalid/api/CustomerUser*' => Http::response(['CustomerUser' => ['UserLogin' => 'TestCompanyClients', 'UserCustomerID' => 'testcompany']], 200),
+        ]);
+
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
+        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001')
+            ->call('openEditTicketTextModal')
+            ->assertDispatched('open-modal', id: 'edit-ticket-text-modal')
+            ->assertSet('isTicketTextModalOpen', true)
+            ->set('ticketTextTitle', 'Edited Title')
+            ->call('saveTicketText')
+            ->assertSet('isTicketTextModalOpen', false)
+            ->assertSet('ticketTextTitle', 'Edited Title')
+            ->call('openEditTicketTextModal')
+            ->call('resetTicketText')
+            ->assertSet('ticketTextTitle', 'TestCompany CPU Load');
+    }
 }
