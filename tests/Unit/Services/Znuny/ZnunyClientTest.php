@@ -166,4 +166,91 @@ class ZnunyClientTest extends TestCase
 
         $client->getTicketStates();
     }
+
+    public function test_connection_returns_success_when_all_endpoints_work()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/Health*' => Http::response(['Success' => 1], 200),
+            'https://example.invalid/api/SystemConfig*' => Http::response(['Plugin' => 'ZnunyAgentList'], 200),
+            'https://example.invalid/api/Agent*' => Http::response(['Agents' => [['UserID' => 1, 'UserLogin' => 'agent1']]], 200),
+            'https://example.invalid/api/Queue*' => Http::response(['Queues' => [['QueueID' => 1, 'Name' => 'q1']]], 200),
+            'https://example.invalid/api/TicketState*' => Http::response(['TicketStates' => [['ID' => 1, 'Name' => 'new']]], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $result = $client->testConnection();
+
+        $this->assertEquals('success', $result['status']);
+        $this->assertTrue($result['checks']['session']);
+        $this->assertTrue($result['checks']['health']);
+        $this->assertTrue($result['checks']['system_config']);
+        $this->assertEquals(1, $result['counts']['agents']);
+        $this->assertEquals(1, $result['counts']['queues']);
+        $this->assertEquals(1, $result['counts']['states']);
+        $this->assertEmpty($result['warnings']);
+        $this->assertEmpty($result['errors']);
+    }
+
+    public function test_connection_returns_partial_when_optional_ticket_fails()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/Health*' => Http::response(['Success' => 1], 200),
+            'https://example.invalid/api/SystemConfig*' => Http::response(['Plugin' => 'ZnunyAgentList'], 200),
+            'https://example.invalid/api/Agent*' => Http::response(['Agents' => [['UserID' => 1, 'UserLogin' => 'agent1']]], 200),
+            'https://example.invalid/api/Queue*' => Http::response(['Queues' => [['QueueID' => 1, 'Name' => 'q1']]], 200),
+            'https://example.invalid/api/TicketState*' => Http::response(['TicketStates' => [['ID' => 1, 'Name' => 'new']]], 200),
+            'https://example.invalid/api/ZnunyAgentListTicket/123*' => Http::response([
+                'Error' => [
+                    'ErrorCode' => 'Ticket.NotFound',
+                    'ErrorMessage' => 'Ticket 123 not found',
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $result = $client->testConnection(123);
+
+        $this->assertEquals('partial', $result['status']);
+        $this->assertFalse($result['checks']['ticket']);
+        $this->assertCount(1, $result['warnings']);
+        $this->assertStringContainsString('Ticket 123 not found', $result['warnings'][0]);
+    }
+
+    public function test_connection_returns_failed_and_strips_credentials_on_auth_failure()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response([
+                'Error' => [
+                    'ErrorCode' => 'ZnunyAgentList.AuthFail',
+                    'ErrorMessage' => 'Invalid password "secret"',
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $result = $client->testConnection();
+
+        $this->assertEquals('failed', $result['status']);
+        $this->assertCount(1, $result['errors']);
+
+        // Assert password is redacted
+        $this->assertStringContainsString('Invalid password "[redacted]"', $result['errors'][0]);
+        $this->assertStringNotContainsString('secret', $result['errors'][0]);
+    }
+
+    public function test_connection_returns_failed_on_transport_failure()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response('', 500),
+        ]);
+
+        $client = new ZnunyClient;
+        $result = $client->testConnection();
+
+        $this->assertEquals('failed', $result['status']);
+        $this->assertCount(1, $result['errors']);
+        $this->assertStringContainsString('HTTP request failed with status 500', $result['errors'][0]);
+    }
 }

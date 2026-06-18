@@ -356,30 +356,71 @@ class ZnunyClient
     /**
      * Test the API connection retrieval of a Ticket.
      */
-    public function testConnection(int|string $ticketId = 55992): array
+    public function testConnection(int|string|null $ticketId = null): array
     {
-        try {
-            $normalizedId = $this->normalizeTicketId($ticketId);
-            $this->cachedSessionId = null; // force fresh session check
-            $ticket = $this->getTicket($normalizedId);
+        $this->cachedSessionId = null; // force fresh session check
 
-            return [
-                'status' => 'success',
-                'TicketID' => $ticket['TicketID'],
-                'TicketNumber' => $ticket['TicketNumber'],
-                'Title' => $ticket['Title'],
-                'Queue' => $ticket['Queue'],
-                'Owner' => $ticket['Owner'],
-                'State' => $ticket['State'],
-                'ticket_url' => $this->ticketUrl($normalizedId),
-            ];
+        $result = [
+            'status' => 'failed',
+            'checks' => [],
+            'counts' => [
+                'agents' => 0,
+                'queues' => 0,
+                'states' => 0,
+            ],
+            'warnings' => [],
+            'errors' => [],
+        ];
+
+        try {
+            // Check 1: Session creation
+            $this->sessionId();
+            $result['checks']['session'] = true;
+
+            // Check 2: Health
+            $health = $this->health();
+            $result['checks']['health'] = $health['success'];
+
+            // Check 3: SystemConfig
+            $config = $this->systemConfig();
+            $result['checks']['system_config'] = ! empty($config['plugin']);
+
+            // Check 4: Agents
+            $agents = $this->getAgents();
+            $result['counts']['agents'] = count($agents);
+            $result['checks']['agents'] = true;
+
+            // Check 5: Queues
+            $queues = $this->getQueues();
+            $result['counts']['queues'] = count($queues);
+            $result['checks']['queues'] = true;
+
+            // Check 6: Ticket States
+            $states = $this->getTicketStates();
+            $result['counts']['states'] = count($states);
+            $result['checks']['states'] = true;
+
+            // Optional Check: Ticket
+            if ($ticketId) {
+                try {
+                    $normalizedId = $this->normalizeTicketId($ticketId);
+                    $ticket = $this->getTicket($normalizedId);
+                    $result['checks']['ticket'] = true;
+                    $result['ticket_url'] = $this->ticketUrl($normalizedId);
+                } catch (Throwable $te) {
+                    $result['checks']['ticket'] = false;
+                    $result['warnings'][] = 'Optional ticket check failed: '.$this->sanitizeExceptionMessage($te->getMessage());
+                }
+            }
+
+            $result['status'] = empty($result['warnings']) ? 'success' : 'partial';
 
         } catch (Throwable $e) {
-            return [
-                'status' => 'failed',
-                'error' => $this->sanitizeExceptionMessage($e->getMessage()),
-            ];
+            $result['status'] = 'failed';
+            $result['errors'][] = $this->sanitizeExceptionMessage($e->getMessage());
         }
+
+        return $result;
     }
 
     /**
