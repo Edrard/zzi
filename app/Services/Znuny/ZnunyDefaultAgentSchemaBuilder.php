@@ -29,15 +29,21 @@ class ZnunyDefaultAgentSchemaBuilder
         }
 
         $currentId = SettingsService::string('znuny_default_agent_id');
-        if ($currentId !== '' && ! isset($options[$currentId]) && empty($warning)) {
-            // Check if it's excluded or completely inactive
-            $allAgents = $agentService->getAgents(failSilently: true);
-            $isActive = collect($allAgents)->contains('id', (int) $currentId);
-
-            if ($isActive) {
-                $warning = 'The currently selected default agent is excluded from selectable agents. Please choose another agent.';
+        if ($currentId !== '' && ! isset($options[$currentId])) {
+            if (! empty($warning)) {
+                $options[$currentId] = "Saved agent ID: {$currentId} (not verified)";
             } else {
-                $warning = "The currently selected agent (ID: {$currentId}) is no longer returned by the active agents list. Please select a valid agent.";
+                // Check if it's excluded or completely inactive
+                $allAgents = $agentService->getAgents(failSilently: true);
+                $isActive = collect($allAgents)->contains('id', (int) $currentId);
+
+                if ($isActive) {
+                    $warning = 'The currently selected default agent is excluded from selectable agents. Please choose another agent.';
+                    $options[$currentId] = "Saved agent ID: {$currentId} (excluded)";
+                } else {
+                    $warning = "The currently selected agent (ID: {$currentId}) is no longer returned by the active agents list. Please select a valid agent.";
+                    $options[$currentId] = "Saved agent ID: {$currentId} (invalid)";
+                }
             }
         }
 

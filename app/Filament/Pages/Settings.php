@@ -22,6 +22,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class Settings extends Page implements HasForms
@@ -303,6 +304,16 @@ class Settings extends Page implements HasForms
                     ];
                     $setting->update(['value' => $valueToStore]);
                 }
+            }
+        }
+
+        $clearedZnunyCaches = false;
+        foreach ($changedSettings as $change) {
+            if (str_starts_with($change['key'], 'znuny_')) {
+                Cache::forget('znuny_active_agents');
+                Cache::forget('znuny.queues');
+                $clearedZnunyCaches = true;
+                break;
             }
         }
 

@@ -6,6 +6,7 @@ use App\Filament\Pages\Settings;
 use App\Models\AuditLog;
 use App\Models\Setting;
 use App\Models\User;
+use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyAgentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -266,5 +267,82 @@ class ZnunyAgentSettingsTest extends TestCase
         ])->call('save');
 
         $this->assertEquals('1', Setting::where('key', 'znuny_default_agent_id')->value('value'));
+    }
+
+    public function test_can_save_settings_when_agent_api_is_unavailable()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Setting::where('key', 'znuny_default_agent_id')->update(['value' => '3']);
+        Setting::where('key', 'znuny_default_agent_login')->update(['value' => 'agent3']);
+        Setting::where('key', 'znuny_default_agent_name')->update(['value' => 'Agent Three']);
+        Setting::where('key', 'znuny_api_timeout')->update(['value' => '10']);
+
+        Http::fake([
+            'http://api.local/Session*' => Http::response(['SessionID' => 'fake-session']),
+            'http://api.local/Agent*' => Http::response([], 500),
+        ]);
+
+        $livewire = Livewire::actingAs($admin)
+            ->test(Settings::class);
+
+        // Warning should be displayed
+        $livewire->assertSeeHtml('Could not load active agents from Znuny API.');
+
+        // Save should not be blocked, we update timeout
+        $livewire->fillForm([
+            'znuny_api_timeout' => '20',
+            'znuny_password' => 'newsecretpassword',
+        ])->call('save')
+            ->assertHasNoFormErrors();
+
+        // Ensure timeout changed
+        $this->assertEquals('20', Setting::where('key', 'znuny_api_timeout')->value('value'));
+
+        // Ensure snapshot didn't get cleared
+        $this->assertEquals('3', Setting::where('key', 'znuny_default_agent_id')->value('value'));
+        $this->assertEquals('agent3', Setting::where('key', 'znuny_default_agent_login')->value('value'));
+
+        // Ensure password was updated correctly
+        $this->assertEquals('newsecretpassword', app(SettingsService::class)->string('znuny_password'));
+        $this->assertStringStartsWith('enc:v1:', Setting::where('key', 'znuny_password')->value('value'));
+    }
+
+    public function test_empty_password_preserves_existing_encrypted_password()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $encryptedPass = app(SettingsService::class)->encryptForStorage('znuny_password', 'oldsecret');
+        Setting::where('key', 'znuny_password')->update(['value' => $encryptedPass]);
+
+        Livewire::actingAs($admin)
+            ->test(Settings::class)
+            ->fillForm([
+                'znuny_password' => '', // Submit empty password
+                'znuny_api_timeout' => '30',
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertEquals('oldsecret', app(SettingsService::class)->string('znuny_password'));
+        $this->assertEquals($encryptedPass, Setting::where('key', 'znuny_password')->value('value'));
+    }
+
+    public function test_missing_agent_id_is_included_as_fallback_option()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Setting::where('key', 'znuny_default_agent_id')->update(['value' => '99']);
+
+        Http::fake([
+            'http://api.local/Session*' => Http::response(['SessionID' => 'fake-session']),
+            'http://api.local/Agent*' => Http::response([], 500),
+        ]);
+
+        $livewire = Livewire::actingAs($admin)
+            ->test(Settings::class);
+
+        // Since it's missing (API failed), it should add the fallback
+        $livewire->assertSeeHtml('Saved agent ID: 99 (not verified)');
     }
 }
