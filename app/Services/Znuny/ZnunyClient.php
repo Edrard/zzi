@@ -13,12 +13,39 @@ class ZnunyClient
 {
     private ?string $cachedSessionId = null;
 
+    private ?string $overrideApiUrl = null;
+
+    private ?string $overrideUsername = null;
+
+    private ?string $overridePassword = null;
+
+    /**
+     * Provide explicit credentials to override saved settings for this client instance.
+     */
+    public function withCredentials(string $apiUrl, string $username, string $password): static
+    {
+        $this->overrideApiUrl = $apiUrl;
+        $this->overrideUsername = $username;
+        $this->overridePassword = $password;
+        $this->cachedSessionId = null;
+
+        return $this;
+    }
+
+    /**
+     * Test connection with explicit credentials.
+     */
+    public function testConnectionWithCredentials(string $apiUrl, string $username, string $password): array
+    {
+        return $this->withCredentials($apiUrl, $username, $password)->testConnection();
+    }
+
     /**
      * Get the base API URL (rtrimmed).
      */
     protected function apiUrl(): string
     {
-        $url = SettingsService::string('znuny_api_url', '');
+        $url = $this->overrideApiUrl ?? SettingsService::string('znuny_api_url', '');
         if (empty($url)) {
             throw new Exception('Znuny API URL is not configured.');
         }
@@ -62,7 +89,7 @@ class ZnunyClient
      */
     protected function sanitizeExceptionMessage(string $message): string
     {
-        $password = SettingsService::string('znuny_password', '');
+        $password = $this->overridePassword ?? SettingsService::string('znuny_password', '');
         if (! empty($password)) {
             $message = str_replace($password, '[redacted]', $message);
         }
@@ -137,8 +164,8 @@ class ZnunyClient
      */
     public function createSession(): string
     {
-        $username = SettingsService::string('znuny_username', '');
-        $password = SettingsService::string('znuny_password', '');
+        $username = $this->overrideUsername ?? SettingsService::string('znuny_username', '');
+        $password = $this->overridePassword ?? SettingsService::string('znuny_password', '');
 
         if (empty($username) || empty($password)) {
             throw new Exception('Znuny username or password is not configured.');

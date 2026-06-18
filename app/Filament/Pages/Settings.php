@@ -20,6 +20,7 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Actions;
+use Filament\Schemas\Components\Placeholder;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -52,83 +53,92 @@ class Settings extends Page implements HasForms
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('testZnunyConnection')
-                ->label('Test Znuny API connection')
-                ->icon('heroicon-o-signal')
-                ->color('info')
-                ->action(function () {
-                    $client = app(ZnunyClient::class);
-                    $result = $client->testConnection();
-
-                    $status = $result['status'] ?? 'failed';
-                    $checks = $result['checks'] ?? [];
-                    $counts = $result['counts'] ?? [];
-                    $warnings = $result['warnings'] ?? [];
-                    $errors = $result['errors'] ?? [];
-
-                    $color = match ($status) {
-                        'success' => 'success',
-                        'partial' => 'warning',
-                        default => 'danger',
-                    };
-
-                    $title = match ($status) {
-                        'success' => 'Znuny API Connection Successful',
-                        'partial' => 'Znuny API Connection Partial Success',
-                        default => 'Znuny API Connection Failed',
-                    };
-
-                    $body = '<strong>Checks:</strong><br>';
-                    foreach ($checks as $key => $passed) {
-                        $icon = $passed ? '✅' : '❌';
-                        $body .= "{$icon} ".Str::title(str_replace('_', ' ', $key)).'<br>';
-                    }
-
-                    if (! empty($counts)) {
-                        $body .= '<br><strong>Counts:</strong><br>';
-                        foreach ($counts as $key => $count) {
-                            $body .= Str::title(str_replace('_', ' ', $key)).": {$count}<br>";
-                        }
-                    }
-
-                    if (! empty($warnings)) {
-                        $body .= '<br><strong>Warnings:</strong><br>';
-                        foreach ($warnings as $warning) {
-                            $body .= '⚠️ '.htmlspecialchars($warning).'<br>';
-                        }
-                    }
-
-                    if (! empty($errors)) {
-                        $body .= '<br><strong>Errors:</strong><br>';
-                        foreach ($errors as $error) {
-                            $body .= '❌ '.htmlspecialchars($error).'<br>';
-                        }
-                    }
-
-                    AuditLogger::log(
-                        action: 'settings.znuny_connection_tested',
-                        entityType: 'settings',
-                        entityId: null,
-                        context: [
-                            'status' => $status,
-                            'checks' => $checks,
-                            'counts' => $counts,
-                            'warnings' => $warnings,
-                            'errors' => $errors,
-                        ]
-                    );
-
-                    Notification::make()
-                        ->title($title)
-                        ->body(new HtmlString($body))
-                        ->color($color)
-                        ->persistent()
-                        ->send();
-                }),
             Action::make('save')
                 ->label('Save settings')
                 ->action('save'),
         ];
+    }
+
+    public function testZnunyConnectionAction(): void
+    {
+        $data = $this->form->getRawState();
+        $apiUrl = $data['znuny_api_url'] ?? '';
+        $username = $data['znuny_username'] ?? '';
+        $password = $data['znuny_password'] ?? '';
+
+        if (empty($password)) {
+            $password = \App\Services\SettingsService::string('znuny_password', '');
+        }
+
+        $client = app(\App\Services\Znuny\ZnunyClient::class);
+        $result = $client->testConnectionWithCredentials($apiUrl, $username, $password);
+
+        $status = $result['status'] ?? 'failed';
+        $checks = $result['checks'] ?? [];
+        $counts = $result['counts'] ?? [];
+        $warnings = $result['warnings'] ?? [];
+        $errors = $result['errors'] ?? [];
+
+        $color = match ($status) {
+            'success' => 'success',
+            'partial' => 'warning',
+            default => 'danger',
+        };
+
+        $title = match ($status) {
+            'success' => 'Znuny API Connection Successful',
+            'partial' => 'Znuny API Connection Partial Success',
+            default => 'Znuny API Connection Failed',
+        };
+
+        $body = "<strong>Checks:</strong><br>";
+        foreach ($checks as $key => $passed) {
+            $icon = $passed ? '✅' : '❌';
+            $body .= "{$icon} " . \Illuminate\Support\Str::title(str_replace('_', ' ', $key)) . "<br>";
+        }
+
+        if (! empty($counts)) {
+            $body .= "<br><strong>Counts:</strong><br>";
+            foreach ($counts as $key => $count) {
+                $body .= \Illuminate\Support\Str::title(str_replace('_', ' ', $key)) . ": {$count}<br>";
+            }
+        }
+
+        if (! empty($warnings)) {
+            $body .= "<br><strong>Warnings:</strong><br>";
+            foreach ($warnings as $warning) {
+                $body .= "⚠️ " . htmlspecialchars($warning) . "<br>";
+            }
+        }
+
+        if (! empty($errors)) {
+            $body .= "<br><strong>Errors:</strong><br>";
+            foreach ($errors as $error) {
+                $body .= "❌ " . htmlspecialchars($error) . "<br>";
+            }
+        }
+
+        \App\Services\AuditLogger::log(
+            action: 'settings.znuny_connection_tested',
+            entityType: 'settings',
+            entityId: null,
+            context: [
+                'source' => 'form_state',
+                'password_source' => empty($data['znuny_password']) ? 'saved' : 'form',
+                'status' => $status,
+                'checks' => $checks,
+                'counts' => $counts,
+                'warnings' => $warnings,
+                'errors' => $errors,
+            ]
+        );
+
+        Notification::make()
+            ->title($title)
+            ->body(new \Illuminate\Support\HtmlString($body))
+            ->color($color)
+            ->persistent()
+            ->send();
     }
 
     public function mount(): void
@@ -408,6 +418,25 @@ class Settings extends Page implements HasForms
                 ->schema(array_filter([
                     $z['znuny_username'] ?? null,
                     $z['znuny_password'] ?? null,
+                    Actions::make([
+                        Action::make('testZnunyConnection')
+                            ->label('Test Znuny API connection')
+                            ->icon('heroicon-o-signal')
+                            ->color('info')
+                            ->disabled(function ($get) {
+                                if (empty($get('znuny_api_url')) || empty($get('znuny_username'))) {
+                                    return true;
+                                }
+                                if (empty($get('znuny_password')) && empty(SettingsService::string('znuny_password'))) {
+                                    return true;
+                                }
+                                return false;
+                            })
+                            ->action('testZnunyConnectionAction'),
+                    ]),
+                    \Filament\Forms\Components\Placeholder::make('tester_help')
+                        ->hiddenLabel()
+                        ->content('Tests current Znuny form values without saving settings.'),
                 ]))->columns(1),
 
             Section::make('Endpoints')

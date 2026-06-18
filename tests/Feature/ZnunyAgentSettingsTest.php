@@ -362,7 +362,7 @@ class ZnunyAgentSettingsTest extends TestCase
         $livewire = Livewire::actingAs($admin)
             ->test(Settings::class);
 
-        $livewire->callAction('testZnunyConnection')
+        $livewire->call('testZnunyConnectionAction')
             ->assertNotified()
             ->assertHasNoActionErrors();
 
@@ -392,7 +392,7 @@ class ZnunyAgentSettingsTest extends TestCase
         $livewire = Livewire::actingAs($admin)
             ->test(Settings::class);
 
-        $livewire->callAction('testZnunyConnection')
+        $livewire->call('testZnunyConnectionAction')
             ->assertNotified()
             ->assertHasNoActionErrors();
 
