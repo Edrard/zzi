@@ -345,4 +345,65 @@ class ZnunyAgentSettingsTest extends TestCase
         // Since it's missing (API failed), it should add the fallback
         $livewire->assertSeeHtml('Saved agent ID: 99 (not verified)');
     }
+
+    public function test_znuny_connection_action_success()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Http::fake([
+            'http://api.local/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'http://api.local/Health*' => Http::response(['Success' => 1], 200),
+            'http://api.local/SystemConfig*' => Http::response(['Plugin' => 'ZnunyAgentList'], 200),
+            'http://api.local/Agent*' => Http::response(['Agents' => [['UserID' => 1, 'UserLogin' => 'agent1']]], 200),
+            'http://api.local/Queue*' => Http::response(['Queues' => [['QueueID' => 1, 'Name' => 'q1']]], 200),
+            'http://api.local/TicketState*' => Http::response(['TicketStates' => [['ID' => 1, 'Name' => 'new']]], 200),
+        ]);
+
+        $livewire = Livewire::actingAs($admin)
+            ->test(Settings::class);
+
+        $livewire->callAction('testZnunyConnection')
+            ->assertNotified()
+            ->assertHasNoActionErrors();
+
+        // Check Audit Log
+        $log = AuditLog::where('action', 'settings.znuny_connection_tested')->first();
+        $this->assertNotNull($log);
+        $this->assertEquals('success', $log->context['status']);
+        $this->assertEquals(1, $log->context['counts']['agents']);
+        $this->assertEquals(1, $log->context['counts']['queues']);
+    }
+
+    public function test_znuny_connection_action_failure_sanitizes_credentials()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Setting::updateOrCreate(['key' => 'znuny_password', 'type' => 'string'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'SuperSecret123')]);
+
+        Http::fake([
+            'http://api.local/Session*' => Http::response([
+                'Error' => [
+                    'ErrorCode' => 'ZnunyAgentList.AuthFail',
+                    'ErrorMessage' => 'Invalid password "SuperSecret123" for session',
+                ],
+            ], 200),
+        ]);
+
+        $livewire = Livewire::actingAs($admin)
+            ->test(Settings::class);
+
+        $livewire->callAction('testZnunyConnection')
+            ->assertNotified()
+            ->assertHasNoActionErrors();
+
+        // Check Audit Log
+        $log = AuditLog::where('action', 'settings.znuny_connection_tested')->latest()->first();
+        $this->assertNotNull($log);
+        $this->assertEquals('failed', $log->context['status']);
+
+        // Ensure the error was logged but password redacted
+        $error = $log->context['errors'][0];
+        $this->assertStringContainsString('[redacted]', $error);
+        $this->assertStringNotContainsString('SuperSecret123', $error);
+    }
 }

@@ -3,8 +3,10 @@
 namespace App\Filament\Pages;
 
 use App\Models\Setting;
+use App\Services\AuditLogger;
 use App\Services\SettingsAuditLogService;
 use App\Services\SettingsService;
+use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyDefaultAgentSchemaBuilder;
 use App\Services\Znuny\ZnunyDefaultAgentSettingsService;
 use App\Services\Znuny\ZnunyQueueHostMappingSchemaBuilder;
@@ -23,6 +25,7 @@ use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
 class Settings extends Page implements HasForms
@@ -49,6 +52,79 @@ class Settings extends Page implements HasForms
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('testZnunyConnection')
+                ->label('Test Znuny API connection')
+                ->icon('heroicon-o-signal')
+                ->color('info')
+                ->action(function () {
+                    $client = app(ZnunyClient::class);
+                    $result = $client->testConnection();
+
+                    $status = $result['status'] ?? 'failed';
+                    $checks = $result['checks'] ?? [];
+                    $counts = $result['counts'] ?? [];
+                    $warnings = $result['warnings'] ?? [];
+                    $errors = $result['errors'] ?? [];
+
+                    $color = match ($status) {
+                        'success' => 'success',
+                        'partial' => 'warning',
+                        default => 'danger',
+                    };
+
+                    $title = match ($status) {
+                        'success' => 'Znuny API Connection Successful',
+                        'partial' => 'Znuny API Connection Partial Success',
+                        default => 'Znuny API Connection Failed',
+                    };
+
+                    $body = '<strong>Checks:</strong><br>';
+                    foreach ($checks as $key => $passed) {
+                        $icon = $passed ? '✅' : '❌';
+                        $body .= "{$icon} ".Str::title(str_replace('_', ' ', $key)).'<br>';
+                    }
+
+                    if (! empty($counts)) {
+                        $body .= '<br><strong>Counts:</strong><br>';
+                        foreach ($counts as $key => $count) {
+                            $body .= Str::title(str_replace('_', ' ', $key)).": {$count}<br>";
+                        }
+                    }
+
+                    if (! empty($warnings)) {
+                        $body .= '<br><strong>Warnings:</strong><br>';
+                        foreach ($warnings as $warning) {
+                            $body .= '⚠️ '.htmlspecialchars($warning).'<br>';
+                        }
+                    }
+
+                    if (! empty($errors)) {
+                        $body .= '<br><strong>Errors:</strong><br>';
+                        foreach ($errors as $error) {
+                            $body .= '❌ '.htmlspecialchars($error).'<br>';
+                        }
+                    }
+
+                    AuditLogger::log(
+                        action: 'settings.znuny_connection_tested',
+                        entityType: 'settings',
+                        entityId: null,
+                        context: [
+                            'status' => $status,
+                            'checks' => $checks,
+                            'counts' => $counts,
+                            'warnings' => $warnings,
+                            'errors' => $errors,
+                        ]
+                    );
+
+                    Notification::make()
+                        ->title($title)
+                        ->body(new HtmlString($body))
+                        ->color($color)
+                        ->persistent()
+                        ->send();
+                }),
             Action::make('save')
                 ->label('Save settings')
                 ->action('save'),
