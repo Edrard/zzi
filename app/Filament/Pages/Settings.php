@@ -20,7 +20,6 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Actions;
-use Filament\Schemas\Components\Placeholder;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -66,11 +65,48 @@ class Settings extends Page implements HasForms
         $username = $data['znuny_username'] ?? '';
         $password = $data['znuny_password'] ?? '';
 
+        $passwordSource = 'form';
         if (empty($password)) {
-            $password = \App\Services\SettingsService::string('znuny_password', '');
+            $password = SettingsService::string('znuny_password', '');
+            $passwordSource = empty($password) ? 'missing' : 'saved';
         }
 
-        $client = app(\App\Services\Znuny\ZnunyClient::class);
+        $errorResult = null;
+        if (empty($apiUrl)) {
+            $errorResult = 'Znuny API URL is required.';
+        } elseif (empty($username)) {
+            $errorResult = 'Znuny username is required.';
+        } elseif (empty($password)) {
+            $errorResult = 'Znuny password is required.';
+        }
+
+        if ($errorResult !== null) {
+            AuditLogger::log(
+                action: 'settings.znuny_connection_tested',
+                entityType: 'settings',
+                entityId: null,
+                context: [
+                    'source' => 'form_state',
+                    'password_source' => $passwordSource,
+                    'status' => 'failed',
+                    'checks' => [],
+                    'counts' => [],
+                    'warnings' => [],
+                    'errors' => [$errorResult],
+                ]
+            );
+
+            Notification::make()
+                ->title('Znuny API Connection Failed')
+                ->body(new HtmlString('<strong>Errors:</strong><br>❌ '.htmlspecialchars($errorResult).'<br>'))
+                ->color('danger')
+                ->persistent()
+                ->send();
+
+            return;
+        }
+
+        $client = app(ZnunyClient::class);
         $result = $client->testConnectionWithCredentials($apiUrl, $username, $password);
 
         $status = $result['status'] ?? 'failed';
@@ -91,40 +127,40 @@ class Settings extends Page implements HasForms
             default => 'Znuny API Connection Failed',
         };
 
-        $body = "<strong>Checks:</strong><br>";
+        $body = '<strong>Checks:</strong><br>';
         foreach ($checks as $key => $passed) {
             $icon = $passed ? '✅' : '❌';
-            $body .= "{$icon} " . \Illuminate\Support\Str::title(str_replace('_', ' ', $key)) . "<br>";
+            $body .= "{$icon} ".Str::title(str_replace('_', ' ', $key)).'<br>';
         }
 
         if (! empty($counts)) {
-            $body .= "<br><strong>Counts:</strong><br>";
+            $body .= '<br><strong>Counts:</strong><br>';
             foreach ($counts as $key => $count) {
-                $body .= \Illuminate\Support\Str::title(str_replace('_', ' ', $key)) . ": {$count}<br>";
+                $body .= Str::title(str_replace('_', ' ', $key)).": {$count}<br>";
             }
         }
 
         if (! empty($warnings)) {
-            $body .= "<br><strong>Warnings:</strong><br>";
+            $body .= '<br><strong>Warnings:</strong><br>';
             foreach ($warnings as $warning) {
-                $body .= "⚠️ " . htmlspecialchars($warning) . "<br>";
+                $body .= '⚠️ '.htmlspecialchars($warning).'<br>';
             }
         }
 
         if (! empty($errors)) {
-            $body .= "<br><strong>Errors:</strong><br>";
+            $body .= '<br><strong>Errors:</strong><br>';
             foreach ($errors as $error) {
-                $body .= "❌ " . htmlspecialchars($error) . "<br>";
+                $body .= '❌ '.htmlspecialchars($error).'<br>';
             }
         }
 
-        \App\Services\AuditLogger::log(
+        AuditLogger::log(
             action: 'settings.znuny_connection_tested',
             entityType: 'settings',
             entityId: null,
             context: [
                 'source' => 'form_state',
-                'password_source' => empty($data['znuny_password']) ? 'saved' : 'form',
+                'password_source' => $passwordSource,
                 'status' => $status,
                 'checks' => $checks,
                 'counts' => $counts,
@@ -135,7 +171,7 @@ class Settings extends Page implements HasForms
 
         Notification::make()
             ->title($title)
-            ->body(new \Illuminate\Support\HtmlString($body))
+            ->body(new HtmlString($body))
             ->color($color)
             ->persistent()
             ->send();
@@ -423,15 +459,6 @@ class Settings extends Page implements HasForms
                             ->label('Test Znuny API connection')
                             ->icon('heroicon-o-signal')
                             ->color('info')
-                            ->disabled(function ($get) {
-                                if (empty($get('znuny_api_url')) || empty($get('znuny_username'))) {
-                                    return true;
-                                }
-                                if (empty($get('znuny_password')) && empty(SettingsService::string('znuny_password'))) {
-                                    return true;
-                                }
-                                return false;
-                            })
                             ->action('testZnunyConnectionAction'),
                     ]),
                     \Filament\Forms\Components\Placeholder::make('tester_help')

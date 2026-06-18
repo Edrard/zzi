@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyAgentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -405,5 +406,140 @@ class ZnunyAgentSettingsTest extends TestCase
         $error = $log->context['errors'][0];
         $this->assertStringContainsString('[redacted]', $error);
         $this->assertStringNotContainsString('SuperSecret123', $error);
+    }
+
+    public function test_znuny_connection_action_fails_without_api_url()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $livewire = Livewire::actingAs($admin)
+            ->test(Settings::class)
+            ->fillForm([
+                'znuny_api_url' => '',
+                'znuny_username' => 'agent1',
+            ])
+            ->call('testZnunyConnectionAction')
+            ->assertNotified();
+
+        $log = AuditLog::where('action', 'settings.znuny_connection_tested')->latest()->first();
+        $this->assertNotNull($log);
+        $this->assertEquals('failed', $log->context['status']);
+        $this->assertContains('Znuny API URL is required.', $log->context['errors']);
+    }
+
+    public function test_znuny_connection_action_fails_without_username()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $livewire = Livewire::actingAs($admin)
+            ->test(Settings::class)
+            ->fillForm([
+                'znuny_api_url' => 'http://api.local',
+                'znuny_username' => '',
+            ])
+            ->call('testZnunyConnectionAction')
+            ->assertNotified();
+
+        $log = AuditLog::where('action', 'settings.znuny_connection_tested')->latest()->first();
+        $this->assertNotNull($log);
+        $this->assertEquals('failed', $log->context['status']);
+        $this->assertContains('Znuny username is required.', $log->context['errors']);
+    }
+
+    public function test_znuny_connection_action_fails_without_password()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Setting::updateOrCreate(['key' => 'znuny_password', 'type' => 'string'], ['value' => '']);
+
+        $livewire = Livewire::actingAs($admin)
+            ->test(Settings::class)
+            ->fillForm([
+                'znuny_api_url' => 'http://api.local',
+                'znuny_username' => 'agent1',
+                'znuny_password' => '',
+            ])
+            ->call('testZnunyConnectionAction')
+            ->assertNotified();
+
+        $log = AuditLog::where('action', 'settings.znuny_connection_tested')->latest()->first();
+        $this->assertNotNull($log);
+        $this->assertEquals('failed', $log->context['status']);
+        $this->assertEquals('missing', $log->context['password_source']);
+        $this->assertContains('Znuny password is required.', $log->context['errors']);
+    }
+
+    public function test_znuny_connection_action_uses_form_password()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Setting::updateOrCreate(['key' => 'znuny_password', 'type' => 'string'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'SavedSecret')]);
+
+        Http::fake([
+            'http://api.local/Session*' => function (Request $request) {
+                if ($request['Password'] === 'FormSecret') {
+                    return Http::response(['SessionID' => 'fake_session'], 200);
+                }
+
+                return Http::response(['Error' => ['ErrorMessage' => 'Wrong']], 200);
+            },
+            'http://api.local/Health*' => Http::response(['Success' => 1], 200),
+            'http://api.local/SystemConfig*' => Http::response(['Plugin' => 'ZnunyAgentList'], 200),
+            'http://api.local/Agent*' => Http::response(['Agents' => []], 200),
+            'http://api.local/Queue*' => Http::response(['Queues' => []], 200),
+            'http://api.local/TicketState*' => Http::response(['TicketStates' => []], 200),
+        ]);
+
+        $livewire = Livewire::actingAs($admin)
+            ->test(Settings::class)
+            ->fillForm([
+                'znuny_api_url' => 'http://api.local',
+                'znuny_username' => 'agent1',
+                'znuny_password' => 'FormSecret',
+            ])
+            ->call('testZnunyConnectionAction')
+            ->assertNotified();
+
+        $log = AuditLog::where('action', 'settings.znuny_connection_tested')->latest()->first();
+        $this->assertNotNull($log);
+        $this->assertEquals('success', $log->context['status']);
+        $this->assertEquals('form', $log->context['password_source']);
+    }
+
+    public function test_znuny_connection_action_uses_saved_password()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Setting::updateOrCreate(['key' => 'znuny_password', 'type' => 'string'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'SavedSecret')]);
+
+        Http::fake([
+            'http://api.local/Session*' => function (Request $request) {
+                if ($request['Password'] === 'SavedSecret') {
+                    return Http::response(['SessionID' => 'fake_session'], 200);
+                }
+
+                return Http::response(['Error' => ['ErrorMessage' => 'Wrong']], 200);
+            },
+            'http://api.local/Health*' => Http::response(['Success' => 1], 200),
+            'http://api.local/SystemConfig*' => Http::response(['Plugin' => 'ZnunyAgentList'], 200),
+            'http://api.local/Agent*' => Http::response(['Agents' => []], 200),
+            'http://api.local/Queue*' => Http::response(['Queues' => []], 200),
+            'http://api.local/TicketState*' => Http::response(['TicketStates' => []], 200),
+        ]);
+
+        $livewire = Livewire::actingAs($admin)
+            ->test(Settings::class)
+            ->fillForm([
+                'znuny_api_url' => 'http://api.local',
+                'znuny_username' => 'agent1',
+                'znuny_password' => '',
+            ])
+            ->call('testZnunyConnectionAction')
+            ->assertNotified();
+
+        $log = AuditLog::where('action', 'settings.znuny_connection_tested')->latest()->first();
+        $this->assertNotNull($log);
+        $this->assertEquals('success', $log->context['status']);
+        $this->assertEquals('saved', $log->context['password_source']);
     }
 }
