@@ -94,4 +94,76 @@ class ZnunyClientTest extends TestCase
         $this->assertNull($response['ticket_number']);
         $this->assertContains('Some API error', $response['errors']);
     }
+
+    public function test_process_response_unwraps_data_array()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/TicketState*' => Http::response([
+                'Success' => 1,
+                'Data' => [
+                    'TicketStates' => [
+                        ['ID' => 1, 'Name' => 'new'],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $states = $client->getTicketStates();
+
+        $this->assertCount(1, $states);
+        $this->assertEquals('new', $states[0]['Name']);
+    }
+
+    public function test_authfail_error_code_triggers_session_retry()
+    {
+        // First request returns AuthFail, second returns Success
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::sequence()
+                ->push(['SessionID' => 'fake_session_1'], 200)
+                ->push(['SessionID' => 'fake_session_2'], 200),
+            'https://example.invalid/api/TicketState*' => Http::sequence()
+                ->push([
+                    'Error' => [
+                        'ErrorCode' => 'ZnunyAgentList.AuthFail',
+                        'ErrorMessage' => 'Session invalid',
+                    ],
+                ], 200)
+                ->push([
+                    'Success' => 1,
+                    'Data' => [
+                        'TicketStates' => [
+                            ['ID' => 1, 'Name' => 'new'],
+                        ],
+                    ],
+                ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $states = $client->getTicketStates();
+
+        $this->assertCount(1, $states);
+        $this->assertEquals('new', $states[0]['Name']);
+    }
+
+    public function test_process_response_throws_exception_on_other_error()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/TicketState*' => Http::response([
+                'Error' => [
+                    'ErrorCode' => 'ZnunyAgentList.SomeError',
+                    'ErrorMessage' => 'Something went wrong',
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Znuny API Error: [ZnunyAgentList.SomeError] Something went wrong');
+
+        $client->getTicketStates();
+    }
 }

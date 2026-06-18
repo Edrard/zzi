@@ -101,7 +101,8 @@ class ZnunyClient
             throw new Exception("Znuny API Error: [$errorCode] $errorMsg");
         }
 
-        return $data;
+        // Return Data unwrapped if present, otherwise return whole payload
+        return array_key_exists('Data', $data) ? $data['Data'] : $data;
     }
 
     /**
@@ -127,7 +128,8 @@ class ZnunyClient
         return str_contains($msg, 'sessionidinvalid') ||
                str_contains($msg, 'sessionid invalid') ||
                str_contains($msg, 'session invalid') ||
-               str_contains($msg, 'invalid sessionid');
+               str_contains($msg, 'invalid sessionid') ||
+               str_contains($msg, 'znunyagentlist.authfail');
     }
 
     /**
@@ -184,7 +186,7 @@ class ZnunyClient
 
         try {
             $session = $this->sessionId();
-            $response = $this->request()->get($this->apiUrl()."/Ticket/{$normalizedId}", [
+            $response = $this->request()->get($this->apiUrl()."/ZnunyAgentListTicket/{$normalizedId}", [
                 'SessionID' => $session,
             ]);
 
@@ -290,6 +292,36 @@ class ZnunyClient
                 $this->cachedSessionId = null;
 
                 return $this->getAgents(true);
+            }
+
+            throw new Exception($this->sanitizeExceptionMessage($e->getMessage()));
+        }
+    }
+
+    /**
+     * Get list of ticket states.
+     */
+    public function getTicketStates(bool $isRetry = false): array
+    {
+        try {
+            $session = $this->sessionId();
+            $response = $this->request()->get($this->apiUrl().'/TicketState', [
+                'SessionID' => $session,
+            ]);
+
+            $data = $this->processResponse($response);
+
+            if (! isset($data['TicketStates']) || ! is_array($data['TicketStates'])) {
+                throw new Exception('Invalid TicketStates list returned from Znuny API.');
+            }
+
+            return $data['TicketStates'];
+
+        } catch (Throwable $e) {
+            if (! $isRetry && $this->isInvalidSessionError($e)) {
+                $this->cachedSessionId = null;
+
+                return $this->getTicketStates(true);
             }
 
             throw new Exception($this->sanitizeExceptionMessage($e->getMessage()));
