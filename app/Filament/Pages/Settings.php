@@ -512,20 +512,14 @@ class Settings extends Page implements HasForms
     {
         $zdGroups = [];
 
-        if (isset($zd['znuny_queue_from_host_regex']) || isset($zd['znuny_customer_user_from_queue_template'])) {
+        if (isset($zd['znuny_queue_from_host_regex']) || isset($zd['znuny_customer_user_from_queue_template']) || isset($zd['znuny_manual_ticket_footer'])) {
             $zdGroups[] = Section::make('Ticket default rules')
                 ->description('These rules only generate default suggestions for manual ticket creation. The operator will still be able to override Queue and CustomerUser before creating a ticket.')
                 ->schema(array_filter([
                     $zd['znuny_queue_from_host_regex'] ?? null,
                     $zd['znuny_customer_user_from_queue_template'] ?? null,
+                    $zd['znuny_manual_ticket_footer'] ?? null,
                 ]))->columns(1);
-        }
-
-        if (isset($zd['znuny_manual_ticket_footer'])) {
-            $zdGroups[] = Section::make('Content rules')
-                ->schema([
-                    $zd['znuny_manual_ticket_footer'],
-                ])->columns(1);
         }
 
         if (isset($zd['znuny_queue_host_mappings'])) {
