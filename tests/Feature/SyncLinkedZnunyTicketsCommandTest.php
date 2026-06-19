@@ -42,13 +42,12 @@ class SyncLinkedZnunyTicketsCommandTest extends TestCase
         Http::fake([
             '*example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
             '*example.invalid/api/ZnunyAgentListTicket/100*' => Http::response([
+                'Found' => 1,
                 'Ticket' => [
-                    [
-                        'TicketID' => 100,
-                        'TicketNumber' => '1000',
-                        'State' => 'open',
-                        'StateType' => 'open',
-                    ],
+                    'TicketID' => 100,
+                    'TicketNumber' => '1000',
+                    'State' => 'open',
+                    'StateType' => 'open',
                 ],
             ], 200),
         ]);
@@ -121,11 +120,10 @@ class SyncLinkedZnunyTicketsCommandTest extends TestCase
         Http::fake([
             '*example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
             '*example.invalid/api/ZnunyAgentListTicket*' => Http::response([
+                'Found' => 1,
                 'Ticket' => [
-                    [
-                        'TicketID' => 300,
-                        'TicketNumber' => '3000',
-                    ],
+                    'TicketID' => 300,
+                    'TicketNumber' => '3000',
                 ],
             ], 200),
         ]);
@@ -156,12 +154,11 @@ class SyncLinkedZnunyTicketsCommandTest extends TestCase
         Http::fake([
             '*example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
             '*example.invalid/api/ZnunyAgentListTicket/400*' => Http::response([
+                'Found' => 1,
                 'Ticket' => [
-                    [
-                        'TicketID' => 400,
-                        'TicketNumber' => '4000',
-                        'State' => 'closed',
-                    ],
+                    'TicketID' => 400,
+                    'TicketNumber' => '4000',
+                    'State' => 'closed',
                 ],
             ], 200),
         ]);

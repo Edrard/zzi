@@ -87,7 +87,7 @@ class ZnunyLinkedTicketSyncService
                     $stats['unchanged']++;
                 }
             } catch (Throwable $e) {
-                if (str_contains($e->getMessage(), 'No ticket returned for TicketID') || str_contains($e->getMessage(), 'Empty ticket array returned')) {
+                if (str_contains($e->getMessage(), 'Ticket not found in Znuny.')) {
                     $localTicket->znuny_ticket_sync_error = 'Ticket not found in Znuny.';
                     $stats['missing']++;
 

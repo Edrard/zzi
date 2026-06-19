@@ -219,14 +219,15 @@ class ZnunyClient
 
             $data = $this->processResponse($response);
 
-            if (empty($data['Ticket']) || ! is_array($data['Ticket'])) {
-                throw new Exception("No ticket returned for TicketID {$normalizedId}.");
+            if (isset($data['Found']) && (int) $data['Found'] === 0) {
+                throw new Exception("Ticket not found in Znuny.");
             }
 
-            $ticket = $data['Ticket'][0] ?? null;
-            if (! $ticket) {
-                throw new Exception("Empty ticket array returned for TicketID {$normalizedId}.");
+            if (empty($data['Ticket']) || ! is_array($data['Ticket'])) {
+                throw new Exception("No valid ticket data returned for TicketID {$normalizedId}.");
             }
+
+            $ticket = $data['Ticket'];
 
             return [
                 'TicketID' => $ticket['TicketID'] ?? null,
