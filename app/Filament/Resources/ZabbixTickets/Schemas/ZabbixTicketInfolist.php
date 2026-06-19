@@ -15,29 +15,21 @@ class ZabbixTicketInfolist
                 Section::make('Ticket')
                     ->schema([
                         TextEntry::make('znuny_ticket_number')->label('Ticket Number')->placeholder('-'),
-                        TextEntry::make('znuny_ticket_id')->label('Ticket ID')->placeholder('-'),
-                        TextEntry::make('creation_source')->label('Creation Source')->placeholder('-'),
                         TextEntry::make('created_at')->label('Ticket Age')->since()->placeholder('-'),
-                        TextEntry::make('znuny_ticket_changed_at')->label('Changed')->dateTime()->placeholder('-'),
                     ])->columns(2),
 
                 Section::make('Zabbix')
                     ->schema([
                         TextEntry::make('zabbix_host_name')->label('Host')->placeholder('-'),
                         TextEntry::make('zabbix_problem_name')->label('Problem')->columnSpanFull()->placeholder('-'),
-                        TextEntry::make('zabbix_event_id')->label('Event ID')->placeholder('-'),
                     ])->columns(2),
 
                 Section::make('Znuny Snapshot')
                     ->schema([
                         TextEntry::make('znuny_queue_name')->label('Queue')->placeholder('-'),
-                        TextEntry::make('znuny_queue_id')->label('Queue ID')->placeholder('-'),
                         TextEntry::make('znuny_owner_name')->label('Owner')->placeholder('-'),
-                        TextEntry::make('znuny_owner_id')->label('Owner ID')->placeholder('-'),
                         TextEntry::make('znuny_priority')->label('Priority')->placeholder('-'),
-                        TextEntry::make('znuny_priority_id')->label('Priority ID')->placeholder('-'),
                         TextEntry::make('znuny_state_name')->label('State')->placeholder('-'),
-                        TextEntry::make('znuny_ticket_state_type')->label('State Type')->placeholder('-'),
                     ])->columns(2),
 
                 Section::make('Sync')
@@ -48,15 +40,7 @@ class ZabbixTicketInfolist
                             ->color('danger')
                             ->placeholder('-')
                             ->columnSpanFull(),
-                        TextEntry::make('znuny_ticket_snapshot_hash')->label('Snapshot Hash')->placeholder('-')->columnSpanFull(),
                     ])->columns(2),
-
-                Section::make('Created/Audit')
-                    ->schema([
-                        TextEntry::make('creator.name')->label('Created By')->placeholder('-'),
-                        TextEntry::make('created_at')->label('Local Created')->dateTime()->placeholder('-'),
-                        TextEntry::make('updated_at')->label('Local Updated')->dateTime()->placeholder('-'),
-                    ])->columns(3),
             ]);
     }
 }

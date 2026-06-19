@@ -3,8 +3,10 @@
 namespace Tests\Feature\Filament;
 
 use App\Filament\Resources\ZabbixTickets\Pages\ListZabbixTickets;
+use App\Models\Setting;
 use App\Models\User;
 use App\Models\ZabbixTicket;
+use App\Services\Znuny\ZnunyClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -80,13 +82,25 @@ class LinkedTicketsPageTest extends TestCase
         Livewire::test(ListZabbixTickets::class)
             ->mountTableAction('view', $ticket)
             ->assertSuccessful();
+
+    }
+
+    public function test_linked_tickets_page_has_refresh_and_sync_actions()
+    {
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+
+        Livewire::test(ListZabbixTickets::class)
+            ->assertActionExists('refresh')
+            ->assertActionExists('sync_tickets')
+            ->callAction('refresh')
+            ->assertSuccessful();
     }
 
     public function test_linked_tickets_open_ticket_action_has_url()
     {
         $this->actingAs(User::factory()->create(['role' => 'admin']));
-        
-        \App\Models\Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
 
         $ticket = ZabbixTicket::create([
             'zabbix_event_id' => '12345',
@@ -101,7 +115,7 @@ class LinkedTicketsPageTest extends TestCase
             'creation_source' => 'manual',
         ]);
 
-        $url = app(\App\Services\Znuny\ZnunyClient::class)->ticketUrl(999);
+        $url = app(ZnunyClient::class)->ticketUrl(999);
 
         Livewire::test(ListZabbixTickets::class)
             ->assertTableActionHasUrl('open_ticket', $url, $ticket);

@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\ZabbixTickets;
 
 use App\Filament\Resources\ZabbixTickets\Pages\ListZabbixTickets;
-use App\Filament\Resources\ZabbixTickets\Pages\ViewZabbixTicket;
 use App\Filament\Resources\ZabbixTickets\Schemas\ZabbixTicketInfolist;
 use App\Filament\Resources\ZabbixTickets\Tables\ZabbixTicketsTable;
 use App\Models\ZabbixTicket;
@@ -48,7 +47,6 @@ class ZabbixTicketResource extends Resource
     {
         return [
             'index' => ListZabbixTickets::route('/'),
-            'view' => ViewZabbixTicket::route('/{record}'),
         ];
     }
 }
