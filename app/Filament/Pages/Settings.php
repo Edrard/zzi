@@ -12,6 +12,7 @@ use App\Services\Znuny\ZnunyDefaultAgentSettingsService;
 use App\Services\Znuny\ZnunyQueueHostMappingSchemaBuilder;
 use App\Services\Znuny\ZnunyQueueHostMappingService;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -238,6 +239,12 @@ class Settings extends Page implements HasForms
                     ->helperText('Znuny agent logins that must not be selectable as ticket owners in the manual ticket creation modal. Put one login per line.')
                     ->required(false)
                     ->rows(4);
+            } elseif ($setting->key === 'znuny_manual_ticket_footer') {
+                $component = Textarea::make($setting->key)
+                    ->label($label)
+                    ->helperText($setting->description)
+                    ->required(false)
+                    ->rows(3);
             } elseif ($setting->key === 'znuny_queue_from_host_regex') {
                 $component = TextInput::make($setting->key)
                     ->label('Queue detection regex from Zabbix host')
@@ -319,7 +326,7 @@ class Settings extends Page implements HasForms
                 $groups['Retention'][] = $component;
             } elseif (in_array($setting->key, ['zabbix_api_url', 'zabbix_api_token', 'zabbix_api_timeout', 'zabbix_api_verify_ssl', 'zabbix_poll_interval_minutes', 'zabbix_problem_cache_ttl_minutes', 'zabbix_problem_limit', 'zabbix_exclude_suppressed_problems'])) {
                 $groups['Zabbix'][] = $component;
-            } elseif (in_array($setting->key, ['znuny_queue_from_host_regex', 'znuny_customer_user_from_queue_template', 'znuny_queue_host_mappings'])) {
+            } elseif (in_array($setting->key, ['znuny_queue_from_host_regex', 'znuny_customer_user_from_queue_template', 'znuny_queue_host_mappings', 'znuny_manual_ticket_footer'])) {
                 $groups['Znuny Ticket Defaults'][$setting->key] = $component;
             } elseif (str_starts_with($setting->key, 'znuny_')) {
                 $groups['Znuny'][$setting->key] = $component;
@@ -461,7 +468,7 @@ class Settings extends Page implements HasForms
                             ->color('info')
                             ->action('testZnunyConnectionAction'),
                     ]),
-                    \Filament\Forms\Components\Placeholder::make('tester_help')
+                    Placeholder::make('tester_help')
                         ->hiddenLabel()
                         ->content('Tests current Znuny form values without saving settings.'),
                 ]))->columns(1),
@@ -512,6 +519,13 @@ class Settings extends Page implements HasForms
                     $zd['znuny_queue_from_host_regex'] ?? null,
                     $zd['znuny_customer_user_from_queue_template'] ?? null,
                 ]))->columns(1);
+        }
+
+        if (isset($zd['znuny_manual_ticket_footer'])) {
+            $zdGroups[] = Section::make('Content rules')
+                ->schema([
+                    $zd['znuny_manual_ticket_footer'],
+                ])->columns(1);
         }
 
         if (isset($zd['znuny_queue_host_mappings'])) {

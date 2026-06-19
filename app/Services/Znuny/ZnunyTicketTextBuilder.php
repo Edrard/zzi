@@ -2,6 +2,7 @@
 
 namespace App\Services\Znuny;
 
+use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixProblemFormatter;
 
 class ZnunyTicketTextBuilder
@@ -68,8 +69,11 @@ class ZnunyTicketTextBuilder
             }
         }
 
-        $body[] = '';
-        $body[] = 'Created manually by Zabbix Znuny Integration.';
+        $footer = trim(SettingsService::string('znuny_manual_ticket_footer', 'Created manually by Zabbix Znuny Integration.'));
+        if ($footer !== '') {
+            $body[] = '';
+            $body[] = $footer;
+        }
 
         return [
             'title' => $title,

@@ -2,12 +2,16 @@
 
 namespace Tests\Unit\Services\Znuny;
 
+use App\Models\Setting;
 use App\Services\Zabbix\ZabbixProblemFormatter;
 use App\Services\Znuny\ZnunyTicketTextBuilder;
-use PHPUnit\Framework\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
 class ZnunyTicketTextBuilderTest extends TestCase
 {
+    use RefreshDatabase;
+
     private ZnunyTicketTextBuilder $builder;
 
     private $fixedTime;
@@ -138,5 +142,43 @@ Created manually by Zabbix Znuny Integration.
 TEXT;
 
         $this->assertEquals($expectedBody, $result['article_body']);
+    }
+
+    public function test_appends_custom_footer()
+    {
+        Setting::updateOrCreate(
+            ['key' => 'znuny_manual_ticket_footer'],
+            ['value' => 'This is a custom footer for our org.', 'type' => 'string']
+        );
+
+        $result = $this->builder->build(['name' => 'Problem']);
+
+        $this->assertStringContainsString('This is a custom footer for our org.', $result['article_body']);
+        $this->assertStringNotContainsString('Created manually by Zabbix Znuny Integration.', $result['article_body']);
+    }
+
+    public function test_appends_no_footer_if_empty()
+    {
+        Setting::updateOrCreate(
+            ['key' => 'znuny_manual_ticket_footer'],
+            ['value' => '', 'type' => 'string']
+        );
+
+        $result = $this->builder->build(['name' => 'Problem']);
+
+        $this->assertStringNotContainsString('Created manually by Zabbix Znuny Integration.', $result['article_body']);
+        $this->assertStringNotContainsString("\n\n\n", $result['article_body']); // Should not leave trailing spaces
+    }
+
+    public function test_appends_no_footer_if_whitespace_only()
+    {
+        Setting::updateOrCreate(
+            ['key' => 'znuny_manual_ticket_footer'],
+            ['value' => '   ', 'type' => 'string']
+        );
+
+        $result = $this->builder->build(['name' => 'Problem']);
+
+        $this->assertStringNotContainsString('Created manually by Zabbix Znuny Integration.', $result['article_body']);
     }
 }

@@ -542,4 +542,21 @@ class ZnunyAgentSettingsTest extends TestCase
         $this->assertEquals('success', $log->context['status']);
         $this->assertEquals('saved', $log->context['password_source']);
     }
+
+    public function test_can_save_empty_manual_ticket_footer()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Setting::updateOrCreate(['key' => 'znuny_manual_ticket_footer', 'type' => 'string'], ['value' => 'Old value']);
+
+        $livewire = Livewire::actingAs($admin)
+            ->test(Settings::class)
+            ->fillForm([
+                'znuny_manual_ticket_footer' => '',
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertEquals('', Setting::where('key', 'znuny_manual_ticket_footer')->value('value'));
+    }
 }

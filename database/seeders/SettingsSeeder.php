@@ -37,6 +37,7 @@ class SettingsSeeder extends Seeder
             ['key' => 'znuny_password', 'value' => '', 'type' => 'string', 'description' => 'Znuny integration agent password'],
             ['key' => 'znuny_api_timeout', 'value' => '15', 'type' => 'integer', 'description' => 'Znuny API request timeout in seconds'],
             ['key' => 'znuny_api_verify_ssl', 'value' => 'true', 'type' => 'boolean', 'description' => 'Verify Znuny API SSL certificate'],
+            ['key' => 'znuny_manual_ticket_footer', 'value' => 'Created manually by Zabbix Znuny Integration.', 'type' => 'string', 'description' => 'Optional text appended to manually created Znuny tickets. Leave empty to disable.'],
         ];
 
         foreach ($settings as $setting) {
