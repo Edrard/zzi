@@ -231,6 +231,60 @@ class Settings extends Page implements HasForms
             }
 
             $label = Str::title(str_replace('_', ' ', $setting->key));
+            $description = $setting->description;
+
+            $overrides = [
+                'znuny_agent_cache_ttl_minutes' => [
+                    'label' => 'Znuny Agent Cache TTL Minutes',
+                    'description' => 'How long Znuny agent list data is cached. 0 disables this cache.',
+                ],
+                'znuny_queue_cache_ttl_minutes' => [
+                    'label' => 'Znuny Queue Cache TTL Minutes',
+                    'description' => 'How long Znuny queue list data is cached. 0 disables this cache.',
+                ],
+                'znuny_ticket_snapshot_cache_ttl_minutes' => [
+                    'label' => 'Znuny Ticket Snapshot Cache TTL Minutes',
+                    'description' => 'How long linked ticket snapshot data may be cached before refresh. 0 disables this cache.',
+                ],
+                'znuny_detailed_sync_audit_enabled' => [
+                    'label' => 'Enable Detailed Sync Audit Log',
+                    'description' => 'Write detailed linked-ticket sync events to the audit log. Keep disabled unless troubleshooting.',
+                ],
+                'znuny_linked_ticket_sync_batch_size' => [
+                    'label' => 'Linked Ticket Sync Batch Size',
+                    'description' => 'Maximum number of eligible linked tickets processed per sync run. 0 means all eligible tickets.',
+                ],
+                'znuny_linked_ticket_sync_interval_minutes' => [
+                    'label' => 'Linked Ticket Sync Interval Minutes',
+                    'description' => 'How often scheduled linked-ticket synchronization should run.',
+                ],
+                'manual_ticket_auto_close_enabled' => [
+                    'label' => 'Enable Automatic Close',
+                    'description' => 'Automatically close manually created linked tickets when their Zabbix problem remains resolved long enough.',
+                ],
+                'default_close_delay_hours' => [
+                    'label' => 'Default Close Delay Hours',
+                    'description' => 'Hours a linked Zabbix problem must remain resolved before automatic ticket close can run.',
+                ],
+                'default_reopen_window_hours' => [
+                    'label' => 'Default Reopen Window Hours',
+                    'description' => 'Hours after ticket close during which the same logical Zabbix problem is shown as a recent candidate for reopening. Reopen is still a manual operator action.',
+                ],
+                'manual_ticket_flap_threshold' => [
+                    'label' => 'Flap Threshold',
+                    'description' => 'Number of times the same linked problem may return after resolving before it is marked as flapping. 0 disables flapping detection.',
+                ],
+                'manual_ticket_extra_flapping_delay_hours' => [
+                    'label' => 'Extra Flapping Delay Hours',
+                    'description' => 'Additional close delay added after flapping is detected for a linked manual ticket.',
+                ],
+            ];
+
+            if (isset($overrides[$setting->key])) {
+                $label = $overrides[$setting->key]['label'];
+                $description = $overrides[$setting->key]['description'];
+            }
+
             $component = null;
 
             if ($setting->key === 'znuny_default_agent_id') {
@@ -283,17 +337,17 @@ class Settings extends Page implements HasForms
             } elseif ($setting->type === 'boolean') {
                 $component = Toggle::make($setting->key)
                     ->label($label)
-                    ->helperText($setting->description)
+                    ->helperText($description)
                     ->required();
             } elseif ($setting->type === 'integer') {
                 $min = 0;
-                if ($setting->key === 'cleanup_batch_size') {
+                if ($setting->key === 'cleanup_batch_size' || $setting->key === 'znuny_linked_ticket_sync_interval_minutes') {
                     $min = 1;
                 }
 
                 $component = TextInput::make($setting->key)
                     ->label($label)
-                    ->helperText($setting->description)
+                    ->helperText($description)
                     ->numeric()
                     ->integer()
                     ->minValue($min)
@@ -303,13 +357,13 @@ class Settings extends Page implements HasForms
             } elseif ($setting->type === 'json') {
                 $component = Textarea::make($setting->key)
                     ->label($label)
-                    ->helperText($setting->description)
+                    ->helperText($description)
                     ->rule('json')
                     ->required();
             } else {
                 $input = TextInput::make($setting->key)
                     ->label($label)
-                    ->helperText($setting->description)
+                    ->helperText($description)
                     ->required();
 
                 if (in_array($setting->key, ['zabbix_api_token', 'znuny_password'])) {
@@ -565,8 +619,8 @@ class Settings extends Page implements HasForms
                     Tab::make('Auto tickets')
                         ->schema([
                             Placeholder::make('auto_tickets_placeholder')
-                                ->hiddenLabel()
-                                ->content('Automatic ticket creation and auto-ticket lifecycle rules will be configured here later. This stage only prepares the settings structure.'),
+                                ->label('Auto Ticket Automation')
+                                ->content('Automatic ticket creation and auto-ticket lifecycle rules will be configured here later. No auto-ticket automation is active in this stage.'),
                         ])
                         ->columns(1),
                 ]),
