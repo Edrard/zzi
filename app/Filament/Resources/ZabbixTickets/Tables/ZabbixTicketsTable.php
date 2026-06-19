@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\ZabbixTickets\Tables;
 
 use App\Models\ZabbixTicket;
+use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyClient;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
@@ -13,7 +14,11 @@ class ZabbixTicketsTable
 {
     public static function configure(Table $table): Table
     {
+        $minutes = SettingsService::int('zabbix_poll_interval_minutes', 1) ?? 1;
+        $seconds = max((int) round(($minutes * 60) / 2), 10);
+
         return $table
+            ->poll("{$seconds}s")
             ->recordClasses(fn () => 'text-[13px] [&>td]:px-3 [&>td]:py-2')
             ->columns([
                 TextColumn::make('zabbix_host_name')

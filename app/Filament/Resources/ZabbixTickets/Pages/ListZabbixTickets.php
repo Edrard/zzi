@@ -21,16 +21,6 @@ class ListZabbixTickets extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('refresh')
-                ->label('Refresh')
-                ->icon('heroicon-o-arrow-path')
-                ->action(function () {
-                    Notification::make()
-                        ->title('Table refreshed')
-                        ->success()
-                        ->send();
-                }),
-
             Action::make('sync_tickets')
                 ->label('Sync Tickets')
                 ->icon('heroicon-o-cloud-arrow-down')
