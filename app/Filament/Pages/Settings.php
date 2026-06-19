@@ -213,9 +213,11 @@ class Settings extends Page implements HasForms
         $groups = [
             'General' => [],
             'Retention' => [],
+            'Cache' => [],
             'Zabbix' => [],
             'Znuny' => [],
             'Znuny Ticket Defaults' => [],
+            'Znuny Sync' => [],
             'Automation' => [],
             'Other' => [],
         ];
@@ -328,10 +330,14 @@ class Settings extends Page implements HasForms
                 $groups['Zabbix'][] = $component;
             } elseif (in_array($setting->key, ['znuny_queue_from_host_regex', 'znuny_customer_user_from_queue_template', 'znuny_queue_host_mappings', 'znuny_manual_ticket_footer'])) {
                 $groups['Znuny Ticket Defaults'][$setting->key] = $component;
+            } elseif (in_array($setting->key, ['znuny_queue_cache_ttl_minutes', 'znuny_agent_cache_ttl_minutes', 'znuny_ticket_snapshot_cache_ttl_minutes'])) {
+                $groups['Cache'][] = $component;
+            } elseif (in_array($setting->key, ['znuny_linked_ticket_sync_interval_minutes', 'znuny_linked_ticket_sync_batch_size', 'znuny_detailed_sync_audit_enabled'])) {
+                $groups['Znuny Sync'][] = $component;
             } elseif (str_starts_with($setting->key, 'znuny_')) {
                 $groups['Znuny'][$setting->key] = $component;
-            } elseif (in_array($setting->key, ['default_close_delay_hours', 'default_reopen_window_hours'])) {
-                $groups['Automation'][] = $component;
+            } elseif (in_array($setting->key, ['default_close_delay_hours', 'default_reopen_window_hours', 'manual_ticket_auto_close_enabled', 'manual_ticket_flap_threshold', 'manual_ticket_extra_flapping_delay_hours'])) {
+                $groups['Automation'][$setting->key] = $component;
             } else {
                 $groups['Other'][] = $component;
             }
@@ -351,6 +357,10 @@ class Settings extends Page implements HasForms
                 ->schema($groups['Retention'])
                 ->columns(1);
             $groups['Retention'] = [$retentionSection];
+        }
+
+        if (! empty($groups['Automation'])) {
+            $groups['Automation'] = $this->buildAutomationTabGroups($groups['Automation']);
         }
 
         $tabs = [];
@@ -536,5 +546,30 @@ class Settings extends Page implements HasForms
         }
 
         return $zdGroups;
+    }
+
+    private function buildAutomationTabGroups(array $a): array
+    {
+        return [
+            Tabs::make('AutomationTabs')
+                ->tabs([
+                    Tab::make('Manual tickets')
+                        ->schema(array_filter([
+                            $a['manual_ticket_auto_close_enabled'] ?? null,
+                            $a['default_close_delay_hours'] ?? null,
+                            $a['default_reopen_window_hours'] ?? null,
+                            $a['manual_ticket_flap_threshold'] ?? null,
+                            $a['manual_ticket_extra_flapping_delay_hours'] ?? null,
+                        ]))
+                        ->columns(1),
+                    Tab::make('Auto tickets')
+                        ->schema([
+                            Placeholder::make('auto_tickets_placeholder')
+                                ->hiddenLabel()
+                                ->content('Automatic ticket creation and auto-ticket lifecycle rules will be configured here later. This stage only prepares the settings structure.'),
+                        ])
+                        ->columns(1),
+                ]),
+        ];
     }
 }

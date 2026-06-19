@@ -559,4 +559,46 @@ class ZnunyAgentSettingsTest extends TestCase
 
         $this->assertEquals('', Setting::where('key', 'znuny_manual_ticket_footer')->value('value'));
     }
+
+    public function test_cache_and_sync_settings_are_savable()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $livewire = Livewire::actingAs($admin)
+            ->test(Settings::class)
+            ->fillForm([
+                'znuny_queue_cache_ttl_minutes' => 30,
+                'znuny_agent_cache_ttl_minutes' => 30,
+                'znuny_ticket_snapshot_cache_ttl_minutes' => 10,
+                'znuny_linked_ticket_sync_interval_minutes' => 10,
+                'znuny_linked_ticket_sync_batch_size' => 100,
+                'znuny_detailed_sync_audit_enabled' => true,
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertEquals('30', Setting::where('key', 'znuny_queue_cache_ttl_minutes')->value('value'));
+        $this->assertEquals('100', Setting::where('key', 'znuny_linked_ticket_sync_batch_size')->value('value'));
+    }
+
+    public function test_automation_settings_are_savable()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $livewire = Livewire::actingAs($admin)
+            ->test(Settings::class)
+            ->fillForm([
+                'manual_ticket_auto_close_enabled' => false,
+                'manual_ticket_flap_threshold' => 5,
+                'manual_ticket_extra_flapping_delay_hours' => 8,
+                'default_close_delay_hours' => 5,
+                'default_reopen_window_hours' => 48,
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertEquals('false', Setting::where('key', 'manual_ticket_auto_close_enabled')->value('value'));
+        $this->assertEquals('5', Setting::where('key', 'manual_ticket_flap_threshold')->value('value'));
+        $this->assertEquals('5', Setting::where('key', 'default_close_delay_hours')->value('value'));
+    }
 }

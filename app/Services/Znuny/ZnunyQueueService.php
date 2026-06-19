@@ -2,6 +2,7 @@
 
 namespace App\Services\Znuny;
 
+use App\Services\SettingsService;
 use Illuminate\Support\Facades\Cache;
 
 class ZnunyQueueService
@@ -12,7 +13,7 @@ class ZnunyQueueService
 
     private function getCacheTtl(): int
     {
-        $ttl = (int) config('znuny.queue_cache_ttl_minutes', 15);
+        $ttl = SettingsService::int('znuny_queue_cache_ttl_minutes', 15);
 
         return $ttl > 0 ? $ttl : 15;
     }
