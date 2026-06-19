@@ -2,10 +2,8 @@
 
 namespace App\Filament\Resources\ZabbixTickets\Schemas;
 
-use App\Models\ZabbixTicket;
-use App\Services\Znuny\ZnunyClient;
-use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 class ZabbixTicketInfolist
@@ -14,57 +12,50 @@ class ZabbixTicketInfolist
     {
         return $schema
             ->components([
+                Section::make('Ticket')
+                    ->schema([
+                        TextEntry::make('znuny_ticket_number')->label('Ticket Number')->placeholder('-'),
+                        TextEntry::make('znuny_ticket_id')->label('Ticket ID')->placeholder('-'),
+                        TextEntry::make('creation_source')->label('Creation Source')->placeholder('-'),
+                        TextEntry::make('created_at')->label('Ticket Age')->since()->placeholder('-'),
+                        TextEntry::make('znuny_ticket_changed_at')->label('Changed')->dateTime()->placeholder('-'),
+                    ])->columns(2),
+
                 Section::make('Zabbix')
                     ->schema([
-                        TextEntry::make('zabbix_event_id')->label('Event ID'),
-                        TextEntry::make('zabbix_trigger_id')->label('Trigger ID')->placeholder('-'),
-                        TextEntry::make('zabbix_host_id')->label('Host ID')->placeholder('-'),
-                        TextEntry::make('zabbix_host_name')->label('Host name'),
-                        TextEntry::make('zabbix_problem_name')->label('Problem')->columnSpanFull(),
-                        TextEntry::make('zabbix_severity')
-                            ->label('Severity')
-                            ->badge()
-                            ->formatStateUsing(fn (?int $state) => match ($state) {
-                                0 => 'Not classified',
-                                1 => 'Information',
-                                2 => 'Warning',
-                                3 => 'Average',
-                                4 => 'High',
-                                5 => 'Disaster',
-                                default => 'Unknown',
-                            })
-                            ->color(fn (?int $state): string => match ($state) {
-                                0 => 'gray',
-                                1 => 'info',
-                                2 => 'warning',
-                                3 => 'warning',
-                                4 => 'danger',
-                                5 => 'danger',
-                                default => 'gray',
-                            }),
-                        TextEntry::make('zabbix_started_at')->label('Started at')->dateTime()->placeholder('-'),
+                        TextEntry::make('zabbix_host_name')->label('Host')->placeholder('-'),
+                        TextEntry::make('zabbix_problem_name')->label('Problem')->columnSpanFull()->placeholder('-'),
+                        TextEntry::make('zabbix_event_id')->label('Event ID')->placeholder('-'),
                     ])->columns(2),
 
-                Section::make('Znuny')
+                Section::make('Znuny Snapshot')
                     ->schema([
-                        TextEntry::make('znuny_ticket_number')->label('Ticket number'),
-                        TextEntry::make('znuny_ticket_id')->label('Ticket ID'),
                         TextEntry::make('znuny_queue_name')->label('Queue')->placeholder('-'),
+                        TextEntry::make('znuny_queue_id')->label('Queue ID')->placeholder('-'),
                         TextEntry::make('znuny_owner_name')->label('Owner')->placeholder('-'),
+                        TextEntry::make('znuny_owner_id')->label('Owner ID')->placeholder('-'),
+                        TextEntry::make('znuny_priority')->label('Priority')->placeholder('-'),
+                        TextEntry::make('znuny_priority_id')->label('Priority ID')->placeholder('-'),
                         TextEntry::make('znuny_state_name')->label('State')->placeholder('-'),
-                        TextEntry::make('open_in_znuny')
-                            ->label('')
-                            ->formatStateUsing(fn () => 'Open in Znuny')
-                            ->url(fn (ZabbixTicket $record) => app(ZnunyClient::class)->ticketUrl($record->znuny_ticket_id))
-                            ->openUrlInNewTab()
-                            ->color('primary'),
+                        TextEntry::make('znuny_ticket_state_type')->label('State Type')->placeholder('-'),
                     ])->columns(2),
 
-                Section::make('Metadata')
+                Section::make('Sync')
                     ->schema([
-                        TextEntry::make('creator.name')->label('Created by')->placeholder('-'),
-                        TextEntry::make('created_at')->label('Created at')->dateTime(),
-                        TextEntry::make('updated_at')->label('Updated at')->dateTime(),
+                        TextEntry::make('znuny_ticket_last_checked_at')->label('Last Checked')->dateTime()->placeholder('-'),
+                        TextEntry::make('znuny_ticket_last_synced_at')->label('Last Synced')->dateTime()->placeholder('-'),
+                        TextEntry::make('znuny_ticket_sync_error')->label('Sync Error')
+                            ->color('danger')
+                            ->placeholder('-')
+                            ->columnSpanFull(),
+                        TextEntry::make('znuny_ticket_snapshot_hash')->label('Snapshot Hash')->placeholder('-')->columnSpanFull(),
+                    ])->columns(2),
+
+                Section::make('Created/Audit')
+                    ->schema([
+                        TextEntry::make('creator.name')->label('Created By')->placeholder('-'),
+                        TextEntry::make('created_at')->label('Local Created')->dateTime()->placeholder('-'),
+                        TextEntry::make('updated_at')->label('Local Updated')->dateTime()->placeholder('-'),
                     ])->columns(3),
             ]);
     }

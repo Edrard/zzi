@@ -4,6 +4,7 @@ namespace App\Filament\Resources\ZabbixTickets\Tables;
 
 use App\Models\ZabbixTicket;
 use App\Services\Znuny\ZnunyClient;
+use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -14,72 +15,36 @@ class ZabbixTicketsTable
     {
         return $table
             ->columns([
-                TextColumn::make('znuny_ticket_number')
-                    ->label('Ticket')
-                    ->searchable()
-                    ->sortable()
-                    ->url(fn (ZabbixTicket $record) => app(ZnunyClient::class)->ticketUrl($record->znuny_ticket_id))
-                    ->openUrlInNewTab(),
-
                 TextColumn::make('zabbix_host_name')
                     ->label('Host')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->wrap(),
 
                 TextColumn::make('zabbix_problem_name')
                     ->label('Problem')
                     ->searchable()
                     ->wrap(),
 
-                TextColumn::make('zabbix_severity')
-                    ->label('Severity')
-                    ->sortable()
-                    ->badge()
-                    ->formatStateUsing(fn (?int $state) => match ($state) {
-                        0 => 'Not classified',
-                        1 => 'Information',
-                        2 => 'Warning',
-                        3 => 'Average',
-                        4 => 'High',
-                        5 => 'Disaster',
-                        default => 'Unknown',
-                    })
-                    ->color(fn (?int $state): string => match ($state) {
-                        0 => 'gray',
-                        1 => 'info',
-                        2 => 'warning',
-                        3 => 'warning',
-                        4 => 'danger',
-                        5 => 'danger',
-                        default => 'gray',
-                    }),
-
-                TextColumn::make('znuny_queue_name')
-                    ->label('Queue')
-                    ->searchable()
-                    ->sortable()
-                    ->placeholder('-'),
-
-                TextColumn::make('znuny_owner_name')
-                    ->label('Owner')
-                    ->searchable()
-                    ->sortable()
-                    ->placeholder('-'),
-
                 TextColumn::make('znuny_state_name')
                     ->label('State')
-                    ->searchable()
+                    ->badge()
+                    ->color(function (ZabbixTicket $record): string {
+                        if ($record->znuny_ticket_sync_error) {
+                            return 'danger';
+                        }
+
+                        return $record->znuny_ticket_state_type === 'open' ? 'warning' : 'success';
+                    })
+                    ->icon(fn (ZabbixTicket $record): ?string => $record->znuny_ticket_sync_error ? 'heroicon-o-exclamation-triangle' : null)
+                    ->tooltip(fn (ZabbixTicket $record): ?string => $record->znuny_ticket_sync_error)
                     ->sortable()
+                    ->searchable()
                     ->placeholder('-'),
 
-                TextColumn::make('creator.name')
-                    ->label('Created by')
-                    ->placeholder('-')
-                    ->toggleable(),
-
                 TextColumn::make('created_at')
-                    ->label('Created')
-                    ->dateTime()
+                    ->label('Ticket Age')
+                    ->since()
                     ->sortable(),
             ])
             ->defaultSort('created_at', 'desc')
@@ -87,7 +52,12 @@ class ZabbixTicketsTable
                 //
             ])
             ->recordActions([
-                ViewAction::make(),
+                ViewAction::make()->slideOver(),
+                Action::make('open_ticket')
+                    ->label('Open Ticket')
+                    ->icon('heroicon-o-arrow-top-right-on-square')
+                    ->url(fn (?ZabbixTicket $record) => $record ? app(ZnunyClient::class)->ticketUrl($record->znuny_ticket_id) : null)
+                    ->openUrlInNewTab(),
             ])
             ->toolbarActions([]);
     }

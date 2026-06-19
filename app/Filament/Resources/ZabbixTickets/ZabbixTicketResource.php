@@ -21,11 +21,11 @@ class ZabbixTicketResource extends Resource
 
     protected static string|\UnitEnum|null $navigationGroup = 'Znuny';
 
-    protected static ?string $navigationLabel = 'Znuny Tickets';
+    protected static ?string $navigationLabel = 'Linked Tickets';
 
-    protected static ?string $modelLabel = 'Znuny Ticket';
+    protected static ?string $modelLabel = 'Linked Ticket';
 
-    protected static ?string $pluralModelLabel = 'Znuny Tickets';
+    protected static ?string $pluralModelLabel = 'Linked Tickets';
 
     public static function infolist(Schema $schema): Schema
     {
