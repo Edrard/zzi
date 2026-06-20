@@ -29,15 +29,12 @@ class ZnunyManualTicketAutoCloseService
         }
 
         // 2. Prepare payload
-        // Using conservative 'closed successful' as instructed, with minimal notes.
+        // Using the flat ZnunyAgentList /TicketClose contract
         $payload = [
-            'State' => 'closed successful',
-            'Article' => [
-                'Kind' => 'internal_note',
-                'Subject' => 'Automatic ticket close',
-                'Body' => 'Closed automatically by Zabbix Znuny Integration after the linked Zabbix problem remained resolved.',
-                'ContentType' => 'text/plain; charset=utf8',
-            ],
+            'Kind' => 'internal_note',
+            'Subject' => 'Automatic ticket close',
+            'Body' => 'Closed automatically by Zabbix Znuny Integration after the linked Zabbix problem remained resolved.',
+            'Reason' => 'Automatic ticket close after linked Zabbix problem remained resolved.',
         ];
 
         // 3. Call Znuny controlled close endpoint
