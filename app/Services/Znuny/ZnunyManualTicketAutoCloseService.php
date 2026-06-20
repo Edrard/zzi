@@ -33,8 +33,9 @@ class ZnunyManualTicketAutoCloseService
         $payload = [
             'State' => 'closed successful',
             'Article' => [
-                'Subject' => 'Auto-Close',
-                'Body' => 'Zabbix problem resolved. Ticket auto-closed.',
+                'Kind' => 'internal_note',
+                'Subject' => 'Automatic ticket close',
+                'Body' => 'Closed automatically by Zabbix Znuny Integration after the linked Zabbix problem remained resolved.',
                 'ContentType' => 'text/plain; charset=utf8',
             ],
         ];

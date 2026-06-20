@@ -62,7 +62,9 @@ class AutoCloseManualTicketsCommandTest extends TestCase
         $clientMock->shouldReceive('closeTicket')
             ->once()
             ->with(100, \Mockery::on(function ($payload) {
-                return $payload['State'] === 'closed successful';
+                return $payload['State'] === 'closed successful'
+                    && isset($payload['Article']['Kind'])
+                    && $payload['Article']['Kind'] === 'internal_note';
             }))
             ->andReturn([
                 'success' => true,
