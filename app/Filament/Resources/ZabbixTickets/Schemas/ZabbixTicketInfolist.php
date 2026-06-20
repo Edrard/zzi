@@ -12,7 +12,7 @@ class ZabbixTicketInfolist
 {
     private static function formatLabel(string $label): HtmlString
     {
-        return new HtmlString('<span class="linked-ticket-detail-label">'.e($label).'</span>');
+        return new HtmlString('<span style="color: light-dark(#6b7280, #bbb); font-weight: 400;">'.e($label).'</span>');
     }
 
     public static function configure(Schema $schema): Schema
