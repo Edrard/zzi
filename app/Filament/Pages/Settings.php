@@ -13,6 +13,7 @@ use App\Services\Znuny\ZnunyQueueHostMappingSchemaBuilder;
 use App\Services\Znuny\ZnunyQueueHostMappingService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -226,7 +227,7 @@ class Settings extends Page implements HasForms
         $initialData = $this->data ?? [];
 
         foreach ($settings as $setting) {
-            if (in_array($setting->key, ['znuny_default_agent_login', 'znuny_default_agent_name'])) {
+            if (in_array($setting->key, ['znuny_default_agent_login', 'znuny_default_agent_name', 'manual_ticket_auto_close_enabled'])) {
                 continue;
             }
 
@@ -258,9 +259,9 @@ class Settings extends Page implements HasForms
                     'label' => 'Linked Ticket Sync Interval Minutes',
                     'description' => 'How often scheduled linked-ticket synchronization should run.',
                 ],
-                'manual_ticket_auto_close_enabled' => [
-                    'label' => 'Enable Automatic Close',
-                    'description' => 'Automatically close manually created linked tickets when their Zabbix problem remains resolved long enough.',
+                'manual_ticket_auto_close_schedule_mode' => [
+                    'label' => 'Manual Ticket Auto-close Scheduler Mode',
+                    'description' => 'Controls how the scheduler handles auto-closing of manual tickets.',
                 ],
                 'default_close_delay_hours' => [
                     'label' => 'Default Close Delay Hours',
@@ -360,6 +361,16 @@ class Settings extends Page implements HasForms
                     ->helperText($description)
                     ->rule('json')
                     ->required();
+            } elseif ($setting->key === 'manual_ticket_auto_close_schedule_mode') {
+                $component = Select::make($setting->key)
+                    ->label($label)
+                    ->helperText('disabled: scheduler will not auto-close manual tickets; dry_run: scheduler logs what would be closed without changing Znuny; execute: scheduler closes eligible manual tickets using the verified /TicketClose workflow.')
+                    ->options([
+                        'disabled' => 'Disabled',
+                        'dry_run' => 'Dry Run',
+                        'execute' => 'Execute',
+                    ])
+                    ->required();
             } else {
                 $input = TextInput::make($setting->key)
                     ->label($label)
@@ -390,7 +401,7 @@ class Settings extends Page implements HasForms
                 $groups['Znuny Sync'][] = $component;
             } elseif (str_starts_with($setting->key, 'znuny_')) {
                 $groups['Znuny'][$setting->key] = $component;
-            } elseif (in_array($setting->key, ['default_close_delay_hours', 'default_reopen_window_hours', 'manual_ticket_auto_close_enabled', 'manual_ticket_flap_threshold', 'manual_ticket_extra_flapping_delay_hours'])) {
+            } elseif (in_array($setting->key, ['default_close_delay_hours', 'default_reopen_window_hours', 'manual_ticket_auto_close_schedule_mode', 'manual_ticket_flap_threshold', 'manual_ticket_extra_flapping_delay_hours'])) {
                 $groups['Automation'][$setting->key] = $component;
             } else {
                 $groups['Other'][] = $component;
@@ -609,7 +620,7 @@ class Settings extends Page implements HasForms
                 ->tabs([
                     Tab::make('Manual tickets')
                         ->schema(array_filter([
-                            $a['manual_ticket_auto_close_enabled'] ?? null,
+                            $a['manual_ticket_auto_close_schedule_mode'] ?? null,
                             $a['default_close_delay_hours'] ?? null,
                             $a['default_reopen_window_hours'] ?? null,
                             $a['manual_ticket_flap_threshold'] ?? null,

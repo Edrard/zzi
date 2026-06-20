@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\ZabbixTicket;
+use App\Services\AuditLogger;
 use App\Services\Znuny\ZnunyManualTicketAutoCloseService;
 use App\Services\Znuny\ZnunyManualTicketCloseCandidateService;
 use Illuminate\Console\Command;
@@ -69,6 +70,21 @@ class AutoCloseManualTicketsCommand extends Command
                 ]);
             }
 
+            if (count($candidates) > 0) {
+                AuditLogger::log(
+                    'znuny.auto_close.dry_run',
+                    'system',
+                    null,
+                    [
+                        'summary' => $summary,
+                        'candidates' => array_map(fn ($r) => [
+                            'ticket_number' => $r['ticket_number'],
+                            'reason' => $r['reason'],
+                        ], $candidates),
+                    ]
+                );
+            }
+
             if ($json) {
                 $this->line(json_encode([
                     'mode' => 'dry-run',
@@ -121,10 +137,31 @@ class AutoCloseManualTicketsCommand extends Command
 
             if ($outcome['success']) {
                 $summary['closed']++;
+                AuditLogger::log(
+                    'znuny.auto_close.success',
+                    'zabbix_ticket',
+                    $ticket->id,
+                    [
+                        'ticket_number' => $ticket->znuny_ticket_number,
+                        'host' => $ticket->zabbix_host_name,
+                        'problem' => $ticket->zabbix_problem_name,
+                    ]
+                );
             } elseif ($outcome['skipped']) {
                 $summary['skipped']++;
             } else {
                 $summary['failed']++;
+                AuditLogger::log(
+                    'znuny.auto_close.failed',
+                    'zabbix_ticket',
+                    $ticket->id,
+                    [
+                        'ticket_number' => $ticket->znuny_ticket_number,
+                        'host' => $ticket->zabbix_host_name,
+                        'problem' => $ticket->zabbix_problem_name,
+                        'reason' => $outcome['reason'],
+                    ]
+                );
             }
         }
 

@@ -26,7 +26,7 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
             'polled_at' => now()->toIso8601String(),
         ]));
 
-        Setting::updateOrCreate(['key' => 'manual_ticket_auto_close_enabled'], ['value' => 'true', 'type' => 'boolean']);
+        Setting::updateOrCreate(['key' => 'manual_ticket_auto_close_schedule_mode'], ['value' => 'execute', 'type' => 'string']);
         Setting::updateOrCreate(['key' => 'default_close_delay_hours'], ['value' => '4', 'type' => 'integer']);
         Setting::updateOrCreate(['key' => 'manual_ticket_flap_threshold'], ['value' => '3', 'type' => 'integer']);
         Setting::updateOrCreate(['key' => 'manual_ticket_extra_flapping_delay_hours'], ['value' => '24', 'type' => 'integer']);
@@ -151,34 +151,6 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
         $ticket->refresh();
         $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_CLOSE_CANDIDATE, $ticket->manual_lifecycle_status);
         $this->assertEquals(1, $stats['close_candidate']);
-    }
-
-    public function test_auto_close_disabled()
-    {
-        Carbon::setTestNow(now());
-        Setting::updateOrCreate(['key' => 'manual_ticket_auto_close_enabled'], ['value' => 'false', 'type' => 'boolean']);
-
-        $ticket = ZabbixTicket::create([
-            'zabbix_event_id' => 'evt1',
-            'zabbix_trigger_id' => 'trg1',
-            'zabbix_host_id' => 'host1',
-            'zabbix_host_name' => 'Host 1',
-            'zabbix_problem_name' => 'Problem 1',
-            'zabbix_severity' => 4,
-            'zabbix_started_at' => now()->subDays(2),
-            'znuny_ticket_id' => 100,
-            'znuny_ticket_number' => '1000',
-            'creation_source' => 'manual',
-            'znuny_ticket_state_type' => 'open',
-            'zabbix_problem_is_active' => false,
-            'zabbix_problem_resolved_at' => now()->subHours(5), // Usually ready, but disabled
-        ]);
-
-        $service = app(ZnunyManualTicketLifecycleService::class);
-        $stats = $service->evaluate();
-
-        $ticket->refresh();
-        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_RESOLVED_WAITING, $ticket->manual_lifecycle_status);
     }
 
     public function test_flap_counter()

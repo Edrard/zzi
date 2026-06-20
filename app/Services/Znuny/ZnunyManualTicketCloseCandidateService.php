@@ -3,7 +3,6 @@
 namespace App\Services\Znuny;
 
 use App\Models\ZabbixTicket;
-use App\Services\SettingsService;
 use Illuminate\Support\Carbon;
 
 class ZnunyManualTicketCloseCandidateService
@@ -20,8 +19,6 @@ class ZnunyManualTicketCloseCandidateService
         }
 
         $tickets = $query->get();
-
-        $autoCloseEnabled = SettingsService::bool('manual_ticket_auto_close_enabled', false);
 
         $report = [
             'candidates' => [],
@@ -62,12 +59,6 @@ class ZnunyManualTicketCloseCandidateService
 
             if ($ticket->manual_lifecycle_status !== ZnunyManualTicketLifecycleService::STATUS_CLOSE_CANDIDATE) {
                 $report['summary']['skipped_not_candidate']++;
-
-                continue;
-            }
-
-            if (! $autoCloseEnabled) {
-                $report['summary']['skipped_auto_close_disabled']++;
 
                 continue;
             }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Setting;
 use App\Services\SettingsService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -40,6 +41,30 @@ if ($syncInterval > 0) {
     // We can just use cron safely clamped to 59, or use modulo logic.
     $interval = min($syncInterval, 59);
     Schedule::command('znuny:sync-linked-tickets')
+        ->cron("*/{$interval} * * * *")
+        ->withoutOverlapping();
+}
+
+$autoCloseMode = 'execute';
+try {
+    $autoCloseMode = SettingsService::string('manual_ticket_auto_close_schedule_mode', 'execute');
+    // Migration fallback for environments without the new setting but having the old one.
+    if (! Setting::where('key', 'manual_ticket_auto_close_schedule_mode')->exists()) {
+        $oldEnabled = SettingsService::bool('manual_ticket_auto_close_enabled', true);
+        $autoCloseMode = $oldEnabled ? 'execute' : 'disabled';
+    }
+} catch (Throwable $e) {
+    // Database or settings table might not exist yet
+}
+
+if ($autoCloseMode === 'dry_run' && $syncInterval > 0) {
+    $interval = min($syncInterval, 59);
+    Schedule::command('znuny:auto-close-manual-tickets')
+        ->cron("*/{$interval} * * * *")
+        ->withoutOverlapping();
+} elseif ($autoCloseMode === 'execute' && $syncInterval > 0) {
+    $interval = min($syncInterval, 59);
+    Schedule::command('znuny:auto-close-manual-tickets --execute')
         ->cron("*/{$interval} * * * *")
         ->withoutOverlapping();
 }

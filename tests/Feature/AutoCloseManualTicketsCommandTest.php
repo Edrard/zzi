@@ -16,7 +16,7 @@ class AutoCloseManualTicketsCommandTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        Setting::updateOrCreate(['key' => 'manual_ticket_auto_close_enabled'], ['value' => 'true', 'type' => 'boolean']);
+        Setting::updateOrCreate(['key' => 'manual_ticket_auto_close_schedule_mode'], ['value' => 'execute', 'type' => 'string']);
     }
 
     private function createCandidateTicket($overrides = [])
@@ -93,26 +93,6 @@ class AutoCloseManualTicketsCommandTest extends TestCase
         $this->assertEquals('closed', $ticket->znuny_ticket_state_type);
     }
 
-    public function test_execute_rechecks_eligibility_and_skips()
-    {
-        $ticket = $this->createCandidateTicket();
-
-        // Simulate that after finding candidates, before executing close, it's no longer eligible
-        // We can do this by setting setting to false right before execution,
-        // or simulating a mock that changes the DB.
-        // Actually, let's just make sure the service re-reads the DB.
-        Setting::updateOrCreate(['key' => 'manual_ticket_auto_close_enabled'], ['value' => 'false', 'type' => 'boolean']);
-
-        $clientMock = $this->mock(ZnunyClient::class);
-        $clientMock->shouldNotReceive('closeTicket');
-
-        $this->artisan('znuny:auto-close-manual-tickets --execute')
-            ->assertSuccessful()
-            ->expectsOutputToContain('Auto-closing manual tickets (EXECUTE MODE)...');
-
-        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_CLOSE_CANDIDATE, ZabbixTicket::first()->manual_lifecycle_status);
-    }
-
     public function test_skips_closed_znuny_snapshot()
     {
         $this->createCandidateTicket(['znuny_ticket_state_type' => 'closed']);
@@ -127,18 +107,6 @@ class AutoCloseManualTicketsCommandTest extends TestCase
     public function test_skips_cache_stale()
     {
         $this->createCandidateTicket(['manual_lifecycle_status' => ZnunyManualTicketLifecycleService::STATUS_CACHE_STALE]);
-
-        $clientMock = $this->mock(ZnunyClient::class);
-        $clientMock->shouldNotReceive('closeTicket');
-
-        $this->artisan('znuny:auto-close-manual-tickets --execute')
-            ->assertSuccessful();
-    }
-
-    public function test_skips_auto_close_disabled()
-    {
-        Setting::updateOrCreate(['key' => 'manual_ticket_auto_close_enabled'], ['value' => 'false', 'type' => 'boolean']);
-        $this->createCandidateTicket();
 
         $clientMock = $this->mock(ZnunyClient::class);
         $clientMock->shouldNotReceive('closeTicket');

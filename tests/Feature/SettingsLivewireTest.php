@@ -55,4 +55,58 @@ class SettingsLivewireTest extends TestCase
         $this->assertEquals('Queue1', $val[0]['queue_name']);
         $this->assertEquals('Note', $val[0]['note']);
     }
+
+    public function test_manual_ticket_auto_close_schedule_mode_is_in_automation_tab_and_no_other_tab()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+
+        $form = $component->instance()->getForm('form');
+        $schema = $form->getComponents();
+
+        // Recursively search for components
+        $foundMode = false;
+        $foundEnabled = false;
+        $foundOtherTab = false;
+        $automationTabModeFound = false;
+
+        $search = function ($components, $parentGroupName = null) use (&$search, &$foundMode, &$foundEnabled, &$foundOtherTab, &$automationTabModeFound) {
+            foreach ($components as $c) {
+                $type = class_basename($c);
+                $name = method_exists($c, 'getName') ? $c->getName() : null;
+                $label = method_exists($c, 'getLabel') ? $c->getLabel() : null;
+
+                if ($type === 'Tab' && $label === 'Other') {
+                    $foundOtherTab = true;
+                }
+
+                if ($type === 'Tab' && $label === 'Manual tickets') {
+                    $parentGroupName = 'Manual tickets';
+                }
+
+                if ($name === 'manual_ticket_auto_close_enabled') {
+                    $foundEnabled = true;
+                }
+
+                if ($name === 'manual_ticket_auto_close_schedule_mode') {
+                    $foundMode = true;
+                    if ($parentGroupName === 'Manual tickets') {
+                        $automationTabModeFound = true;
+                    }
+                }
+
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents(), $parentGroupName);
+                }
+            }
+        };
+
+        $search($schema);
+
+        $this->assertTrue($foundMode, 'manual_ticket_auto_close_schedule_mode should be rendered');
+        $this->assertFalse($foundEnabled, 'manual_ticket_auto_close_enabled should not be rendered');
+        $this->assertFalse($foundOtherTab, 'Other tab should not be rendered when empty');
+        $this->assertTrue($automationTabModeFound, 'manual_ticket_auto_close_schedule_mode should be in Automation -> Manual tickets tab');
+    }
 }

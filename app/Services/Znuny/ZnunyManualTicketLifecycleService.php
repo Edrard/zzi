@@ -49,7 +49,6 @@ class ZnunyManualTicketLifecycleService
             'failed' => 0,
         ];
 
-        $autoCloseEnabled = SettingsService::bool('manual_ticket_auto_close_enabled', false);
         $closeDelayHours = SettingsService::int('default_close_delay_hours', 4);
         $flapThreshold = SettingsService::int('manual_ticket_flap_threshold', 3);
         $flapDelayHours = SettingsService::int('manual_ticket_extra_flapping_delay_hours', 24);
@@ -153,7 +152,7 @@ class ZnunyManualTicketLifecycleService
 
                 $ticket->manual_close_eligible_at = (clone $ticket->zabbix_problem_resolved_at)->addHours($delayHours);
 
-                if ($autoCloseEnabled && $now->greaterThanOrEqualTo($ticket->manual_close_eligible_at)) {
+                if ($now->greaterThanOrEqualTo($ticket->manual_close_eligible_at)) {
                     $ticket->manual_lifecycle_status = self::STATUS_CLOSE_CANDIDATE;
                     $stats['close_candidate']++;
                 } else {

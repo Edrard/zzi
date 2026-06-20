@@ -17,7 +17,7 @@ class ZnunyManualTicketCloseCandidateServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        Setting::updateOrCreate(['key' => 'manual_ticket_auto_close_enabled'], ['value' => 'true', 'type' => 'boolean']);
+        Setting::updateOrCreate(['key' => 'manual_ticket_auto_close_schedule_mode'], ['value' => 'execute', 'type' => 'string']);
     }
 
     public function test_finds_close_candidate()
@@ -192,33 +192,6 @@ class ZnunyManualTicketCloseCandidateServiceTest extends TestCase
 
         $this->assertCount(0, $report['candidates']);
         $this->assertEquals(1, $report['summary']['skipped_future_eligibility']);
-    }
-
-    public function test_auto_close_disabled()
-    {
-        Setting::updateOrCreate(['key' => 'manual_ticket_auto_close_enabled'], ['value' => 'false', 'type' => 'boolean']);
-
-        ZabbixTicket::create([
-            'zabbix_event_id' => 'evt1',
-            'zabbix_trigger_id' => 'trg1',
-            'zabbix_host_id' => 'host1',
-            'zabbix_host_name' => 'Host 1',
-            'zabbix_problem_name' => 'Problem 1',
-            'zabbix_severity' => 4,
-            'zabbix_started_at' => now(),
-            'znuny_ticket_id' => 100,
-            'znuny_ticket_number' => '1000',
-            'creation_source' => 'manual',
-            'znuny_ticket_state_type' => 'open',
-            'manual_lifecycle_status' => ZnunyManualTicketLifecycleService::STATUS_CLOSE_CANDIDATE,
-            'manual_close_eligible_at' => now()->subMinute(),
-        ]);
-
-        $service = app(ZnunyManualTicketCloseCandidateService::class);
-        $report = $service->review();
-
-        $this->assertCount(0, $report['candidates']);
-        $this->assertEquals(1, $report['summary']['skipped_auto_close_disabled']);
     }
 
     public function test_command_output()
