@@ -6,19 +6,25 @@ use App\Models\ZabbixTicket;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Support\HtmlString;
 
 class ZabbixTicketInfolist
 {
+    private static function formatLabel(string $label): HtmlString
+    {
+        return new HtmlString('<span style="color: #bbb; font-weight: normal;">'.e($label).'</span>');
+    }
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
             ->components([
                 Section::make('Ticket')
                     ->schema([
-                        TextEntry::make('znuny_ticket_number')->label('Ticket Number')->inlineLabel()->placeholder('-'),
-                        TextEntry::make('created_at')->label('Ticket Age')->since()->inlineLabel()->placeholder('-'),
+                        TextEntry::make('znuny_ticket_number')->label(self::formatLabel('Ticket Number'))->inlineLabel()->placeholder('-'),
+                        TextEntry::make('created_at')->label(self::formatLabel('Ticket Age'))->since()->inlineLabel()->placeholder('-'),
                         TextEntry::make('resolution_context')
-                            ->label('Resolution Context')
+                            ->label(self::formatLabel('Resolution Context'))
                             ->state(function (ZabbixTicket $record) {
                                 $isClosed = strtolower($record->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $record->znuny_state_name), 'closed');
                                 if ($isClosed) {
@@ -81,23 +87,23 @@ class ZabbixTicketInfolist
 
                 Section::make('Zabbix')
                     ->schema([
-                        TextEntry::make('zabbix_host_name')->label('Host')->inlineLabel()->placeholder('-'),
-                        TextEntry::make('zabbix_problem_name')->label('Problem')->inlineLabel()->placeholder('-'),
+                        TextEntry::make('zabbix_host_name')->label(self::formatLabel('Host'))->inlineLabel()->placeholder('-'),
+                        TextEntry::make('zabbix_problem_name')->label(self::formatLabel('Problem'))->inlineLabel()->placeholder('-'),
                     ])->columns(1),
 
                 Section::make('Znuny Snapshot')
                     ->schema([
-                        TextEntry::make('znuny_queue_name')->label('Queue')->inlineLabel()->placeholder('-'),
-                        TextEntry::make('znuny_owner_name')->label('Owner')->inlineLabel()->placeholder('-'),
-                        TextEntry::make('znuny_priority')->label('Priority')->inlineLabel()->placeholder('-'),
-                        TextEntry::make('znuny_state_name')->label('State')->inlineLabel()->placeholder('-'),
+                        TextEntry::make('znuny_queue_name')->label(self::formatLabel('Queue'))->inlineLabel()->placeholder('-'),
+                        TextEntry::make('znuny_owner_name')->label(self::formatLabel('Owner'))->inlineLabel()->placeholder('-'),
+                        TextEntry::make('znuny_priority')->label(self::formatLabel('Priority'))->inlineLabel()->placeholder('-'),
+                        TextEntry::make('znuny_state_name')->label(self::formatLabel('State'))->inlineLabel()->placeholder('-'),
                     ])->columns(1),
 
                 Section::make('Sync')
                     ->schema([
-                        TextEntry::make('znuny_ticket_last_checked_at')->label('Last Checked')->dateTime()->inlineLabel()->placeholder('-'),
-                        TextEntry::make('znuny_ticket_last_synced_at')->label('Last Synced')->dateTime()->inlineLabel()->placeholder('-'),
-                        TextEntry::make('znuny_ticket_sync_error')->label('Sync Error')
+                        TextEntry::make('znuny_ticket_last_checked_at')->label(self::formatLabel('Last Checked'))->dateTime()->inlineLabel()->placeholder('-'),
+                        TextEntry::make('znuny_ticket_last_synced_at')->label(self::formatLabel('Last Synced'))->dateTime()->inlineLabel()->placeholder('-'),
+                        TextEntry::make('znuny_ticket_sync_error')->label(self::formatLabel('Sync Error'))
                             ->color('danger')
                             ->inlineLabel()
                             ->placeholder('-'),
