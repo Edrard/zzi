@@ -377,6 +377,9 @@ class CurrentZabbixProblems extends Page
             $this->ticketValidationWarnings = [];
             $this->ticketValidationStatus = 'validating';
 
+            $hostId = (string) ($this->ticketModalProblem['hosts'][0]['hostid'] ?? '');
+            $triggerId = (string) ($this->ticketModalProblem['objectid'] ?? $this->ticketModalProblem['triggerid'] ?? '');
+
             $service = app(ZnunyTicketCreationService::class);
             $result = $service->createTicketForProblem(
                 (string) $this->ticketModalEventId,
@@ -387,7 +390,9 @@ class CurrentZabbixProblems extends Page
                 (string) $this->ticketCustomerUser,
                 (string) $this->ticketTextTitle,
                 (string) $this->ticketTextArticleSubject,
-                (string) $this->ticketTextArticleBody
+                (string) $this->ticketTextArticleBody,
+                $hostId === '' ? null : $hostId,
+                $triggerId === '' ? null : $triggerId
             );
 
             if ($result['success']) {

@@ -9,7 +9,6 @@ use App\Services\Znuny\ZabbixTicketLinkService;
 use Exception;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ZabbixTicketLinkServiceTest extends TestCase

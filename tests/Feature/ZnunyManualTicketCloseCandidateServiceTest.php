@@ -169,6 +169,30 @@ class ZnunyManualTicketCloseCandidateServiceTest extends TestCase
         $this->assertEquals(1, $report['summary']['skipped_cache_stale']);
     }
 
+    public function test_skips_identity_missing()
+    {
+        ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => null,
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'zabbix_severity' => 4,
+            'zabbix_started_at' => now(),
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open',
+            'manual_lifecycle_status' => ZnunyManualTicketLifecycleService::STATUS_IDENTITY_MISSING,
+        ]);
+
+        $service = app(ZnunyManualTicketCloseCandidateService::class);
+        $report = $service->review();
+
+        $this->assertCount(0, $report['candidates']);
+        $this->assertEquals(1, $report['summary']['skipped_identity_missing']);
+    }
+
     public function test_skips_future_eligibility()
     {
         ZabbixTicket::create([

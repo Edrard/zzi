@@ -213,8 +213,14 @@ class LinkedTicketsPageTest extends TestCase
             'manual_lifecycle_status' => 'active', 'zabbix_problem_is_active' => true, 'znuny_ticket_state_type' => 'closed', 'znuny_state_name' => 'closed successful',
         ]);
 
+        // 9. manual_lifecycle_status = identity_missing -> Unknown
+        $ticket9 = ZabbixTicket::create([
+            'zabbix_event_id' => '9', 'zabbix_trigger_id' => '9', 'zabbix_host_id' => '9', 'zabbix_host_name' => 'host9', 'zabbix_problem_name' => 'prob9', 'zabbix_severity' => 9, 'zabbix_started_at' => now(), 'znuny_ticket_id' => 9, 'znuny_ticket_number' => '9', 'creation_source' => 'manual',
+            'manual_lifecycle_status' => 'identity_missing', 'zabbix_problem_is_active' => false, 'znuny_ticket_state_type' => 'open',
+        ]);
+
         Livewire::test(ListZabbixTickets::class)
-            ->assertCanSeeTableRecords([$ticket1, $ticket2, $ticket3, $ticket4, $ticket5, $ticket6, $ticket7, $ticket8])
+            ->assertCanSeeTableRecords([$ticket1, $ticket2, $ticket3, $ticket4, $ticket5, $ticket6, $ticket7, $ticket8, $ticket9])
             ->assertSeeHtml('Active') // from ticket1 and ticket2
             ->assertSeeHtml('Waiting') // ticket3
             ->assertSeeHtml('Ready') // ticket4

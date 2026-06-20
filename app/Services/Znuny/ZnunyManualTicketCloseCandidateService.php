@@ -57,6 +57,15 @@ class ZnunyManualTicketCloseCandidateService
                 continue;
             }
 
+            if ($ticket->manual_lifecycle_status === ZnunyManualTicketLifecycleService::STATUS_IDENTITY_MISSING || empty($ticket->zabbix_host_id) || empty($ticket->zabbix_trigger_id)) {
+                if (! isset($report['summary']['skipped_identity_missing'])) {
+                    $report['summary']['skipped_identity_missing'] = 0;
+                }
+                $report['summary']['skipped_identity_missing']++;
+
+                continue;
+            }
+
             if ($ticket->manual_lifecycle_status !== ZnunyManualTicketLifecycleService::STATUS_CLOSE_CANDIDATE) {
                 $report['summary']['skipped_not_candidate']++;
 

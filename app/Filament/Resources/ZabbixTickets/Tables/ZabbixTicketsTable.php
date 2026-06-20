@@ -170,6 +170,9 @@ class ZabbixTicketsTable
                         if ($record->manual_lifecycle_status === 'cache_stale') {
                             return 'Zabbix problem cache may be stale. Waiting for sync.';
                         }
+                        if ($record->manual_lifecycle_status === 'identity_missing') {
+                            return 'Missing Zabbix host/trigger identity; lifecycle cannot be evaluated safely.';
+                        }
                         if ($record->manual_lifecycle_status === 'active' || $record->zabbix_problem_is_active === true) {
                             return 'Linked Zabbix problem is still active.';
                         }

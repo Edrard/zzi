@@ -6,6 +6,7 @@ use App\Models\Setting;
 use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyLookupService;
+use App\Services\Znuny\ZnunyQueueService;
 use App\Services\Znuny\ZnunyTicketDefaultRuleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -37,10 +38,11 @@ class ZnunyAdvancedLookupTest extends TestCase
 
     private function getLookupService(): ZnunyLookupService
     {
-        $mockQueueService = \Mockery::mock(\App\Services\Znuny\ZnunyQueueService::class);
-        $mockQueueService->shouldReceive('findQueueByName')->andReturnUsing(function($name) {
+        $mockQueueService = \Mockery::mock(ZnunyQueueService::class);
+        $mockQueueService->shouldReceive('findQueueByName')->andReturnUsing(function ($name) {
             return (new ZnunyClient)->getQueueByName($name);
         });
+
         return new ZnunyLookupService(new ZnunyTicketDefaultRuleService, new ZnunyClient, $mockQueueService);
     }
 

@@ -81,6 +81,7 @@ class ZabbixTicketLinkService
                     'zabbix_problem_name' => $data['zabbix_problem_name'],
                     'zabbix_severity' => $data['zabbix_severity'] ?? null,
                     'zabbix_started_at' => $data['zabbix_started_at'] ?? null,
+                    'creation_source' => $data['creation_source'] ?? 'manual',
                     'znuny_ticket_id' => $data['znuny_ticket_id'],
                     'znuny_ticket_number' => $data['znuny_ticket_number'],
                     'znuny_queue_id' => $data['znuny_queue_id'] ?? null,

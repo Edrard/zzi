@@ -36,8 +36,11 @@ class ZabbixTicketInfolist
                                 if ($record->manual_lifecycle_status === 'cache_stale') {
                                     return 'Cache stale';
                                 }
+                                if ($record->manual_lifecycle_status === 'identity_missing') {
+                                    return 'Missing Zabbix host/trigger identity; lifecycle cannot be evaluated safely.';
+                                }
                                 if ($record->manual_lifecycle_status === 'active' || $record->zabbix_problem_is_active === true) {
-                                    return 'Active';
+                                    return 'Zabbix problem is still active.';
                                 }
 
                                 return 'Unknown';
@@ -65,6 +68,13 @@ class ZabbixTicketInfolist
                                 }
 
                                 return 'gray';
+                            })
+                            ->tooltip(function (ZabbixTicket $record) {
+                                if ($record->manual_lifecycle_status === 'identity_missing') {
+                                    return 'Missing Zabbix host/trigger identity; lifecycle cannot be evaluated safely.';
+                                }
+
+                                return null;
                             })->columnSpanFull(),
                     ])->columns(2),
 

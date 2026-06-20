@@ -9,6 +9,7 @@ use App\Models\ZabbixTicket;
 use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixProblemCache;
 use App\Services\Znuny\ZnunyAgentService;
+use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketCreationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -256,7 +257,9 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
                 'TestCompanyClients',
                 'Test Title',
                 'Test Subject',
-                'Test Body'
+                'Test Body',
+                '2001',
+                '3001'
             )
             ->andReturn([
                 'success' => true,
@@ -273,6 +276,8 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
                 'eventid' => '1001',
                 'host_name' => 'TestCompany swiss test01',
                 'name' => 'TestCompany CPU Load',
+                'objectid' => '3001',
+                'hosts' => [['hostid' => '2001']],
             ])
             ->set('ticketOwnerId', '10')
             ->set('ticketQueue', 'TestCompany')
@@ -285,6 +290,51 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->assertSet('ticketValidationStatus', 'success')
             ->assertSet('isTicketTextModalOpen', false)
             ->assertNotified();
+    }
+
+    public function test_create_ticket_persists_identity_and_stores_local_record()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        // Mock the HTTP client instead of the service to test full local DB insertion
+        $clientMock = $this->mock(ZnunyClient::class);
+        $clientMock->shouldReceive('validateTicketCreate')->andReturn([
+            'valid' => true,
+            'errors' => [],
+            'warnings' => [],
+        ]);
+        $clientMock->shouldReceive('createTicket')->andReturn([
+            'success' => true,
+            'ticket_id' => 7777,
+            'ticket_number' => 'TN777777',
+            'warnings' => [],
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->set('ticketModalEventId', '1005')
+            ->set('ticketModalProblem', [
+                'eventid' => '1005',
+                'host_name' => 'TestCompany swiss test05',
+                'name' => 'TestCompany Memory Load',
+                'objectid' => '3005',
+                'hosts' => [['hostid' => '2005']],
+            ])
+            ->set('ticketOwnerId', '10')
+            ->set('ticketQueue', 'TestCompany')
+            ->set('ticketCustomerUser', 'TestCompanyClients')
+            ->set('ticketTextTitle', 'Test Title')
+            ->set('ticketTextArticleSubject', 'Test Subject')
+            ->set('ticketTextArticleBody', 'Test Body')
+            ->call('createZnunyTicket')
+            ->assertSet('ticketValidationStatus', 'success');
+
+        $ticket = ZabbixTicket::where('zabbix_event_id', '1005')->first();
+        $this->assertNotNull($ticket);
+        $this->assertEquals('2005', $ticket->zabbix_host_id);
+        $this->assertEquals('3005', $ticket->zabbix_trigger_id);
+        $this->assertEquals('TestCompany swiss test05', $ticket->zabbix_host_name);
+        $this->assertEquals('TestCompany Memory Load', $ticket->zabbix_problem_name);
     }
 
     public function test_create_ticket_failure()

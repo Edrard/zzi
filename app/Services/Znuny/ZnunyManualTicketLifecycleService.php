@@ -23,6 +23,8 @@ class ZnunyManualTicketLifecycleService
 
     public const STATUS_CACHE_STALE = 'cache_stale';
 
+    public const STATUS_IDENTITY_MISSING = 'identity_missing';
+
     public function __construct(
         protected ZabbixProblemCache $cache
     ) {}
@@ -45,6 +47,7 @@ class ZnunyManualTicketLifecycleService
             'close_candidate' => 0,
             'flapping' => 0,
             'closed' => 0,
+            'identity_missing' => 0,
             'skipped' => 0,
             'failed' => 0,
         ];
@@ -78,6 +81,19 @@ class ZnunyManualTicketLifecycleService
             $stats['scanned']++;
 
             try {
+                if (empty($ticket->zabbix_host_id) || empty($ticket->zabbix_trigger_id)) {
+                    $ticket->manual_lifecycle_status = self::STATUS_IDENTITY_MISSING;
+                    $ticket->manual_lifecycle_last_checked_at = $now;
+                    $ticket->zabbix_problem_is_active = null;
+                    $ticket->zabbix_problem_resolved_at = null;
+                    $ticket->manual_close_eligible_at = null;
+                    $ticket->save();
+                    $stats['identity_missing']++;
+                    $stats['skipped']++;
+
+                    continue;
+                }
+
                 if ($ticket->znuny_ticket_state_type === 'closed') {
                     $ticket->manual_lifecycle_status = self::STATUS_CLOSED;
                     $ticket->manual_lifecycle_last_checked_at = $now;

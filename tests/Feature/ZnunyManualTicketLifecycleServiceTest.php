@@ -465,4 +465,95 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
         $this->assertEquals(now()->subHours(1)->toDateTimeString(), $ticket->zabbix_problem_resolved_at->toDateTimeString());
         $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_CACHE_STALE, $ticket->manual_lifecycle_status);
     }
+
+    public function test_missing_host_id_sets_identity_missing()
+    {
+        Carbon::setTestNow(now());
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => null,
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open',
+            'manual_lifecycle_status' => 'active',
+            'zabbix_problem_is_active' => true,
+        ]);
+
+        $service = app(ZnunyManualTicketLifecycleService::class);
+        $stats = $service->evaluate();
+
+        $ticket->refresh();
+
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_IDENTITY_MISSING, $ticket->manual_lifecycle_status);
+        $this->assertNull($ticket->zabbix_problem_is_active);
+        $this->assertNull($ticket->zabbix_problem_resolved_at);
+        $this->assertNull($ticket->manual_close_eligible_at);
+        $this->assertEquals(1, $stats['identity_missing']);
+    }
+
+    public function test_missing_trigger_id_sets_identity_missing()
+    {
+        Carbon::setTestNow(now());
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => null,
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open',
+            'manual_lifecycle_status' => 'close_candidate',
+            'zabbix_problem_resolved_at' => now()->subDays(1),
+            'manual_close_eligible_at' => now()->subHours(1),
+        ]);
+
+        $service = app(ZnunyManualTicketLifecycleService::class);
+        $stats = $service->evaluate();
+
+        $ticket->refresh();
+
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_IDENTITY_MISSING, $ticket->manual_lifecycle_status);
+        $this->assertNull($ticket->zabbix_problem_is_active);
+        $this->assertNull($ticket->zabbix_problem_resolved_at);
+        $this->assertNull($ticket->manual_close_eligible_at);
+        $this->assertEquals(1, $stats['identity_missing']);
+    }
+
+    public function test_missing_both_identity_sets_identity_missing()
+    {
+        Carbon::setTestNow(now());
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => null,
+            'zabbix_host_id' => null,
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open',
+            'manual_lifecycle_status' => 'resolved_waiting',
+            'zabbix_problem_resolved_at' => now()->subHours(1),
+        ]);
+
+        $service = app(ZnunyManualTicketLifecycleService::class);
+        $stats = $service->evaluate();
+
+        $ticket->refresh();
+
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_IDENTITY_MISSING, $ticket->manual_lifecycle_status);
+        $this->assertNull($ticket->zabbix_problem_is_active);
+        $this->assertNull($ticket->zabbix_problem_resolved_at);
+        $this->assertNull($ticket->manual_close_eligible_at);
+        $this->assertEquals(1, $stats['identity_missing']);
+    }
 }

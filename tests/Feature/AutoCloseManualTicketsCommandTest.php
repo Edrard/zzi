@@ -115,6 +115,17 @@ class AutoCloseManualTicketsCommandTest extends TestCase
             ->assertSuccessful();
     }
 
+    public function test_skips_identity_missing()
+    {
+        $this->createCandidateTicket(['manual_lifecycle_status' => ZnunyManualTicketLifecycleService::STATUS_IDENTITY_MISSING]);
+
+        $clientMock = $this->mock(ZnunyClient::class);
+        $clientMock->shouldNotReceive('closeTicket');
+
+        $this->artisan('znuny:auto-close-manual-tickets --execute')
+            ->assertSuccessful();
+    }
+
     public function test_skips_future_eligibility()
     {
         $this->createCandidateTicket(['manual_close_eligible_at' => now()->addMinutes(10)]);

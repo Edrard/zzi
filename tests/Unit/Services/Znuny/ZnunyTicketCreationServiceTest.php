@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Services\Znuny;
 
+use App\Models\ZabbixTicket;
 use App\Services\Znuny\ZabbixTicketLinkService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketCreationService;
@@ -174,7 +175,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
 
         $linkServiceMock->shouldReceive('existsForEventId')->once()->with('123')->andReturn(true);
         $linkServiceMock->shouldReceive('findByEventId')->once()->with('123')->andReturn(
-            new \App\Models\ZabbixTicket(['znuny_ticket_id' => 99, 'znuny_ticket_number' => 'TN99'])
+            new ZabbixTicket(['znuny_ticket_id' => 99, 'znuny_ticket_number' => 'TN99'])
         );
 
         $result = $service->createTicketForProblem('123', 'Host', 'Prob', 10, 'Q', 'CU', 'T', 'S', 'B');

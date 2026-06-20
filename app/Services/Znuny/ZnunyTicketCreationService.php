@@ -173,7 +173,9 @@ class ZnunyTicketCreationService
         string $customerUser,
         string $title,
         string $articleSubject,
-        string $articleBody
+        string $articleBody,
+        ?string $hostId = null,
+        ?string $triggerId = null
     ): array {
         $result = [
             'success' => false,
@@ -297,8 +299,11 @@ class ZnunyTicketCreationService
             try {
                 $this->linkService->create([
                     'zabbix_event_id' => $eventId,
+                    'zabbix_host_id' => $hostId,
+                    'zabbix_trigger_id' => $triggerId,
                     'zabbix_host_name' => $hostName,
                     'zabbix_problem_name' => $problemName,
+                    'creation_source' => 'manual',
                     'znuny_ticket_id' => $ticketId,
                     'znuny_ticket_number' => $ticketNumber,
                     'znuny_queue_name' => $queue,
