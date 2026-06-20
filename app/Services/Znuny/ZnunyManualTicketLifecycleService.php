@@ -21,6 +21,8 @@ class ZnunyManualTicketLifecycleService
 
     public const STATUS_NOT_APPLICABLE = 'not_applicable';
 
+    public const STATUS_CACHE_STALE = 'cache_stale';
+
     public function __construct(
         protected ZabbixProblemCache $cache
     ) {}
@@ -54,6 +56,24 @@ class ZnunyManualTicketLifecycleService
 
         $now = Carbon::now();
         $activeProblems = $this->cache->all();
+        $lastPoll = $this->cache->lastPoll();
+
+        $pollIntervalMinutes = SettingsService::int('zabbix_poll_interval_minutes', 1) ?? 1;
+        $maxStaleMinutes = max(2 * $pollIntervalMinutes, 2);
+
+        $isCacheFresh = false;
+        if ($lastPoll && isset($lastPoll['status']) && $lastPoll['status'] === 'success' && isset($lastPoll['polled_at'])) {
+            try {
+                $polledAt = Carbon::parse($lastPoll['polled_at']);
+                if ($polledAt->greaterThanOrEqualTo($now->copy()->subMinutes($maxStaleMinutes))) {
+                    $isCacheFresh = true;
+                }
+            } catch (\Throwable $e) {
+                // Ignore parse error, cache is stale
+            }
+        }
+
+        $stats['cache_stale'] = 0;
 
         foreach ($tickets as $ticket) {
             $stats['scanned']++;
@@ -64,6 +84,16 @@ class ZnunyManualTicketLifecycleService
                     $ticket->manual_lifecycle_last_checked_at = $now;
                     $ticket->save();
                     $stats['closed']++;
+
+                    continue;
+                }
+
+                if (! $isCacheFresh) {
+                    $ticket->manual_lifecycle_status = self::STATUS_CACHE_STALE;
+                    $ticket->manual_lifecycle_last_checked_at = $now;
+                    $ticket->save();
+                    $stats['cache_stale']++;
+                    $stats['skipped']++;
 
                     continue;
                 }

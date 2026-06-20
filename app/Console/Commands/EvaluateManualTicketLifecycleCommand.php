@@ -41,6 +41,7 @@ class EvaluateManualTicketLifecycleCommand extends Command
                 ['Close Candidate', $stats['close_candidate']],
                 ['Flapping', $stats['flapping']],
                 ['Closed', $stats['closed']],
+                ['Cache Stale', $stats['cache_stale']],
                 ['Skipped', $stats['skipped']],
                 ['Failed', $stats['failed']],
             ]

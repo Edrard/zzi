@@ -17,6 +17,7 @@ Artisan::command('inspire', function () {
 Schedule::command('app:poll-zabbix-problems')->everyMinute();
 Schedule::command('app:cleanup')->dailyAt('02:30');
 Schedule::command('app:collect-daily-statistics')->dailyAt('23:55');
+Schedule::command('znuny:evaluate-manual-ticket-lifecycle')->everyMinute()->withoutOverlapping();
 
 $syncInterval = 5;
 
