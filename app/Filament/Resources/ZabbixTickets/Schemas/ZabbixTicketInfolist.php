@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ZabbixTickets\Schemas;
 
+use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -23,6 +24,17 @@ class ZabbixTicketInfolist
                         TextEntry::make('zabbix_host_name')->label('Host')->placeholder('-'),
                         TextEntry::make('zabbix_problem_name')->label('Problem')->columnSpanFull()->placeholder('-'),
                     ])->columns(2),
+
+                Section::make('Lifecycle')
+                    ->schema([
+                        TextEntry::make('manual_lifecycle_status')->label('Status')->badge()->placeholder('-'),
+                        IconEntry::make('zabbix_problem_is_active')->label('Problem Active')->boolean()->placeholder('-'),
+                        TextEntry::make('zabbix_problem_resolved_at')->label('Resolved Since')->dateTime()->placeholder('-'),
+                        TextEntry::make('manual_close_eligible_at')->label('Close Eligible At')->dateTime()->placeholder('-'),
+                        TextEntry::make('manual_flap_count')->label('Flap Count')->placeholder('-'),
+                        TextEntry::make('manual_flapping_detected_at')->label('Flapping Since')->dateTime()->placeholder('-'),
+                    ])->columns(2)
+                    ->visible(fn ($record) => $record->creation_source === 'manual'),
 
                 Section::make('Znuny Snapshot')
                     ->schema([

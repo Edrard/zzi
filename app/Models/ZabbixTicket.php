@@ -33,6 +33,14 @@ class ZabbixTicket extends Model
         'znuny_ticket_sync_error',
         'znuny_ticket_snapshot_hash',
         'created_by',
+        'manual_lifecycle_status',
+        'zabbix_problem_is_active',
+        'zabbix_problem_last_seen_active_at',
+        'zabbix_problem_resolved_at',
+        'manual_close_eligible_at',
+        'manual_flap_count',
+        'manual_flapping_detected_at',
+        'manual_lifecycle_last_checked_at',
     ];
 
     protected function casts(): array
@@ -49,6 +57,13 @@ class ZabbixTicket extends Model
             'znuny_ticket_last_checked_at' => 'datetime',
             'znuny_ticket_last_synced_at' => 'datetime',
             'created_by' => 'integer',
+            'zabbix_problem_is_active' => 'boolean',
+            'zabbix_problem_last_seen_active_at' => 'datetime',
+            'zabbix_problem_resolved_at' => 'datetime',
+            'manual_close_eligible_at' => 'datetime',
+            'manual_flap_count' => 'integer',
+            'manual_flapping_detected_at' => 'datetime',
+            'manual_lifecycle_last_checked_at' => 'datetime',
         ];
     }
 
