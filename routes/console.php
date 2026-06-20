@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\SettingsService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -16,3 +17,28 @@ Artisan::command('inspire', function () {
 Schedule::command('app:poll-zabbix-problems')->everyMinute();
 Schedule::command('app:cleanup')->dailyAt('02:30');
 Schedule::command('app:collect-daily-statistics')->dailyAt('23:55');
+
+$syncInterval = 5;
+
+try {
+    $syncInterval = SettingsService::int('znuny_linked_ticket_sync_interval_minutes', 5);
+} catch (Throwable $e) {
+    // Database or settings table might not exist yet during testing or initial migrations
+}
+
+// Use default if null or strictly less than 0
+if ($syncInterval === null || $syncInterval < 0) {
+    $syncInterval = 5;
+}
+
+if ($syncInterval > 0) {
+    // Avoid cron string exceptions if interval > 59 by clamping it
+    // Wait, in Laravel ->cron("*/5 * * * *") works for 5.
+    // If it's over 59, it's safer to just clamp it or use ->everyNMinutes() if we want.
+    // But Laravel doesn't have an arbitrary everyNMinutes.
+    // We can just use cron safely clamped to 59, or use modulo logic.
+    $interval = min($syncInterval, 59);
+    Schedule::command('znuny:sync-linked-tickets')
+        ->cron("*/{$interval} * * * *")
+        ->withoutOverlapping();
+}

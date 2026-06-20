@@ -7,6 +7,7 @@ use App\Models\ZabbixTicket;
 use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyLinkedTicketSyncService;
 use App\Services\Znuny\ZnunyTicketSnapshotNormalizer;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -269,5 +270,52 @@ class SyncLinkedZnunyTicketsCommandTest extends TestCase
 
         $ticket->refresh();
         $this->assertEquals('open', $ticket->znuny_state_name); // Repaired!
+    }
+
+    public function test_scheduler_registers_sync_command_with_default_interval()
+    {
+        $schedule = app(Schedule::class);
+
+        $events = collect($schedule->events())->filter(function ($event) {
+            return str_contains($event->command, 'znuny:sync-linked-tickets');
+        });
+
+        $this->assertCount(1, $events);
+        $event = $events->first();
+        $this->assertEquals('*/5 * * * *', $event->expression);
+        $this->assertTrue($event->withoutOverlapping);
+    }
+
+    public function test_scheduler_respects_custom_interval_setting()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_linked_ticket_sync_interval_minutes'], ['value' => '15', 'type' => 'integer']);
+
+        // Re-resolve console routes
+        require base_path('routes/console.php');
+
+        $schedule = app(Schedule::class);
+        $events = collect($schedule->events())->filter(function ($event) {
+            return str_contains($event->command, 'znuny:sync-linked-tickets');
+        });
+
+        // The console.php adds to the Schedule singleton, so we'll just check the last one
+        $event = $events->last();
+        $this->assertEquals('*/15 * * * *', $event->expression);
+    }
+
+    public function test_scheduler_disables_sync_when_interval_is_zero()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_linked_ticket_sync_interval_minutes'], ['value' => '0', 'type' => 'integer']);
+
+        // We must clear the schedule to test it cleanly
+        $this->app->instance(Schedule::class, new Schedule);
+        require base_path('routes/console.php');
+
+        $schedule = app(Schedule::class);
+        $events = collect($schedule->events())->filter(function ($event) {
+            return str_contains($event->command, 'znuny:sync-linked-tickets');
+        });
+
+        $this->assertCount(0, $events);
     }
 }
