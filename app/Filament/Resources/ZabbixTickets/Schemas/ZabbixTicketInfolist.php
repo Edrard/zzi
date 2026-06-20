@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ZabbixTickets\Schemas;
 
+use App\Models\ZabbixTicket;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
@@ -17,6 +18,47 @@ class ZabbixTicketInfolist
                     ->schema([
                         TextEntry::make('znuny_ticket_number')->label('Ticket Number')->placeholder('-'),
                         TextEntry::make('created_at')->label('Ticket Age')->since()->placeholder('-'),
+                        TextEntry::make('resolution_context')
+                            ->label('Resolution Context')
+                            ->state(function (ZabbixTicket $record) {
+                                if (strtolower($record->znuny_ticket_state_type ?? '') === 'closed') {
+                                    return 'Closed';
+                                }
+                                if ($record->manual_lifecycle_status === 'close_candidate') {
+                                    return 'Ready to close';
+                                }
+                                if ($record->manual_lifecycle_status === 'resolved_waiting') {
+                                    return 'Resolved, waiting for close delay';
+                                }
+                                if ($record->manual_lifecycle_status === 'flapping') {
+                                    return 'Flapping detected';
+                                }
+                                if ($record->zabbix_problem_is_active === false) {
+                                    return 'Problem resolved';
+                                }
+
+                                return 'Problem active';
+                            })
+                            ->badge()
+                            ->color(function (ZabbixTicket $record) {
+                                if (strtolower($record->znuny_ticket_state_type ?? '') === 'closed') {
+                                    return 'gray';
+                                }
+                                if ($record->manual_lifecycle_status === 'close_candidate') {
+                                    return 'success';
+                                }
+                                if ($record->manual_lifecycle_status === 'resolved_waiting') {
+                                    return 'warning';
+                                }
+                                if ($record->manual_lifecycle_status === 'flapping') {
+                                    return 'danger';
+                                }
+                                if ($record->zabbix_problem_is_active === false) {
+                                    return 'info';
+                                }
+
+                                return 'danger';
+                            })->columnSpanFull(),
                     ])->columns(2),
 
                 Section::make('Zabbix')

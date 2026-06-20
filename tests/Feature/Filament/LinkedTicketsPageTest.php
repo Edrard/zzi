@@ -159,4 +159,112 @@ class LinkedTicketsPageTest extends TestCase
         Livewire::test(ListZabbixTickets::class)
             ->assertTableActionHasUrl('open_ticket', $url, $ticket);
     }
+
+    public function test_linked_tickets_resolution_context_badges_in_table()
+    {
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+
+        $ticket1 = ZabbixTicket::create([
+            'zabbix_event_id' => '1', 'zabbix_trigger_id' => '1', 'zabbix_host_id' => '1', 'zabbix_host_name' => 'host1', 'zabbix_problem_name' => 'prob1', 'zabbix_severity' => 1, 'zabbix_started_at' => now(), 'znuny_ticket_id' => 1, 'znuny_ticket_number' => '1', 'creation_source' => 'manual',
+            'manual_lifecycle_status' => 'close_candidate', 'zabbix_problem_is_active' => false, 'znuny_ticket_state_type' => 'open',
+        ]);
+
+        $ticket2 = ZabbixTicket::create([
+            'zabbix_event_id' => '2', 'zabbix_trigger_id' => '2', 'zabbix_host_id' => '2', 'zabbix_host_name' => 'host2', 'zabbix_problem_name' => 'prob2', 'zabbix_severity' => 2, 'zabbix_started_at' => now(), 'znuny_ticket_id' => 2, 'znuny_ticket_number' => '2', 'creation_source' => 'manual',
+            'manual_lifecycle_status' => 'active', 'zabbix_problem_is_active' => false, 'znuny_ticket_state_type' => 'open',
+        ]);
+
+        $ticket3 = ZabbixTicket::create([
+            'zabbix_event_id' => '3', 'zabbix_trigger_id' => '3', 'zabbix_host_id' => '3', 'zabbix_host_name' => 'host3', 'zabbix_problem_name' => 'prob3', 'zabbix_severity' => 3, 'zabbix_started_at' => now(), 'znuny_ticket_id' => 3, 'znuny_ticket_number' => '3', 'creation_source' => 'manual',
+            'manual_lifecycle_status' => 'active', 'zabbix_problem_is_active' => true, 'znuny_ticket_state_type' => 'open',
+        ]);
+
+        $ticket4 = ZabbixTicket::create([
+            'zabbix_event_id' => '4', 'zabbix_trigger_id' => '4', 'zabbix_host_id' => '4', 'zabbix_host_name' => 'host4', 'zabbix_problem_name' => 'prob4', 'zabbix_severity' => 4, 'zabbix_started_at' => now(), 'znuny_ticket_id' => 4, 'znuny_ticket_number' => '4', 'creation_source' => 'manual',
+            'manual_lifecycle_status' => 'close_candidate', 'zabbix_problem_is_active' => false, 'znuny_ticket_state_type' => 'closed',
+        ]);
+
+        Livewire::test(ListZabbixTickets::class)
+            ->assertCanSeeTableRecords([$ticket1, $ticket2, $ticket3, $ticket4])
+            ->assertSee('Ready to close')
+            ->assertSee('Problem resolved');
+    }
+
+    public function test_linked_tickets_manual_close_action_visibility()
+    {
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+
+        $ticketOpen = ZabbixTicket::create([
+            'zabbix_event_id' => '1', 'zabbix_trigger_id' => '1', 'zabbix_host_id' => '1', 'zabbix_host_name' => 'host1', 'zabbix_problem_name' => 'prob1', 'zabbix_severity' => 1, 'zabbix_started_at' => now(), 'znuny_ticket_id' => 1, 'znuny_ticket_number' => '1', 'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open', 'znuny_state_name' => 'open',
+        ]);
+
+        $ticketClosed = ZabbixTicket::create([
+            'zabbix_event_id' => '2', 'zabbix_trigger_id' => '2', 'zabbix_host_id' => '2', 'zabbix_host_name' => 'host2', 'zabbix_problem_name' => 'prob2', 'zabbix_severity' => 2, 'zabbix_started_at' => now(), 'znuny_ticket_id' => 2, 'znuny_ticket_number' => '2', 'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'closed', 'znuny_state_name' => 'closed successful',
+        ]);
+
+        Livewire::test(ListZabbixTickets::class)
+            ->assertTableActionVisible('manual_close_ticket', $ticketOpen)
+            ->assertTableActionHidden('manual_close_ticket', $ticketClosed);
+    }
+
+    public function test_linked_tickets_manual_close_action_success()
+    {
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => '1', 'zabbix_trigger_id' => '1', 'zabbix_host_id' => '1', 'zabbix_host_name' => 'host1', 'zabbix_problem_name' => 'prob1', 'zabbix_severity' => 1, 'zabbix_started_at' => now(), 'znuny_ticket_id' => 1, 'znuny_ticket_number' => '1000', 'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open', 'znuny_state_name' => 'open', 'manual_lifecycle_status' => 'active',
+        ]);
+
+        $clientMock = $this->mock(ZnunyClient::class);
+        $clientMock->shouldReceive('ticketUrl')->andReturn('http://example.com/ticket/1');
+        $clientMock->shouldReceive('closeTicket')
+            ->once()
+            ->with(1, \Mockery::on(function ($payload) {
+                return $payload['Kind'] === 'internal_note' && $payload['Reason'] === 'Test close';
+            }))
+            ->andReturn(['success' => true]);
+
+        $clientMock->shouldReceive('getTicket')
+            ->once()
+            ->with(1)
+            ->andReturn(['StateType' => 'closed', 'State' => 'closed successful']);
+
+        Livewire::test(ListZabbixTickets::class)
+            ->callTableAction('manual_close_ticket', $ticket, data: ['reason' => 'Test close'])
+            ->assertHasNoTableActionErrors()
+            ->assertNotified('Ticket Closed');
+
+        $ticket->refresh();
+        $this->assertEquals('closed', $ticket->znuny_ticket_state_type);
+        $this->assertEquals('closed successful', $ticket->znuny_state_name);
+        $this->assertEquals('closed', $ticket->manual_lifecycle_status);
+    }
+
+    public function test_linked_tickets_manual_close_action_failure()
+    {
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => '1', 'zabbix_trigger_id' => '1', 'zabbix_host_id' => '1', 'zabbix_host_name' => 'host1', 'zabbix_problem_name' => 'prob1', 'zabbix_severity' => 1, 'zabbix_started_at' => now(), 'znuny_ticket_id' => 1, 'znuny_ticket_number' => '1000', 'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open', 'znuny_state_name' => 'open', 'manual_lifecycle_status' => 'active',
+        ]);
+
+        $clientMock = $this->mock(ZnunyClient::class);
+        $clientMock->shouldReceive('ticketUrl')->andReturn('http://example.com/ticket/1');
+        $clientMock->shouldReceive('closeTicket')
+            ->once()
+            ->andReturn(['success' => false, 'errors' => ['API error']]);
+
+        Livewire::test(ListZabbixTickets::class)
+            ->callTableAction('manual_close_ticket', $ticket, data: ['reason' => 'Test close'])
+            ->assertNotified();
+
+        $ticket->refresh();
+        $this->assertEquals('open', $ticket->znuny_ticket_state_type);
+        $this->assertEquals('open', $ticket->znuny_state_name);
+        $this->assertEquals('active', $ticket->manual_lifecycle_status);
+    }
 }
