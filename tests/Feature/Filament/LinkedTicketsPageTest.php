@@ -216,7 +216,7 @@ class LinkedTicketsPageTest extends TestCase
         Livewire::test(ListZabbixTickets::class)
             ->assertCanSeeTableRecords([$ticket1, $ticket2, $ticket3, $ticket4, $ticket5, $ticket6, $ticket7, $ticket8])
             ->assertSeeHtml('Active') // from ticket1 and ticket2
-            ->assertSeeHtml('Resolved') // ticket3
+            ->assertSeeHtml('Waiting') // ticket3
             ->assertSeeHtml('Ready') // ticket4
             ->assertSeeHtml('Flapping') // ticket5
             ->assertSeeHtml('Cache stale') // ticket6

@@ -96,7 +96,7 @@ class ZabbixTicketsTable
                             return 'Ready';
                         }
                         if ($record->manual_lifecycle_status === 'resolved_waiting') {
-                            return 'Resolved';
+                            return 'Waiting';
                         }
                         if ($record->manual_lifecycle_status === 'cache_stale') {
                             return 'Cache stale';

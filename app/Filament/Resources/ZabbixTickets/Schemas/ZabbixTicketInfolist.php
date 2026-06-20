@@ -31,7 +31,7 @@ class ZabbixTicketInfolist
                                     return 'Ready';
                                 }
                                 if ($record->manual_lifecycle_status === 'resolved_waiting') {
-                                    return 'Resolved, waiting';
+                                    return 'Waiting for close delay';
                                 }
                                 if ($record->manual_lifecycle_status === 'cache_stale') {
                                     return 'Cache stale';
