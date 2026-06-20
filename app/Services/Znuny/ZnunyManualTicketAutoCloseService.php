@@ -38,35 +38,67 @@ class ZnunyManualTicketAutoCloseService
         ];
 
         // 3. Call Znuny controlled close endpoint
+        $response = null;
+        $apiError = null;
+
         try {
             $response = $this->znunyClient->closeTicket($ticket->znuny_ticket_id, $payload);
+        } catch (\Throwable $e) {
+            $apiError = $e->getMessage();
+        }
+
+        // If response clearly contains Error (either thrown exception or explicitly in response), treat as failure
+        if ($apiError && str_starts_with($apiError, 'Znuny API Error:')) {
+            return [
+                'success' => false,
+                'ticket_number' => $ticket->znuny_ticket_number,
+                'skipped' => false,
+                'reason' => 'Failed to close in Znuny: '.$apiError,
+            ];
+        }
+
+        if ($response && ! empty($response['errors'])) {
+            return [
+                'success' => false,
+                'ticket_number' => $ticket->znuny_ticket_number,
+                'skipped' => false,
+                'reason' => 'Failed to close in Znuny: '.implode(', ', $response['errors']),
+            ];
+        }
+
+        // 4. Perform read-after-write verification
+        try {
+            $ticketSnapshot = $this->znunyClient->getTicket($ticket->znuny_ticket_id);
         } catch (\Throwable $e) {
             return [
                 'success' => false,
                 'ticket_number' => $ticket->znuny_ticket_number,
                 'skipped' => false,
-                'reason' => 'API Error: '.$e->getMessage(),
+                'reason' => 'Verification failed: '.$e->getMessage(),
             ];
         }
 
-        if (! $response['success']) {
-            $errors = implode(', ', $response['errors'] ?? ['Unknown close error']);
+        $stateType = $ticketSnapshot['StateType'] ?? null;
+        $stateName = $ticketSnapshot['State'] ?? null;
 
+        $isClosed = $stateType === 'closed' || str_contains(strtolower((string) $stateName), 'closed');
+
+        if (! $isClosed) {
             return [
                 'success' => false,
                 'ticket_number' => $ticket->znuny_ticket_number,
                 'skipped' => false,
-                'reason' => 'Failed to close in Znuny: '.$errors,
+                'reason' => 'Ticket is still open after close attempt.',
             ];
         }
 
-        // 4. Update local DB safely on success
+        // 5. Update local DB safely on verified success
         $ticket->update([
             'manual_lifecycle_status' => ZnunyManualTicketLifecycleService::STATUS_CLOSED,
             'manual_lifecycle_last_checked_at' => now(),
-            // Optionally optimistic snapshot update, let sync job handle the rest.
-            'znuny_ticket_state_type' => 'closed',
-            'znuny_state_name' => 'closed successful',
+            'znuny_state_name' => $stateName,
+            'znuny_ticket_state_type' => $stateType,
+            'znuny_ticket_changed_at' => $ticketSnapshot['Changed'] ?? now(),
         ]);
 
         return [

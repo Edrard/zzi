@@ -75,6 +75,14 @@ class AutoCloseManualTicketsCommandTest extends TestCase
                 'errors' => [],
             ]);
 
+        $clientMock->shouldReceive('getTicket')
+            ->once()
+            ->with(100)
+            ->andReturn([
+                'StateType' => 'closed',
+                'State' => 'closed successful',
+            ]);
+
         $this->artisan('znuny:auto-close-manual-tickets --execute')
             ->assertSuccessful()
             ->expectsOutputToContain('Auto-closing manual tickets (EXECUTE MODE)...')
@@ -161,6 +169,14 @@ class AutoCloseManualTicketsCommandTest extends TestCase
             ->with(200, \Mockery::any())
             ->andReturn(['success' => true]);
 
+        $clientMock->shouldReceive('getTicket')
+            ->once()
+            ->with(200)
+            ->andReturn([
+                'StateType' => 'closed',
+                'State' => 'closed successful',
+            ]);
+
         $this->artisan('znuny:auto-close-manual-tickets --execute --ticket-id='.$ticket2->id)
             ->assertSuccessful();
 
@@ -177,6 +193,13 @@ class AutoCloseManualTicketsCommandTest extends TestCase
         $clientMock->shouldReceive('closeTicket')
             ->once()
             ->andReturn(['success' => true]);
+
+        $clientMock->shouldReceive('getTicket')
+            ->once()
+            ->andReturn([
+                'StateType' => 'closed',
+                'State' => 'closed successful',
+            ]);
 
         $this->artisan('znuny:auto-close-manual-tickets --execute --limit=1')
             ->assertSuccessful();
@@ -213,6 +236,13 @@ class AutoCloseManualTicketsCommandTest extends TestCase
             ->once()
             ->andReturn(['success' => true]);
 
+        $clientMock->shouldReceive('getTicket')
+            ->once()
+            ->andReturn([
+                'StateType' => 'closed',
+                'State' => 'closed successful',
+            ]);
+
         $this->artisan('znuny:auto-close-manual-tickets --execute --json')
             ->assertSuccessful();
     }
@@ -230,7 +260,110 @@ class AutoCloseManualTicketsCommandTest extends TestCase
             ->once()
             ->andReturn(['success' => true]);
 
+        $clientMock->shouldReceive('getTicket')
+            ->once()
+            ->andReturn([
+                'StateType' => 'closed',
+                'State' => 'closed successful',
+            ]);
+
         $this->artisan('znuny:auto-close-manual-tickets --execute')
             ->assertSuccessful();
+    }
+
+    public function test_ambiguous_response_but_verified_closed()
+    {
+        $this->createCandidateTicket();
+
+        $clientMock = $this->mock(ZnunyClient::class);
+        $clientMock->shouldReceive('closeTicket')
+            ->once()
+            ->andReturn([
+                'success' => false,
+                'errors' => [], // ambiguous
+            ]);
+
+        $clientMock->shouldReceive('getTicket')
+            ->once()
+            ->with(100)
+            ->andReturn([
+                'StateType' => 'closed',
+                'State' => 'closed successful',
+            ]);
+
+        $this->artisan('znuny:auto-close-manual-tickets --execute')
+            ->assertSuccessful()
+            ->expectsOutputToContain('Closed successfully.');
+
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_CLOSED, ZabbixTicket::first()->manual_lifecycle_status);
+    }
+
+    public function test_ambiguous_response_and_verification_says_still_open()
+    {
+        $this->createCandidateTicket();
+
+        $clientMock = $this->mock(ZnunyClient::class);
+        $clientMock->shouldReceive('closeTicket')
+            ->once()
+            ->andReturn([
+                'success' => false,
+                'errors' => [], // ambiguous
+            ]);
+
+        $clientMock->shouldReceive('getTicket')
+            ->once()
+            ->with(100)
+            ->andReturn([
+                'StateType' => 'open',
+                'State' => 'open',
+            ]);
+
+        $this->artisan('znuny:auto-close-manual-tickets --execute')
+            ->assertSuccessful()
+            ->expectsOutputToContain('Ticket is still open after close attempt.');
+
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_CLOSE_CANDIDATE, ZabbixTicket::first()->manual_lifecycle_status);
+    }
+
+    public function test_ambiguous_response_and_verification_throws()
+    {
+        $this->createCandidateTicket();
+
+        $clientMock = $this->mock(ZnunyClient::class);
+        $clientMock->shouldReceive('closeTicket')
+            ->once()
+            ->andReturn([
+                'success' => false,
+                'errors' => [], // ambiguous
+            ]);
+
+        $clientMock->shouldReceive('getTicket')
+            ->once()
+            ->with(100)
+            ->andThrow(new \Exception('Network timeout'));
+
+        $this->artisan('znuny:auto-close-manual-tickets --execute')
+            ->assertSuccessful()
+            ->expectsOutputToContain('Verification failed: Network timeout');
+
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_CLOSE_CANDIDATE, ZabbixTicket::first()->manual_lifecycle_status);
+    }
+
+    public function test_explicit_api_error_fails_immediately()
+    {
+        $this->createCandidateTicket();
+
+        $clientMock = $this->mock(ZnunyClient::class);
+        $clientMock->shouldReceive('closeTicket')
+            ->once()
+            ->andThrow(new \Exception('Znuny API Error: Invalid state'));
+
+        $clientMock->shouldNotReceive('getTicket');
+
+        $this->artisan('znuny:auto-close-manual-tickets --execute')
+            ->assertSuccessful()
+            ->expectsOutputToContain('Failed to close in Znuny: Znuny API Error: Invalid state');
+
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_CLOSE_CANDIDATE, ZabbixTicket::first()->manual_lifecycle_status);
     }
 }
