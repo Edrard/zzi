@@ -27,12 +27,13 @@ class ListZabbixTickets extends ListRecords
                 ->action(function () {
                     try {
                         $service = app(ZnunyLinkedTicketSyncService::class);
-                        $result = $service->sync();
+                        $result = $service->sync(0, null, true);
 
                         $message = sprintf(
-                            'Sync completed: %d scanned, %d updated, %d unchanged, %d missing, %d failed.',
+                            'Sync completed: %d scanned, %d updated, %d reconciled, %d unchanged, %d missing, %d failed.',
                             $result['scanned'] ?? 0,
                             $result['synced'] ?? 0,
+                            $result['reconciled'] ?? 0,
                             $result['unchanged'] ?? 0,
                             $result['missing'] ?? 0,
                             $result['failed'] ?? 0

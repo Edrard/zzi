@@ -15,7 +15,7 @@ class ZnunyLinkedTicketSyncService
         private ZnunyTicketSnapshotNormalizer $normalizer
     ) {}
 
-    public function sync(int $batchSize = 0, ?int $ticketId = null): array
+    public function sync(int $batchSize = 0, ?int $ticketId = null, bool $reconcile = false): array
     {
         $query = ZabbixTicket::whereNotNull('znuny_ticket_id');
 
@@ -35,6 +35,7 @@ class ZnunyLinkedTicketSyncService
         $stats = [
             'scanned' => 0,
             'synced' => 0,
+            'reconciled' => 0,
             'unchanged' => 0,
             'missing' => 0,
             'failed' => 0,
@@ -80,11 +81,23 @@ class ZnunyLinkedTicketSyncService
                         ]);
                     }
                 } else {
+                    $drifted = false;
+                    if ($reconcile) {
+                        $localTicket->fill($normalized);
+                        if ($localTicket->isDirty(array_keys($normalized))) {
+                            $drifted = true;
+                        }
+                    }
+
                     $localTicket->znuny_ticket_last_synced_at = $now;
                     $localTicket->znuny_ticket_sync_error = null;
                     $localTicket->save();
 
-                    $stats['unchanged']++;
+                    if ($drifted) {
+                        $stats['reconciled']++;
+                    } else {
+                        $stats['unchanged']++;
+                    }
                 }
             } catch (Throwable $e) {
                 if (str_contains($e->getMessage(), 'Ticket not found in Znuny.')) {
