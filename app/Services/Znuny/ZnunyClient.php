@@ -220,7 +220,7 @@ class ZnunyClient
             $data = $this->processResponse($response);
 
             if (isset($data['Found']) && (int) $data['Found'] === 0) {
-                throw new Exception("Ticket not found in Znuny.");
+                throw new Exception('Ticket not found in Znuny.');
             }
 
             if (empty($data['Ticket']) || ! is_array($data['Ticket'])) {
@@ -813,6 +813,30 @@ class ZnunyClient
                 'success' => true,
                 'ticket_id' => $data['TicketID'],
                 'ticket_number' => $data['TicketNumber'],
+                'warnings' => $data['Warnings'] ?? [],
+                'errors' => $data['Errors'] ?? [],
+                'raw' => $data,
+            ];
+        });
+    }
+
+    /**
+     * Call POST /TicketClose to safely close a ticket.
+     */
+    public function closeTicket(int|string $ticketId, array $payload): array
+    {
+        return $this->withSessionRetry(function ($session) use ($ticketId, $payload) {
+            $normalizedId = $this->normalizeTicketId($ticketId);
+
+            $payload['SessionID'] = $session;
+            $payload['TicketID'] = $normalizedId;
+
+            $response = $this->request()->post($this->apiUrl().'/TicketClose', $payload);
+
+            $data = $this->processResponse($response);
+
+            return [
+                'success' => ! empty($data['Success']),
                 'warnings' => $data['Warnings'] ?? [],
                 'errors' => $data['Errors'] ?? [],
                 'raw' => $data,

@@ -81,6 +81,7 @@ class ZnunyManualTicketCloseCandidateService
             // Ticket is a valid close candidate
             $report['summary']['candidates']++;
             $report['candidates'][] = [
+                'id' => $ticket->id,
                 'ticket_number' => $ticket->znuny_ticket_number,
                 'host' => $ticket->zabbix_host_name,
                 'problem' => $ticket->zabbix_problem_name,
