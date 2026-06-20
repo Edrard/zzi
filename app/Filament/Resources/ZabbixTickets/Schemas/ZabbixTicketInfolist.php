@@ -34,7 +34,9 @@ class ZabbixTicketInfolist
                                 'close_candidate' => 'success',
                                 'closed', 'cache_stale', 'not_applicable' => 'gray',
                                 default => 'primary',
-                            })->placeholder('-'),
+                            })
+                            ->formatStateUsing(fn ($state) => $state === 'close_candidate' ? 'Ready for future auto-close' : ucwords(str_replace('_', ' ', $state)))
+                            ->placeholder('-'),
                         IconEntry::make('zabbix_problem_is_active')->label('Problem Active')->boolean()->placeholder('-'),
                         TextEntry::make('zabbix_problem_resolved_at')->label('Resolved Since')->dateTime()->placeholder('-'),
                         TextEntry::make('manual_close_eligible_at')->label('Close Eligible At')->dateTime()->placeholder('-'),
