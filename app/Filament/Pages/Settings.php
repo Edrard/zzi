@@ -302,6 +302,12 @@ class Settings extends Page implements HasForms
                     ->helperText($setting->description)
                     ->required(false)
                     ->rows(3);
+            } elseif ($setting->key === 'linked_ticket_manual_close_default_reason') {
+                $component = Textarea::make($setting->key)
+                    ->label($label)
+                    ->helperText($description)
+                    ->required(true)
+                    ->rows(2);
             } elseif ($setting->key === 'znuny_queue_from_host_regex') {
                 $component = TextInput::make($setting->key)
                     ->label('Queue detection regex from Zabbix host')
@@ -401,7 +407,7 @@ class Settings extends Page implements HasForms
                 $groups['Znuny Sync'][] = $component;
             } elseif (str_starts_with($setting->key, 'znuny_')) {
                 $groups['Znuny'][$setting->key] = $component;
-            } elseif (in_array($setting->key, ['default_close_delay_hours', 'default_reopen_window_hours', 'manual_ticket_auto_close_schedule_mode', 'manual_ticket_flap_threshold', 'manual_ticket_extra_flapping_delay_hours'])) {
+            } elseif (in_array($setting->key, ['default_close_delay_hours', 'default_reopen_window_hours', 'manual_ticket_auto_close_schedule_mode', 'manual_ticket_flap_threshold', 'manual_ticket_extra_flapping_delay_hours', 'linked_ticket_manual_close_default_reason'])) {
                 $groups['Automation'][$setting->key] = $component;
             } else {
                 $groups['Other'][] = $component;
@@ -621,6 +627,7 @@ class Settings extends Page implements HasForms
                     Tab::make('Manual tickets')
                         ->schema(array_filter([
                             $a['manual_ticket_auto_close_schedule_mode'] ?? null,
+                            $a['linked_ticket_manual_close_default_reason'] ?? null,
                             $a['default_close_delay_hours'] ?? null,
                             $a['default_reopen_window_hours'] ?? null,
                             $a['manual_ticket_flap_threshold'] ?? null,

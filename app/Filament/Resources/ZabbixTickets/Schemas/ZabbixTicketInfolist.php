@@ -15,8 +15,8 @@ class ZabbixTicketInfolist
             ->components([
                 Section::make('Ticket')
                     ->schema([
-                        TextEntry::make('znuny_ticket_number')->label('Ticket Number')->placeholder('-'),
-                        TextEntry::make('created_at')->label('Ticket Age')->since()->placeholder('-'),
+                        TextEntry::make('znuny_ticket_number')->label('Ticket Number')->inlineLabel()->placeholder('-'),
+                        TextEntry::make('created_at')->label('Ticket Age')->since()->inlineLabel()->placeholder('-'),
                         TextEntry::make('resolution_context')
                             ->label('Resolution Context')
                             ->state(function (ZabbixTicket $record) {
@@ -75,32 +75,33 @@ class ZabbixTicketInfolist
                                 }
 
                                 return null;
-                            })->columnSpanFull(),
-                    ])->columns(2),
+                            })
+                            ->inlineLabel(),
+                    ])->columns(1),
 
                 Section::make('Zabbix')
                     ->schema([
-                        TextEntry::make('zabbix_host_name')->label('Host')->placeholder('-'),
-                        TextEntry::make('zabbix_problem_name')->label('Problem')->columnSpanFull()->placeholder('-'),
-                    ])->columns(2),
+                        TextEntry::make('zabbix_host_name')->label('Host')->inlineLabel()->placeholder('-'),
+                        TextEntry::make('zabbix_problem_name')->label('Problem')->inlineLabel()->placeholder('-'),
+                    ])->columns(1),
 
                 Section::make('Znuny Snapshot')
                     ->schema([
-                        TextEntry::make('znuny_queue_name')->label('Queue')->placeholder('-'),
-                        TextEntry::make('znuny_owner_name')->label('Owner')->placeholder('-'),
-                        TextEntry::make('znuny_priority')->label('Priority')->placeholder('-'),
-                        TextEntry::make('znuny_state_name')->label('State')->placeholder('-'),
-                    ])->columns(2),
+                        TextEntry::make('znuny_queue_name')->label('Queue')->inlineLabel()->placeholder('-'),
+                        TextEntry::make('znuny_owner_name')->label('Owner')->inlineLabel()->placeholder('-'),
+                        TextEntry::make('znuny_priority')->label('Priority')->inlineLabel()->placeholder('-'),
+                        TextEntry::make('znuny_state_name')->label('State')->inlineLabel()->placeholder('-'),
+                    ])->columns(1),
 
                 Section::make('Sync')
                     ->schema([
-                        TextEntry::make('znuny_ticket_last_checked_at')->label('Last Checked')->dateTime()->placeholder('-'),
-                        TextEntry::make('znuny_ticket_last_synced_at')->label('Last Synced')->dateTime()->placeholder('-'),
+                        TextEntry::make('znuny_ticket_last_checked_at')->label('Last Checked')->dateTime()->inlineLabel()->placeholder('-'),
+                        TextEntry::make('znuny_ticket_last_synced_at')->label('Last Synced')->dateTime()->inlineLabel()->placeholder('-'),
                         TextEntry::make('znuny_ticket_sync_error')->label('Sync Error')
                             ->color('danger')
-                            ->placeholder('-')
-                            ->columnSpanFull(),
-                    ])->columns(2),
+                            ->inlineLabel()
+                            ->placeholder('-'),
+                    ])->columns(1),
             ]);
     }
 }

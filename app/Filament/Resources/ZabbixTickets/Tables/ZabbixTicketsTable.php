@@ -210,7 +210,7 @@ class ZabbixTicketsTable
                             ->form([
                                 Textarea::make('reason')
                                     ->label('Reason / Comment')
-                                    ->default('Manual close from Linked Tickets UI.')
+                                    ->default(fn () => SettingsService::string('linked_ticket_manual_close_default_reason', 'Manual close from Linked Tickets UI.'))
                                     ->required(),
                             ])
                             ->visible(function (ZabbixTicket $record) {
@@ -233,7 +233,7 @@ class ZabbixTicketsTable
                                     $record,
                                     'Manual ticket close',
                                     'Closed manually from Linked Tickets UI.',
-                                    $data['reason'] ?? 'Manual close from Linked Tickets UI.'
+                                    $data['reason'] ?? SettingsService::string('linked_ticket_manual_close_default_reason', 'Manual close from Linked Tickets UI.')
                                 );
 
                                 if ($result['success']) {
