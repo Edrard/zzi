@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\ZabbixTickets\Schemas;
 
 use App\Models\ZabbixTicket;
-use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -21,43 +20,51 @@ class ZabbixTicketInfolist
                         TextEntry::make('resolution_context')
                             ->label('Resolution Context')
                             ->state(function (ZabbixTicket $record) {
-                                if (strtolower($record->znuny_ticket_state_type ?? '') === 'closed') {
+                                $isClosed = strtolower($record->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $record->znuny_state_name), 'closed');
+                                if ($isClosed) {
                                     return 'Closed';
                                 }
+                                if ($record->manual_lifecycle_status === 'flapping') {
+                                    return 'Flapping';
+                                }
                                 if ($record->manual_lifecycle_status === 'close_candidate') {
-                                    return 'Ready to close';
+                                    return 'Ready';
                                 }
                                 if ($record->manual_lifecycle_status === 'resolved_waiting') {
-                                    return 'Resolved, waiting for close delay';
+                                    return 'Resolved, waiting';
                                 }
-                                if ($record->manual_lifecycle_status === 'flapping') {
-                                    return 'Flapping detected';
+                                if ($record->manual_lifecycle_status === 'cache_stale') {
+                                    return 'Cache stale';
                                 }
-                                if ($record->zabbix_problem_is_active === false) {
-                                    return 'Problem resolved';
+                                if ($record->manual_lifecycle_status === 'active' || $record->zabbix_problem_is_active === true) {
+                                    return 'Active';
                                 }
 
-                                return 'Problem active';
+                                return 'Unknown';
                             })
                             ->badge()
                             ->color(function (ZabbixTicket $record) {
-                                if (strtolower($record->znuny_ticket_state_type ?? '') === 'closed') {
+                                $isClosed = strtolower($record->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $record->znuny_state_name), 'closed');
+                                if ($isClosed) {
                                     return 'gray';
+                                }
+                                if ($record->manual_lifecycle_status === 'flapping') {
+                                    return 'danger';
                                 }
                                 if ($record->manual_lifecycle_status === 'close_candidate') {
                                     return 'success';
                                 }
                                 if ($record->manual_lifecycle_status === 'resolved_waiting') {
-                                    return 'warning';
-                                }
-                                if ($record->manual_lifecycle_status === 'flapping') {
-                                    return 'danger';
-                                }
-                                if ($record->zabbix_problem_is_active === false) {
                                     return 'info';
                                 }
+                                if ($record->manual_lifecycle_status === 'cache_stale') {
+                                    return 'warning';
+                                }
+                                if ($record->manual_lifecycle_status === 'active' || $record->zabbix_problem_is_active === true) {
+                                    return 'danger';
+                                }
 
-                                return 'danger';
+                                return 'gray';
                             })->columnSpanFull(),
                     ])->columns(2),
 
@@ -66,27 +73,6 @@ class ZabbixTicketInfolist
                         TextEntry::make('zabbix_host_name')->label('Host')->placeholder('-'),
                         TextEntry::make('zabbix_problem_name')->label('Problem')->columnSpanFull()->placeholder('-'),
                     ])->columns(2),
-
-                Section::make('Lifecycle')
-                    ->schema([
-                        TextEntry::make('manual_lifecycle_status')->label('Status')->badge()
-                            ->color(fn ($state) => match ($state) {
-                                'active', 'flapping' => 'danger',
-                                'resolved_waiting' => 'warning',
-                                'close_candidate' => 'success',
-                                'closed', 'cache_stale', 'not_applicable' => 'gray',
-                                default => 'primary',
-                            })
-                            ->formatStateUsing(fn ($state) => $state === 'close_candidate' ? 'Ready for future auto-close' : ucwords(str_replace('_', ' ', $state)))
-                            ->placeholder('-'),
-                        IconEntry::make('zabbix_problem_is_active')->label('Problem Active')->boolean()->placeholder('-'),
-                        TextEntry::make('zabbix_problem_resolved_at')->label('Resolved Since')->dateTime()->placeholder('-'),
-                        TextEntry::make('manual_close_eligible_at')->label('Close Eligible At')->dateTime()->placeholder('-'),
-                        TextEntry::make('manual_flap_count')->label('Flap Count')->placeholder('-'),
-                        TextEntry::make('manual_flapping_detected_at')->label('Flapping Since')->dateTime()->placeholder('-'),
-                        TextEntry::make('manual_lifecycle_last_checked_at')->label('Lifecycle Last Checked')->dateTime()->placeholder('-'),
-                    ])->columns(2)
-                    ->visible(fn ($record) => $record->creation_source === 'manual'),
 
                 Section::make('Znuny Snapshot')
                     ->schema([
