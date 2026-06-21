@@ -123,12 +123,24 @@ class ZnunyManualTicketLifecycleService
                 }
 
                 $activeProblem = false;
+                $currentEventId = null;
+                $currentStartedAt = null;
+
                 foreach ($activeProblems as $problem) {
                     $hostId = $problem['hosts'][0]['hostid'] ?? ($problem['hostid'] ?? null);
                     $triggerId = $problem['objectid'] ?? ($problem['triggerid'] ?? null);
 
                     if ($hostId == $ticket->zabbix_host_id && $triggerId == $ticket->zabbix_trigger_id) {
                         $activeProblem = true;
+                        $currentEventId = (string) ($problem['eventid'] ?? '');
+                        if (! empty($problem['clock'])) {
+                            $currentStartedAt = Carbon::createFromTimestamp($problem['clock']);
+                        } elseif (! empty($problem['started_at'])) {
+                            try {
+                                $currentStartedAt = Carbon::parse($problem['started_at']);
+                            } catch (\Throwable $e) {
+                            }
+                        }
                         break;
                     }
                 }
@@ -137,6 +149,15 @@ class ZnunyManualTicketLifecycleService
                     $individualProblem = $this->cache->find($ticket->zabbix_event_id);
                     if ($individualProblem) {
                         $activeProblem = true;
+                        $currentEventId = (string) ($individualProblem['eventid'] ?? '');
+                        if (! empty($individualProblem['clock'])) {
+                            $currentStartedAt = Carbon::createFromTimestamp($individualProblem['clock']);
+                        } elseif (! empty($individualProblem['started_at'])) {
+                            try {
+                                $currentStartedAt = Carbon::parse($individualProblem['started_at']);
+                            } catch (\Throwable $e) {
+                            }
+                        }
                     }
                 }
 
@@ -157,16 +178,56 @@ class ZnunyManualTicketLifecycleService
                     $ticket->zabbix_problem_last_seen_active_at = $now;
 
                     if ($isRealReturnFromResolved) {
-                        // Flap detected! Genuine transition from resolved/waiting to active.
-                        $ticket->manual_flap_count++;
+                        $isLegitimateFlap = false;
+
+                        $isGenuinelyNew = false;
+                        if ($currentEventId && $currentEventId !== $ticket->zabbix_event_id) {
+                            $isGenuinelyNew = true;
+                        }
+                        if ($currentStartedAt && $ticket->zabbix_started_at && $currentStartedAt->toDateTimeString() !== $ticket->zabbix_started_at->toDateTimeString()) {
+                            $isGenuinelyNew = true;
+                        }
+
+                        $isNewer = true;
+                        if ($currentStartedAt) {
+                            if ($ticket->zabbix_started_at && $currentStartedAt->lessThanOrEqualTo($ticket->zabbix_started_at)) {
+                                $isNewer = false;
+                            }
+                            if ($ticket->created_at && $currentStartedAt->lessThanOrEqualTo($ticket->created_at)) {
+                                $isNewer = false;
+                            }
+                            if ($ticket->zabbix_problem_resolved_at && $currentStartedAt->lessThanOrEqualTo($ticket->zabbix_problem_resolved_at)) {
+                                $isNewer = false;
+                            }
+                        }
+
+                        $notAlreadyCounted = true;
+                        if ($currentEventId && $currentEventId === $ticket->zabbix_last_counted_flap_event_id) {
+                            $notAlreadyCounted = false;
+                        }
+                        if ($currentStartedAt && $ticket->zabbix_last_counted_flap_started_at && $currentStartedAt->lessThanOrEqualTo($ticket->zabbix_last_counted_flap_started_at)) {
+                            $notAlreadyCounted = false;
+                        }
+
+                        if ($isGenuinelyNew && $isNewer && $notAlreadyCounted) {
+                            $isLegitimateFlap = true;
+                        }
+
+                        if ($isLegitimateFlap) {
+                            $ticket->manual_flap_count++;
+                            $ticket->zabbix_last_counted_flap_event_id = $currentEventId;
+                            $ticket->zabbix_last_counted_flap_started_at = $currentStartedAt;
+                            $ticket->manual_last_flap_counted_at = $now;
+
+                            if ($flapThreshold > 0 && $ticket->manual_flap_count >= $flapThreshold) {
+                                $ticket->manual_flapping_detected_at = $ticket->manual_flapping_detected_at ?? $now;
+                            }
+                        }
+
                         $ticket->zabbix_problem_resolved_at = null;
                         $ticket->manual_close_eligible_at = null;
-
-                        if ($flapThreshold > 0 && $ticket->manual_flap_count >= $flapThreshold) {
-                            $ticket->manual_flapping_detected_at = $ticket->manual_flapping_detected_at ?? $now;
-                        }
                     } else {
-                        // Repeated active -> active evaluation.
+                        // Repeated active -> active evaluation or return from non-trusted resolved state
                         // Must not increment flap count. Make sure resolved_at is cleared.
                         if ($ticket->zabbix_problem_resolved_at !== null) {
                             $ticket->zabbix_problem_resolved_at = null;

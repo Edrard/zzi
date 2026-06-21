@@ -41,6 +41,9 @@ class ZabbixTicket extends Model
         'manual_close_eligible_at',
         'manual_flap_count',
         'manual_flapping_detected_at',
+        'zabbix_last_counted_flap_event_id',
+        'zabbix_last_counted_flap_started_at',
+        'manual_last_flap_counted_at',
         'manual_lifecycle_last_checked_at',
     ];
 
@@ -65,6 +68,8 @@ class ZabbixTicket extends Model
             'manual_close_eligible_at' => 'datetime',
             'manual_flap_count' => 'integer',
             'manual_flapping_detected_at' => 'datetime',
+            'zabbix_last_counted_flap_started_at' => 'datetime',
+            'manual_last_flap_counted_at' => 'datetime',
             'manual_lifecycle_last_checked_at' => 'datetime',
         ];
     }

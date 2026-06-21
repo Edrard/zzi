@@ -84,32 +84,31 @@ class ZabbixTicketInfolist
                                 return null;
                             })
                             ->inlineLabel(),
-                    ])->columns(1),
-
-                Section::make('Lifecycle Timing')
-                    ->schema([
                         TextEntry::make('zabbix_problem_resolved_at')
                             ->label(self::formatLabel('Problem Resolved At'))
-                            ->state(fn (ZabbixTicket $record) => app(DateTimeDisplayService::class)->formatDateTimeWithTimezone($record->zabbix_problem_resolved_at))
-                            ->visible(fn (ZabbixTicket $record) => ! empty($record->zabbix_problem_resolved_at))
+                            ->state(fn (?ZabbixTicket $record) => $record && $record->zabbix_problem_resolved_at ? app(DateTimeDisplayService::class)->formatDateTimeWithTimezone($record->zabbix_problem_resolved_at) : null)
+                            ->visible(fn (?ZabbixTicket $record) => $record && ! empty($record->zabbix_problem_resolved_at))
                             ->inlineLabel(),
                         TextEntry::make('manual_close_eligible_at')
                             ->label(self::formatLabel('Auto-Close Eligible At'))
-                            ->state(fn (ZabbixTicket $record) => app(DateTimeDisplayService::class)->formatDateTimeWithTimezone($record->manual_close_eligible_at))
-                            ->visible(fn (ZabbixTicket $record) => ! empty($record->manual_close_eligible_at))
+                            ->state(fn (?ZabbixTicket $record) => $record && $record->manual_close_eligible_at ? app(DateTimeDisplayService::class)->formatDateTimeWithTimezone($record->manual_close_eligible_at) : null)
+                            ->visible(fn (?ZabbixTicket $record) => $record && ! empty($record->manual_close_eligible_at))
                             ->inlineLabel(),
                         TextEntry::make('znuny_ticket_closed_at')
                             ->label(self::formatLabel('Closed At'))
-                            ->state(fn (?ZabbixTicket $record) => $record ? app(DateTimeDisplayService::class)->formatDateTimeWithTimezone($record->znuny_ticket_closed_at) : null)
+                            ->state(fn (?ZabbixTicket $record) => $record && $record->znuny_ticket_closed_at ? app(DateTimeDisplayService::class)->formatDateTimeWithTimezone($record->znuny_ticket_closed_at) : null)
                             ->visible(fn (?ZabbixTicket $record) => $record && ! empty($record->znuny_ticket_closed_at))
                             ->inlineLabel(),
                         TextEntry::make('manual_flap_count')
                             ->label(self::formatLabel('Flap Count'))
                             ->visible(fn (?ZabbixTicket $record) => $record && $record->manual_flap_count > 0)
                             ->inlineLabel(),
-                    ])
-                    ->visible(fn (?ZabbixTicket $record) => $record && (! empty($record->zabbix_problem_resolved_at) || ! empty($record->manual_close_eligible_at) || ! empty($record->znuny_ticket_closed_at) || $record->manual_flap_count > 0))
-                    ->columns(1),
+                        TextEntry::make('manual_last_flap_counted_at')
+                            ->label(self::formatLabel('Last Flap Counted At'))
+                            ->state(fn (?ZabbixTicket $record) => $record && $record->manual_last_flap_counted_at ? app(DateTimeDisplayService::class)->formatDateTimeWithTimezone($record->manual_last_flap_counted_at) : null)
+                            ->visible(fn (?ZabbixTicket $record) => $record && ! empty($record->manual_last_flap_counted_at))
+                            ->inlineLabel(),
+                    ])->columns(1),
 
                 Section::make('Zabbix')
                     ->schema([
