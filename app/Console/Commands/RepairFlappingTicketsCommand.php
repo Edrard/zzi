@@ -9,14 +9,34 @@ use Illuminate\Support\Carbon;
 
 class RepairFlappingTicketsCommand extends Command
 {
-    protected $signature = 'znuny:repair-flapping-tickets {--dry-run : Only list affected tickets without modifying them} {--include-active-counts : Also reset polluted manual_flap_count on active non-flapping tickets}';
+    protected $signature = 'znuny:repair-flapping-tickets {--dry-run : Only list affected tickets without modifying them} {--include-active-counts : Also reset polluted manual_flap_count on active non-flapping tickets} {--backfill-started-at : Backfill missing zabbix_started_at from current Zabbix cache if available}';
 
     protected $description = 'Repair manually created tickets that were incorrectly marked as flapping due to repeated evaluations without state transition.';
+
+    private function extractProblemStartedAt(array $problem): ?Carbon
+    {
+        if (! empty($problem['clock'])) {
+            return Carbon::createFromTimestamp($problem['clock']);
+        }
+        if (! empty($problem['started_at'])) {
+            try {
+                return Carbon::parse($problem['started_at']);
+            } catch (\Throwable $e) {
+            }
+        }
+
+        return null;
+    }
 
     public function handle(ZabbixProblemCache $cache)
     {
         $isDryRun = $this->option('dry-run');
         $includeActiveCounts = $this->option('include-active-counts');
+        $backfillStartedAt = $this->option('backfill-started-at');
+
+        if ($backfillStartedAt) {
+            return $this->handleBackfill($cache, $isDryRun);
+        }
 
         if ($isDryRun) {
             $this->info('DRY RUN: Identifying polluted flapping tickets...');
@@ -41,6 +61,7 @@ class RepairFlappingTicketsCommand extends Command
         $count = 0;
         foreach ($tickets as $ticket) {
             $isFalseFlap = true;
+            $reason = 'flapping_status_reset';
 
             if ($includeActiveCounts && $ticket->manual_lifecycle_status !== 'flapping') {
                 $currentProblem = null;
@@ -59,27 +80,35 @@ class RepairFlappingTicketsCommand extends Command
 
                 if ($currentProblem) {
                     $currentEventId = (string) ($currentProblem['eventid'] ?? '');
-                    $currentStartedAt = null;
-                    if (! empty($currentProblem['clock'])) {
-                        $currentStartedAt = Carbon::createFromTimestamp($currentProblem['clock']);
-                    } elseif (! empty($currentProblem['started_at'])) {
-                        try {
-                            $currentStartedAt = Carbon::parse($currentProblem['started_at']);
-                        } catch (\Throwable $e) {
+                    $currentStartedAt = $this->extractProblemStartedAt($currentProblem);
+
+                    if (! $currentStartedAt) {
+                        // Conservative fallback: without reliable timestamp, assume not a false flap for active counts
+                        $isFalseFlap = false;
+                        $reason = 'missing_started_at';
+                    } else {
+                        $isGenuinelyNew = false;
+                        if ($currentEventId && $currentEventId !== $ticket->zabbix_event_id) {
+                            $isGenuinelyNew = true;
+                        }
+                        if ($currentStartedAt && $ticket->zabbix_started_at && $currentStartedAt->toDateTimeString() !== $ticket->zabbix_started_at->toDateTimeString()) {
+                            $isGenuinelyNew = true;
+                        }
+
+                        if ($isGenuinelyNew) {
+                            $isFalseFlap = false;
+                        } else {
+                            $reason = 'same_occurrence';
                         }
                     }
+                } else {
+                    // No current problem to verify, be conservative
+                    $isFalseFlap = false;
+                    $reason = 'no_current_problem';
+                }
 
-                    $isGenuinelyNew = false;
-                    if ($currentEventId && $currentEventId !== $ticket->zabbix_event_id) {
-                        $isGenuinelyNew = true;
-                    }
-                    if ($currentStartedAt && $ticket->zabbix_started_at && $currentStartedAt->toDateTimeString() !== $ticket->zabbix_started_at->toDateTimeString()) {
-                        $isGenuinelyNew = true;
-                    }
-
-                    if ($isGenuinelyNew) {
-                        $isFalseFlap = false;
-                    }
+                if ($isFalseFlap) {
+                    $reason = 'active_polluted_count';
                 }
             }
 
@@ -87,7 +116,7 @@ class RepairFlappingTicketsCommand extends Command
                 continue;
             }
 
-            $this->info(($isDryRun ? 'Would repair' : 'Repairing')." Ticket ID {$ticket->id} (Host: {$ticket->zabbix_host_name}, Flap Count: {$ticket->manual_flap_count})");
+            $this->info(($isDryRun ? 'Would repair' : 'Repairing')." Ticket ID {$ticket->id} (Host: {$ticket->zabbix_host_name}, Flap Count: {$ticket->manual_flap_count}) - Reason: {$reason}");
 
             if (! $isDryRun) {
                 $ticket->manual_lifecycle_status = 'active';
@@ -107,6 +136,49 @@ class RepairFlappingTicketsCommand extends Command
             $this->info("Dry run complete. {$count} tickets would be repaired.");
         } else {
             $this->info("Repaired {$count} tickets.");
+        }
+
+        return self::SUCCESS;
+    }
+
+    private function handleBackfill(ZabbixProblemCache $cache, bool $isDryRun): int
+    {
+        if ($isDryRun) {
+            $this->info('DRY RUN: Identifying tickets for backfill...');
+        } else {
+            $this->info('Backfilling missing zabbix_started_at...');
+        }
+
+        $tickets = ZabbixTicket::where('creation_source', 'manual')
+            ->whereNull('zabbix_started_at')
+            ->whereNotNull('zabbix_event_id')
+            ->get();
+
+        $count = 0;
+        foreach ($tickets as $ticket) {
+            $problem = $cache->find($ticket->zabbix_event_id);
+            if (! $problem) {
+                continue;
+            }
+
+            $startedAt = $this->extractProblemStartedAt($problem);
+            if (! $startedAt) {
+                continue;
+            }
+
+            $this->info(($isDryRun ? 'Would backfill' : 'Backfilling')." Ticket ID {$ticket->id} (Event: {$ticket->zabbix_event_id}) with {$startedAt->toDateTimeString()}");
+
+            if (! $isDryRun) {
+                $ticket->zabbix_started_at = $startedAt;
+                $ticket->save();
+            }
+            $count++;
+        }
+
+        if ($isDryRun) {
+            $this->info("Dry run complete. {$count} tickets would be backfilled.");
+        } else {
+            $this->info("Backfilled {$count} tickets.");
         }
 
         return self::SUCCESS;

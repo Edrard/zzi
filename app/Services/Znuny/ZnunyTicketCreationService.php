@@ -175,7 +175,8 @@ class ZnunyTicketCreationService
         string $articleSubject,
         string $articleBody,
         ?string $hostId = null,
-        ?string $triggerId = null
+        ?string $triggerId = null,
+        ?string $startedAt = null
     ): array {
         $result = [
             'success' => false,
@@ -303,6 +304,7 @@ class ZnunyTicketCreationService
                     'zabbix_trigger_id' => $triggerId,
                     'zabbix_host_name' => $hostName,
                     'zabbix_problem_name' => $problemName,
+                    'zabbix_started_at' => $startedAt,
                     'creation_source' => 'manual',
                     'znuny_ticket_id' => $ticketId,
                     'znuny_ticket_number' => $ticketNumber,

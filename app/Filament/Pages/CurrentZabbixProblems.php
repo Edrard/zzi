@@ -17,6 +17,7 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 
 class CurrentZabbixProblems extends Page
@@ -389,6 +390,15 @@ class CurrentZabbixProblems extends Page
 
             $hostId = (string) ($this->ticketModalProblem['hosts'][0]['hostid'] ?? '');
             $triggerId = (string) ($this->ticketModalProblem['objectid'] ?? $this->ticketModalProblem['triggerid'] ?? '');
+            $startedAt = null;
+            if (! empty($this->ticketModalProblem['clock'])) {
+                $startedAt = Carbon::createFromTimestamp($this->ticketModalProblem['clock'])->toDateTimeString();
+            } elseif (! empty($this->ticketModalProblem['started_at'])) {
+                try {
+                    $startedAt = Carbon::parse($this->ticketModalProblem['started_at'])->toDateTimeString();
+                } catch (\Throwable $e) {
+                }
+            }
 
             $service = app(ZnunyTicketCreationService::class);
             $result = $service->createTicketForProblem(
@@ -402,7 +412,8 @@ class CurrentZabbixProblems extends Page
                 (string) $this->ticketTextArticleSubject,
                 (string) $this->ticketTextArticleBody,
                 $hostId === '' ? null : $hostId,
-                $triggerId === '' ? null : $triggerId
+                $triggerId === '' ? null : $triggerId,
+                $startedAt
             );
 
             if ($result['success']) {

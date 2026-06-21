@@ -122,44 +122,11 @@ class ZnunyManualTicketLifecycleService
                     continue;
                 }
 
-                $activeProblem = false;
-                $currentEventId = null;
-                $currentStartedAt = null;
+                $currentProblem = $this->findActiveProblemForTicket($ticket, $activeProblems);
 
-                foreach ($activeProblems as $problem) {
-                    $hostId = $problem['hosts'][0]['hostid'] ?? ($problem['hostid'] ?? null);
-                    $triggerId = $problem['objectid'] ?? ($problem['triggerid'] ?? null);
-
-                    if ($hostId == $ticket->zabbix_host_id && $triggerId == $ticket->zabbix_trigger_id) {
-                        $activeProblem = true;
-                        $currentEventId = (string) ($problem['eventid'] ?? '');
-                        if (! empty($problem['clock'])) {
-                            $currentStartedAt = Carbon::createFromTimestamp($problem['clock']);
-                        } elseif (! empty($problem['started_at'])) {
-                            try {
-                                $currentStartedAt = Carbon::parse($problem['started_at']);
-                            } catch (\Throwable $e) {
-                            }
-                        }
-                        break;
-                    }
-                }
-
-                if (! $activeProblem && $ticket->zabbix_event_id) {
-                    $individualProblem = $this->cache->find($ticket->zabbix_event_id);
-                    if ($individualProblem) {
-                        $activeProblem = true;
-                        $currentEventId = (string) ($individualProblem['eventid'] ?? '');
-                        if (! empty($individualProblem['clock'])) {
-                            $currentStartedAt = Carbon::createFromTimestamp($individualProblem['clock']);
-                        } elseif (! empty($individualProblem['started_at'])) {
-                            try {
-                                $currentStartedAt = Carbon::parse($individualProblem['started_at']);
-                            } catch (\Throwable $e) {
-                            }
-                        }
-                    }
-                }
+                $activeProblem = $currentProblem !== null;
+                $currentEventId = $currentProblem ? $this->extractProblemEventId($currentProblem) : null;
+                $currentStartedAt = $currentProblem ? $this->extractProblemStartedAt($currentProblem) : null;
 
                 $wasActive = $ticket->zabbix_problem_is_active === true;
                 $wasResolvedLike = in_array($ticket->manual_lifecycle_status, [
@@ -178,40 +145,7 @@ class ZnunyManualTicketLifecycleService
                     $ticket->zabbix_problem_last_seen_active_at = $now;
 
                     if ($isRealReturnFromResolved) {
-                        $isLegitimateFlap = false;
-
-                        $isGenuinelyNew = false;
-                        if ($currentEventId && $currentEventId !== $ticket->zabbix_event_id) {
-                            $isGenuinelyNew = true;
-                        }
-                        if ($currentStartedAt && $ticket->zabbix_started_at && $currentStartedAt->toDateTimeString() !== $ticket->zabbix_started_at->toDateTimeString()) {
-                            $isGenuinelyNew = true;
-                        }
-
-                        $isNewer = true;
-                        if ($currentStartedAt) {
-                            if ($ticket->zabbix_started_at && $currentStartedAt->lessThanOrEqualTo($ticket->zabbix_started_at)) {
-                                $isNewer = false;
-                            }
-                            if ($ticket->created_at && $currentStartedAt->lessThanOrEqualTo($ticket->created_at)) {
-                                $isNewer = false;
-                            }
-                            if ($ticket->zabbix_problem_resolved_at && $currentStartedAt->lessThanOrEqualTo($ticket->zabbix_problem_resolved_at)) {
-                                $isNewer = false;
-                            }
-                        }
-
-                        $notAlreadyCounted = true;
-                        if ($currentEventId && $currentEventId === $ticket->zabbix_last_counted_flap_event_id) {
-                            $notAlreadyCounted = false;
-                        }
-                        if ($currentStartedAt && $ticket->zabbix_last_counted_flap_started_at && $currentStartedAt->lessThanOrEqualTo($ticket->zabbix_last_counted_flap_started_at)) {
-                            $notAlreadyCounted = false;
-                        }
-
-                        if ($isGenuinelyNew && $isNewer && $notAlreadyCounted) {
-                            $isLegitimateFlap = true;
-                        }
+                        $isLegitimateFlap = $this->isLegitimateFlap($ticket, $currentEventId, $currentStartedAt);
 
                         if ($isLegitimateFlap) {
                             $ticket->manual_flap_count++;
@@ -281,5 +215,86 @@ class ZnunyManualTicketLifecycleService
         }
 
         return $stats;
+    }
+
+    private function findActiveProblemForTicket(ZabbixTicket $ticket, array $activeProblems): ?array
+    {
+        foreach ($activeProblems as $problem) {
+            $hostId = $problem['hosts'][0]['hostid'] ?? ($problem['hostid'] ?? null);
+            $triggerId = $problem['objectid'] ?? ($problem['triggerid'] ?? null);
+
+            if ($hostId == $ticket->zabbix_host_id && $triggerId == $ticket->zabbix_trigger_id) {
+                return $problem;
+            }
+        }
+
+        if ($ticket->zabbix_event_id) {
+            $individualProblem = $this->cache->find($ticket->zabbix_event_id);
+            if ($individualProblem) {
+                return $individualProblem;
+            }
+        }
+
+        return null;
+    }
+
+    private function extractProblemEventId(array $problem): ?string
+    {
+        $eventId = (string) ($problem['eventid'] ?? '');
+
+        return $eventId === '' ? null : $eventId;
+    }
+
+    private function extractProblemStartedAt(array $problem): ?Carbon
+    {
+        if (! empty($problem['clock'])) {
+            return Carbon::createFromTimestamp($problem['clock']);
+        }
+
+        if (! empty($problem['started_at'])) {
+            try {
+                return Carbon::parse($problem['started_at']);
+            } catch (\Throwable $e) {
+                // fall through
+            }
+        }
+
+        return null;
+    }
+
+    private function isLegitimateFlap(ZabbixTicket $ticket, ?string $currentEventId, ?Carbon $currentStartedAt): bool
+    {
+        if ($currentStartedAt === null) {
+            return false; // Reliable timestamp is mandatory
+        }
+
+        $isGenuinelyNew = false;
+        if ($currentEventId && $ticket->zabbix_event_id && $currentEventId !== $ticket->zabbix_event_id) {
+            $isGenuinelyNew = true;
+        }
+        if ($ticket->zabbix_started_at && $currentStartedAt->toDateTimeString() !== $ticket->zabbix_started_at->toDateTimeString()) {
+            $isGenuinelyNew = true;
+        }
+
+        $isNewer = true;
+        if ($ticket->zabbix_started_at && $currentStartedAt->lessThanOrEqualTo($ticket->zabbix_started_at)) {
+            $isNewer = false;
+        }
+        if ($ticket->created_at && $currentStartedAt->lessThanOrEqualTo($ticket->created_at)) {
+            $isNewer = false;
+        }
+        if ($ticket->zabbix_problem_resolved_at && $currentStartedAt->lessThanOrEqualTo($ticket->zabbix_problem_resolved_at)) {
+            $isNewer = false;
+        }
+
+        $notAlreadyCounted = true;
+        if ($currentEventId && $ticket->zabbix_last_counted_flap_event_id && $currentEventId === $ticket->zabbix_last_counted_flap_event_id) {
+            $notAlreadyCounted = false;
+        }
+        if ($ticket->zabbix_last_counted_flap_started_at && $currentStartedAt->lessThanOrEqualTo($ticket->zabbix_last_counted_flap_started_at)) {
+            $notAlreadyCounted = false;
+        }
+
+        return $isGenuinelyNew && $isNewer && $notAlreadyCounted;
     }
 }
