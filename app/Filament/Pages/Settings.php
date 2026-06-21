@@ -499,7 +499,7 @@ class Settings extends Page implements HasForms
                 $input = TextInput::make($setting->key)
                     ->label($label)
                     ->helperText($description)
-                    ->required(!in_array($setting->key, ['zabbix_problem_url_template', 'znuny_ticket_url_template']));
+                    ->required(! in_array($setting->key, ['zabbix_problem_url_template', 'znuny_ticket_url_template']));
 
                 if (in_array($setting->key, ['zabbix_api_token', 'znuny_password'])) {
                     $input->password()
@@ -680,12 +680,13 @@ class Settings extends Page implements HasForms
                                 ->content('Tests current Zabbix form values without saving settings.'),
                         ]))
                         ->columns(1),
-                    Tab::make('Problem Handling')
+                    Tab::make('Problem Handling & UI')
                         ->schema(array_filter([
                             $z['zabbix_poll_interval_minutes'] ?? null,
                             $z['zabbix_problem_cache_ttl_minutes'] ?? null,
                             $z['zabbix_problem_limit'] ?? null,
                             $z['zabbix_exclude_suppressed_problems'] ?? null,
+                            $z['zabbix_problem_url_template'] ?? null,
                         ]))
                         ->columns(1),
                 ]),

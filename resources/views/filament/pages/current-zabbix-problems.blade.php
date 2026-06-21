@@ -840,7 +840,7 @@
                                                     <li><strong>Owner:</strong> {{ $this->getTicketOwnerDisplay($linkedTicket) }}</li>
                                                     <li><strong>Ticket Age:</strong> {{ $this->formatAge((int) $linkedTicket->created_at->diffInSeconds()) }}</li>
                                                     @if($linkedTicket->manual_lifecycle_status === 'reopen_candidate')
-                                                        <li><strong class="text-orange-500 dark:text-orange-400 inline-flex items-center gap-1"><x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-4 h-4" /> Manual Reopen Candidate</strong></li>
+                                                        <li><strong class="text-orange-500 dark:text-orange-400 inline-flex items-center gap-1">Manual Reopen Candidate</strong></li>
                                                     @endif
                                                 </ul>
                                             </div>
