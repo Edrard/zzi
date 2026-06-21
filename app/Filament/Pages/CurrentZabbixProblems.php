@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Models\ZabbixTicket;
 use App\Services\SettingsService;
 use App\Services\Support\DateTimeDisplayService;
 use App\Services\Zabbix\ZabbixProblemCache;
@@ -10,11 +11,13 @@ use App\Services\Zabbix\ZabbixProblemQueryService;
 use App\Services\Znuny\ZabbixTicketLinkService;
 use App\Services\Znuny\ZnunyAgentService;
 use App\Services\Znuny\ZnunyClient;
+use App\Services\Znuny\ZnunyLinkedTicketReopenService;
 use App\Services\Znuny\ZnunyManualTicketLifecycleService;
 use App\Services\Znuny\ZnunyTicketCreationService;
 use App\Services\Znuny\ZnunyTicketModalStateBuilder;
 use App\Services\Znuny\ZnunyTicketTextBuilder;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
@@ -129,6 +132,52 @@ class CurrentZabbixProblems extends Page
                 ->danger()
                 ->send();
         }
+    }
+
+    public function reopenTicketAction(): Action
+    {
+        return Action::make('reopenTicket')
+            ->label('Reopen')
+            ->icon('heroicon-o-arrow-path')
+            ->color('warning')
+            ->requiresConfirmation()
+            ->modalHeading('Reopen Znuny Ticket')
+            ->modalDescription('Reopen this closed manual ticket?')
+            ->form([
+                Textarea::make('reason')
+                    ->label('Reopen Note / Article Body')
+                    ->required()
+                    ->default(fn () => SettingsService::string('manual_ticket_reopen_note_template', 'Reopening this ticket because the linked Zabbix problem became active again within the configured reopen window.')),
+            ])
+            ->action(function (array $arguments, Action $action, array $data) {
+                $ticketId = $arguments['ticket_id'] ?? null;
+                $ticket = ZabbixTicket::find($ticketId);
+
+                if (! $ticket) {
+                    Notification::make()->title('Ticket not found')->danger()->send();
+                    $action->cancel();
+
+                    return;
+                }
+
+                $reason = $data['reason'] ?? 'Reopening ticket.';
+                $service = app(ZnunyLinkedTicketReopenService::class);
+                $result = $service->reopenTicket($ticket, $reason);
+
+                if ($result['success']) {
+                    Notification::make()
+                        ->title('Ticket Reopened')
+                        ->body('Znuny ticket successfully reopened.')
+                        ->success()
+                        ->send();
+                } else {
+                    Notification::make()
+                        ->title('Reopen Failed')
+                        ->body($result['reason'] ?? 'Failed to reopen ticket.')
+                        ->danger()
+                        ->send();
+                }
+            });
     }
 
     public function sortBy(string $field): void

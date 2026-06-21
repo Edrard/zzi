@@ -348,6 +348,14 @@ class Settings extends Page implements HasForms
                     'label' => 'Enable Detailed Sync Audit Log',
                     'description' => 'Write detailed linked-ticket sync events to the audit log. Keep disabled unless troubleshooting.',
                 ],
+                'znuny_ticket_url_template' => [
+                    'label' => 'Znuny Ticket URL Template',
+                    'description' => 'Template used to open a Znuny ticket in the Znuny web UI. Supported placeholders: {ticket_id} for the internal Znuny TicketID. Example: https://znuny.example.com/otrs/index.pl?Action=AgentTicketZoom;TicketID={ticket_id}',
+                ],
+                'zabbix_problem_url_template' => [
+                    'label' => 'Zabbix Problem URL Template',
+                    'description' => 'Template used to open a Zabbix problem in the Zabbix web UI. Use {trigger_id} as the trigger ID placeholder. Example for Zabbix 7.0: https://zabbix.example.com/zabbix.php?show=1&action=problem.view&triggerids%5B%5D={trigger_id}',
+                ],
                 'znuny_linked_ticket_sync_batch_size' => [
                     'label' => 'Linked Ticket Sync Batch Size',
                     'description' => 'Maximum number of eligible linked tickets processed per sync run. 0 means all eligible tickets.',
@@ -400,6 +408,12 @@ class Settings extends Page implements HasForms
                     ->required(false)
                     ->rows(3);
             } elseif ($setting->key === 'linked_ticket_manual_close_default_reason') {
+                $component = Textarea::make($setting->key)
+                    ->label($label)
+                    ->helperText($description)
+                    ->required(true)
+                    ->rows(2);
+            } elseif ($setting->key === 'manual_ticket_reopen_note_template') {
                 $component = Textarea::make($setting->key)
                     ->label($label)
                     ->helperText($description)
@@ -485,7 +499,7 @@ class Settings extends Page implements HasForms
                 $input = TextInput::make($setting->key)
                     ->label($label)
                     ->helperText($description)
-                    ->required();
+                    ->required(!in_array($setting->key, ['zabbix_problem_url_template', 'znuny_ticket_url_template']));
 
                 if (in_array($setting->key, ['zabbix_api_token', 'znuny_password'])) {
                     $input->password()
@@ -501,9 +515,9 @@ class Settings extends Page implements HasForms
                 $groups['General'][] = $component;
             } elseif (in_array($setting->key, ['retention_action_logs_days', 'retention_closed_tickets_days', 'retention_failed_jobs_days', 'retention_resolved_days', 'retention_statistics_days'])) {
                 $groups['Retention'][] = $component;
-            } elseif (in_array($setting->key, ['zabbix_api_url', 'zabbix_api_token', 'zabbix_api_timeout', 'zabbix_api_verify_ssl', 'zabbix_poll_interval_minutes', 'zabbix_problem_cache_ttl_minutes', 'zabbix_problem_limit', 'zabbix_exclude_suppressed_problems'])) {
+            } elseif (in_array($setting->key, ['zabbix_api_url', 'zabbix_api_token', 'zabbix_api_timeout', 'zabbix_api_verify_ssl', 'zabbix_poll_interval_minutes', 'zabbix_problem_cache_ttl_minutes', 'zabbix_problem_limit', 'zabbix_exclude_suppressed_problems', 'zabbix_problem_url_template'])) {
                 $groups['Zabbix'][$setting->key] = $component;
-            } elseif (in_array($setting->key, ['znuny_queue_from_host_regex', 'znuny_customer_user_from_queue_template', 'znuny_queue_host_mappings', 'znuny_manual_ticket_footer', 'znuny_default_agent_id', 'linked_ticket_manual_close_default_reason'])) {
+            } elseif (in_array($setting->key, ['znuny_queue_from_host_regex', 'znuny_customer_user_from_queue_template', 'znuny_queue_host_mappings', 'znuny_manual_ticket_footer', 'znuny_default_agent_id', 'linked_ticket_manual_close_default_reason', 'manual_ticket_reopen_note_template'])) {
                 $groups['Znuny Ticket Defaults'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['znuny_queue_cache_ttl_minutes', 'znuny_agent_cache_ttl_minutes', 'znuny_ticket_snapshot_cache_ttl_minutes'])) {
                 $groups['Cache'][] = $component;
@@ -756,6 +770,7 @@ class Settings extends Page implements HasForms
                 $zd['znuny_default_agent_id'] ?? null,
                 $zd['znuny_manual_ticket_footer'] ?? null,
                 $zd['linked_ticket_manual_close_default_reason'] ?? null,
+                $zd['manual_ticket_reopen_note_template'] ?? null,
             ]))->columns(1);
 
         return [

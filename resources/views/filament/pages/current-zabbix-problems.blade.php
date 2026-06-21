@@ -665,10 +665,10 @@
         @php
             $eventIds = collect($problems)->pluck('eventid')->filter()->toArray();
             $ticketsByEventId = \App\Models\ZabbixTicket::whereIn('zabbix_event_id', $eventIds)->get()->keyBy('zabbix_event_id');
-            
+
             $hostIds = collect($problems)->map(fn($p) => $p['hosts'][0]['hostid'] ?? ($p['hostid'] ?? null))->filter()->unique()->toArray();
             $triggerIds = collect($problems)->map(fn($p) => $p['objectid'] ?? ($p['triggerid'] ?? null))->filter()->unique()->toArray();
-            
+
             $reopenCandidates = collect();
             if (!empty($hostIds) && !empty($triggerIds)) {
                 $reopenCandidates = \App\Models\ZabbixTicket::where('manual_lifecycle_status', 'reopen_candidate')
@@ -747,11 +747,11 @@
                             $severityLabel = $problem['severity_label'] ?? $this->getSeverityFallback($severityValue);
                             $ageSeconds = $this->getProblemAgeSeconds($problem);
                             $eventId = (string) ($problem['eventid'] ?? $problem['objectid'] ?? $problem['triggerid'] ?? $loop->index);
-                            
+
                             $hostId = $problem['hosts'][0]['hostid'] ?? ($problem['hostid'] ?? null);
                             $triggerId = $problem['objectid'] ?? ($problem['triggerid'] ?? null);
                             $hostTriggerKey = $hostId && $triggerId ? $hostId . '_' . $triggerId : null;
-                            
+
                             $linkedTicket = $ticketsByEventId[$eventId] ?? ($hostTriggerKey ? $reopenCandidates[$hostTriggerKey] ?? null : null);
                         @endphp
                         <tbody wire:key="zbx-problem-{{ $eventId }}">
@@ -778,7 +778,7 @@
                                 <td>
                                     @if($linkedTicket)
                                         @if($linkedTicket->manual_lifecycle_status === 'reopen_candidate')
-                                            <x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-4 h-4 text-warning-500" title="Manual reopen candidate. Ticket: {{ $linkedTicket->znuny_ticket_number }}" />
+                                            <x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-4 h-4 text-orange-500 dark:text-orange-400" title="Manual reopen candidate. Ticket: {{ $linkedTicket->znuny_ticket_number }}" />
                                         @else
                                             <x-filament::icon icon="heroicon-o-ticket" class="w-4 h-4 text-gray-500 dark:text-gray-400" title="Ticket already linked: {{ $linkedTicket->znuny_ticket_number }}" />
                                         @endif
@@ -840,28 +840,53 @@
                                                     <li><strong>Owner:</strong> {{ $this->getTicketOwnerDisplay($linkedTicket) }}</li>
                                                     <li><strong>Ticket Age:</strong> {{ $this->formatAge((int) $linkedTicket->created_at->diffInSeconds()) }}</li>
                                                     @if($linkedTicket->manual_lifecycle_status === 'reopen_candidate')
-                                                        <li><strong class="text-warning-600 dark:text-warning-400">Manual Reopen Candidate</strong></li>
+                                                        <li><strong class="text-orange-500 dark:text-orange-400 inline-flex items-center gap-1"><x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-4 h-4" /> Manual Reopen Candidate</strong></li>
                                                     @endif
                                                 </ul>
                                             </div>
-                                            <div class="zbx-ticket-panel" style="grid-column: 1 / -1;">
-                                                <x-filament::button tag="a" href="{{ app(\App\Services\Znuny\ZnunyClient::class)->ticketUrl($linkedTicket->znuny_ticket_id) }}" target="_blank" color="info" size="sm" icon="heroicon-o-arrow-top-right-on-square">
-                                                    Open Ticket
-                                                </x-filament::button>
+                                        @endif
 
-                                                @if($linkedTicket->manual_lifecycle_status === 'reopen_candidate' && $canCreateTicket)
-                                                    <x-filament::button wire:click="openCreateTicketModal('{{ $problem['eventid'] }}')" icon="heroicon-o-ticket">
+                                        @php
+                                            $zabbixUrlTemplate = \App\Services\SettingsService::string('zabbix_problem_url_template', '');
+                                            $zabbixProblemUrl = null;
+                                            if (!empty($zabbixUrlTemplate) && !empty($triggerId)) {
+                                                $zabbixProblemUrl = str_replace('{trigger_id}', urlencode((string)$triggerId), $zabbixUrlTemplate);
+                                            }
+                                        @endphp
+
+                                        <div class="zbx-ticket-panel" style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                                            <div class="zbx-problem-actions" style="display: flex; gap: 0.5rem; align-items: center;">
+                                                @if($zabbixProblemUrl)
+                                                    <x-filament::button tag="a" :href="$zabbixProblemUrl" target="_blank" color="gray" size="sm" icon="heroicon-o-arrow-top-right-on-square">
+                                                        Open in Zabbix
+                                                    </x-filament::button>
+                                                @endif
+                                            </div>
+
+                                            <div class="zbx-ticket-actions" style="display: flex; gap: 0.5rem; align-items: center;">
+                                                @if($linkedTicket)
+                                                    @if($linkedTicket->manual_lifecycle_status === 'reopen_candidate')
+                                                        <x-filament::button wire:click="mountAction('reopenTicket', { ticket_id: {{ $linkedTicket->id }} })" color="warning" size="sm" icon="heroicon-o-arrow-path">
+                                                            Reopen
+                                                        </x-filament::button>
+
+                                                        @if($canCreateTicket)
+                                                            <x-filament::button wire:click="openCreateTicketModal('{{ $problem['eventid'] }}')" icon="heroicon-o-ticket" size="sm" color="gray">
+                                                                Create ticket
+                                                            </x-filament::button>
+                                                        @endif
+                                                    @else
+                                                        <x-filament::button tag="a" :href="app(\App\Services\Znuny\ZnunyClient::class)->ticketUrl($linkedTicket->znuny_ticket_id)" target="_blank" color="info" size="sm" icon="heroicon-o-arrow-top-right-on-square">
+                                                            Open Ticket
+                                                        </x-filament::button>
+                                                    @endif
+                                                @elseif($canCreateTicket)
+                                                    <x-filament::button wire:click="openCreateTicketModal('{{ $problem['eventid'] }}')" icon="heroicon-o-ticket" size="sm" color="primary">
                                                         Create ticket
                                                     </x-filament::button>
                                                 @endif
                                             </div>
-                                        @elseif($canCreateTicket)
-                                            <div class="zbx-ticket-panel" style="grid-column: 1 / -1;">
-                                                <x-filament::button wire:click="openCreateTicketModal('{{ $problem['eventid'] }}')" icon="heroicon-o-ticket">
-                                                    Create ticket
-                                                </x-filament::button>
-                                            </div>
-                                        @endif
+                                        </div>
 
                                     </div>
                                 </td>

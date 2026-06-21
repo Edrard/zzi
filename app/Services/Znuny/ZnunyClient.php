@@ -843,4 +843,28 @@ class ZnunyClient
             ];
         });
     }
+
+    /**
+     * Call POST /TicketReopen to safely reopen a ticket.
+     */
+    public function reopenTicket(int|string $ticketId, array $payload): array
+    {
+        return $this->withSessionRetry(function ($session) use ($ticketId, $payload) {
+            $normalizedId = $this->normalizeTicketId($ticketId);
+
+            $payload['SessionID'] = $session;
+            $payload['TicketID'] = $normalizedId;
+
+            $response = $this->request()->post($this->apiUrl().'/TicketReopen', $payload);
+
+            $data = $this->processResponse($response);
+
+            return [
+                'success' => ! empty($data['Success']),
+                'warnings' => $data['Warnings'] ?? [],
+                'errors' => $data['Errors'] ?? [],
+                'raw' => $data,
+            ];
+        });
+    }
 }

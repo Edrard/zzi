@@ -32,7 +32,7 @@ class SettingsSeeder extends Seeder
             ['key' => 'zabbix_exclude_suppressed_problems', 'value' => 'true', 'type' => 'boolean', 'description' => 'Exclude suppressed Zabbix problems from polling results'],
             ['key' => 'znuny_api_url', 'value' => 'https://otrs.vamark.net/otrs/nph-genericinterface.pl/Webservice/GenericTicketConnectorREST', 'type' => 'string', 'description' => 'Znuny GenericTicketConnectorREST base URL'],
             ['key' => 'znuny_web_url', 'value' => 'https://otrs.vamark.net/otrs/index.pl', 'type' => 'string', 'description' => 'Znuny agent web interface URL'],
-            ['key' => 'znuny_ticket_url_template', 'value' => 'https://otrs.vamark.net/otrs/index.pl?Action=AgentTicketZoom;TicketID={ticket_id}', 'type' => 'string', 'description' => 'Znuny agent ticket URL template'],
+            ['key' => 'znuny_ticket_url_template', 'value' => '', 'type' => 'string', 'description' => 'Znuny agent ticket URL template'],
             ['key' => 'znuny_username', 'value' => '', 'type' => 'string', 'description' => 'Znuny integration agent login'],
             ['key' => 'znuny_password', 'value' => '', 'type' => 'string', 'description' => 'Znuny integration agent password'],
             ['key' => 'znuny_api_timeout', 'value' => '15', 'type' => 'integer', 'description' => 'Znuny API request timeout in seconds'],

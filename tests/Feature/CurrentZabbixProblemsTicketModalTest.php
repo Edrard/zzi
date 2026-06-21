@@ -34,6 +34,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $cache->putMany([
             [
                 'eventid' => '1001',
+                'objectid' => '2001',
                 'name' => 'TestCompany CPU Load',
                 'host_name' => 'TestCompany swiss test01',
                 'severity' => 4,
@@ -49,6 +50,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ],
             [
                 'eventid' => '1002',
+                'objectid' => '2002',
                 'name' => 'No IP problem',
                 'host_name' => 'TestCompany swiss test02',
                 'severity' => 4,
@@ -530,5 +532,44 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         // But more specifically, verify the span wrapper for Creating... is clean.
         $this->assertStringContainsString('<span wire:loading.flex wire:target="createZnunyTicket" class="items-center gap-2">', $html);
         $this->assertStringNotContainsString('</svg> Creating...', $html);
+    }
+
+    public function test_reopen_candidate_shows_reopen_action_and_warning_icon()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        ZabbixTicket::create([
+            'zabbix_event_id' => '1001',
+            'zabbix_host_name' => 'TestCompany',
+            'zabbix_problem_name' => 'CPU Load',
+            'znuny_ticket_id' => '1234',
+            'znuny_ticket_number' => '2026000000000000',
+            'manual_lifecycle_status' => 'reopen_candidate',
+        ]);
+
+        Setting::updateOrCreate(['key' => 'manual_ticket_reopen_note_template'], ['value' => 'Reopen me!', 'type' => 'string']);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class);
+
+        $html = $component->html();
+        $this->assertStringContainsString('Reopen', $html);
+        $this->assertStringContainsString('Manual Reopen Candidate', $html);
+        $this->assertStringContainsString('mountAction(\'reopenTicket\'', $html);
+        $this->assertStringNotContainsString('Open Ticket', $html); // because it is a candidate
+    }
+
+    public function test_open_in_zabbix_button_rendered_when_template_set()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Setting::updateOrCreate(['key' => 'zabbix_problem_url_template'], ['value' => 'https://zabbix.test/?trigger={trigger_id}', 'type' => 'string']);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class);
+
+        $html = $component->html();
+        $this->assertStringContainsString('Open in Zabbix', $html);
+        $this->assertStringContainsString('https://zabbix.test/?trigger=2001', $html);
     }
 }

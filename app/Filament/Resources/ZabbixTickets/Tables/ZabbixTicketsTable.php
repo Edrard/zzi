@@ -7,6 +7,7 @@ use App\Services\AuditLogger;
 use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyLinkedTicketCloseService;
+use App\Services\Znuny\ZnunyLinkedTicketReopenService;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Textarea;
@@ -299,15 +300,32 @@ class ZabbixTicketsTable
                             ->color('warning')
                             ->requiresConfirmation()
                             ->modalHeading('Reopen Znuny Ticket')
-                            ->modalDescription('Reopen this closed manual ticket? (Backend reopen action is missing)')
+                            ->modalDescription('Reopen this closed manual ticket?')
+                            ->form([
+                                Textarea::make('reason')
+                                    ->label('Reopen Note / Article Body')
+                                    ->required()
+                                    ->default(fn () => SettingsService::string('manual_ticket_reopen_note_template', 'Reopening this ticket because the linked Zabbix problem became active again within the configured reopen window.')),
+                            ])
                             ->visible(fn (ZabbixTicket $record) => $record->manual_lifecycle_status === 'reopen_candidate')
-                            ->action(function (ZabbixTicket $record, array $data) use ($action) {
-                                Notification::make()
-                                    ->title('Not Implemented')
-                                    ->body('Backend reopen action is missing.')
-                                    ->warning()
-                                    ->send();
-                                $action->cancel();
+                            ->action(function (ZabbixTicket $record, array $data, Action|\Filament\Tables\Actions\Action $action) {
+                                $reason = $data['reason'] ?? 'Reopening ticket.';
+                                $service = app(ZnunyLinkedTicketReopenService::class);
+                                $result = $service->reopenTicket($record, $reason);
+
+                                if ($result['success']) {
+                                    Notification::make()
+                                        ->title('Ticket Reopened')
+                                        ->body('Znuny ticket successfully reopened.')
+                                        ->success()
+                                        ->send();
+                                } else {
+                                    Notification::make()
+                                        ->title('Reopen Failed')
+                                        ->body($result['reason'] ?? 'Failed to reopen ticket.')
+                                        ->danger()
+                                        ->send();
+                                }
                             }),
                     ]),
                 Action::make('open_ticket')
