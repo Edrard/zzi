@@ -9,15 +9,21 @@ class DateTimeDisplayService
 {
     public function timezone(): string
     {
-        $tz = SettingsService::string('app_display_timezone', 'Europe/Kyiv');
+        $tz = SettingsService::string('app_display_timezone', 'UTC');
+
+        $tz = trim((string) $tz, '"\'');
 
         try {
-            new \DateTimeZone($tz);
+            if ($tz && in_array($tz, \DateTimeZone::listIdentifiers())) {
+                new \DateTimeZone($tz);
 
-            return $tz;
+                return $tz;
+            }
         } catch (\Exception $e) {
-            return 'UTC';
+            // fallback
         }
+
+        return 'UTC';
     }
 
     public function formatDateTime(mixed $value): ?string

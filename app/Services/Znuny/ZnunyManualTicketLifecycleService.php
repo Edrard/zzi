@@ -127,24 +127,38 @@ class ZnunyManualTicketLifecycleService
                 $ticket->manual_lifecycle_last_checked_at = $now;
 
                 if ($activeProblem) {
+                    $wasResolved = $ticket->getOriginal('zabbix_problem_is_active') === false ||
+                                   in_array($ticket->getOriginal('manual_lifecycle_status'), [self::STATUS_RESOLVED_WAITING, self::STATUS_CLOSE_CANDIDATE]);
+
                     $ticket->zabbix_problem_is_active = true;
                     $ticket->zabbix_problem_last_seen_active_at = $now;
 
-                    if ($ticket->zabbix_problem_resolved_at !== null) {
-                        // Flap detected
+                    if ($wasResolved) {
+                        // Flap detected! Genuine transition from resolved/waiting to active.
                         $ticket->manual_flap_count++;
                         $ticket->zabbix_problem_resolved_at = null;
                         $ticket->manual_close_eligible_at = null;
 
-                        if ($ticket->manual_flap_count >= $flapThreshold) {
+                        if ($flapThreshold > 0 && $ticket->manual_flap_count >= $flapThreshold) {
                             $ticket->manual_flapping_detected_at = $ticket->manual_flapping_detected_at ?? $now;
+                        }
+                    } else {
+                        // Repeated active -> active evaluation.
+                        // Must not increment flap count. Make sure resolved_at is cleared.
+                        if ($ticket->zabbix_problem_resolved_at !== null) {
+                            $ticket->zabbix_problem_resolved_at = null;
+                            $ticket->manual_close_eligible_at = null;
                         }
                     }
 
-                    if ($ticket->manual_flap_count >= $flapThreshold) {
+                    if ($flapThreshold > 0 && $ticket->manual_flap_count >= $flapThreshold) {
                         $ticket->manual_lifecycle_status = self::STATUS_FLAPPING;
                         $stats['flapping']++;
                     } else {
+                        // Self-healing logic for active tickets that shouldn't be flapping
+                        if ($ticket->manual_lifecycle_status === self::STATUS_FLAPPING) {
+                            $ticket->manual_flapping_detected_at = null;
+                        }
                         $ticket->manual_lifecycle_status = self::STATUS_ACTIVE;
                         $stats['active']++;
                     }
@@ -162,7 +176,7 @@ class ZnunyManualTicketLifecycleService
                 }
 
                 $delayHours = $closeDelayHours;
-                if ($ticket->manual_flap_count >= $flapThreshold) {
+                if ($flapThreshold > 0 && $ticket->manual_flap_count >= $flapThreshold) {
                     $delayHours += $flapDelayHours;
                 }
 

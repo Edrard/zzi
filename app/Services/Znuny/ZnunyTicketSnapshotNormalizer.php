@@ -32,7 +32,7 @@ class ZnunyTicketSnapshotNormalizer
         }
 
         // Search for possible close time fields, but do not assume "Changed" is close time.
-        $closeTimeFields = ['Closed', 'ClosedAt', 'CloseTime', 'CloseTimestamp'];
+        $closeTimeFields = ['Closed', 'ClosedAt', 'ClosedTime', 'CloseTime', 'CloseTimestamp'];
         foreach ($closeTimeFields as $field) {
             if (! empty($ticketData[$field])) {
                 try {

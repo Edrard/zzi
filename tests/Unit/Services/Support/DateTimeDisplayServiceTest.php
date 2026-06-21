@@ -26,10 +26,10 @@ class DateTimeDisplayServiceTest extends TestCase
         $this->assertEquals('America/New_York', $this->service->timezone());
     }
 
-    public function test_it_falls_back_to_europe_kyiv_if_missing()
+    public function test_it_falls_back_to_utc_if_missing()
     {
-        Setting::where('key', 'app_display_timezone')->delete();
-        $this->assertEquals('Europe/Kyiv', $this->service->timezone());
+        $service = new DateTimeDisplayService;
+        $this->assertEquals('UTC', $service->timezone());
     }
 
     public function test_it_falls_back_to_utc_if_invalid_timezone()

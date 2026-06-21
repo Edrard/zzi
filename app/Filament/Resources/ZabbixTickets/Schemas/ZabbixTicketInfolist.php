@@ -100,18 +100,12 @@ class ZabbixTicketInfolist
                             ->inlineLabel(),
                         TextEntry::make('znuny_ticket_closed_at')
                             ->label(self::formatLabel('Closed At'))
-                            ->state(function (ZabbixTicket $record) {
-                                if ($record->znuny_ticket_closed_at) {
-                                    return app(DateTimeDisplayService::class)->formatDateTimeWithTimezone($record->znuny_ticket_closed_at);
-                                }
-
-                                return 'Not available from Znuny';
-                            })
-                            ->visible(function (ZabbixTicket $record) {
-                                return strtolower($record->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $record->znuny_state_name), 'closed');
-                            })
+                            ->state(fn (ZabbixTicket $record) => app(DateTimeDisplayService::class)->formatDateTimeWithTimezone($record->znuny_ticket_closed_at))
+                            ->visible(fn (ZabbixTicket $record) => ! empty($record->znuny_ticket_closed_at))
                             ->inlineLabel(),
-                    ])->columns(1),
+                    ])
+                    ->visible(fn (ZabbixTicket $record) => ! empty($record->zabbix_problem_resolved_at) || ! empty($record->manual_close_eligible_at) || ! empty($record->znuny_ticket_closed_at))
+                    ->columns(1),
 
                 Section::make('Zabbix')
                     ->schema([

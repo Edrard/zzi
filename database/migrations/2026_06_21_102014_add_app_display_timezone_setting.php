@@ -10,12 +10,15 @@ return new class extends Migration
      */
     public function up(): void
     {
-        DB::table('settings')->insert([
-            'key' => 'app_display_timezone',
-            'value' => 'Europe/Kyiv',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        DB::table('settings')->updateOrInsert(
+            ['key' => 'app_display_timezone'],
+            [
+                'value' => 'UTC',
+                'type' => 'string',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
     }
 
     /**

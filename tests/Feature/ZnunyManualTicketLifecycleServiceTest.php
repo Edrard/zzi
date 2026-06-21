@@ -192,6 +192,14 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
         $this->assertTrue($ticket->zabbix_problem_is_active);
         $this->assertNull($ticket->zabbix_problem_resolved_at);
         $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_ACTIVE, $ticket->manual_lifecycle_status);
+
+        // Second evaluate, ticket is still active in cache
+        $service->evaluate();
+        $ticket->refresh();
+
+        // Should remain 1
+        $this->assertEquals(1, $ticket->manual_flap_count);
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_ACTIVE, $ticket->manual_lifecycle_status);
     }
 
     public function test_flapping_threshold()
@@ -233,6 +241,95 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
         $this->assertNotNull($ticket->manual_flapping_detected_at);
         $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_FLAPPING, $ticket->manual_lifecycle_status);
         $this->assertEquals(1, $stats['flapping']);
+    }
+
+    public function test_flapping_disabled_when_threshold_is_zero()
+    {
+        Carbon::setTestNow(now());
+        Setting::updateOrCreate(['key' => 'manual_ticket_flap_threshold'], ['value' => '0', 'type' => 'integer']);
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'zabbix_severity' => 4,
+            'zabbix_started_at' => now()->subDays(2),
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open',
+            'zabbix_problem_is_active' => false,
+            'zabbix_problem_resolved_at' => now()->subHours(1),
+            'manual_flap_count' => 5, // high count
+        ]);
+
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            [
+                'eventid' => 'evt2',
+                'objectid' => 'trg1',
+                'hosts' => [['hostid' => 'host1']],
+            ],
+        ], 60);
+
+        $service = app(ZnunyManualTicketLifecycleService::class);
+        $stats = $service->evaluate();
+
+        $ticket->refresh();
+        $this->assertEquals(6, $ticket->manual_flap_count); // count still increments
+        $this->assertNull($ticket->manual_flapping_detected_at); // but not detected
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_ACTIVE, $ticket->manual_lifecycle_status);
+        $this->assertEquals(1, $stats['active']);
+    }
+
+    public function test_polluted_flapping_active_ticket_is_demoted_to_active()
+    {
+        Carbon::setTestNow(now());
+        Setting::updateOrCreate(['key' => 'manual_ticket_flap_threshold'], ['value' => '3', 'type' => 'integer']);
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'zabbix_severity' => 4,
+            'zabbix_started_at' => now()->subDays(2),
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open',
+            'zabbix_problem_is_active' => true,
+            'manual_lifecycle_status' => 'flapping',
+            'manual_flap_count' => 1, // Polluted data: not reaching threshold but status is flapping
+            'manual_flapping_detected_at' => now()->subDay(),
+            'zabbix_problem_resolved_at' => now()->subHours(1), // Polluted data: has resolved_at but is active
+        ]);
+
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            [
+                'eventid' => 'evt2',
+                'objectid' => 'trg1',
+                'hosts' => [['hostid' => 'host1']],
+            ],
+        ], 60);
+
+        $service = app(ZnunyManualTicketLifecycleService::class);
+        $stats = $service->evaluate();
+
+        $ticket->refresh();
+        // Since it was active -> active, flap_count remains 1
+        $this->assertEquals(1, $ticket->manual_flap_count);
+        // It self-heals by clearing detected_at
+        $this->assertNull($ticket->manual_flapping_detected_at);
+        // And demoting status to active
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_ACTIVE, $ticket->manual_lifecycle_status);
+        // And clears the polluted resolved_at
+        $this->assertNull($ticket->zabbix_problem_resolved_at);
+        $this->assertEquals(1, $stats['active']);
     }
 
     public function test_extra_flapping_delay()
