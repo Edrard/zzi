@@ -663,23 +663,7 @@
         </div>
 
         @php
-            $eventIds = collect($problems)->pluck('eventid')->filter()->toArray();
-            $ticketsByEventId = \App\Models\ZabbixTicket::whereIn('zabbix_event_id', $eventIds)->get()->keyBy('zabbix_event_id');
-
-            $hostIds = collect($problems)->map(fn($p) => $p['hosts'][0]['hostid'] ?? ($p['hostid'] ?? null))->filter()->unique()->toArray();
-            $triggerIds = collect($problems)->map(fn($p) => $p['objectid'] ?? ($p['triggerid'] ?? null))->filter()->unique()->toArray();
-
-            $reopenCandidates = collect();
-            if (!empty($hostIds) && !empty($triggerIds)) {
-                $reopenCandidates = \App\Models\ZabbixTicket::where('manual_lifecycle_status', 'reopen_candidate')
-                    ->whereIn('zabbix_host_id', $hostIds)
-                    ->whereIn('zabbix_trigger_id', $triggerIds)
-                    ->get()
-                    ->keyBy(function($t) {
-                        return $t->zabbix_host_id . '_' . $t->zabbix_trigger_id;
-                    });
-            }
-
+            $resolvedTickets = $this->resolveLinkedTickets($problems);
             $canCreateTicket = in_array(auth()->user()->role, ['admin', 'operator'], true);
         @endphp
         <div class="zbx-table-container">
@@ -750,9 +734,9 @@
 
                             $hostId = $problem['hosts'][0]['hostid'] ?? ($problem['hostid'] ?? null);
                             $triggerId = $problem['objectid'] ?? ($problem['triggerid'] ?? null);
-                            $hostTriggerKey = $hostId && $triggerId ? $hostId . '_' . $triggerId : null;
 
-                            $linkedTicket = $ticketsByEventId[$eventId] ?? ($hostTriggerKey ? $reopenCandidates[$hostTriggerKey] ?? null : null);
+                            $linkedTicket = $resolvedTickets[$eventId] ?? null;
+                            $indicator = $this->getProblemTicketIndicator($linkedTicket);
                         @endphp
                         <tbody wire:key="zbx-problem-{{ $eventId }}">
                             <tr class="zbx-problem-row" @click="
@@ -776,14 +760,8 @@
                                     </span>
                                 </td>
                                 <td>
-                                    @if($linkedTicket)
-                                        @if($linkedTicket->manual_lifecycle_status === 'reopen_candidate')
-                                            <x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-4 h-4 !text-orange-500 dark:!text-orange-400" style="color: #f97316;" title="Manual reopen candidate. Ticket: {{ $linkedTicket->znuny_ticket_number }}" />
-                                        @elseif($linkedTicket->manual_lifecycle_status === 'reopened')
-                                            <x-filament::icon icon="heroicon-o-ticket" class="w-4 h-4 !text-orange-500 dark:!text-orange-400" style="color: #f97316;" title="Manually reopened ticket. Ticket: {{ $linkedTicket->znuny_ticket_number }}" />
-                                        @else
-                                            <x-filament::icon icon="heroicon-o-ticket" class="w-4 h-4 text-gray-500 dark:text-gray-400" title="Ticket already linked: {{ $linkedTicket->znuny_ticket_number }}" />
-                                        @endif
+                                    @if($indicator)
+                                        <x-filament::icon icon="{{ $indicator['icon'] }}" class="{{ $indicator['class'] }}" style="{{ $indicator['style'] }}" title="{{ $indicator['title'] }}" />
                                     @endif
                                 </td>
                                 <td class="zbx-host-col">
@@ -845,6 +823,8 @@
                                                         <li><strong class="text-orange-500 dark:text-orange-400 inline-flex items-center gap-1">Manual Reopen Candidate</strong></li>
                                                     @elseif($linkedTicket->manual_lifecycle_status === 'reopened')
                                                         <li><strong class="text-orange-500 dark:text-orange-400 inline-flex items-center gap-1">Manually reopened</strong></li>
+                                                    @elseif($linkedTicket->manual_lifecycle_status === 'flapping')
+                                                        <li><strong class="text-red-500 dark:text-red-400 inline-flex items-center gap-1">Flapping</strong></li>
                                                     @endif
                                                     @if($linkedTicket->manual_reopened_at)
                                                         <li><strong>Reopened at:</strong> {{ $linkedTicket->manual_reopened_at->format('Y-m-d H:i:s') }}</li>

@@ -210,6 +210,114 @@ class CurrentZabbixProblems extends Page
         return $result['problems'];
     }
 
+    public function resolveLinkedTickets(array $problems): array
+    {
+        $eventIds = collect($problems)->pluck('eventid')->filter()->toArray();
+        $ticketsByEventId = ZabbixTicket::whereIn('zabbix_event_id', $eventIds)->get()->keyBy('zabbix_event_id');
+
+        $hostIds = collect($problems)->map(fn ($p) => $p['hosts'][0]['hostid'] ?? ($p['hostid'] ?? null))->filter()->unique()->toArray();
+        $triggerIds = collect($problems)->map(fn ($p) => $p['objectid'] ?? ($p['triggerid'] ?? null))->filter()->unique()->toArray();
+
+        $ticketsByHostTrigger = collect();
+        if (! empty($hostIds) && ! empty($triggerIds)) {
+            $ticketsByHostTrigger = ZabbixTicket::where(function ($query) {
+                $query->whereNotNull('znuny_ticket_id')
+                    ->orWhereNotNull('znuny_ticket_number');
+            })
+                ->whereIn('zabbix_host_id', $hostIds)
+                ->whereIn('zabbix_trigger_id', $triggerIds)
+                ->get()
+                ->groupBy(function ($t) {
+                    return $t->zabbix_host_id.'_'.$t->zabbix_trigger_id;
+                });
+        }
+
+        $resolved = [];
+        foreach ($problems as $problem) {
+            $eventId = (string) ($problem['eventid'] ?? $problem['objectid'] ?? $problem['triggerid'] ?? '');
+            if (! $eventId) {
+                continue;
+            }
+
+            $hostId = $problem['hosts'][0]['hostid'] ?? ($problem['hostid'] ?? null);
+            $triggerId = $problem['objectid'] ?? ($problem['triggerid'] ?? null);
+            $hostTriggerKey = $hostId && $triggerId ? $hostId.'_'.$triggerId : null;
+
+            $linkedTicket = $ticketsByEventId[$eventId] ?? null;
+
+            if (! $linkedTicket && $hostTriggerKey && isset($ticketsByHostTrigger[$hostTriggerKey])) {
+                $candidates = $ticketsByHostTrigger[$hostTriggerKey];
+
+                $linkedTicket = $candidates->sortBy(function ($t) {
+                    $statusScore = match ($t->manual_lifecycle_status) {
+                        'flapping' => 1,
+                        'reopen_candidate' => 2,
+                        'reopened' => 3,
+                        'active' => 4,
+                        'resolved_waiting' => 5,
+                        'close_candidate' => 6,
+                        'closed' => 7,
+                        default => 8,
+                    };
+                    $stateScore = strtolower($t->znuny_ticket_state_type ?? '') === 'closed' ? 1 : 0;
+
+                    return sprintf('%d-%d-%012d', $statusScore, $stateScore, 999999999999 - $t->updated_at->timestamp);
+                })->first();
+            }
+
+            if ($linkedTicket) {
+                $resolved[$eventId] = $linkedTicket;
+            }
+        }
+
+        return $resolved;
+    }
+
+    public function getProblemTicketIndicator(?ZabbixTicket $ticket): array
+    {
+        if (! $ticket) {
+            return [];
+        }
+
+        if ($ticket->manual_lifecycle_status === 'reopen_candidate') {
+            return [
+                'kind' => 'reopen_candidate',
+                'icon' => 'heroicon-o-exclamation-triangle',
+                'class' => 'w-4 h-4 !text-orange-500 dark:!text-orange-400',
+                'style' => 'color: #f97316;',
+                'title' => 'Manual reopen candidate. Ticket: '.$ticket->znuny_ticket_number,
+            ];
+        }
+
+        if ($ticket->manual_lifecycle_status === 'reopened') {
+            return [
+                'kind' => 'reopened',
+                'icon' => 'heroicon-o-ticket',
+                'class' => 'w-4 h-4 !text-orange-500 dark:!text-orange-400',
+                'style' => 'color: #f97316;',
+                'title' => 'Manually reopened ticket. Ticket: '.$ticket->znuny_ticket_number,
+            ];
+        }
+
+        if ($ticket->manual_lifecycle_status === 'flapping') {
+            return [
+                'kind' => 'flapping',
+                'icon' => 'heroicon-o-exclamation-triangle',
+                'class' => 'w-4 h-4 text-danger-500 dark:text-danger-400 text-red-500',
+                'style' => '',
+                'title' => 'Flapping ticket. Ticket: '.$ticket->znuny_ticket_number,
+            ];
+        }
+
+        return [
+            'kind' => 'linked',
+            'icon' => 'heroicon-o-ticket',
+            'class' => 'w-4 h-4 text-gray-500 dark:text-gray-400',
+            'style' => '',
+            'title' => 'Ticket already linked: '.$ticket->znuny_ticket_number,
+        ];
+    }
+
     public function getLastPollProperty(): ?array
     {
         $cache = app(ZabbixProblemCache::class);
