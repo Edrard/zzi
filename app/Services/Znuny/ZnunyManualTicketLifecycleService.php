@@ -116,15 +116,12 @@ class ZnunyManualTicketLifecycleService
                         $currentProblem = $this->findActiveProblemForTicket($ticket, $activeProblems);
 
                         if ($currentProblem !== null) {
-                            $currentStartedAt = $this->extractProblemStartedAt($currentProblem);
-                            $anchor = $ticket->zabbix_problem_resolved_at
-                                ?? $ticket->manual_lifecycle_closed_at
-                                ?? $ticket->znuny_ticket_closed_at;
+                            $anchor = $ticket->manual_lifecycle_closed_at;
 
-                            if ($anchor && $currentStartedAt) {
+                            if ($anchor) {
                                 $windowEnd = (clone $anchor)->addHours($reopenWindowHours);
 
-                                if ($currentStartedAt->lessThanOrEqualTo($windowEnd)) {
+                                if ($now->lessThanOrEqualTo($windowEnd)) {
                                     $ticket->manual_lifecycle_status = self::STATUS_REOPEN_CANDIDATE;
                                     $ticket->zabbix_problem_is_active = true;
                                     $ticket->zabbix_problem_last_seen_active_at = $now;

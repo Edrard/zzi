@@ -1139,4 +1139,228 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
         $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_ACTIVE, $ticket->manual_lifecycle_status);
         $this->assertNull($ticket->zabbix_last_counted_flap_event_id);
     }
+
+    public function test_reopen_candidate_inside_window()
+    {
+        Carbon::setTestNow(now());
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'zabbix_severity' => 4,
+            'zabbix_started_at' => now()->subDays(2),
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'closed',
+            'manual_lifecycle_closed_at' => now()->subHours(2),
+        ]);
+
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            [
+                'eventid' => 'evt2',
+                'objectid' => 'trg1',
+                'hosts' => [['hostid' => 'host1']],
+                'started_at' => now()->subHour()->toIso8601String(),
+            ],
+        ], 60);
+
+        $service = app(ZnunyManualTicketLifecycleService::class);
+        $service->evaluate();
+
+        $ticket->refresh();
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_REOPEN_CANDIDATE, $ticket->manual_lifecycle_status);
+        $this->assertTrue($ticket->zabbix_problem_is_active);
+    }
+
+    public function test_reopen_candidate_outside_window()
+    {
+        Carbon::setTestNow(now());
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'zabbix_severity' => 4,
+            'zabbix_started_at' => now()->subDays(10),
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'closed',
+            'manual_lifecycle_closed_at' => now()->subDays(2),
+        ]);
+
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            [
+                'eventid' => 'evt2',
+                'objectid' => 'trg1',
+                'hosts' => [['hostid' => 'host1']],
+                'started_at' => now()->subHour()->toIso8601String(),
+            ],
+        ], 60);
+
+        $service = app(ZnunyManualTicketLifecycleService::class);
+        $service->evaluate();
+
+        $ticket->refresh();
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_CLOSED, $ticket->manual_lifecycle_status);
+        $this->assertFalse($ticket->zabbix_problem_is_active);
+    }
+
+    public function test_reopen_candidate_stale_cache()
+    {
+        Carbon::setTestNow(now());
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'zabbix_severity' => 4,
+            'zabbix_started_at' => now()->subDays(2),
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'closed',
+            'manual_lifecycle_closed_at' => now()->subHours(2),
+        ]);
+
+        Redis::set('zabbix:problems:last_poll', json_encode([
+            'status' => 'success',
+            'polled_at' => now()->subHours(5)->toIso8601String(),
+        ]));
+
+        $service = app(ZnunyManualTicketLifecycleService::class);
+        $service->evaluate();
+
+        $ticket->refresh();
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_CLOSED, $ticket->manual_lifecycle_status);
+    }
+
+    public function test_reopen_candidate_no_active_problem()
+    {
+        Carbon::setTestNow(now());
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'zabbix_severity' => 4,
+            'zabbix_started_at' => now()->subDays(2),
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'closed',
+            'manual_lifecycle_closed_at' => now()->subHours(2),
+        ]);
+
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([], 60);
+
+        $service = app(ZnunyManualTicketLifecycleService::class);
+        $service->evaluate();
+
+        $ticket->refresh();
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_CLOSED, $ticket->manual_lifecycle_status);
+    }
+
+    public function test_reopen_candidate_repeated_evaluations()
+    {
+        Carbon::setTestNow(now());
+
+        $closedAt = now()->subHours(2);
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'zabbix_severity' => 4,
+            'zabbix_started_at' => now()->subDays(2),
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'closed',
+            'manual_lifecycle_closed_at' => $closedAt,
+            'manual_flap_count' => 0,
+        ]);
+
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            [
+                'eventid' => 'evt2',
+                'objectid' => 'trg1',
+                'hosts' => [['hostid' => 'host1']],
+                'started_at' => now()->subHour()->toIso8601String(),
+            ],
+        ], 60);
+
+        $service = app(ZnunyManualTicketLifecycleService::class);
+        
+        $service->evaluate();
+        $ticket->refresh();
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_REOPEN_CANDIDATE, $ticket->manual_lifecycle_status);
+        $this->assertEquals($closedAt->toDateTimeString(), $ticket->manual_lifecycle_closed_at->toDateTimeString());
+        $this->assertEquals(0, $ticket->manual_flap_count);
+
+        Carbon::setTestNow(now()->addMinutes(5));
+        Redis::set('zabbix:problems:last_poll', json_encode([
+            'status' => 'success',
+            'polled_at' => now()->toIso8601String(),
+        ]));
+
+        $service->evaluate();
+        $ticket->refresh();
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_REOPEN_CANDIDATE, $ticket->manual_lifecycle_status);
+        $this->assertEquals($closedAt->toDateTimeString(), $ticket->manual_lifecycle_closed_at->toDateTimeString());
+        $this->assertEquals(0, $ticket->manual_flap_count);
+    }
+
+    public function test_non_manual_ticket_is_not_reopen_candidate()
+    {
+        Carbon::setTestNow(now());
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'zabbix_severity' => 4,
+            'zabbix_started_at' => now()->subDays(2),
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'auto',
+            'znuny_ticket_state_type' => 'closed',
+            'manual_lifecycle_closed_at' => now()->subHours(2),
+        ]);
+
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            [
+                'eventid' => 'evt1',
+                'objectid' => 'trg1',
+                'hosts' => [['hostid' => 'host1']],
+                'started_at' => now()->subDays(2)->toIso8601String(),
+            ],
+        ], 60);
+
+        $service = app(ZnunyManualTicketLifecycleService::class);
+        $stats = $service->evaluate();
+
+        $ticket->refresh();
+        $this->assertNotEquals(ZnunyManualTicketLifecycleService::STATUS_REOPEN_CANDIDATE, $ticket->manual_lifecycle_status);
+        $this->assertEquals(0, $stats['reopen_candidate']);
+    }
 }

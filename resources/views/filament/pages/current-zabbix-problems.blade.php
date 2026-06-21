@@ -662,10 +662,24 @@
             </div>
         </div>
 
-        {{-- Table --}}
         @php
             $eventIds = collect($problems)->pluck('eventid')->filter()->toArray();
-            $linkedTickets = \App\Models\ZabbixTicket::whereIn('zabbix_event_id', $eventIds)->get()->keyBy('zabbix_event_id');
+            $ticketsByEventId = \App\Models\ZabbixTicket::whereIn('zabbix_event_id', $eventIds)->get()->keyBy('zabbix_event_id');
+            
+            $hostIds = collect($problems)->map(fn($p) => $p['hosts'][0]['hostid'] ?? ($p['hostid'] ?? null))->filter()->unique()->toArray();
+            $triggerIds = collect($problems)->map(fn($p) => $p['objectid'] ?? ($p['triggerid'] ?? null))->filter()->unique()->toArray();
+            
+            $reopenCandidates = collect();
+            if (!empty($hostIds) && !empty($triggerIds)) {
+                $reopenCandidates = \App\Models\ZabbixTicket::where('manual_lifecycle_status', 'reopen_candidate')
+                    ->whereIn('zabbix_host_id', $hostIds)
+                    ->whereIn('zabbix_trigger_id', $triggerIds)
+                    ->get()
+                    ->keyBy(function($t) {
+                        return $t->zabbix_host_id . '_' . $t->zabbix_trigger_id;
+                    });
+            }
+
             $canCreateTicket = in_array(auth()->user()->role, ['admin', 'operator'], true);
         @endphp
         <div class="zbx-table-container">
@@ -733,6 +747,12 @@
                             $severityLabel = $problem['severity_label'] ?? $this->getSeverityFallback($severityValue);
                             $ageSeconds = $this->getProblemAgeSeconds($problem);
                             $eventId = (string) ($problem['eventid'] ?? $problem['objectid'] ?? $problem['triggerid'] ?? $loop->index);
+                            
+                            $hostId = $problem['hosts'][0]['hostid'] ?? ($problem['hostid'] ?? null);
+                            $triggerId = $problem['objectid'] ?? ($problem['triggerid'] ?? null);
+                            $hostTriggerKey = $hostId && $triggerId ? $hostId . '_' . $triggerId : null;
+                            
+                            $linkedTicket = $ticketsByEventId[$eventId] ?? ($hostTriggerKey ? $reopenCandidates[$hostTriggerKey] ?? null : null);
                         @endphp
                         <tbody wire:key="zbx-problem-{{ $eventId }}">
                             <tr class="zbx-problem-row" @click="
@@ -756,11 +776,11 @@
                                     </span>
                                 </td>
                                 <td>
-                                    @if(isset($linkedTickets[$eventId]))
-                                        @if($linkedTickets[$eventId]->manual_lifecycle_status === 'reopen_candidate')
-                                            <x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-4 h-4 text-warning-500" title="Manual reopen candidate. Ticket: {{ $linkedTickets[$eventId]->znuny_ticket_number }}" />
+                                    @if($linkedTicket)
+                                        @if($linkedTicket->manual_lifecycle_status === 'reopen_candidate')
+                                            <x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-4 h-4 text-warning-500" title="Manual reopen candidate. Ticket: {{ $linkedTicket->znuny_ticket_number }}" />
                                         @else
-                                            <x-filament::icon icon="heroicon-o-ticket" class="w-4 h-4 text-gray-500 dark:text-gray-400" title="Ticket already linked: {{ $linkedTickets[$eventId]->znuny_ticket_number }}" />
+                                            <x-filament::icon icon="heroicon-o-ticket" class="w-4 h-4 text-gray-500 dark:text-gray-400" title="Ticket already linked: {{ $linkedTicket->znuny_ticket_number }}" />
                                         @endif
                                     @endif
                                 </td>
@@ -811,9 +831,6 @@
                                             @endif
                                         </div>
 
-                                        @php
-                                            $linkedTicket = $linkedTickets[$problem['eventid'] ?? ''] ?? null;
-                                        @endphp
                                         @if($linkedTicket)
                                             <div class="zbx-detail-block">
                                                 <h4>Ticket</h4>
