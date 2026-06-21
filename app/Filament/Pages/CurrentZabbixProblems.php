@@ -116,10 +116,21 @@ class CurrentZabbixProblems extends Page
             $exitCode = Artisan::call('app:poll-zabbix-problems', ['--force' => true]);
 
             if ($exitCode === 0) {
-                Notification::make()
-                    ->title('Zabbix problems refreshed successfully')
-                    ->success()
-                    ->send();
+                $evalExitCode = Artisan::call('znuny:evaluate-manual-ticket-lifecycle');
+
+                if ($evalExitCode === 0) {
+                    Notification::make()
+                        ->title('Zabbix problems refreshed successfully')
+                        ->body('Refresh and lifecycle evaluation completed successfully.')
+                        ->success()
+                        ->send();
+                } else {
+                    Notification::make()
+                        ->title('Zabbix problems refreshed successfully')
+                        ->body('Zabbix refresh succeeded, but lifecycle evaluation failed.')
+                        ->danger()
+                        ->send();
+                }
             } else {
                 Notification::make()
                     ->title('Failed to refresh Zabbix problems')

@@ -12,6 +12,7 @@ use App\Services\Znuny\ZnunyAgentService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketCreationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
@@ -585,5 +586,42 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
 
         $html = $component->html();
         $this->assertStringNotContainsString('Open in Zabbix', $html);
+    }
+
+    public function test_refresh_from_zabbix_calls_poll_and_evaluate_lifecycle()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Artisan::shouldReceive('call')
+            ->with('app:poll-zabbix-problems', ['--force' => true])
+            ->once()
+            ->andReturn(0);
+
+        Artisan::shouldReceive('call')
+            ->with('znuny:evaluate-manual-ticket-lifecycle')
+            ->once()
+            ->andReturn(0);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('refreshFromZabbix');
+    }
+
+    public function test_refresh_from_zabbix_skips_lifecycle_on_poll_failure()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Artisan::shouldReceive('call')
+            ->with('app:poll-zabbix-problems', ['--force' => true])
+            ->once()
+            ->andReturn(1);
+
+        Artisan::shouldReceive('call')
+            ->with('znuny:evaluate-manual-ticket-lifecycle')
+            ->never();
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('refreshFromZabbix');
     }
 }

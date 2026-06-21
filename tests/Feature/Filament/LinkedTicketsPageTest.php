@@ -10,6 +10,7 @@ use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyLinkedTicketCloseService;
 use App\Services\Znuny\ZnunyLinkedTicketSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -301,5 +302,51 @@ class LinkedTicketsPageTest extends TestCase
         Livewire::test(ListZabbixTickets::class)
             ->mountTableAction('view', $ticket3)
             ->assertHasNoTableActionErrors();
+    }
+
+    public function test_sync_action_calls_artisan_commands()
+    {
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+
+        Artisan::shouldReceive('call')
+            ->with('znuny:sync-linked-tickets')
+            ->once()
+            ->andReturn(0);
+
+        Artisan::shouldReceive('output')
+            ->andReturn('Mocked output');
+
+        Artisan::shouldReceive('call')
+            ->with('znuny:evaluate-manual-ticket-lifecycle')
+            ->once()
+            ->andReturn(0);
+
+        Artisan::shouldReceive('output')
+            ->andReturn('');
+
+        Livewire::test(ListZabbixTickets::class)
+            ->callAction('sync_tickets')
+            ->assertHasNoActionErrors();
+    }
+
+    public function test_sync_action_skips_lifecycle_on_sync_failure()
+    {
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+
+        Artisan::shouldReceive('call')
+            ->with('znuny:sync-linked-tickets')
+            ->once()
+            ->andReturn(1);
+
+        Artisan::shouldReceive('output')
+            ->andReturn('Mocked failure');
+
+        Artisan::shouldReceive('call')
+            ->with('znuny:evaluate-manual-ticket-lifecycle')
+            ->never();
+
+        Livewire::test(ListZabbixTickets::class)
+            ->callAction('sync_tickets')
+            ->assertHasNoActionErrors();
     }
 }
