@@ -17,6 +17,8 @@ class ZnunyManualTicketLifecycleService
 
     public const STATUS_FLAPPING = 'flapping';
 
+    public const STATUS_REOPEN_CANDIDATE = 'reopen_candidate';
+
     public const STATUS_CLOSED = 'closed';
 
     public const STATUS_NOT_APPLICABLE = 'not_applicable';
@@ -46,6 +48,7 @@ class ZnunyManualTicketLifecycleService
             'resolved_waiting' => 0,
             'close_candidate' => 0,
             'flapping' => 0,
+            'reopen_candidate' => 0,
             'closed' => 0,
             'identity_missing' => 0,
             'skipped' => 0,
@@ -55,6 +58,7 @@ class ZnunyManualTicketLifecycleService
         $closeDelayHours = SettingsService::int('default_close_delay_hours', 4);
         $flapThreshold = SettingsService::int('manual_ticket_flap_threshold', 3);
         $flapDelayHours = SettingsService::int('manual_ticket_extra_flapping_delay_hours', 24);
+        $reopenWindowHours = SettingsService::defaultReopenWindowHours();
 
         $now = Carbon::now();
         $activeProblems = $this->cache->all();
@@ -104,7 +108,38 @@ class ZnunyManualTicketLifecycleService
                 }
 
                 if ($ticket->znuny_ticket_state_type === 'closed') {
+                    if ($ticket->manual_lifecycle_closed_at === null) {
+                        $ticket->manual_lifecycle_closed_at = clone $now;
+                    }
+
+                    if ($isCacheFresh) {
+                        $currentProblem = $this->findActiveProblemForTicket($ticket, $activeProblems);
+
+                        if ($currentProblem !== null) {
+                            $currentStartedAt = $this->extractProblemStartedAt($currentProblem);
+                            $anchor = $ticket->zabbix_problem_resolved_at
+                                ?? $ticket->manual_lifecycle_closed_at
+                                ?? $ticket->znuny_ticket_closed_at;
+
+                            if ($anchor && $currentStartedAt) {
+                                $windowEnd = (clone $anchor)->addHours($reopenWindowHours);
+
+                                if ($currentStartedAt->lessThanOrEqualTo($windowEnd)) {
+                                    $ticket->manual_lifecycle_status = self::STATUS_REOPEN_CANDIDATE;
+                                    $ticket->zabbix_problem_is_active = true;
+                                    $ticket->zabbix_problem_last_seen_active_at = $now;
+                                    $ticket->manual_lifecycle_last_checked_at = $now;
+                                    $ticket->save();
+                                    $stats['reopen_candidate']++;
+
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+
                     $ticket->manual_lifecycle_status = self::STATUS_CLOSED;
+                    $ticket->zabbix_problem_is_active = false;
                     $ticket->manual_lifecycle_last_checked_at = $now;
                     $ticket->save();
                     $stats['closed']++;

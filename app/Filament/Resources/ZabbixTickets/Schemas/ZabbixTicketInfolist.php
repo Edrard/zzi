@@ -27,6 +27,9 @@ class ZabbixTicketInfolist
                         TextEntry::make('resolution_context')
                             ->label(self::formatLabel('Resolution Context'))
                             ->state(function (ZabbixTicket $record) {
+                                if ($record->manual_lifecycle_status === 'reopen_candidate') {
+                                    return 'Manual reopen candidate';
+                                }
                                 $isClosed = strtolower($record->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $record->znuny_state_name), 'closed');
                                 if ($isClosed) {
                                     return 'Closed';
@@ -54,6 +57,9 @@ class ZabbixTicketInfolist
                             })
                             ->badge()
                             ->color(function (ZabbixTicket $record) {
+                                if ($record->manual_lifecycle_status === 'reopen_candidate') {
+                                    return 'warning';
+                                }
                                 $isClosed = strtolower($record->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $record->znuny_state_name), 'closed');
                                 if ($isClosed) {
                                     return 'gray';
@@ -76,7 +82,17 @@ class ZabbixTicketInfolist
 
                                 return 'gray';
                             })
+                            ->icon(function (ZabbixTicket $record) {
+                                if ($record->manual_lifecycle_status === 'reopen_candidate') {
+                                    return 'heroicon-o-exclamation-triangle';
+                                }
+
+                                return null;
+                            })
                             ->tooltip(function (ZabbixTicket $record) {
+                                if ($record->manual_lifecycle_status === 'reopen_candidate') {
+                                    return 'The Znuny ticket is closed, but the linked Zabbix problem is active again within the reopen window. Review manually.';
+                                }
                                 if ($record->manual_lifecycle_status === 'identity_missing') {
                                     return 'Missing Zabbix host/trigger identity; lifecycle cannot be evaluated safely.';
                                 }

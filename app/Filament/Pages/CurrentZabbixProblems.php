@@ -10,6 +10,7 @@ use App\Services\Zabbix\ZabbixProblemQueryService;
 use App\Services\Znuny\ZabbixTicketLinkService;
 use App\Services\Znuny\ZnunyAgentService;
 use App\Services\Znuny\ZnunyClient;
+use App\Services\Znuny\ZnunyManualTicketLifecycleService;
 use App\Services\Znuny\ZnunyTicketCreationService;
 use App\Services\Znuny\ZnunyTicketModalStateBuilder;
 use App\Services\Znuny\ZnunyTicketTextBuilder;
@@ -246,7 +247,7 @@ class CurrentZabbixProblems extends Page
 
         $linkService = app(ZabbixTicketLinkService::class);
         $existing = $linkService->findByEventId($eventId);
-        if ($existing) {
+        if ($existing && $existing->manual_lifecycle_status !== ZnunyManualTicketLifecycleService::STATUS_REOPEN_CANDIDATE && $existing->manual_lifecycle_status !== ZnunyManualTicketLifecycleService::STATUS_CLOSED) {
             Notification::make()
                 ->title("Ticket already linked: {$existing->znuny_ticket_number}")
                 ->info()

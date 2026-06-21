@@ -757,7 +757,11 @@
                                 </td>
                                 <td>
                                     @if(isset($linkedTickets[$eventId]))
-                                        <x-filament::icon icon="heroicon-o-ticket" class="w-4 h-4 text-gray-500 dark:text-gray-400" title="Ticket already linked: {{ $linkedTickets[$eventId]->znuny_ticket_number }}" />
+                                        @if($linkedTickets[$eventId]->manual_lifecycle_status === 'reopen_candidate')
+                                            <x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-4 h-4 text-warning-500" title="Manual reopen candidate. Ticket: {{ $linkedTickets[$eventId]->znuny_ticket_number }}" />
+                                        @else
+                                            <x-filament::icon icon="heroicon-o-ticket" class="w-4 h-4 text-gray-500 dark:text-gray-400" title="Ticket already linked: {{ $linkedTickets[$eventId]->znuny_ticket_number }}" />
+                                        @endif
                                     @endif
                                 </td>
                                 <td class="zbx-host-col">
@@ -818,12 +822,21 @@
                                                     <li><strong>Queue:</strong> {{ $linkedTicket->znuny_queue_name ?: 'N/A' }}</li>
                                                     <li><strong>Owner:</strong> {{ $this->getTicketOwnerDisplay($linkedTicket) }}</li>
                                                     <li><strong>Ticket Age:</strong> {{ $this->formatAge((int) $linkedTicket->created_at->diffInSeconds()) }}</li>
+                                                    @if($linkedTicket->manual_lifecycle_status === 'reopen_candidate')
+                                                        <li><strong class="text-warning-600 dark:text-warning-400">Manual Reopen Candidate</strong></li>
+                                                    @endif
                                                 </ul>
                                             </div>
                                             <div class="zbx-ticket-panel" style="grid-column: 1 / -1;">
                                                 <x-filament::button tag="a" href="{{ app(\App\Services\Znuny\ZnunyClient::class)->ticketUrl($linkedTicket->znuny_ticket_id) }}" target="_blank" color="info" size="sm" icon="heroicon-o-arrow-top-right-on-square">
                                                     Open Ticket
                                                 </x-filament::button>
+
+                                                @if($linkedTicket->manual_lifecycle_status === 'reopen_candidate' && $canCreateTicket)
+                                                    <x-filament::button wire:click="openCreateTicketModal('{{ $problem['eventid'] }}')" icon="heroicon-o-ticket">
+                                                        Create ticket
+                                                    </x-filament::button>
+                                                @endif
                                             </div>
                                         @elseif($canCreateTicket)
                                             <div class="zbx-ticket-panel" style="grid-column: 1 / -1;">
