@@ -155,6 +155,7 @@ class ZabbixProblemCache
             'ttl_minutes' => (int) round($ttl / 60),
             'ttl_seconds' => $ttl,
             'limit' => $limit,
+            'last_successful_polled_at' => now()->toIso8601String(),
         ];
 
         if ($limit !== null) {
@@ -181,6 +182,12 @@ class ZabbixProblemCache
 
         if ($lastPoll && isset($lastPoll['status'])) {
             $payload['previous_status'] = $lastPoll['status'];
+        }
+
+        if ($lastPoll && isset($lastPoll['last_successful_polled_at'])) {
+            $payload['last_successful_polled_at'] = $lastPoll['last_successful_polled_at'];
+        } elseif ($lastPoll && $lastPoll['status'] === 'success' && isset($lastPoll['polled_at'])) {
+            $payload['last_successful_polled_at'] = $lastPoll['polled_at'];
         }
 
         Redis::setex('zabbix:problems:last_poll', $ttl, json_encode($payload, JSON_THROW_ON_ERROR));

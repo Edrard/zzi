@@ -786,6 +786,53 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
         $this->assertEquals(1, $stats['identity_missing']);
     }
 
+    public function test_individual_cache_gap_prevents_false_resolved()
+    {
+        Carbon::setTestNow(now());
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'zabbix_severity' => 4,
+            'zabbix_started_at' => now()->subDay(),
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open',
+            'zabbix_problem_is_active' => true,
+            'manual_lifecycle_status' => 'active',
+        ]);
+
+        $cache = app(ZabbixProblemCache::class);
+        // Put a DIFFERENT problem in the main index (simulating missing from latest poll)
+        $cache->putMany([
+            [
+                'eventid' => 'evt2',
+                'objectid' => 'trg2',
+                'hosts' => [['hostid' => 'host2']],
+            ],
+        ], 60);
+
+        // BUT the individual problem key is still alive in Redis
+        Redis::setex('zabbix:problem:evt1', 60, json_encode([
+            'eventid' => 'evt1',
+            'objectid' => 'trg1',
+            'hosts' => [['hostid' => 'host1']],
+        ]));
+
+        $service = app(ZnunyManualTicketLifecycleService::class);
+        $service->evaluate();
+
+        $ticket->refresh();
+
+        // Should remain active because it was found in individual cache!
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_ACTIVE, $ticket->manual_lifecycle_status);
+        $this->assertTrue($ticket->zabbix_problem_is_active);
+    }
+
     public function test_missing_trigger_id_sets_identity_missing()
     {
         Carbon::setTestNow(now());

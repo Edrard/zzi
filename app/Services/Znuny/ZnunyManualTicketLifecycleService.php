@@ -61,12 +61,21 @@ class ZnunyManualTicketLifecycleService
         $lastPoll = $this->cache->lastPoll();
 
         $pollIntervalMinutes = SettingsService::int('zabbix_poll_interval_minutes', 1) ?? 1;
-        $maxStaleMinutes = max(2 * $pollIntervalMinutes, 2);
+        $presenceWindowMinutes = SettingsService::int('zabbix_problem_cache_ttl_minutes', 3) ?? 3;
+        $maxStaleMinutes = max($presenceWindowMinutes, 2 * $pollIntervalMinutes);
 
         $isCacheFresh = false;
-        if ($lastPoll && isset($lastPoll['status']) && $lastPoll['status'] === 'success' && isset($lastPoll['polled_at'])) {
+
+        $lastSuccessfulAt = null;
+        if ($lastPoll && isset($lastPoll['last_successful_polled_at'])) {
+            $lastSuccessfulAt = $lastPoll['last_successful_polled_at'];
+        } elseif ($lastPoll && isset($lastPoll['status']) && $lastPoll['status'] === 'success' && isset($lastPoll['polled_at'])) {
+            $lastSuccessfulAt = $lastPoll['polled_at'];
+        }
+
+        if ($lastSuccessfulAt) {
             try {
-                $polledAt = Carbon::parse($lastPoll['polled_at']);
+                $polledAt = Carbon::parse($lastSuccessfulAt);
                 if ($polledAt->greaterThanOrEqualTo($now->copy()->subMinutes($maxStaleMinutes))) {
                     $isCacheFresh = true;
                 }
@@ -121,6 +130,13 @@ class ZnunyManualTicketLifecycleService
                     if ($hostId == $ticket->zabbix_host_id && $triggerId == $ticket->zabbix_trigger_id) {
                         $activeProblem = true;
                         break;
+                    }
+                }
+
+                if (! $activeProblem && $ticket->zabbix_event_id) {
+                    $individualProblem = $this->cache->find($ticket->zabbix_event_id);
+                    if ($individualProblem) {
+                        $activeProblem = true;
                     }
                 }
 

@@ -278,4 +278,28 @@ class LinkedTicketsPageTest extends TestCase
         $this->assertEquals('active', $ticket->manual_lifecycle_status);
         $this->assertEquals('open', $ticket->znuny_ticket_state_type);
     }
+
+    public function test_linked_tickets_view_details_flap_count_visibility()
+    {
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+
+        $ticket1 = ZabbixTicket::create([
+            'zabbix_event_id' => '1', 'zabbix_trigger_id' => '1', 'zabbix_host_id' => '1', 'zabbix_host_name' => 'host1', 'zabbix_problem_name' => 'prob1', 'zabbix_severity' => 1, 'zabbix_started_at' => now(), 'znuny_ticket_id' => 1, 'znuny_ticket_number' => '1', 'creation_source' => 'manual',
+            'manual_flap_count' => 0,
+        ]);
+
+        $ticket3 = ZabbixTicket::create([
+            'zabbix_event_id' => '3', 'zabbix_trigger_id' => '3', 'zabbix_host_id' => '3', 'zabbix_host_name' => 'host3', 'zabbix_problem_name' => 'prob3', 'zabbix_severity' => 1, 'zabbix_started_at' => now(), 'znuny_ticket_id' => 3, 'znuny_ticket_number' => '3', 'creation_source' => 'manual',
+            'manual_flap_count' => 2,
+        ]);
+
+        // Ensure actions open without crashing and closures execute correctly
+        Livewire::test(ListZabbixTickets::class)
+            ->mountTableAction('view', $ticket1)
+            ->assertHasNoTableActionErrors();
+
+        Livewire::test(ListZabbixTickets::class)
+            ->mountTableAction('view', $ticket3)
+            ->assertHasNoTableActionErrors();
+    }
 }
