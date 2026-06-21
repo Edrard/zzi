@@ -68,6 +68,43 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
         $this->assertEquals(1, $stats['active']);
     }
 
+    public function test_reopened_ticket_remains_reopened()
+    {
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt_reopen',
+            'zabbix_trigger_id' => 'trg_reopen',
+            'zabbix_host_id' => 'host_reopen',
+            'zabbix_host_name' => 'Host Reopen',
+            'zabbix_problem_name' => 'Problem Reopen',
+            'zabbix_severity' => 4,
+            'zabbix_started_at' => now(),
+            'znuny_ticket_id' => 101,
+            'znuny_ticket_number' => '1001',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open',
+            'manual_lifecycle_status' => ZnunyManualTicketLifecycleService::STATUS_REOPENED,
+        ]);
+
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            [
+                'eventid' => 'evt_reopen',
+                'objectid' => 'trg_reopen',
+                'hosts' => [['hostid' => 'host_reopen']],
+            ],
+        ], 60);
+
+        $service = app(ZnunyManualTicketLifecycleService::class);
+        $stats = $service->evaluate();
+
+        $ticket->refresh();
+
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_REOPENED, $ticket->manual_lifecycle_status);
+        $this->assertTrue($ticket->zabbix_problem_is_active);
+        $this->assertNull($ticket->manual_close_eligible_at);
+        $this->assertEquals(1, $stats['reopened']);
+    }
+
     public function test_resolved_manual_linked_ticket_calculates_close_eligible_at()
     {
         Carbon::setTestNow(now());
@@ -1307,7 +1344,7 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
         ], 60);
 
         $service = app(ZnunyManualTicketLifecycleService::class);
-        
+
         $service->evaluate();
         $ticket->refresh();
         $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_REOPEN_CANDIDATE, $ticket->manual_lifecycle_status);

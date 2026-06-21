@@ -51,7 +51,8 @@ class ZnunyLinkedTicketReopenService
             }
 
             // Successfully reopened in Znuny. Update local status.
-            $ticket->manual_lifecycle_status = ZnunyManualTicketLifecycleService::STATUS_ACTIVE;
+            $ticket->manual_lifecycle_status = ZnunyManualTicketLifecycleService::STATUS_REOPENED;
+            $ticket->manual_reopened_at = now();
             $ticket->zabbix_problem_is_active = true;
             $ticket->manual_close_eligible_at = null;
             // keep flap fields unchanged

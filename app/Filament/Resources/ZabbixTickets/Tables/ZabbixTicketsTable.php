@@ -89,6 +89,9 @@ class ZabbixTicketsTable
                         if ($record->manual_lifecycle_status === 'reopen_candidate') {
                             return 'Manual reopen candidate';
                         }
+                        if ($record->manual_lifecycle_status === 'reopened') {
+                            return 'Reopened';
+                        }
                         $isClosed = strtolower($record->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $record->znuny_state_name), 'closed');
                         if ($isClosed) {
                             return 'Closed';
@@ -113,6 +116,9 @@ class ZabbixTicketsTable
                     })
                     ->color(function (ZabbixTicket $record) {
                         if ($record->manual_lifecycle_status === 'reopen_candidate') {
+                            return 'warning';
+                        }
+                        if ($record->manual_lifecycle_status === 'reopened') {
                             return 'warning';
                         }
                         $isClosed = strtolower($record->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $record->znuny_state_name), 'closed');
@@ -141,6 +147,9 @@ class ZabbixTicketsTable
                         if ($record->manual_lifecycle_status === 'reopen_candidate') {
                             return 'heroicon-o-exclamation-triangle';
                         }
+                        if ($record->manual_lifecycle_status === 'reopened') {
+                            return 'heroicon-o-ticket';
+                        }
                         $isClosed = strtolower($record->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $record->znuny_state_name), 'closed');
                         if ($isClosed) {
                             return 'heroicon-o-check-circle';
@@ -166,6 +175,9 @@ class ZabbixTicketsTable
                     ->tooltip(function (ZabbixTicket $record) {
                         if ($record->manual_lifecycle_status === 'reopen_candidate') {
                             return 'Znuny ticket is closed, but the linked Zabbix problem is active again within the reopen window. Choose Reopen or Create Ticket manually.';
+                        }
+                        if ($record->manual_lifecycle_status === 'reopened') {
+                            return 'Manually reopened ticket';
                         }
                         $isClosed = strtolower($record->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $record->znuny_state_name), 'closed');
                         if ($isClosed) {

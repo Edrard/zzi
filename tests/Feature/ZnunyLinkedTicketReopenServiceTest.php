@@ -74,7 +74,8 @@ class ZnunyLinkedTicketReopenServiceTest extends TestCase
         $this->assertTrue($result['success']);
 
         $ticket->refresh();
-        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_ACTIVE, $ticket->manual_lifecycle_status);
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_REOPENED, $ticket->manual_lifecycle_status);
+        $this->assertNotNull($ticket->manual_reopened_at);
         $this->assertTrue($ticket->zabbix_problem_is_active);
         $this->assertNull($ticket->manual_close_eligible_at);
         $this->assertEquals('open', $ticket->znuny_state_name);

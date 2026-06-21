@@ -19,6 +19,8 @@ class ZnunyManualTicketLifecycleService
 
     public const STATUS_REOPEN_CANDIDATE = 'reopen_candidate';
 
+    public const STATUS_REOPENED = 'reopened';
+
     public const STATUS_CLOSED = 'closed';
 
     public const STATUS_NOT_APPLICABLE = 'not_applicable';
@@ -49,6 +51,7 @@ class ZnunyManualTicketLifecycleService
             'close_candidate' => 0,
             'flapping' => 0,
             'reopen_candidate' => 0,
+            'reopened' => 0,
             'closed' => 0,
             'identity_missing' => 0,
             'skipped' => 0,
@@ -209,8 +212,13 @@ class ZnunyManualTicketLifecycleService
                         if ($ticket->manual_lifecycle_status === self::STATUS_FLAPPING) {
                             $ticket->manual_flapping_detected_at = null;
                         }
-                        $ticket->manual_lifecycle_status = self::STATUS_ACTIVE;
-                        $stats['active']++;
+                        if ($ticket->manual_lifecycle_status === self::STATUS_REOPENED) {
+                            $ticket->manual_lifecycle_status = self::STATUS_REOPENED;
+                            $stats['reopened']++;
+                        } else {
+                            $ticket->manual_lifecycle_status = self::STATUS_ACTIVE;
+                            $stats['active']++;
+                        }
                     }
 
                     $ticket->save();

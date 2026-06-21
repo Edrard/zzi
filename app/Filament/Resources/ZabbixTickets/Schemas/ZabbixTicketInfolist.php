@@ -24,11 +24,15 @@ class ZabbixTicketInfolist
                     ->schema([
                         TextEntry::make('znuny_ticket_number')->label(self::formatLabel('Ticket Number'))->inlineLabel()->placeholder('-'),
                         TextEntry::make('created_at')->label(self::formatLabel('Ticket Age'))->since()->inlineLabel()->placeholder('-'),
+                        TextEntry::make('manual_reopened_at')->label(self::formatLabel('Reopened at'))->dateTime()->inlineLabel()->visible(fn (ZabbixTicket $record) => $record->manual_reopened_at !== null),
                         TextEntry::make('resolution_context')
                             ->label(self::formatLabel('Resolution Context'))
                             ->state(function (ZabbixTicket $record) {
                                 if ($record->manual_lifecycle_status === 'reopen_candidate') {
                                     return 'Manual reopen candidate';
+                                }
+                                if ($record->manual_lifecycle_status === 'reopened') {
+                                    return 'Reopened';
                                 }
                                 $isClosed = strtolower($record->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $record->znuny_state_name), 'closed');
                                 if ($isClosed) {
@@ -60,6 +64,9 @@ class ZabbixTicketInfolist
                                 if ($record->manual_lifecycle_status === 'reopen_candidate') {
                                     return 'warning';
                                 }
+                                if ($record->manual_lifecycle_status === 'reopened') {
+                                    return 'warning';
+                                }
                                 $isClosed = strtolower($record->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $record->znuny_state_name), 'closed');
                                 if ($isClosed) {
                                     return 'gray';
@@ -86,12 +93,18 @@ class ZabbixTicketInfolist
                                 if ($record->manual_lifecycle_status === 'reopen_candidate') {
                                     return 'heroicon-o-exclamation-triangle';
                                 }
+                                if ($record->manual_lifecycle_status === 'reopened') {
+                                    return 'heroicon-o-ticket';
+                                }
 
                                 return null;
                             })
                             ->tooltip(function (ZabbixTicket $record) {
                                 if ($record->manual_lifecycle_status === 'reopen_candidate') {
                                     return 'The Znuny ticket is closed, but the linked Zabbix problem is active again within the reopen window. Review manually.';
+                                }
+                                if ($record->manual_lifecycle_status === 'reopened') {
+                                    return 'Manually reopened ticket.';
                                 }
                                 if ($record->manual_lifecycle_status === 'identity_missing') {
                                     return 'Missing Zabbix host/trigger identity; lifecycle cannot be evaluated safely.';

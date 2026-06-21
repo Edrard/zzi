@@ -779,6 +779,8 @@
                                     @if($linkedTicket)
                                         @if($linkedTicket->manual_lifecycle_status === 'reopen_candidate')
                                             <x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-4 h-4 !text-orange-500 dark:!text-orange-400" style="color: #f97316;" title="Manual reopen candidate. Ticket: {{ $linkedTicket->znuny_ticket_number }}" />
+                                        @elseif($linkedTicket->manual_lifecycle_status === 'reopened')
+                                            <x-filament::icon icon="heroicon-o-ticket" class="w-4 h-4 !text-orange-500 dark:!text-orange-400" style="color: #f97316;" title="Manually reopened ticket. Ticket: {{ $linkedTicket->znuny_ticket_number }}" />
                                         @else
                                             <x-filament::icon icon="heroicon-o-ticket" class="w-4 h-4 text-gray-500 dark:text-gray-400" title="Ticket already linked: {{ $linkedTicket->znuny_ticket_number }}" />
                                         @endif
@@ -841,6 +843,11 @@
                                                     <li><strong>Ticket Age:</strong> {{ $this->formatAge((int) $linkedTicket->created_at->diffInSeconds()) }}</li>
                                                     @if($linkedTicket->manual_lifecycle_status === 'reopen_candidate')
                                                         <li><strong class="text-orange-500 dark:text-orange-400 inline-flex items-center gap-1">Manual Reopen Candidate</strong></li>
+                                                    @elseif($linkedTicket->manual_lifecycle_status === 'reopened')
+                                                        <li><strong class="text-orange-500 dark:text-orange-400 inline-flex items-center gap-1">Manually reopened</strong></li>
+                                                    @endif
+                                                    @if($linkedTicket->manual_reopened_at)
+                                                        <li><strong>Reopened at:</strong> {{ $linkedTicket->manual_reopened_at->format('Y-m-d H:i:s') }}</li>
                                                     @endif
                                                 </ul>
                                             </div>
