@@ -213,14 +213,15 @@ class AutoCloseManualTicketsCommandTest extends TestCase
         $clientMock = $this->mock(ZnunyClient::class);
         $clientMock->shouldReceive('closeTicket')
             ->once()
-            ->andReturn(['success' => true]);
-
-        $clientMock->shouldReceive('getTicket')
-            ->once()
             ->andReturn([
-                'StateType' => 'closed',
-                'State' => 'closed successful',
+                'success' => true,
+                'state' => 'closed successful',
+                'state_type' => 'closed',
+                'warnings' => [],
+                'errors' => [],
             ]);
+
+        $clientMock->shouldNotReceive('getTicket');
 
         $this->artisan('znuny:auto-close-manual-tickets --execute --json')
             ->assertSuccessful();
@@ -257,10 +258,7 @@ class AutoCloseManualTicketsCommandTest extends TestCase
         $clientMock = $this->mock(ZnunyClient::class);
         $clientMock->shouldReceive('closeTicket')
             ->once()
-            ->andReturn([
-                'success' => false,
-                'errors' => [], // ambiguous
-            ]);
+            ->andThrow(new \Exception('Network timeout'));
 
         $clientMock->shouldReceive('getTicket')
             ->once()
@@ -284,10 +282,7 @@ class AutoCloseManualTicketsCommandTest extends TestCase
         $clientMock = $this->mock(ZnunyClient::class);
         $clientMock->shouldReceive('closeTicket')
             ->once()
-            ->andReturn([
-                'success' => false,
-                'errors' => [], // ambiguous
-            ]);
+            ->andThrow(new \Exception('Network timeout'));
 
         $clientMock->shouldReceive('getTicket')
             ->once()
@@ -311,10 +306,7 @@ class AutoCloseManualTicketsCommandTest extends TestCase
         $clientMock = $this->mock(ZnunyClient::class);
         $clientMock->shouldReceive('closeTicket')
             ->once()
-            ->andReturn([
-                'success' => false,
-                'errors' => [], // ambiguous
-            ]);
+            ->andThrow(new \Exception('Network timeout'));
 
         $clientMock->shouldReceive('getTicket')
             ->once()

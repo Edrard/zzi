@@ -253,4 +253,95 @@ class ZnunyClientTest extends TestCase
         $this->assertCount(1, $result['errors']);
         $this->assertStringContainsString('HTTP request failed with status 500', $result['errors'][0]);
     }
+
+    public function test_close_ticket_normalization_success()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/TicketClose*' => Http::response([
+                'Success' => 1,
+                'Data' => [
+                    'Ticket' => [
+                        'TicketID' => 57115,
+                        'TicketNumber' => '2026061846000189',
+                        'State' => 'closed successful',
+                        'StateType' => 'closed',
+                    ],
+                    'ArticleID' => 339513,
+                    'State' => 'closed successful',
+                    'Warnings' => [],
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $response = $client->closeTicket(57115, ['Reason' => 'Test']);
+
+        $this->assertTrue($response['success']);
+        $this->assertEquals(57115, $response['ticket_id']);
+        $this->assertEquals('2026061846000189', $response['ticket_number']);
+        $this->assertEquals('closed successful', $response['state']);
+        $this->assertEquals('closed', $response['state_type']);
+        $this->assertEquals(339513, $response['article_id']);
+        $this->assertEmpty($response['errors']);
+    }
+
+    public function test_reopen_ticket_normalization_success()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/TicketReopen*' => Http::response([
+                'Success' => 1,
+                'Data' => [
+                    'Ticket' => [
+                        'TicketID' => 57115,
+                        'TicketNumber' => '2026061846000189',
+                        'State' => 'open',
+                        'StateType' => 'open',
+                    ],
+                    'ArticleID' => 339514,
+                    'State' => 'open',
+                    'Reason' => 'Problem reappeared.',
+                    'Warnings' => [],
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $response = $client->reopenTicket(57115, ['Reason' => 'Test']);
+
+        $this->assertTrue($response['success']);
+        $this->assertEquals(57115, $response['ticket_id']);
+        $this->assertEquals('2026061846000189', $response['ticket_number']);
+        $this->assertEquals('open', $response['state']);
+        $this->assertEquals('open', $response['state_type']);
+        $this->assertEquals(339514, $response['article_id']);
+        $this->assertEmpty($response['errors']);
+    }
+
+    public function test_reopen_ticket_normalization_business_error()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/TicketReopen*' => Http::response([
+                'Success' => 1,
+                'Data' => [
+                    'Ticket' => [
+                        'TicketID' => 57115,
+                        'TicketNumber' => '2026061846000189',
+                        'State' => 'open',
+                        'StateType' => 'open',
+                    ],
+                    'Errors' => ['Ticket is not closed.'],
+                    'Warnings' => [],
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $response = $client->reopenTicket(57115, ['Reason' => 'Test']);
+
+        $this->assertFalse($response['success']);
+        $this->assertContains('Ticket is not closed.', $response['errors']);
+    }
 }

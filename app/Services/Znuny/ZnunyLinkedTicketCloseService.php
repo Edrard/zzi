@@ -40,27 +40,31 @@ class ZnunyLinkedTicketCloseService
             ];
         }
 
-        if ($response && ! empty($response['errors'])) {
+        if ($response && ! $response['success']) {
             return [
                 'success' => false,
                 'ticket_number' => $ticket->znuny_ticket_number,
-                'reason' => 'Failed to close in Znuny: '.implode(', ', $response['errors']),
+                'reason' => 'Failed to close in Znuny: '.implode(', ', $response['errors'] ?? ['Unknown error']),
             ];
         }
 
-        // Perform read-after-write verification
-        try {
-            $ticketSnapshot = $this->znunyClient->getTicket($ticket->znuny_ticket_id);
-        } catch (\Throwable $e) {
-            return [
-                'success' => false,
-                'ticket_number' => $ticket->znuny_ticket_number,
-                'reason' => 'Verification failed: '.$e->getMessage(),
-            ];
-        }
+        $stateType = $response['state_type'] ?? null;
+        $stateName = $response['state'] ?? null;
 
-        $stateType = $ticketSnapshot['StateType'] ?? null;
-        $stateName = $ticketSnapshot['State'] ?? null;
+        // Perform read-after-write verification only if state is missing from close response
+        if (! $stateType || ! $stateName) {
+            try {
+                $ticketSnapshot = $this->znunyClient->getTicket($ticket->znuny_ticket_id);
+                $stateType = $ticketSnapshot['StateType'] ?? null;
+                $stateName = $ticketSnapshot['State'] ?? null;
+            } catch (\Throwable $e) {
+                return [
+                    'success' => false,
+                    'ticket_number' => $ticket->znuny_ticket_number,
+                    'reason' => 'Verification failed: '.$e->getMessage(),
+                ];
+            }
+        }
 
         $isClosed = $stateType === 'closed' || str_contains(strtolower((string) $stateName), 'closed');
 

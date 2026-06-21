@@ -58,14 +58,8 @@ class ZnunyLinkedTicketReopenService
             // keep flap fields unchanged
 
             // If response includes State/StateType, update local Znuny state fields
-            if (! empty($response['raw']['State']) || ! empty($response['raw']['StateType'])) {
-                if (! empty($response['raw']['State'])) {
-                    $ticket->znuny_state_name = $response['raw']['State'];
-                }
-                if (! empty($response['raw']['StateType'])) {
-                    $ticket->znuny_ticket_state_type = $response['raw']['StateType'];
-                }
-            }
+            $ticket->znuny_state_name = $response['state'] ?? ($response['raw']['State'] ?? 'open');
+            $ticket->znuny_ticket_state_type = $response['state_type'] ?? ($response['raw']['StateType'] ?? 'open');
 
             $ticket->save();
 

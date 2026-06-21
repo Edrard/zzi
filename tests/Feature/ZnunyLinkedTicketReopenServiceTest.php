@@ -63,10 +63,19 @@ class ZnunyLinkedTicketReopenServiceTest extends TestCase
             }))
             ->andReturn([
                 'success' => true,
+                'state' => 'open',
+                'state_type' => 'open',
+                'ticket_id' => 12345,
+                'ticket_number' => '123456789',
+                'article_id' => 339514,
                 'raw' => [
-                    'Success' => 1,
                     'State' => 'open',
-                    'StateType' => 'open',
+                    'Ticket' => [
+                        'State' => 'open',
+                        'StateType' => 'open',
+                        'TicketID' => 12345,
+                        'TicketNumber' => '123456789',
+                    ],
                 ],
             ]);
 

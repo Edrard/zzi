@@ -821,6 +821,43 @@ class ZnunyClient
     }
 
     /**
+     * Normalize controlled ticket write operations (like Close and Reopen)
+     * expecting the unwrapped Data payload.
+     */
+    protected function normalizeControlledTicketWriteResponse(array $data): array
+    {
+        $ticket = $data['Ticket'] ?? [];
+
+        $ticketId = $data['TicketID'] ?? $ticket['TicketID'] ?? null;
+        $ticketNumber = $data['TicketNumber'] ?? $ticket['TicketNumber'] ?? null;
+        $state = $data['State'] ?? $ticket['State'] ?? null;
+        $stateType = $data['StateType'] ?? $ticket['StateType'] ?? null;
+        $articleId = $data['ArticleID'] ?? null;
+
+        $errors = $data['Errors'] ?? [];
+        $warnings = $data['Warnings'] ?? [];
+
+        $hasSuccessIndicator = $articleId !== null || $ticketId !== null || $ticketNumber !== null || ! empty($ticket) || $state !== null;
+        $success = empty($errors) && $hasSuccessIndicator;
+
+        if (! $success && empty($errors)) {
+            $errors[] = 'Missing ticket write confirmation in response.';
+        }
+
+        return [
+            'success' => $success,
+            'ticket_id' => $ticketId,
+            'ticket_number' => $ticketNumber,
+            'state' => $state,
+            'state_type' => $stateType,
+            'article_id' => $articleId,
+            'warnings' => $warnings,
+            'errors' => $errors,
+            'raw' => $data,
+        ];
+    }
+
+    /**
      * Call POST /TicketClose to safely close a ticket.
      */
     public function closeTicket(int|string $ticketId, array $payload): array
@@ -835,12 +872,7 @@ class ZnunyClient
 
             $data = $this->processResponse($response);
 
-            return [
-                'success' => ! empty($data['Success']),
-                'warnings' => $data['Warnings'] ?? [],
-                'errors' => $data['Errors'] ?? [],
-                'raw' => $data,
-            ];
+            return $this->normalizeControlledTicketWriteResponse($data);
         });
     }
 
@@ -859,12 +891,7 @@ class ZnunyClient
 
             $data = $this->processResponse($response);
 
-            return [
-                'success' => ! empty($data['Success']),
-                'warnings' => $data['Warnings'] ?? [],
-                'errors' => $data['Errors'] ?? [],
-                'raw' => $data,
-            ];
+            return $this->normalizeControlledTicketWriteResponse($data);
         });
     }
 }
