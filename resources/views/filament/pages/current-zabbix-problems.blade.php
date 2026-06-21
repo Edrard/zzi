@@ -778,7 +778,7 @@
                                 <td>
                                     @if($linkedTicket)
                                         @if($linkedTicket->manual_lifecycle_status === 'reopen_candidate')
-                                            <x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-4 h-4 text-orange-500 dark:text-orange-400" title="Manual reopen candidate. Ticket: {{ $linkedTicket->znuny_ticket_number }}" />
+                                            <x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-4 h-4 !text-orange-500 dark:!text-orange-400" style="color: #f97316;" title="Manual reopen candidate. Ticket: {{ $linkedTicket->znuny_ticket_number }}" />
                                         @else
                                             <x-filament::icon icon="heroicon-o-ticket" class="w-4 h-4 text-gray-500 dark:text-gray-400" title="Ticket already linked: {{ $linkedTicket->znuny_ticket_number }}" />
                                         @endif
@@ -857,7 +857,7 @@
                                         <div class="zbx-ticket-panel" style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                                             <div class="zbx-problem-actions" style="display: flex; gap: 0.5rem; align-items: center;">
                                                 @if($zabbixProblemUrl)
-                                                    <x-filament::button tag="a" :href="$zabbixProblemUrl" target="_blank" color="gray" size="sm" icon="heroicon-o-arrow-top-right-on-square">
+                                                    <x-filament::button tag="a" :href="$zabbixProblemUrl" target="_blank" color="info" size="sm" icon="heroicon-o-arrow-top-right-on-square">
                                                         Open in Zabbix
                                                     </x-filament::button>
                                                 @endif
