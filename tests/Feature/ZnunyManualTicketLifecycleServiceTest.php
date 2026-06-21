@@ -258,6 +258,7 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
             'zabbix_problem_name' => 'Problem 1',
             'zabbix_severity' => 4,
             'zabbix_started_at' => now()->subDays(2),
+            'created_at' => now()->subDays(2),
             'znuny_ticket_id' => 100,
             'znuny_ticket_number' => '1000',
             'creation_source' => 'manual',
@@ -267,6 +268,8 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
             'manual_flap_count' => 0,
             'zabbix_problem_resolved_at' => now()->subHours(1),
         ]);
+        $ticket->created_at = now()->subDays(2);
+        $ticket->saveQuietly();
 
         $cache = app(ZabbixProblemCache::class);
         $cache->putMany([
@@ -274,6 +277,7 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
                 'eventid' => 'evt2',
                 'objectid' => 'trg1',
                 'hosts' => [['hostid' => 'host1']],
+                'clock' => now()->subMinutes(30)->timestamp,
             ],
         ], 60);
 
@@ -294,7 +298,7 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
         $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_ACTIVE, $ticket->manual_lifecycle_status);
     }
 
-    public function test_false_flap_same_occurrence_does_not_increment()
+    public function test_same_occurrence_return_does_not_increment_flap_count()
     {
         Carbon::setTestNow(now());
         Setting::updateOrCreate(['key' => 'manual_ticket_flap_threshold'], ['value' => '3', 'type' => 'integer']);
@@ -316,6 +320,8 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
             'manual_flap_count' => 0,
             'zabbix_problem_resolved_at' => now()->subHours(1),
         ]);
+        $ticket->created_at = now()->subDays(2);
+        $ticket->saveQuietly();
 
         $cache = app(ZabbixProblemCache::class);
         $cache->putMany([
@@ -333,7 +339,10 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
         $ticket->refresh();
         $this->assertEquals(0, $ticket->manual_flap_count);
         $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_ACTIVE, $ticket->manual_lifecycle_status);
+        $this->assertTrue($ticket->zabbix_problem_is_active);
         $this->assertNull($ticket->zabbix_last_counted_flap_event_id);
+        $this->assertNull($ticket->zabbix_last_counted_flap_started_at);
+        $this->assertNull($ticket->manual_last_flap_counted_at);
     }
 
     public function test_close_candidate_to_active_increments_exactly_once()
@@ -349,6 +358,7 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
             'zabbix_problem_name' => 'Problem 1',
             'zabbix_severity' => 4,
             'zabbix_started_at' => now()->subDays(2),
+            'created_at' => now()->subDays(2),
             'znuny_ticket_id' => 100,
             'znuny_ticket_number' => '1000',
             'creation_source' => 'manual',
@@ -359,6 +369,8 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
             'zabbix_problem_resolved_at' => now()->subHours(5),
             'manual_close_eligible_at' => now()->subHours(1),
         ]);
+        $ticket->created_at = now()->subDays(2);
+        $ticket->saveQuietly();
 
         $cache = app(ZabbixProblemCache::class);
         $cache->putMany([
@@ -366,6 +378,7 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
                 'eventid' => 'evt2',
                 'objectid' => 'trg1',
                 'hosts' => [['hostid' => 'host1']],
+                'clock' => now()->subMinutes(30)->timestamp,
             ],
         ], 60);
 
@@ -390,6 +403,7 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
             'zabbix_problem_name' => 'Problem 1',
             'zabbix_severity' => 4,
             'zabbix_started_at' => now()->subDays(2),
+            'created_at' => now()->subDays(2),
             'znuny_ticket_id' => 100,
             'znuny_ticket_number' => '1000',
             'creation_source' => 'manual',
@@ -399,6 +413,8 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
             'zabbix_problem_resolved_at' => now()->subHours(1),
             'manual_flap_count' => 5, // high count
         ]);
+        $ticket->created_at = now()->subDays(2);
+        $ticket->saveQuietly();
 
         $cache = app(ZabbixProblemCache::class);
         $cache->putMany([
@@ -406,6 +422,7 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
                 'eventid' => 'evt2',
                 'objectid' => 'trg1',
                 'hosts' => [['hostid' => 'host1']],
+                'clock' => now()->subMinutes(30)->timestamp,
             ],
         ], 60);
 
@@ -480,6 +497,7 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
             'zabbix_problem_name' => 'Problem 1',
             'zabbix_severity' => 4,
             'zabbix_started_at' => now()->subDays(2),
+            'created_at' => now()->subDays(2),
             'znuny_ticket_id' => 100,
             'znuny_ticket_number' => '1000',
             'creation_source' => 'manual',
@@ -489,6 +507,8 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
             'manual_flap_count' => 2,
             'zabbix_problem_resolved_at' => now()->subHours(1),
         ]);
+        $ticket->created_at = now()->subDays(2);
+        $ticket->saveQuietly();
 
         $cache = app(ZabbixProblemCache::class);
         $cache->putMany([
@@ -496,6 +516,7 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
                 'eventid' => 'evt2',
                 'objectid' => 'trg1',
                 'hosts' => [['hostid' => 'host1']],
+                'clock' => now()->subMinutes(30)->timestamp,
             ],
         ], 60);
 
@@ -925,6 +946,8 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
             'manual_lifecycle_status' => 'resolved_waiting',
             'zabbix_problem_resolved_at' => now()->subHours(1),
         ]);
+        $ticket->created_at = now()->subDays(2);
+        $ticket->saveQuietly();
 
         $service = app(ZnunyManualTicketLifecycleService::class);
         $stats = $service->evaluate();
@@ -936,5 +959,184 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
         $this->assertNull($ticket->zabbix_problem_resolved_at);
         $this->assertNull($ticket->manual_close_eligible_at);
         $this->assertEquals(1, $stats['identity_missing']);
+    }
+
+    public function test_duplicate_evaluation_of_already_counted_occurrence_does_not_increment_again()
+    {
+        Carbon::setTestNow(now());
+        Setting::updateOrCreate(['key' => 'manual_ticket_flap_threshold'], ['value' => '3', 'type' => 'integer']);
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'zabbix_severity' => 4,
+            'zabbix_started_at' => now()->subDays(2),
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open',
+            'zabbix_problem_is_active' => true,
+            'manual_lifecycle_status' => 'active',
+            'manual_flap_count' => 1,
+            'zabbix_last_counted_flap_event_id' => 'evt2',
+            'zabbix_last_counted_flap_started_at' => now()->subHours(5),
+            'manual_last_flap_counted_at' => now()->subHours(2),
+        ]);
+
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            [
+                'eventid' => 'evt2',
+                'objectid' => 'trg1',
+                'hosts' => [['hostid' => 'host1']],
+                'started_at' => now()->subHours(5)->toIso8601String(), // Same started_at as last counted
+            ],
+        ], 60);
+
+        $service = app(ZnunyManualTicketLifecycleService::class);
+        $service->evaluate();
+
+        $ticket->refresh();
+        $this->assertEquals(1, $ticket->manual_flap_count); // No increment
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_ACTIVE, $ticket->manual_lifecycle_status);
+        $this->assertEquals('evt2', $ticket->zabbix_last_counted_flap_event_id);
+    }
+
+    public function test_different_eventid_without_reliable_started_at_does_not_increment_flap_count()
+    {
+        Carbon::setTestNow(now());
+        Setting::updateOrCreate(['key' => 'manual_ticket_flap_threshold'], ['value' => '3', 'type' => 'integer']);
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'zabbix_severity' => 4,
+            'zabbix_started_at' => now()->subDays(2),
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open',
+            'zabbix_problem_is_active' => false,
+            'manual_lifecycle_status' => 'resolved_waiting',
+            'manual_flap_count' => 0,
+            'zabbix_problem_resolved_at' => now()->subHours(1),
+        ]);
+        $ticket->created_at = now()->subDays(2);
+        $ticket->saveQuietly();
+
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            [
+                'eventid' => 'evt_different',
+                'objectid' => 'trg1',
+                'hosts' => [['hostid' => 'host1']],
+                // No clock, no started_at
+            ],
+        ], 60);
+
+        $service = app(ZnunyManualTicketLifecycleService::class);
+        $service->evaluate();
+
+        $ticket->refresh();
+        $this->assertEquals(0, $ticket->manual_flap_count);
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_ACTIVE, $ticket->manual_lifecycle_status);
+        $this->assertNull($ticket->zabbix_last_counted_flap_event_id);
+        $this->assertNull($ticket->manual_last_flap_counted_at);
+    }
+
+    public function test_last_counted_flap_started_at_guard_prevents_duplicate_or_older_occurrence()
+    {
+        Carbon::setTestNow(now());
+        Setting::updateOrCreate(['key' => 'manual_ticket_flap_threshold'], ['value' => '3', 'type' => 'integer']);
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'zabbix_severity' => 4,
+            'zabbix_started_at' => now()->subDays(2),
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open',
+            'zabbix_problem_is_active' => false,
+            'manual_lifecycle_status' => 'resolved_waiting',
+            'manual_flap_count' => 1,
+            'zabbix_problem_resolved_at' => now()->subHours(1),
+            'zabbix_last_counted_flap_event_id' => 'evt_prev',
+            'zabbix_last_counted_flap_started_at' => now()->subHours(5),
+        ]);
+
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            [
+                'eventid' => 'evt_new_but_older',
+                'objectid' => 'trg1',
+                'hosts' => [['hostid' => 'host1']],
+                // Older than last counted flap started_at
+                'started_at' => now()->subHours(6)->toIso8601String(),
+            ],
+        ], 60);
+
+        $service = app(ZnunyManualTicketLifecycleService::class);
+        $service->evaluate();
+
+        $ticket->refresh();
+        $this->assertEquals(1, $ticket->manual_flap_count); // Does not increment
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_ACTIVE, $ticket->manual_lifecycle_status);
+        $this->assertEquals('evt_prev', $ticket->zabbix_last_counted_flap_event_id);
+    }
+
+    public function test_cache_gap_with_same_occurrence_does_not_count_as_flap()
+    {
+        Carbon::setTestNow(now());
+        Setting::updateOrCreate(['key' => 'manual_ticket_flap_threshold'], ['value' => '3', 'type' => 'integer']);
+
+        // Ticket previously active, then false-resolved
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'zabbix_severity' => 4,
+            'zabbix_started_at' => now()->subDays(2),
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open',
+            'zabbix_problem_is_active' => false,
+            'manual_lifecycle_status' => 'resolved_waiting',
+            'manual_flap_count' => 0,
+        ]);
+        $ticket->created_at = now()->subDays(2);
+        $ticket->saveQuietly();
+
+        // Cache again contains the same original eventid and started_at
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            [
+                'eventid' => 'evt1',
+                'objectid' => 'trg1',
+                'hosts' => [['hostid' => 'host1']],
+                'started_at' => now()->subDays(2)->toIso8601String(),
+            ],
+        ], 60);
+
+        $service = app(ZnunyManualTicketLifecycleService::class);
+        $service->evaluate();
+
+        $ticket->refresh();
+        $this->assertEquals(0, $ticket->manual_flap_count);
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_ACTIVE, $ticket->manual_lifecycle_status);
+        $this->assertNull($ticket->zabbix_last_counted_flap_event_id);
     }
 }

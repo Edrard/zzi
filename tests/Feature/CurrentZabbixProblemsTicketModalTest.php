@@ -259,7 +259,8 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
                 'Test Subject',
                 'Test Body',
                 '2001',
-                '3001'
+                '3001',
+                null
             )
             ->andReturn([
                 'success' => true,
