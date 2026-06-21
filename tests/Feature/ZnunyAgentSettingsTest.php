@@ -588,7 +588,7 @@ class ZnunyAgentSettingsTest extends TestCase
         $livewire = Livewire::actingAs($admin)
             ->test(Settings::class)
             ->fillForm([
-                'manual_ticket_auto_close_enabled' => false,
+                'manual_ticket_auto_close_schedule_mode' => 'dry_run',
                 'manual_ticket_flap_threshold' => 5,
                 'manual_ticket_extra_flapping_delay_hours' => 8,
                 'default_close_delay_hours' => 5,
@@ -597,7 +597,7 @@ class ZnunyAgentSettingsTest extends TestCase
             ->call('save')
             ->assertHasNoFormErrors();
 
-        $this->assertEquals('false', Setting::where('key', 'manual_ticket_auto_close_enabled')->value('value'));
+        $this->assertEquals('dry_run', Setting::where('key', 'manual_ticket_auto_close_schedule_mode')->value('value'));
         $this->assertEquals('5', Setting::where('key', 'manual_ticket_flap_threshold')->value('value'));
         $this->assertEquals('5', Setting::where('key', 'default_close_delay_hours')->value('value'));
     }

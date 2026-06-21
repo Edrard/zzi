@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\ZabbixTickets\Schemas;
 
 use App\Models\ZabbixTicket;
+use App\Services\Support\DateTimeDisplayService;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -85,6 +86,33 @@ class ZabbixTicketInfolist
                             ->inlineLabel(),
                     ])->columns(1),
 
+                Section::make('Lifecycle Timing')
+                    ->schema([
+                        TextEntry::make('zabbix_problem_resolved_at')
+                            ->label(self::formatLabel('Problem Resolved At'))
+                            ->state(fn (ZabbixTicket $record) => app(DateTimeDisplayService::class)->formatDateTimeWithTimezone($record->zabbix_problem_resolved_at))
+                            ->visible(fn (ZabbixTicket $record) => ! empty($record->zabbix_problem_resolved_at))
+                            ->inlineLabel(),
+                        TextEntry::make('manual_close_eligible_at')
+                            ->label(self::formatLabel('Auto-Close Eligible At'))
+                            ->state(fn (ZabbixTicket $record) => app(DateTimeDisplayService::class)->formatDateTimeWithTimezone($record->manual_close_eligible_at))
+                            ->visible(fn (ZabbixTicket $record) => ! empty($record->manual_close_eligible_at))
+                            ->inlineLabel(),
+                        TextEntry::make('znuny_ticket_closed_at')
+                            ->label(self::formatLabel('Closed At'))
+                            ->state(function (ZabbixTicket $record) {
+                                if ($record->znuny_ticket_closed_at) {
+                                    return app(DateTimeDisplayService::class)->formatDateTimeWithTimezone($record->znuny_ticket_closed_at);
+                                }
+
+                                return 'Not available from Znuny';
+                            })
+                            ->visible(function (ZabbixTicket $record) {
+                                return strtolower($record->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $record->znuny_state_name), 'closed');
+                            })
+                            ->inlineLabel(),
+                    ])->columns(1),
+
                 Section::make('Zabbix')
                     ->schema([
                         TextEntry::make('zabbix_host_name')->label(self::formatLabel('Host'))->inlineLabel()->placeholder('-'),
@@ -101,8 +129,14 @@ class ZabbixTicketInfolist
 
                 Section::make('Sync')
                     ->schema([
-                        TextEntry::make('znuny_ticket_last_checked_at')->label(self::formatLabel('Last Checked'))->dateTime()->inlineLabel()->placeholder('-'),
-                        TextEntry::make('znuny_ticket_last_synced_at')->label(self::formatLabel('Last Synced'))->dateTime()->inlineLabel()->placeholder('-'),
+                        TextEntry::make('znuny_ticket_last_checked_at')
+                            ->label(self::formatLabel('Last Checked'))
+                            ->state(fn (ZabbixTicket $record) => app(DateTimeDisplayService::class)->formatDateTimeWithTimezone($record->znuny_ticket_last_checked_at))
+                            ->inlineLabel()->placeholder('-'),
+                        TextEntry::make('znuny_ticket_last_synced_at')
+                            ->label(self::formatLabel('Last Synced'))
+                            ->state(fn (ZabbixTicket $record) => app(DateTimeDisplayService::class)->formatDateTimeWithTimezone($record->znuny_ticket_last_synced_at))
+                            ->inlineLabel()->placeholder('-'),
                         TextEntry::make('znuny_ticket_sync_error')->label(self::formatLabel('Sync Error'))
                             ->color('danger')
                             ->inlineLabel()

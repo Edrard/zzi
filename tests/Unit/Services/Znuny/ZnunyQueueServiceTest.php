@@ -4,12 +4,15 @@ namespace Tests\Unit\Services\Znuny;
 
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyQueueService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Mockery;
 use Tests\TestCase;
 
 class ZnunyQueueServiceTest extends TestCase
 {
+    use RefreshDatabase;
+
     private ZnunyQueueService $service;
 
     private $clientMock;

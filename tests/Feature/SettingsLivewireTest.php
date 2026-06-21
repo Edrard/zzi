@@ -109,4 +109,51 @@ class SettingsLivewireTest extends TestCase
         $this->assertFalse($foundOtherTab, 'Other tab should not be rendered when empty');
         $this->assertTrue($automationTabModeFound, 'manual_ticket_auto_close_schedule_mode should be in Automation -> Manual tickets tab');
     }
+
+    public function test_app_display_timezone_is_in_general_tab()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+
+        $form = $component->instance()->getForm('form');
+        $schema = $form->getComponents();
+
+        $foundTimezone = false;
+        $generalTabTimezoneFound = false;
+        $foundOtherTab = false;
+
+        $search = function ($components, $parentGroupName = null) use (&$search, &$foundTimezone, &$generalTabTimezoneFound, &$foundOtherTab) {
+            foreach ($components as $c) {
+                $type = class_basename($c);
+                $name = method_exists($c, 'getName') ? $c->getName() : null;
+                $label = method_exists($c, 'getLabel') ? $c->getLabel() : null;
+
+                if ($type === 'Tab' && $label === 'Other') {
+                    $foundOtherTab = true;
+                }
+
+                if ($type === 'Tab' && $label === 'General') {
+                    $parentGroupName = 'General';
+                }
+
+                if ($name === 'app_display_timezone') {
+                    $foundTimezone = true;
+                    if ($parentGroupName === 'General') {
+                        $generalTabTimezoneFound = true;
+                    }
+                }
+
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents(), $parentGroupName);
+                }
+            }
+        };
+
+        $search($schema);
+
+        $this->assertTrue($foundTimezone, 'app_display_timezone should be rendered');
+        $this->assertTrue($generalTabTimezoneFound, 'app_display_timezone should be in General tab');
+        $this->assertFalse($foundOtherTab, 'Other tab should not be rendered when empty');
+    }
 }

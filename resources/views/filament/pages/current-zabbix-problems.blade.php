@@ -780,7 +780,7 @@
                                             <ul class="zbx-detail-list">
                                                 <li><strong>Event ID:</strong> {{ $problem['eventid'] ?? 'N/A' }}</li>
                                                 <li><strong>Object ID:</strong> {{ $problem['objectid'] ?? 'N/A' }}</li>
-                                                <li><strong>Started At:</strong> {{ $problem['started_at'] ?? 'N/A' }}</li>
+                                                <li><strong>Started At:</strong> {{ $this->formatDateTime($problem['started_at'] ?? null) }}</li>
                                                 <li><strong>Current Age:</strong> {{ $this->formatAge($ageSeconds) }}</li>
                                                 <li><strong>Acknowledged:</strong> {{ !empty($problem['acknowledged']) && $problem['acknowledged'] != 0 ? 'Yes' : 'No' }}</li>
                                                 <li><strong>Suppressed:</strong> {{ !empty($problem['suppressed']) && $problem['suppressed'] != 0 ? 'Yes' : 'No' }}</li>
@@ -886,7 +886,7 @@
                             </div>
                             <div class="zbx-ticket-summary-item">
                                 <span class="zbx-ticket-summary-label">Started</span>
-                                <span class="zbx-ticket-summary-value">{{ $ticketModalProblem['started_at'] ?? 'N/A' }}</span>
+                                <span class="zbx-ticket-summary-value">{{ $this->formatDateTime($ticketModalProblem['started_at'] ?? null) }}</span>
                             </div>
                         </div>
                     </div>

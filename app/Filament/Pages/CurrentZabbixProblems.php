@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Services\SettingsService;
+use App\Services\Support\DateTimeDisplayService;
 use App\Services\Zabbix\ZabbixProblemCache;
 use App\Services\Zabbix\ZabbixProblemFormatter;
 use App\Services\Zabbix\ZabbixProblemQueryService;
@@ -183,6 +184,15 @@ class CurrentZabbixProblems extends Page
     public function formatAge(int $seconds): string
     {
         return app(ZabbixProblemFormatter::class)->formatAge($seconds);
+    }
+
+    public function formatDateTime(mixed $value): string
+    {
+        if (empty($value)) {
+            return 'N/A';
+        }
+
+        return app(DateTimeDisplayService::class)->formatDateTimeWithTimezone($value) ?? 'N/A';
     }
 
     public function getSeverityColor(int $severity): string

@@ -377,6 +377,13 @@ class Settings extends Page implements HasForms
                         'execute' => 'Execute',
                     ])
                     ->required();
+            } elseif ($setting->key === 'app_display_timezone') {
+                $component = Select::make($setting->key)
+                    ->label($label)
+                    ->helperText('Timezone used to display dates and times in the admin interface. Backend timestamps and scheduler logic remain unchanged.')
+                    ->options(array_combine(\DateTimeZone::listIdentifiers(), \DateTimeZone::listIdentifiers()))
+                    ->searchable()
+                    ->required();
             } else {
                 $input = TextInput::make($setting->key)
                     ->label($label)
@@ -393,7 +400,7 @@ class Settings extends Page implements HasForms
                 $component = $input;
             }
 
-            if (in_array($setting->key, ['cleanup_enabled', 'cleanup_batch_size'])) {
+            if (in_array($setting->key, ['cleanup_enabled', 'cleanup_batch_size', 'app_display_timezone'])) {
                 $groups['General'][] = $component;
             } elseif (in_array($setting->key, ['retention_action_logs_days', 'retention_closed_tickets_days', 'retention_failed_jobs_days', 'retention_resolved_days', 'retention_statistics_days'])) {
                 $groups['Retention'][] = $component;

@@ -20,6 +20,7 @@ class ZnunyTicketSnapshotNormalizer
             'znuny_priority_id' => isset($ticketData['PriorityID']) ? (int) $ticketData['PriorityID'] : null,
             'znuny_priority' => $ticketData['Priority'] ?? null,
             'znuny_ticket_changed_at' => null,
+            'znuny_ticket_closed_at' => null,
         ];
 
         if (! empty($ticketData['Changed'])) {
@@ -27,6 +28,19 @@ class ZnunyTicketSnapshotNormalizer
                 $normalized['znuny_ticket_changed_at'] = Carbon::parse($ticketData['Changed'])->toDateTimeString();
             } catch (\Exception $e) {
                 // Ignore parse error
+            }
+        }
+
+        // Search for possible close time fields, but do not assume "Changed" is close time.
+        $closeTimeFields = ['Closed', 'ClosedAt', 'CloseTime', 'CloseTimestamp'];
+        foreach ($closeTimeFields as $field) {
+            if (! empty($ticketData[$field])) {
+                try {
+                    $normalized['znuny_ticket_closed_at'] = Carbon::parse($ticketData[$field])->toDateTimeString();
+                    break;
+                } catch (\Exception $e) {
+                    // Ignore parse error
+                }
             }
         }
 

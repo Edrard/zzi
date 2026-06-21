@@ -30,6 +30,7 @@ class ZnunyTicketSnapshotNormalizerTest extends TestCase
             'PriorityID' => 3,
             'Priority' => '3 normal',
             'Changed' => '2023-10-10 12:00:00',
+            'CloseTime' => '2023-10-11 15:30:00',
         ];
 
         $normalized = $this->normalizer->normalize($raw);
@@ -45,6 +46,7 @@ class ZnunyTicketSnapshotNormalizerTest extends TestCase
         $this->assertEquals(3, $normalized['znuny_priority_id']);
         $this->assertEquals('3 normal', $normalized['znuny_priority']);
         $this->assertEquals('2023-10-10 12:00:00', $normalized['znuny_ticket_changed_at']);
+        $this->assertEquals('2023-10-11 15:30:00', $normalized['znuny_ticket_closed_at']);
     }
 
     public function test_it_handles_missing_optional_fields()
