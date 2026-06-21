@@ -246,23 +246,40 @@ class CurrentZabbixProblems extends Page
             $linkedTicket = $ticketsByEventId[$eventId] ?? null;
 
             if (! $linkedTicket && $hostTriggerKey && isset($ticketsByHostTrigger[$hostTriggerKey])) {
-                $candidates = $ticketsByHostTrigger[$hostTriggerKey];
+                $candidates = $ticketsByHostTrigger[$hostTriggerKey]->reject(function ($t) {
+                    return in_array($t->manual_lifecycle_status, [
+                        ZnunyManualTicketLifecycleService::STATUS_CLOSED,
+                        ZnunyManualTicketLifecycleService::STATUS_NOT_APPLICABLE,
+                        ZnunyManualTicketLifecycleService::STATUS_CACHE_STALE,
+                        ZnunyManualTicketLifecycleService::STATUS_IDENTITY_MISSING,
+                    ]);
+                });
 
-                $linkedTicket = $candidates->sortBy(function ($t) {
-                    $statusScore = match ($t->manual_lifecycle_status) {
-                        'flapping' => 1,
-                        'reopen_candidate' => 2,
-                        'reopened' => 3,
-                        'active' => 4,
-                        'resolved_waiting' => 5,
-                        'close_candidate' => 6,
-                        'closed' => 7,
-                        default => 8,
-                    };
-                    $stateScore = strtolower($t->znuny_ticket_state_type ?? '') === 'closed' ? 1 : 0;
+                if ($candidates->isNotEmpty()) {
+                    $linkedTicket = $candidates->sortBy(function ($t) {
+                        $statusScore = match ($t->manual_lifecycle_status) {
+                            'flapping' => 1,
+                            'reopen_candidate' => 2,
+                            'reopened' => 3,
+                            'active' => 4,
+                            'resolved_waiting' => 5,
+                            'close_candidate' => 6,
+                            default => 8,
+                        };
+                        $stateScore = strtolower($t->znuny_ticket_state_type ?? '') === 'closed' ? 1 : 0;
 
-                    return sprintf('%d-%d-%012d', $statusScore, $stateScore, 999999999999 - $t->updated_at->timestamp);
-                })->first();
+                        return sprintf('%d-%d-%012d', $statusScore, $stateScore, 999999999999 - $t->updated_at->timestamp);
+                    })->first();
+                }
+            }
+
+            if ($linkedTicket && in_array($linkedTicket->manual_lifecycle_status, [
+                ZnunyManualTicketLifecycleService::STATUS_CLOSED,
+                ZnunyManualTicketLifecycleService::STATUS_NOT_APPLICABLE,
+                ZnunyManualTicketLifecycleService::STATUS_CACHE_STALE,
+                ZnunyManualTicketLifecycleService::STATUS_IDENTITY_MISSING,
+            ])) {
+                $linkedTicket = null;
             }
 
             if ($linkedTicket) {
@@ -276,6 +293,15 @@ class CurrentZabbixProblems extends Page
     public function getProblemTicketIndicator(?ZabbixTicket $ticket): array
     {
         if (! $ticket) {
+            return [];
+        }
+
+        if (in_array($ticket->manual_lifecycle_status, [
+            ZnunyManualTicketLifecycleService::STATUS_CLOSED,
+            ZnunyManualTicketLifecycleService::STATUS_NOT_APPLICABLE,
+            ZnunyManualTicketLifecycleService::STATUS_CACHE_STALE,
+            ZnunyManualTicketLifecycleService::STATUS_IDENTITY_MISSING,
+        ])) {
             return [];
         }
 

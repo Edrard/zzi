@@ -202,4 +202,36 @@ class CurrentZabbixProblemsTicketIndicatorTest extends TestCase
         $indicator = $page->getProblemTicketIndicator(null);
         $this->assertEmpty($indicator);
     }
+
+    public function test_resolver_closed_ticket_is_ignored()
+    {
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt_old',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_severity' => 3,
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_problem_name' => 'Problem 1',
+            'znuny_ticket_id' => 50001,
+            'znuny_ticket_number' => '1001',
+            'manual_lifecycle_status' => 'closed',
+            'manual_lifecycle_closed_at' => now()->subDays(2),
+        ]);
+
+        $page = new CurrentZabbixProblems;
+        $problems = [
+            [
+                'eventid' => 'evt_new',
+                'hosts' => [['hostid' => 'host1']],
+                'objectid' => 'trg1',
+            ],
+        ];
+
+        $resolved = $page->resolveLinkedTickets($problems);
+
+        $this->assertArrayNotHasKey('evt_new', $resolved);
+
+        $indicator = $page->getProblemTicketIndicator($ticket);
+        $this->assertEmpty($indicator);
+    }
 }

@@ -47,6 +47,8 @@ class ZnunyLinkedTicketReopenServiceTest extends TestCase
             'znuny_ticket_number' => '123456789',
             'manual_close_eligible_at' => now()->subDay(),
             'zabbix_problem_is_active' => false,
+            'manual_lifecycle_closed_at' => now()->subDays(2),
+            'manual_flap_count' => 5,
         ]);
 
         $clientMock = $this->mock(ZnunyClient::class);
@@ -80,6 +82,8 @@ class ZnunyLinkedTicketReopenServiceTest extends TestCase
         $this->assertNull($ticket->manual_close_eligible_at);
         $this->assertEquals('open', $ticket->znuny_state_name);
         $this->assertEquals('open', $ticket->znuny_ticket_state_type);
+        $this->assertEquals(now()->subDays(2)->toDateTimeString(), $ticket->manual_lifecycle_closed_at->toDateTimeString());
+        $this->assertEquals(5, $ticket->manual_flap_count);
     }
 
     public function test_reopen_ticket_handles_failure_response()
