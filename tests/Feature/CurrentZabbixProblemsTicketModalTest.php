@@ -571,5 +571,19 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $html = $component->html();
         $this->assertStringContainsString('Open in Zabbix', $html);
         $this->assertStringContainsString('https://zabbix.test/?trigger=2001', $html);
+        $this->assertStringContainsString('zbx-open-zabbix-button', $html);
+    }
+
+    public function test_open_in_zabbix_button_hidden_when_template_empty()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Setting::updateOrCreate(['key' => 'zabbix_problem_url_template'], ['value' => '', 'type' => 'string']);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class);
+
+        $html = $component->html();
+        $this->assertStringNotContainsString('Open in Zabbix', $html);
     }
 }
