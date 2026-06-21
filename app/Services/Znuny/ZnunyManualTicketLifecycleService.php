@@ -124,16 +124,23 @@ class ZnunyManualTicketLifecycleService
                     }
                 }
 
+                $wasActive = $ticket->zabbix_problem_is_active === true;
+                $wasResolvedLike = in_array($ticket->manual_lifecycle_status, [
+                    self::STATUS_RESOLVED_WAITING,
+                    self::STATUS_CLOSE_CANDIDATE,
+                ], true);
+
                 $ticket->manual_lifecycle_last_checked_at = $now;
 
-                if ($activeProblem) {
-                    $wasResolved = $ticket->getOriginal('zabbix_problem_is_active') === false ||
-                                   in_array($ticket->getOriginal('manual_lifecycle_status'), [self::STATUS_RESOLVED_WAITING, self::STATUS_CLOSE_CANDIDATE]);
+                $isActiveNow = $activeProblem;
+
+                if ($isActiveNow) {
+                    $isRealReturnFromResolved = $isActiveNow && ! $wasActive && $wasResolvedLike;
 
                     $ticket->zabbix_problem_is_active = true;
                     $ticket->zabbix_problem_last_seen_active_at = $now;
 
-                    if ($wasResolved) {
+                    if ($isRealReturnFromResolved) {
                         // Flap detected! Genuine transition from resolved/waiting to active.
                         $ticket->manual_flap_count++;
                         $ticket->zabbix_problem_resolved_at = null;

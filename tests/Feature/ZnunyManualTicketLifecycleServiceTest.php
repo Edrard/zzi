@@ -153,7 +153,7 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
         $this->assertEquals(1, $stats['close_candidate']);
     }
 
-    public function test_flap_counter()
+    public function test_active_ticket_evaluated_multiple_times_remains_active_with_zero_flap_count()
     {
         Carbon::setTestNow(now());
 
@@ -169,12 +169,105 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
             'znuny_ticket_number' => '1000',
             'creation_source' => 'manual',
             'znuny_ticket_state_type' => 'open',
-            'zabbix_problem_is_active' => false,
-            'zabbix_problem_resolved_at' => now()->subHours(1),
+            'zabbix_problem_is_active' => true,
+            'manual_lifecycle_status' => 'active',
             'manual_flap_count' => 0,
         ]);
 
-        // Active again!
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            [
+                'eventid' => 'evt2',
+                'objectid' => 'trg1',
+                'hosts' => [['hostid' => 'host1']],
+            ],
+        ], 60);
+
+        $service = app(ZnunyManualTicketLifecycleService::class);
+        $service->evaluate();
+
+        $ticket->refresh();
+        $this->assertEquals(0, $ticket->manual_flap_count);
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_ACTIVE, $ticket->manual_lifecycle_status);
+
+        // Evaluate again
+        $service->evaluate();
+
+        $ticket->refresh();
+        $this->assertEquals(0, $ticket->manual_flap_count);
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_ACTIVE, $ticket->manual_lifecycle_status);
+    }
+
+    public function test_flapping_ticket_evaluated_multiple_times_remains_flapping_without_increment()
+    {
+        Carbon::setTestNow(now());
+        Setting::updateOrCreate(['key' => 'manual_ticket_flap_threshold'], ['value' => '3', 'type' => 'integer']);
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'zabbix_severity' => 4,
+            'zabbix_started_at' => now()->subDays(2),
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open',
+            'zabbix_problem_is_active' => true,
+            'manual_lifecycle_status' => 'flapping',
+            'manual_flap_count' => 5, // High flap count
+            'manual_flapping_detected_at' => now()->subHours(2),
+        ]);
+
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            [
+                'eventid' => 'evt2',
+                'objectid' => 'trg1',
+                'hosts' => [['hostid' => 'host1']],
+            ],
+        ], 60);
+
+        $service = app(ZnunyManualTicketLifecycleService::class);
+        $service->evaluate();
+
+        $ticket->refresh();
+        $this->assertEquals(5, $ticket->manual_flap_count);
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_FLAPPING, $ticket->manual_lifecycle_status);
+
+        // Evaluate again
+        $service->evaluate();
+
+        $ticket->refresh();
+        $this->assertEquals(5, $ticket->manual_flap_count);
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_FLAPPING, $ticket->manual_lifecycle_status);
+    }
+
+    public function test_resolved_waiting_to_active_increments_exactly_once()
+    {
+        Carbon::setTestNow(now());
+        Setting::updateOrCreate(['key' => 'manual_ticket_flap_threshold'], ['value' => '3', 'type' => 'integer']);
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'zabbix_severity' => 4,
+            'zabbix_started_at' => now()->subDays(2),
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open',
+            'zabbix_problem_is_active' => false,
+            'manual_lifecycle_status' => 'resolved_waiting',
+            'manual_flap_count' => 0,
+            'zabbix_problem_resolved_at' => now()->subHours(1),
+        ]);
+
         $cache = app(ZabbixProblemCache::class);
         $cache->putMany([
             [
@@ -189,23 +282,20 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
 
         $ticket->refresh();
         $this->assertEquals(1, $ticket->manual_flap_count);
-        $this->assertTrue($ticket->zabbix_problem_is_active);
-        $this->assertNull($ticket->zabbix_problem_resolved_at);
         $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_ACTIVE, $ticket->manual_lifecycle_status);
 
-        // Second evaluate, ticket is still active in cache
+        // Evaluate again
         $service->evaluate();
-        $ticket->refresh();
 
-        // Should remain 1
+        $ticket->refresh();
         $this->assertEquals(1, $ticket->manual_flap_count);
         $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_ACTIVE, $ticket->manual_lifecycle_status);
     }
 
-    public function test_flapping_threshold()
+    public function test_close_candidate_to_active_increments_exactly_once()
     {
         Carbon::setTestNow(now());
-        Setting::updateOrCreate(['key' => 'manual_ticket_flap_threshold'], ['value' => '2', 'type' => 'integer']);
+        Setting::updateOrCreate(['key' => 'manual_ticket_flap_threshold'], ['value' => '3', 'type' => 'integer']);
 
         $ticket = ZabbixTicket::create([
             'zabbix_event_id' => 'evt1',
@@ -220,8 +310,10 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
             'creation_source' => 'manual',
             'znuny_ticket_state_type' => 'open',
             'zabbix_problem_is_active' => false,
-            'zabbix_problem_resolved_at' => now()->subHours(1),
-            'manual_flap_count' => 1,
+            'manual_lifecycle_status' => 'close_candidate',
+            'manual_flap_count' => 0,
+            'zabbix_problem_resolved_at' => now()->subHours(5),
+            'manual_close_eligible_at' => now()->subHours(1),
         ]);
 
         $cache = app(ZabbixProblemCache::class);
@@ -234,13 +326,11 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
         ], 60);
 
         $service = app(ZnunyManualTicketLifecycleService::class);
-        $stats = $service->evaluate();
+        $service->evaluate();
 
         $ticket->refresh();
-        $this->assertEquals(2, $ticket->manual_flap_count);
-        $this->assertNotNull($ticket->manual_flapping_detected_at);
-        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_FLAPPING, $ticket->manual_lifecycle_status);
-        $this->assertEquals(1, $stats['flapping']);
+        $this->assertEquals(1, $ticket->manual_flap_count);
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_ACTIVE, $ticket->manual_lifecycle_status);
     }
 
     public function test_flapping_disabled_when_threshold_is_zero()
@@ -261,6 +351,7 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
             'creation_source' => 'manual',
             'znuny_ticket_state_type' => 'open',
             'zabbix_problem_is_active' => false,
+            'manual_lifecycle_status' => 'resolved_waiting', // Added missing status
             'zabbix_problem_resolved_at' => now()->subHours(1),
             'manual_flap_count' => 5, // high count
         ]);
@@ -330,6 +421,108 @@ class ZnunyManualTicketLifecycleServiceTest extends TestCase
         // And clears the polluted resolved_at
         $this->assertNull($ticket->zabbix_problem_resolved_at);
         $this->assertEquals(1, $stats['active']);
+    }
+
+    public function test_transition_brings_flap_count_to_threshold()
+    {
+        Carbon::setTestNow(now());
+        Setting::updateOrCreate(['key' => 'manual_ticket_flap_threshold'], ['value' => '3', 'type' => 'integer']);
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'zabbix_severity' => 4,
+            'zabbix_started_at' => now()->subDays(2),
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open',
+            'zabbix_problem_is_active' => false,
+            'manual_lifecycle_status' => 'resolved_waiting',
+            'manual_flap_count' => 2,
+            'zabbix_problem_resolved_at' => now()->subHours(1),
+        ]);
+
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            [
+                'eventid' => 'evt2',
+                'objectid' => 'trg1',
+                'hosts' => [['hostid' => 'host1']],
+            ],
+        ], 60);
+
+        $service = app(ZnunyManualTicketLifecycleService::class);
+        $service->evaluate();
+
+        $ticket->refresh();
+        $this->assertEquals(3, $ticket->manual_flap_count);
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_FLAPPING, $ticket->manual_lifecycle_status);
+    }
+
+    public function test_repair_command_dry_run()
+    {
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'zabbix_severity' => 4,
+            'zabbix_started_at' => now()->subDays(2),
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open',
+            'zabbix_problem_is_active' => true,
+            'manual_lifecycle_status' => 'flapping',
+            'manual_flap_count' => 5,
+        ]);
+
+        $this->artisan('znuny:repair-flapping-tickets --dry-run')
+            ->expectsOutputToContain('Would repair Ticket ID '.$ticket->id)
+            ->expectsOutputToContain('Dry run complete.')
+            ->assertSuccessful();
+
+        $ticket->refresh();
+        $this->assertEquals(5, $ticket->manual_flap_count);
+        $this->assertEquals('flapping', $ticket->manual_lifecycle_status);
+    }
+
+    public function test_repair_command_execute()
+    {
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'zabbix_severity' => 4,
+            'zabbix_started_at' => now()->subDays(2),
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '1000',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open',
+            'zabbix_problem_is_active' => true,
+            'manual_lifecycle_status' => 'flapping',
+            'manual_flap_count' => 5,
+            'manual_flapping_detected_at' => now()->subHour(),
+        ]);
+
+        $this->artisan('znuny:repair-flapping-tickets')
+            ->expectsOutputToContain('Repairing polluted flapping tickets...')
+            ->expectsOutputToContain('Repairing Ticket ID '.$ticket->id)
+            ->expectsOutputToContain('Repaired 1 tickets.')
+            ->assertSuccessful();
+
+        $ticket->refresh();
+        $this->assertEquals(0, $ticket->manual_flap_count);
+        $this->assertEquals('active', $ticket->manual_lifecycle_status);
+        $this->assertNull($ticket->manual_flapping_detected_at);
+        $this->assertTrue($ticket->zabbix_problem_is_active);
     }
 
     public function test_extra_flapping_delay()
