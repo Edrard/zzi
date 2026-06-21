@@ -678,6 +678,24 @@ class Settings extends Page implements HasForms
         ];
     }
 
+    private function getZnunyConnectionTestAction(string $name): Actions
+    {
+        return Actions::make([
+            Action::make($name)
+                ->label('Test Znuny API Connection')
+                ->icon('heroicon-o-signal')
+                ->color('info')
+                ->action('testZnunyConnectionAction'),
+        ]);
+    }
+
+    private function getZnunyConnectionTestHelperPlaceholder(string $name): Placeholder
+    {
+        return Placeholder::make($name)
+            ->hiddenLabel()
+            ->content('Tests current Znuny form values without saving settings.');
+    }
+
     private function buildZnunyTabGroups(array $z): array
     {
         $tabs = [
@@ -685,6 +703,8 @@ class Settings extends Page implements HasForms
                 ->schema(array_filter([
                     $z['znuny_username'] ?? null,
                     $z['znuny_password'] ?? null,
+                    $this->getZnunyConnectionTestAction('testZnunyConnection_Credentials'),
+                    $this->getZnunyConnectionTestHelperPlaceholder('tester_help_Credentials'),
                 ]))->columns(1),
 
             Tab::make('Endpoints & Connection')
@@ -694,16 +714,8 @@ class Settings extends Page implements HasForms
                     $z['znuny_ticket_url_template'] ?? null,
                     $z['znuny_api_verify_ssl'] ?? null,
                     $z['znuny_api_timeout'] ?? null,
-                    Actions::make([
-                        Action::make('testZnunyConnection')
-                            ->label('Test Znuny API connection')
-                            ->icon('heroicon-o-signal')
-                            ->color('info')
-                            ->action('testZnunyConnectionAction'),
-                    ]),
-                    Placeholder::make('tester_help')
-                        ->hiddenLabel()
-                        ->content('Tests current Znuny form values without saving settings.'),
+                    $this->getZnunyConnectionTestAction('testZnunyConnection_Endpoints'),
+                    $this->getZnunyConnectionTestHelperPlaceholder('tester_help_Endpoints'),
                 ]))->columns(1),
 
             Tab::make('Agents')

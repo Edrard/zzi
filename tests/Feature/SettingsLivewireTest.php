@@ -156,4 +156,41 @@ class SettingsLivewireTest extends TestCase
         $this->assertTrue($generalTabTimezoneFound, 'app_display_timezone should be in General tab');
         $this->assertFalse($foundOtherTab, 'Other tab should not be rendered when empty');
     }
+
+    public function test_znuny_connection_test_button_is_rendered_in_credentials_and_endpoints_tabs()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+
+        $form = $component->instance()->getForm('form');
+        $schema = $form->getComponents();
+
+        $foundCredentialsButton = false;
+        $foundEndpointsButton = false;
+
+        $search = function ($components) use (&$search, &$foundCredentialsButton, &$foundEndpointsButton) {
+            foreach ($components as $c) {
+                $type = class_basename($c);
+                $name = method_exists($c, 'getName') ? $c->getName() : null;
+
+                if ($type === 'Action' && $name === 'testZnunyConnection_Credentials') {
+                    $foundCredentialsButton = true;
+                }
+
+                if ($type === 'Action' && $name === 'testZnunyConnection_Endpoints') {
+                    $foundEndpointsButton = true;
+                }
+
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents());
+                }
+            }
+        };
+
+        $search($schema);
+
+        $this->assertTrue($foundCredentialsButton, 'Test Znuny API Connection button should be rendered in Credentials tab');
+        $this->assertTrue($foundEndpointsButton, 'Test Znuny API Connection button should be rendered in Endpoints tab');
+    }
 }
