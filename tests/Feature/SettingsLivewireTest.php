@@ -81,8 +81,8 @@ class SettingsLivewireTest extends TestCase
                     $foundOtherTab = true;
                 }
 
-                if ($type === 'Tab' && $label === 'Manual tickets') {
-                    $parentGroupName = 'Manual tickets';
+                if ($type === 'Tab' && $label === 'Manual') {
+                    $parentGroupName = 'Manual';
                 }
 
                 if ($name === 'manual_ticket_auto_close_enabled') {
@@ -91,7 +91,7 @@ class SettingsLivewireTest extends TestCase
 
                 if ($name === 'manual_ticket_auto_close_schedule_mode') {
                     $foundMode = true;
-                    if ($parentGroupName === 'Manual tickets') {
+                    if ($parentGroupName === 'Manual') {
                         $automationTabModeFound = true;
                     }
                 }
@@ -107,7 +107,7 @@ class SettingsLivewireTest extends TestCase
         $this->assertTrue($foundMode, 'manual_ticket_auto_close_schedule_mode should be rendered');
         $this->assertFalse($foundEnabled, 'manual_ticket_auto_close_enabled should not be rendered');
         $this->assertFalse($foundOtherTab, 'Other tab should not be rendered when empty');
-        $this->assertTrue($automationTabModeFound, 'manual_ticket_auto_close_schedule_mode should be in Automation -> Manual tickets tab');
+        $this->assertTrue($automationTabModeFound, 'manual_ticket_auto_close_schedule_mode should be in Automation -> Manual tab');
     }
 
     public function test_app_display_timezone_is_in_general_tab()

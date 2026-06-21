@@ -103,6 +103,33 @@ class ZabbixClient
     }
 
     /**
+     * @return array<string, mixed>
+     *
+     * @throws Exception
+     */
+    public function testConnectionWithCredentials(string $url, string $token, int $timeout, bool $verifySsl): array
+    {
+        $oldUrl = $this->url;
+        $oldToken = $this->token;
+        $oldTimeout = $this->timeout;
+        $oldVerifySsl = $this->verifySsl;
+
+        try {
+            $this->url = $url;
+            $this->token = $token;
+            $this->timeout = $timeout;
+            $this->verifySsl = $verifySsl;
+
+            return $this->testConnection();
+        } finally {
+            $this->url = $oldUrl;
+            $this->token = $oldToken;
+            $this->timeout = $oldTimeout;
+            $this->verifySsl = $oldVerifySsl;
+        }
+    }
+
+    /**
      * @param  array<string, mixed>  $params
      * @return array<int, mixed>
      *

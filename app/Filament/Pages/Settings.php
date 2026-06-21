@@ -6,6 +6,7 @@ use App\Models\Setting;
 use App\Services\AuditLogger;
 use App\Services\SettingsAuditLogService;
 use App\Services\SettingsService;
+use App\Services\Zabbix\ZabbixClient;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyDefaultAgentSchemaBuilder;
 use App\Services\Znuny\ZnunyDefaultAgentSettingsService;
@@ -179,6 +180,98 @@ class Settings extends Page implements HasForms
             ->send();
     }
 
+    public function testZabbixConnectionAction(): void
+    {
+        $data = $this->form->getRawState();
+        $apiUrl = $data['zabbix_api_url'] ?? '';
+        $token = $data['zabbix_api_token'] ?? '';
+        $timeout = $data['zabbix_api_timeout'] ?? 15;
+        $verifySsl = $data['zabbix_api_verify_ssl'] ?? true;
+
+        $tokenSource = 'form';
+        if (empty($token)) {
+            $token = SettingsService::string('zabbix_api_token', '');
+            $tokenSource = empty($token) ? 'missing' : 'saved';
+        }
+
+        $errorResult = null;
+        if (empty($apiUrl)) {
+            $errorResult = 'Zabbix API URL is required.';
+        } elseif (empty($token)) {
+            $errorResult = 'Zabbix API Token is required.';
+        }
+
+        if ($errorResult !== null) {
+            AuditLogger::log(
+                action: 'settings.zabbix_connection_tested',
+                entityType: 'settings',
+                entityId: null,
+                context: [
+                    'source' => 'form_state',
+                    'token_source' => $tokenSource,
+                    'status' => 'failed',
+                    'errors' => [$errorResult],
+                ]
+            );
+
+            Notification::make()
+                ->title('Zabbix API Connection Failed')
+                ->body(new HtmlString('<strong>Errors:</strong><br>❌ '.htmlspecialchars($errorResult).'<br>'))
+                ->color('danger')
+                ->persistent()
+                ->send();
+
+            return;
+        }
+
+        $client = app(ZabbixClient::class);
+
+        try {
+            $result = $client->testConnectionWithCredentials($apiUrl, $token, (int) $timeout, (bool) $verifySsl);
+
+            $version = $result['version'] ?? 'Unknown';
+
+            AuditLogger::log(
+                action: 'settings.zabbix_connection_tested',
+                entityType: 'settings',
+                entityId: null,
+                context: [
+                    'source' => 'form_state',
+                    'token_source' => $tokenSource,
+                    'status' => 'success',
+                    'version' => $version,
+                ]
+            );
+
+            Notification::make()
+                ->title('Zabbix API Connection Successful')
+                ->body("Connected successfully. API Version: {$version}")
+                ->color('success')
+                ->persistent()
+                ->send();
+
+        } catch (\Exception $e) {
+            AuditLogger::log(
+                action: 'settings.zabbix_connection_tested',
+                entityType: 'settings',
+                entityId: null,
+                context: [
+                    'source' => 'form_state',
+                    'token_source' => $tokenSource,
+                    'status' => 'failed',
+                    'errors' => [$e->getMessage()],
+                ]
+            );
+
+            Notification::make()
+                ->title('Zabbix API Connection Failed')
+                ->body(new HtmlString('<strong>Errors:</strong><br>❌ '.htmlspecialchars($e->getMessage()).'<br>'))
+                ->color('danger')
+                ->persistent()
+                ->send();
+        }
+    }
+
     public function mount(): void
     {
         $settings = Setting::query()->orderBy('key')->get();
@@ -235,6 +328,10 @@ class Settings extends Page implements HasForms
             $description = $setting->description;
 
             $overrides = [
+                'zabbix_problem_cache_ttl_minutes' => [
+                    'label' => 'Problem Presence Window (minutes)',
+                    'description' => 'How long a last-seen Zabbix problem is still considered present after it stops appearing in Zabbix poll results. This helps avoid premature resolved-state transitions between poll cycles.',
+                ],
                 'znuny_agent_cache_ttl_minutes' => [
                     'label' => 'Znuny Agent Cache TTL Minutes',
                     'description' => 'How long Znuny agent list data is cached. 0 disables this cache.',
@@ -405,8 +502,8 @@ class Settings extends Page implements HasForms
             } elseif (in_array($setting->key, ['retention_action_logs_days', 'retention_closed_tickets_days', 'retention_failed_jobs_days', 'retention_resolved_days', 'retention_statistics_days'])) {
                 $groups['Retention'][] = $component;
             } elseif (in_array($setting->key, ['zabbix_api_url', 'zabbix_api_token', 'zabbix_api_timeout', 'zabbix_api_verify_ssl', 'zabbix_poll_interval_minutes', 'zabbix_problem_cache_ttl_minutes', 'zabbix_problem_limit', 'zabbix_exclude_suppressed_problems'])) {
-                $groups['Zabbix'][] = $component;
-            } elseif (in_array($setting->key, ['znuny_queue_from_host_regex', 'znuny_customer_user_from_queue_template', 'znuny_queue_host_mappings', 'znuny_manual_ticket_footer'])) {
+                $groups['Zabbix'][$setting->key] = $component;
+            } elseif (in_array($setting->key, ['znuny_queue_from_host_regex', 'znuny_customer_user_from_queue_template', 'znuny_queue_host_mappings', 'znuny_manual_ticket_footer', 'znuny_default_agent_id', 'linked_ticket_manual_close_default_reason'])) {
                 $groups['Znuny Ticket Defaults'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['znuny_queue_cache_ttl_minutes', 'znuny_agent_cache_ttl_minutes', 'znuny_ticket_snapshot_cache_ttl_minutes'])) {
                 $groups['Cache'][] = $component;
@@ -414,11 +511,15 @@ class Settings extends Page implements HasForms
                 $groups['Znuny Sync'][] = $component;
             } elseif (str_starts_with($setting->key, 'znuny_')) {
                 $groups['Znuny'][$setting->key] = $component;
-            } elseif (in_array($setting->key, ['default_close_delay_hours', 'default_reopen_window_hours', 'manual_ticket_auto_close_schedule_mode', 'manual_ticket_flap_threshold', 'manual_ticket_extra_flapping_delay_hours', 'linked_ticket_manual_close_default_reason'])) {
+            } elseif (in_array($setting->key, ['default_close_delay_hours', 'default_reopen_window_hours', 'manual_ticket_auto_close_schedule_mode', 'manual_ticket_flap_threshold', 'manual_ticket_extra_flapping_delay_hours'])) {
                 $groups['Automation'][$setting->key] = $component;
             } else {
                 $groups['Other'][] = $component;
             }
+        }
+
+        if (! empty($groups['Zabbix'])) {
+            $groups['Zabbix'] = $this->buildZabbixTabGroups($groups['Zabbix']);
         }
 
         if (! empty($groups['Znuny'])) {
@@ -542,13 +643,57 @@ class Settings extends Page implements HasForms
             ->send();
     }
 
+    private function buildZabbixTabGroups(array $z): array
+    {
+        return [
+            Tabs::make('ZabbixTabs')
+                ->tabs([
+                    Tab::make('Connection')
+                        ->schema(array_filter([
+                            $z['zabbix_api_url'] ?? null,
+                            $z['zabbix_api_token'] ?? null,
+                            $z['zabbix_api_timeout'] ?? null,
+                            $z['zabbix_api_verify_ssl'] ?? null,
+                            Actions::make([
+                                Action::make('testZabbixConnection')
+                                    ->label('Test Zabbix API connection')
+                                    ->icon('heroicon-o-signal')
+                                    ->color('info')
+                                    ->action('testZabbixConnectionAction'),
+                            ]),
+                            Placeholder::make('zabbix_tester_help')
+                                ->hiddenLabel()
+                                ->content('Tests current Zabbix form values without saving settings.'),
+                        ]))
+                        ->columns(1),
+                    Tab::make('Problem Handling')
+                        ->schema(array_filter([
+                            $z['zabbix_poll_interval_minutes'] ?? null,
+                            $z['zabbix_problem_cache_ttl_minutes'] ?? null,
+                            $z['zabbix_problem_limit'] ?? null,
+                            $z['zabbix_exclude_suppressed_problems'] ?? null,
+                        ]))
+                        ->columns(1),
+                ]),
+        ];
+    }
+
     private function buildZnunyTabGroups(array $z): array
     {
-        $znunyGroups = [
-            Section::make('Credentials')
+        $tabs = [
+            Tab::make('Credentials')
                 ->schema(array_filter([
                     $z['znuny_username'] ?? null,
                     $z['znuny_password'] ?? null,
+                ]))->columns(1),
+
+            Tab::make('Endpoints & Connection')
+                ->schema(array_filter([
+                    $z['znuny_api_url'] ?? null,
+                    $z['znuny_web_url'] ?? null,
+                    $z['znuny_ticket_url_template'] ?? null,
+                    $z['znuny_api_verify_ssl'] ?? null,
+                    $z['znuny_api_timeout'] ?? null,
                     Actions::make([
                         Action::make('testZnunyConnection')
                             ->label('Test Znuny API connection')
@@ -561,69 +706,49 @@ class Settings extends Page implements HasForms
                         ->content('Tests current Znuny form values without saving settings.'),
                 ]))->columns(1),
 
-            Section::make('Endpoints')
+            Tab::make('Agents')
                 ->schema(array_filter([
-                    $z['znuny_api_url'] ?? null,
-                    $z['znuny_web_url'] ?? null,
-                    $z['znuny_ticket_url_template'] ?? null,
-                ]))->columns(1),
-
-            Section::make('Connection')
-                ->schema(array_filter([
-                    $z['znuny_api_verify_ssl'] ?? null,
-                    $z['znuny_api_timeout'] ?? null,
+                    $z['znuny_agent_exclude_logins'] ?? null,
                 ]))->columns(1),
         ];
 
-        if (isset($z['znuny_default_agent_id'])) {
-            $znunyGroups[] = $z['znuny_default_agent_id'];
-        }
-        if (isset($z['znuny_agent_exclude_logins'])) {
-            $znunyGroups[] = $z['znuny_agent_exclude_logins'];
-        }
-
-        $knownKeys = [
-            'znuny_username', 'znuny_password', 'znuny_api_url', 'znuny_web_url', 'znuny_ticket_url_template', 'znuny_api_verify_ssl', 'znuny_api_timeout',
-            'znuny_default_agent_id', 'znuny_agent_exclude_logins',
+        return [
+            Tabs::make('ZnunyTabs')->tabs($tabs),
         ];
-        $unknownComponents = array_diff_key($z, array_flip($knownKeys));
-
-        if (! empty($unknownComponents)) {
-            $znunyGroups[] = Section::make('Other')
-                ->schema(array_values($unknownComponents))->columns(1);
-        }
-
-        return $znunyGroups;
     }
 
     private function buildZnunyTicketDefaultsTabGroups(array $zd): array
     {
-        $zdGroups = [];
-
-        if (isset($zd['znuny_queue_from_host_regex']) || isset($zd['znuny_customer_user_from_queue_template']) || isset($zd['znuny_manual_ticket_footer'])) {
-            $zdGroups[] = Section::make('Ticket default rules')
-                ->description('These rules only generate default suggestions for manual ticket creation. The operator will still be able to override Queue and CustomerUser before creating a ticket.')
-                ->schema(array_filter([
-                    $zd['znuny_queue_from_host_regex'] ?? null,
-                    $zd['znuny_customer_user_from_queue_template'] ?? null,
-                    $zd['znuny_manual_ticket_footer'] ?? null,
-                ]))->columns(1);
-        }
+        $tabs = [];
 
         if (isset($zd['znuny_queue_host_mappings'])) {
-            $zdGroups[] = Section::make('Queue host prefix mappings')
-                ->description('Fallback Queue mapping for standardized Zabbix host prefixes. CustomerUser is still generated from the original host prefix.')
+            $tabs[] = Tab::make('Queue Host Prefix Mappings')
                 ->schema([
-                    $zd['znuny_queue_host_mappings'],
-                ])
-                ->columns(1)
-                ->headerActions([
-                    app(ZnunyQueueHostMappingSchemaBuilder::class)->getSaveAction(),
-                    app(ZnunyQueueHostMappingSchemaBuilder::class)->getScanMissingAction(),
+                    Section::make('Queue host prefix mappings')
+                        ->description('Fallback Queue mapping for standardized Zabbix host prefixes. CustomerUser is still generated from the original host prefix.')
+                        ->schema([
+                            $zd['znuny_queue_host_mappings'],
+                        ])
+                        ->columns(1)
+                        ->headerActions([
+                            app(ZnunyQueueHostMappingSchemaBuilder::class)->getSaveAction(),
+                            app(ZnunyQueueHostMappingSchemaBuilder::class)->getScanMissingAction(),
+                        ]),
                 ]);
         }
 
-        return $zdGroups;
+        $tabs[] = Tab::make('Ticket Default Rules')
+            ->schema(array_filter([
+                $zd['znuny_queue_from_host_regex'] ?? null,
+                $zd['znuny_customer_user_from_queue_template'] ?? null,
+                $zd['znuny_default_agent_id'] ?? null,
+                $zd['znuny_manual_ticket_footer'] ?? null,
+                $zd['linked_ticket_manual_close_default_reason'] ?? null,
+            ]))->columns(1);
+
+        return [
+            Tabs::make('ZnunyTicketDefaultsTabs')->tabs($tabs),
+        ];
     }
 
     private function buildAutomationTabGroups(array $a): array
@@ -631,17 +756,16 @@ class Settings extends Page implements HasForms
         return [
             Tabs::make('AutomationTabs')
                 ->tabs([
-                    Tab::make('Manual tickets')
+                    Tab::make('Manual')
                         ->schema(array_filter([
                             $a['manual_ticket_auto_close_schedule_mode'] ?? null,
-                            $a['linked_ticket_manual_close_default_reason'] ?? null,
                             $a['default_close_delay_hours'] ?? null,
                             $a['default_reopen_window_hours'] ?? null,
                             $a['manual_ticket_flap_threshold'] ?? null,
                             $a['manual_ticket_extra_flapping_delay_hours'] ?? null,
                         ]))
                         ->columns(1),
-                    Tab::make('Auto tickets')
+                    Tab::make('Automatic')
                         ->schema([
                             Placeholder::make('auto_tickets_placeholder')
                                 ->label('Auto Ticket Automation')
