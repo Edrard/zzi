@@ -82,4 +82,19 @@ class ZabbixTicket extends Model
     {
         return $this->belongsTo(User::class, 'created_by');
     }
+
+    public function isClosedInZnuny(): bool
+    {
+        return strtolower($this->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $this->znuny_state_name), 'closed');
+    }
+
+    public function isReopenCandidate(): bool
+    {
+        return $this->manual_lifecycle_status === 'reopen_candidate';
+    }
+
+    public function wasManuallyReopened(): bool
+    {
+        return $this->manual_lifecycle_status === 'reopened' || $this->manual_reopened_at !== null;
+    }
 }

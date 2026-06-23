@@ -9,6 +9,7 @@ use App\Services\Support\DateTimeDisplayService;
 use App\Services\Zabbix\ZabbixProblemCache;
 use App\Services\Zabbix\ZabbixProblemFormatter;
 use App\Services\Zabbix\ZabbixProblemQueryService;
+use App\Services\Zabbix\ZabbixTicketStatusPresenter;
 use App\Services\Znuny\ZabbixTicketLinkService;
 use App\Services\Znuny\ZnunyAgentService;
 use App\Services\Znuny\ZnunyClient;
@@ -316,58 +317,9 @@ class CurrentZabbixProblems extends Page
         return $resolved;
     }
 
-    public function getProblemTicketIndicator(?ZabbixTicket $ticket): array
+    public function getProblemTicketIndicator(?ZabbixTicket $ticket): ?array
     {
-        if (! $ticket) {
-            return [];
-        }
-
-        if (in_array($ticket->manual_lifecycle_status, [
-            ZnunyManualTicketLifecycleService::STATUS_CLOSED,
-            ZnunyManualTicketLifecycleService::STATUS_NOT_APPLICABLE,
-            ZnunyManualTicketLifecycleService::STATUS_CACHE_STALE,
-            ZnunyManualTicketLifecycleService::STATUS_IDENTITY_MISSING,
-        ])) {
-            return [];
-        }
-
-        if ($ticket->manual_lifecycle_status === 'flapping') {
-            return [
-                'kind' => 'flapping',
-                'icon' => 'heroicon-o-exclamation-triangle',
-                'class' => 'zbx-status-icon-flapping',
-                'style' => '',
-                'title' => 'Flapping ticket. Ticket: '.$ticket->znuny_ticket_number,
-            ];
-        }
-
-        if ($ticket->manual_lifecycle_status === 'reopen_candidate') {
-            return [
-                'kind' => 'reopen_candidate',
-                'icon' => 'heroicon-o-arrow-path',
-                'class' => 'zbx-status-icon-reopen-candidate',
-                'style' => '',
-                'title' => 'Manual reopen candidate. Ticket: '.$ticket->znuny_ticket_number,
-            ];
-        }
-
-        if ($ticket->manual_lifecycle_status === 'reopened' || $ticket->manual_reopened_at !== null) {
-            return [
-                'kind' => 'reopened',
-                'icon' => 'heroicon-o-arrow-uturn-left',
-                'class' => 'zbx-status-icon-reopened',
-                'style' => '',
-                'title' => 'Manually reopened ticket. Ticket: '.$ticket->znuny_ticket_number,
-            ];
-        }
-
-        return [
-            'kind' => 'linked',
-            'icon' => 'heroicon-o-ticket',
-            'class' => 'zbx-status-icon-linked',
-            'style' => '',
-            'title' => 'Ticket already linked: '.$ticket->znuny_ticket_number,
-        ];
+        return ZabbixTicketStatusPresenter::problemIndicator($ticket);
     }
 
     public function getLastPollProperty(): ?array

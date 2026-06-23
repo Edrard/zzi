@@ -977,53 +977,19 @@
 
             <table style="border-collapse: collapse; font-size: 11px; line-height: 15px; color: #9ca3af;">
                 <tbody>
+                    @foreach(\App\Services\Zabbix\ZabbixTicketStatusPresenter::legendItems() as $item)
                     <tr>
                         <td style="width: 18px; padding: 1px 6px 1px 0; vertical-align: middle;">
-                            <x-filament::icon icon="heroicon-o-ticket" class="zbx-status-icon zbx-status-icon-linked" />
+                            <x-filament::icon icon="{{ $item['icon'] }}" class="zbx-status-icon {{ $item['class'] }}" />
                         </td>
                         <td style="padding: 1px 8px 1px 0; vertical-align: middle; white-space: nowrap; font-weight: 600; color: #374151;" class="dark:!text-gray-300">
-                            Linked ticket
+                            {{ $item['label'] }}
                         </td>
                         <td style="padding: 1px 0; vertical-align: middle; color: #6b7280;" class="dark:!text-gray-400">
-                            This problem already has a linked Znuny ticket.
+                            {{ $item['description'] }}
                         </td>
                     </tr>
-
-                    <tr>
-                        <td style="width: 18px; padding: 1px 6px 1px 0; vertical-align: middle;">
-                            <x-filament::icon icon="heroicon-o-arrow-path" class="zbx-status-icon zbx-status-icon-reopen-candidate" />
-                        </td>
-                        <td style="padding: 1px 8px 1px 0; vertical-align: middle; white-space: nowrap; font-weight: 600; color: #374151;" class="dark:!text-gray-300">
-                            Manual reopen candidate
-                        </td>
-                        <td style="padding: 1px 0; vertical-align: middle; color: #6b7280;" class="dark:!text-gray-400">
-                            The linked ticket is closed, but the problem is active within the reopen window.
-                        </td>
-                    </tr>
-
-                    <tr>
-                        <td style="width: 18px; padding: 1px 6px 1px 0; vertical-align: middle;">
-                            <x-filament::icon icon="heroicon-o-arrow-uturn-left" class="zbx-status-icon zbx-status-icon-reopened" />
-                        </td>
-                        <td style="padding: 1px 8px 1px 0; vertical-align: middle; white-space: nowrap; font-weight: 600; color: #374151;" class="dark:!text-gray-300">
-                            Manually reopened
-                        </td>
-                        <td style="padding: 1px 0; vertical-align: middle; color: #6b7280;" class="dark:!text-gray-400">
-                            The linked ticket was reopened from this integration.
-                        </td>
-                    </tr>
-
-                    <tr>
-                        <td style="width: 18px; padding: 1px 6px 1px 0; vertical-align: middle;">
-                            <x-filament::icon icon="heroicon-o-exclamation-triangle" class="zbx-status-icon zbx-status-icon-flapping" />
-                        </td>
-                        <td style="padding: 1px 8px 1px 0; vertical-align: middle; white-space: nowrap; font-weight: 600; color: #374151;" class="dark:!text-gray-300">
-                            Flapping detected
-                        </td>
-                        <td style="padding: 1px 0; vertical-align: middle; color: #6b7280;" class="dark:!text-gray-400">
-                            Problem repeatedly resolved and returned.
-                        </td>
-                    </tr>
+                    @endforeach
                 </tbody>
             </table>
         </div>

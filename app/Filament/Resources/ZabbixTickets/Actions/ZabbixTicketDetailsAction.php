@@ -48,13 +48,8 @@ class ZabbixTicketDetailsAction
                         if (empty($record->znuny_ticket_id)) {
                             return false;
                         }
-                        $stateName = strtolower($record->znuny_state_name ?? '');
-                        $stateType = strtolower($record->znuny_ticket_state_type ?? '');
-                        if ($stateType === 'closed' || str_contains($stateName, 'closed')) {
-                            return false;
-                        }
 
-                        return true;
+                        return ! $record->isClosedInZnuny();
                     })
                     ->action(function (ZabbixTicket $record, array $data) use ($action) {
                         $record->refresh();
@@ -125,7 +120,7 @@ class ZabbixTicketDetailsAction
                             ->required()
                             ->default(fn () => SettingsService::string('manual_ticket_reopen_note_template', 'Reopening this ticket because the linked Zabbix problem became active again within the configured reopen window.')),
                     ])
-                    ->visible(fn (ZabbixTicket $record) => $record->manual_lifecycle_status === 'reopen_candidate')
+                    ->visible(fn (ZabbixTicket $record) => $record->isReopenCandidate())
                     ->action(function (ZabbixTicket $record, array $data, Action $action) {
                         $reason = $data['reason'] ?? 'Reopening ticket.';
                         $service = app(ZnunyLinkedTicketReopenService::class);
