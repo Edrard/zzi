@@ -3,11 +3,10 @@
 namespace App\Filament\Resources\ZabbixTickets\Tables;
 
 use App\Filament\Resources\ZabbixTickets\Actions\ZabbixTicketDetailsAction;
+use App\Filament\Support\ZnunyTicketManagementActions;
 use App\Models\ZabbixTicket;
 use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixTicketStatusPresenter;
-use App\Services\Znuny\ZnunyClient;
-use Filament\Actions\Action;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -97,11 +96,7 @@ class ZabbixTicketsTable
             ])
             ->recordActions([
                 ZabbixTicketDetailsAction::make(),
-                Action::make('open_ticket')
-                    ->label('Open Ticket')
-                    ->icon('heroicon-o-arrow-top-right-on-square')
-                    ->url(fn (?ZabbixTicket $record) => $record ? app(ZnunyClient::class)->ticketUrl($record->znuny_ticket_id) : null)
-                    ->openUrlInNewTab(),
+                ZnunyTicketManagementActions::openInZnunyAction('open_ticket'),
             ])
             ->toolbarActions([]);
     }
