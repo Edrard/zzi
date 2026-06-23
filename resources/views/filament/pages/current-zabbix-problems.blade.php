@@ -68,31 +68,35 @@
             color: #f87171 !important;
         }
 
-        .zbx-ticket-details-button {
+        .zbx-problem-actions .zbx-ticket-details-button {
             color: #c2410c !important;
-            border-color: #cbd5e1 !important;
+            border: 1px solid #cbd5e1 !important;
             background: transparent !important;
+            box-shadow: none !important;
         }
 
-        .zbx-ticket-details-button:hover {
+        .zbx-problem-actions .zbx-ticket-details-button:hover {
             background: #fff7ed !important;
+            border-color: #fdba74 !important;
         }
 
-        .zbx-ticket-details-button svg {
+        .zbx-problem-actions .zbx-ticket-details-button svg {
             color: #c2410c !important;
         }
 
-        :is(.dark) .zbx-ticket-details-button {
+        :is(.dark) .zbx-problem-actions .zbx-ticket-details-button {
             color: #fb923c !important;
-            border-color: #475569 !important;
+            border: 1px solid #475569 !important;
             background: transparent !important;
+            box-shadow: none !important;
         }
 
-        :is(.dark) .zbx-ticket-details-button:hover {
+        :is(.dark) .zbx-problem-actions .zbx-ticket-details-button:hover {
             background: #1e293b !important;
+            border-color: #fb923c !important;
         }
 
-        :is(.dark) .zbx-ticket-details-button svg {
+        :is(.dark) .zbx-problem-actions .zbx-ticket-details-button svg {
             color: #fb923c !important;
         }
 
@@ -925,9 +929,8 @@
                                                         Open in Zabbix
                                                     </x-filament::button>
                                                 @endif
-
                                                 @if($linkedTicket && strtolower($linkedTicket->znuny_ticket_state_type ?? '') !== 'closed' && !str_contains(strtolower((string) $linkedTicket->znuny_state_name), 'closed') && $linkedTicket->manual_lifecycle_status !== 'reopen_candidate')
-                                                    <x-filament::button wire:click="mountAction('viewTicket', { ticket_id: {{ $linkedTicket->id }} })" color="gray" size="sm" icon="heroicon-o-ticket" class="zbx-ticket-details-button">
+                                                    <x-filament::button wire:click="mountAction('viewTicket', { ticket_id: {{ $linkedTicket->id }} })" class="zbx-ticket-details-button" size="sm" icon="heroicon-o-ticket">
                                                         Ticket details
                                                     </x-filament::button>
                                                 @endif

@@ -2,7 +2,7 @@
 
 namespace App\Filament\Pages;
 
-use App\Filament\Resources\ZabbixTickets\Schemas\ZabbixTicketInfolist;
+use App\Filament\Resources\ZabbixTickets\Actions\ZabbixTicketDetailsAction;
 use App\Models\ZabbixTicket;
 use App\Services\SettingsService;
 use App\Services\Support\DateTimeDisplayService;
@@ -18,8 +18,8 @@ use App\Services\Znuny\ZnunyTicketCreationService;
 use App\Services\Znuny\ZnunyTicketModalStateBuilder;
 use App\Services\Znuny\ZnunyTicketTextBuilder;
 use Filament\Actions\Action;
+use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Textarea;
-use Filament\Infolists\Infolist;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
@@ -147,32 +147,15 @@ class CurrentZabbixProblems extends Page
         }
     }
 
-    public function viewTicketAction(): Action
-    {
-        return Action::make('viewTicket')
-            ->label('Ticket details')
-            ->icon('heroicon-o-ticket')
-            ->record(function (array $arguments) {
-                return ZabbixTicket::find($arguments['ticket_id'] ?? null);
-            })
-            ->infolist(function (Infolist $infolist) {
-                return ZabbixTicketInfolist::configure($infolist->schema([]));
-            })
-            ->slideOver()
-            ->modalHeading('Ticket details')
-            ->modalSubmitAction(false)
-            ->modalCancelActionLabel('Close');
-    }
-
     public function reopenTicketAction(): Action
     {
         return Action::make('reopenTicket')
-            ->label('Reopen')
+            ->label('Reopen Ticket')
             ->icon('heroicon-o-arrow-path')
             ->color('warning')
-            ->requiresConfirmation()
             ->modalHeading('Reopen Znuny Ticket')
-            ->modalDescription('Reopen this closed manual ticket?')
+            ->modalDescription('Reopen the linked Znuny ticket because the Zabbix problem is active again?')
+            ->requiresConfirmation()
             ->form([
                 Textarea::make('reason')
                     ->label('Reopen Note / Article Body')
@@ -181,16 +164,21 @@ class CurrentZabbixProblems extends Page
             ])
             ->action(function (array $arguments, Action $action, array $data) {
                 $ticketId = $arguments['ticket_id'] ?? null;
-                $ticket = ZabbixTicket::find($ticketId);
+                if (! $ticketId) {
+                    Notification::make()->title('Ticket ID missing')->danger()->send();
 
+                    return;
+                }
+
+                $ticket = ZabbixTicket::find($ticketId);
                 if (! $ticket) {
                     Notification::make()->title('Ticket not found')->danger()->send();
-                    $action->cancel();
 
                     return;
                 }
 
                 $reason = $data['reason'] ?? 'Reopening ticket.';
+
                 $service = app(ZnunyLinkedTicketReopenService::class);
                 $result = $service->reopenTicket($ticket, $reason);
 
@@ -207,6 +195,14 @@ class CurrentZabbixProblems extends Page
                         ->danger()
                         ->send();
                 }
+            });
+    }
+
+    public function viewTicketAction(): ViewAction
+    {
+        return ZabbixTicketDetailsAction::make('viewTicket')
+            ->record(function (array $arguments) {
+                return ZabbixTicket::find($arguments['ticket_id'] ?? null);
             });
     }
 

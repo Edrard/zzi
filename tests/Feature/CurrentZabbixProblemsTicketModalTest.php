@@ -654,82 +654,111 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
-        Livewire::actingAs($admin)
-            ->test(CurrentZabbixProblems::class)
-            ->assertSeeHtml('<div class="zbx-icon-legend"')
-            ->assertSeeHtml('zbx-status-icon-linked')
-            ->assertSeeHtml('Linked ticket')
-            ->assertSeeHtml('zbx-status-icon-reopen-candidate')
-            ->assertSeeHtml('Manual reopen candidate')
-            ->assertSeeHtml('zbx-status-icon-reopened')
-            ->assertSeeHtml('Manually reopened')
-            ->assertSeeHtml('zbx-status-icon-flapping')
-            ->assertSeeHtml('Flapping detected');
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class);
+
+        $html = $component->html();
+        $this->assertStringContainsString('Icon legend', $html);
+        $this->assertStringContainsString('Linked ticket', $html);
+        $this->assertStringContainsString('Manual reopen candidate', $html);
+        $this->assertStringContainsString('Manually reopened', $html);
+        $this->assertStringContainsString('Flapping detected', $html);
+
+        $this->assertStringContainsString('<table', $html);
+        $this->assertStringNotContainsString('<ul class="grid', $html);
     }
 
-    public function test_ticket_details_button_rendered_for_open_ticket()
+    public function test_ticket_details_button_renders_for_open_linked_ticket()
     {
         $admin = User::factory()->create(['role' => 'admin']);
-        ZabbixTicket::create([
+
+        $ticket = ZabbixTicket::create([
             'zabbix_event_id' => '1001',
             'zabbix_host_id' => '2001',
-            'zabbix_host_name' => 'Host',
-            'zabbix_problem_name' => 'Problem',
+            'zabbix_host_name' => 'TestCompany swiss test01',
             'zabbix_severity' => 4,
-            'znuny_ticket_id' => 123,
-            'znuny_ticket_number' => '123456',
+            'zabbix_trigger_id' => '2001',
+            'zabbix_problem_name' => 'TestCompany CPU Load',
+            'znuny_ticket_id' => 50001,
+            'znuny_ticket_number' => '1001',
             'znuny_ticket_state_type' => 'open',
-            'znuny_state_name' => 'open',
             'manual_lifecycle_status' => 'active',
         ]);
 
         Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
             ->assertSeeHtml('Ticket details')
-            ->assertSeeHtml('mountAction(\'viewTicket\'');
-    }
-
-    public function test_ticket_details_button_hidden_for_reopen_candidate()
-    {
-        $admin = User::factory()->create(['role' => 'admin']);
-        ZabbixTicket::create([
-            'zabbix_event_id' => '1001',
-            'zabbix_host_id' => '2001',
-            'zabbix_host_name' => 'Host',
-            'zabbix_problem_name' => 'Problem',
-            'zabbix_severity' => 4,
-            'znuny_ticket_id' => 123,
-            'znuny_ticket_number' => '123456',
-            'znuny_ticket_state_type' => 'closed',
-            'znuny_state_name' => 'closed successful',
-            'manual_lifecycle_status' => 'reopen_candidate',
-        ]);
-
-        Livewire::actingAs($admin)
-            ->test(CurrentZabbixProblems::class)
-            ->assertDontSeeHtml('Ticket details')
-            ->assertDontSeeHtml('mountAction(\'viewTicket\'');
+            ->assertSeeHtml('zbx-ticket-details-button')
+            ->assertSeeHtml("mountAction('viewTicket', { ticket_id: {$ticket->id} })");
     }
 
     public function test_ticket_details_button_hidden_for_closed_ticket()
     {
         $admin = User::factory()->create(['role' => 'admin']);
+
         ZabbixTicket::create([
             'zabbix_event_id' => '1001',
             'zabbix_host_id' => '2001',
-            'zabbix_host_name' => 'Host',
-            'zabbix_problem_name' => 'Problem',
+            'zabbix_host_name' => 'TestCompany swiss test01',
             'zabbix_severity' => 4,
-            'znuny_ticket_id' => 123,
-            'znuny_ticket_number' => '123456',
-            'znuny_ticket_state_type' => 'closed',
+            'zabbix_trigger_id' => '2001',
+            'zabbix_problem_name' => 'TestCompany CPU Load',
+            'znuny_ticket_id' => 50001,
+            'znuny_ticket_number' => '1001',
             'znuny_state_name' => 'closed successful',
+            'znuny_ticket_state_type' => 'closed',
             'manual_lifecycle_status' => 'closed',
         ]);
 
         Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
-            ->assertDontSeeHtml('Ticket details')
-            ->assertDontSeeHtml('mountAction(\'viewTicket\'');
+            ->assertDontSeeHtml("mountAction('viewTicket'");
+    }
+
+    public function test_ticket_details_button_hidden_for_reopen_candidate()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        ZabbixTicket::create([
+            'zabbix_event_id' => '1001',
+            'zabbix_host_id' => '2001',
+            'zabbix_host_name' => 'TestCompany swiss test01',
+            'zabbix_severity' => 4,
+            'zabbix_trigger_id' => '2001',
+            'zabbix_problem_name' => 'TestCompany CPU Load',
+            'znuny_ticket_id' => 50001,
+            'znuny_ticket_number' => '1001',
+            'znuny_state_name' => 'closed successful',
+            'znuny_ticket_state_type' => 'closed',
+            'manual_lifecycle_status' => 'reopen_candidate',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->assertDontSeeHtml("mountAction('viewTicket'");
+    }
+
+    public function test_ticket_details_action_opens_modal_with_close_button_if_applicable()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => '1001',
+            'zabbix_host_id' => '2001',
+            'zabbix_host_name' => 'TestCompany swiss test01',
+            'zabbix_severity' => 4,
+            'zabbix_trigger_id' => '2001',
+            'zabbix_problem_name' => 'TestCompany CPU Load',
+            'znuny_ticket_id' => 50001,
+            'znuny_ticket_number' => '1001',
+            'znuny_ticket_state_type' => 'open',
+            'manual_lifecycle_status' => 'active',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->assertActionExists('viewTicket')
+            ->mountAction('viewTicket', ['ticket_id' => $ticket->id])
+            ->assertActionMounted('viewTicket');
     }
 }
