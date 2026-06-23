@@ -572,7 +572,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $html = $component->html();
         $this->assertStringContainsString('Open in Zabbix', $html);
         $this->assertStringContainsString('https://zabbix.test/?trigger=2001', $html);
-        $this->assertStringContainsString('bg-sky-600', $html);
+        $this->assertStringContainsString('!bg-transparent', $html);
     }
 
     public function test_open_in_zabbix_button_hidden_when_template_empty()

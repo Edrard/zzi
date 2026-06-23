@@ -846,7 +846,7 @@
                                         <div class="zbx-ticket-panel" style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                                             <div class="zbx-problem-actions" style="display: flex; gap: 0.5rem; align-items: center;">
                                                 @if($zabbixProblemUrl)
-                                                    <x-filament::button tag="a" :href="$zabbixProblemUrl" target="_blank" color="info" class="!bg-sky-600 hover:!bg-sky-500 !text-white dark:!bg-sky-500 dark:hover:!bg-sky-400" size="sm" icon="heroicon-o-arrow-top-right-on-square">
+                                                    <x-filament::button tag="a" :href="$zabbixProblemUrl" target="_blank" color="gray" class="!bg-transparent !text-slate-600 dark:!text-slate-200 border border-slate-300 dark:border-slate-600 hover:!bg-slate-100 dark:hover:!bg-slate-800" size="sm" icon="heroicon-o-arrow-top-right-on-square">
                                                         Open in Zabbix
                                                     </x-filament::button>
                                                 @endif
