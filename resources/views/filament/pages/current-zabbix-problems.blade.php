@@ -886,40 +886,62 @@
             @endif
         </div>
 
-        <div class="mt-4 p-3 bg-white dark:bg-gray-900 shadow rounded-xl ring-1 ring-gray-950/5 dark:ring-white/10 text-xs">
-            <h3 class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+        <div style="margin-top: 16px; border-top: 1px solid rgba(148, 163, 184, 0.18); padding-top: 12px;">
+            <div style="margin-bottom: 6px; font-size: 11px; line-height: 14px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: .04em;">
                 Icon legend
-            </h3>
-            <ul class="grid gap-x-4 gap-y-1.5 sm:grid-cols-2 xl:grid-cols-4">
-                <li class="flex items-center gap-2 leading-5">
-                    <x-filament::icon icon="heroicon-o-ticket" class="w-4 h-4 shrink-0 text-gray-500 dark:text-gray-400" />
-                    <span>
-                        <span class="font-semibold text-gray-700 dark:text-gray-200">Linked ticket</span>
-                        <span class="text-gray-500 dark:text-gray-400">&mdash; This problem already has a linked Znuny ticket.</span>
-                    </span>
-                </li>
-                <li class="flex items-center gap-2 leading-5">
-                    <x-filament::icon icon="heroicon-o-arrow-path" class="w-4 h-4 shrink-0 !text-orange-500 dark:!text-orange-400" />
-                    <span>
-                        <span class="font-semibold text-gray-700 dark:text-gray-200">Manual reopen candidate</span>
-                        <span class="text-gray-500 dark:text-gray-400">&mdash; The linked ticket is closed, but the problem is active within the reopen window.</span>
-                    </span>
-                </li>
-                <li class="flex items-center gap-2 leading-5">
-                    <x-filament::icon icon="heroicon-o-arrow-uturn-left" class="w-4 h-4 shrink-0 !text-sky-500 dark:!text-sky-400" />
-                    <span>
-                        <span class="font-semibold text-gray-700 dark:text-gray-200">Manually reopened</span>
-                        <span class="text-gray-500 dark:text-gray-400">&mdash; The linked ticket was reopened from this integration.</span>
-                    </span>
-                </li>
-                <li class="flex items-center gap-2 leading-5">
-                    <x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-4 h-4 shrink-0 !text-red-500 dark:!text-red-400" />
-                    <span>
-                        <span class="font-semibold text-gray-700 dark:text-gray-200">Flapping detected</span>
-                        <span class="text-gray-500 dark:text-gray-400">&mdash; Problem repeatedly resolved and returned.</span>
-                    </span>
-                </li>
-            </ul>
+            </div>
+
+            <table style="border-collapse: collapse; font-size: 11px; line-height: 15px; color: #9ca3af;">
+                <tbody>
+                    <tr>
+                        <td style="width: 18px; padding: 1px 6px 1px 0; vertical-align: middle;">
+                            <x-filament::icon icon="heroicon-o-ticket" style="width: 14px; height: 14px; color: #9ca3af; display: inline-block; vertical-align: middle;" />
+                        </td>
+                        <td style="padding: 1px 8px 1px 0; vertical-align: middle; white-space: nowrap; font-weight: 600; color: #374151;" class="dark:!text-gray-300">
+                            Linked ticket
+                        </td>
+                        <td style="padding: 1px 0; vertical-align: middle; color: #6b7280;" class="dark:!text-gray-400">
+                            This problem already has a linked Znuny ticket.
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="width: 18px; padding: 1px 6px 1px 0; vertical-align: middle;">
+                            <x-filament::icon icon="heroicon-o-arrow-path" style="width: 14px; height: 14px; color: #f97316; display: inline-block; vertical-align: middle;" />
+                        </td>
+                        <td style="padding: 1px 8px 1px 0; vertical-align: middle; white-space: nowrap; font-weight: 600; color: #374151;" class="dark:!text-gray-300">
+                            Manual reopen candidate
+                        </td>
+                        <td style="padding: 1px 0; vertical-align: middle; color: #6b7280;" class="dark:!text-gray-400">
+                            The linked ticket is closed, but the problem is active within the reopen window.
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="width: 18px; padding: 1px 6px 1px 0; vertical-align: middle;">
+                            <x-filament::icon icon="heroicon-o-arrow-uturn-left" style="width: 14px; height: 14px; color: #0ea5e9; display: inline-block; vertical-align: middle;" />
+                        </td>
+                        <td style="padding: 1px 8px 1px 0; vertical-align: middle; white-space: nowrap; font-weight: 600; color: #374151;" class="dark:!text-gray-300">
+                            Manually reopened
+                        </td>
+                        <td style="padding: 1px 0; vertical-align: middle; color: #6b7280;" class="dark:!text-gray-400">
+                            The linked ticket was reopened from this integration.
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="width: 18px; padding: 1px 6px 1px 0; vertical-align: middle;">
+                            <x-filament::icon icon="heroicon-o-exclamation-triangle" style="width: 14px; height: 14px; color: #ef4444; display: inline-block; vertical-align: middle;" />
+                        </td>
+                        <td style="padding: 1px 8px 1px 0; vertical-align: middle; white-space: nowrap; font-weight: 600; color: #374151;" class="dark:!text-gray-300">
+                            Flapping detected
+                        </td>
+                        <td style="padding: 1px 0; vertical-align: middle; color: #6b7280;" class="dark:!text-gray-400">
+                            Problem repeatedly resolved and returned.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </div>
 

@@ -663,5 +663,8 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $this->assertStringContainsString('Manual reopen candidate', $html);
         $this->assertStringContainsString('Manually reopened', $html);
         $this->assertStringContainsString('Flapping detected', $html);
+
+        $this->assertStringContainsString('<table', $html);
+        $this->assertStringNotContainsString('<ul class="grid', $html);
     }
 }
