@@ -20,6 +20,8 @@ class ZabbixTicketResource extends Resource
 
     protected static string|\UnitEnum|null $navigationGroup = 'Znuny';
 
+    protected static ?int $navigationSort = 1;
+
     protected static ?string $navigationLabel = 'Linked Tickets';
 
     protected static ?string $modelLabel = 'Linked Ticket';

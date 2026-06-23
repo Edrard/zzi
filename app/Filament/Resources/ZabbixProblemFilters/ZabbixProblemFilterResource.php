@@ -29,6 +29,8 @@ class ZabbixProblemFilterResource extends Resource
 
     protected static string|\UnitEnum|null $navigationGroup = 'Automation';
 
+    protected static ?int $navigationSort = 2;
+
     protected static ?string $navigationLabel = 'Problem Filters';
 
     protected static ?string $recordTitleAttribute = 'name';

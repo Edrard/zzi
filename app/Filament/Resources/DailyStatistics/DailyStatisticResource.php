@@ -20,7 +20,7 @@ class DailyStatisticResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Reports';
+    protected static string|\UnitEnum|null $navigationGroup = 'Reports / Statistics';
 
     protected static ?string $navigationLabel = 'Daily Statistics';
 

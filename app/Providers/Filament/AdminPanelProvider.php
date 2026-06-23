@@ -6,6 +6,7 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\NavigationGroup;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
@@ -33,6 +34,18 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
+            ->navigationGroups([
+                NavigationGroup::make()
+                    ->label('Zabbix'),
+                NavigationGroup::make()
+                    ->label('Znuny'),
+                NavigationGroup::make()
+                    ->label('Reports / Statistics'),
+                NavigationGroup::make()
+                    ->label('Automation'),
+                NavigationGroup::make()
+                    ->label('Administration / Settings'),
+            ])
             ->pages([
                 Dashboard::class,
             ])
