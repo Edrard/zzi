@@ -95,6 +95,7 @@
         :is(.dark) .zbx-ticket-details-button svg {
             color: #fb923c !important;
         }
+
         .zbx-page-stack {
             display: flex;
             flex-direction: column;
@@ -915,9 +916,6 @@
                                             if (!empty($zabbixUrlTemplate) && !empty($triggerId)) {
                                                 $zabbixProblemUrl = str_replace('{trigger_id}', urlencode((string)$triggerId), $zabbixUrlTemplate);
                                             }
-
-                                            $isLinkedTicketClosed = $linkedTicket && (strtolower($linkedTicket->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $linkedTicket->znuny_state_name), 'closed'));
-                                            $showTicketDetailsButton = $linkedTicket && !$isLinkedTicketClosed && $linkedTicket->manual_lifecycle_status !== 'reopen_candidate';
                                         @endphp
 
                                         <div class="zbx-ticket-panel" style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
@@ -927,8 +925,9 @@
                                                         Open in Zabbix
                                                     </x-filament::button>
                                                 @endif
-                                                @if($showTicketDetailsButton)
-                                                    <x-filament::button wire:click="mountAction('viewTicket', { ticket_id: {{ $linkedTicket->id }} })" color="gray" class="zbx-ticket-details-button" size="sm" icon="heroicon-o-ticket">
+
+                                                @if($linkedTicket && strtolower($linkedTicket->znuny_ticket_state_type ?? '') !== 'closed' && !str_contains(strtolower((string) $linkedTicket->znuny_state_name), 'closed') && $linkedTicket->manual_lifecycle_status !== 'reopen_candidate')
+                                                    <x-filament::button wire:click="mountAction('viewTicket', { ticket_id: {{ $linkedTicket->id }} })" color="gray" size="sm" icon="heroicon-o-ticket" class="zbx-ticket-details-button">
                                                         Ticket details
                                                     </x-filament::button>
                                                 @endif

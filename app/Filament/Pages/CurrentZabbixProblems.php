@@ -19,9 +19,9 @@ use App\Services\Znuny\ZnunyTicketModalStateBuilder;
 use App\Services\Znuny\ZnunyTicketTextBuilder;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
+use Filament\Infolists\Infolist;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
-use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
@@ -150,10 +150,16 @@ class CurrentZabbixProblems extends Page
     public function viewTicketAction(): Action
     {
         return Action::make('viewTicket')
+            ->label('Ticket details')
+            ->icon('heroicon-o-ticket')
+            ->record(function (array $arguments) {
+                return ZabbixTicket::find($arguments['ticket_id'] ?? null);
+            })
+            ->infolist(function (Infolist $infolist) {
+                return ZabbixTicketInfolist::configure($infolist->schema([]));
+            })
             ->slideOver()
             ->modalHeading('Ticket details')
-            ->record(fn (array $arguments) => ZabbixTicket::find($arguments['ticket_id'] ?? null))
-            ->schema(fn (Schema $schema) => ZabbixTicketInfolist::configure($schema))
             ->modalSubmitAction(false)
             ->modalCancelActionLabel('Close');
     }
