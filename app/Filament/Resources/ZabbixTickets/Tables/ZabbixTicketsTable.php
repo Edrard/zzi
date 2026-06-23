@@ -86,18 +86,18 @@ class ZabbixTicketsTable
                     ->label('Zabbix')
                     ->badge()
                     ->state(function (ZabbixTicket $record) {
+                        if ($record->manual_lifecycle_status === 'flapping') {
+                            return 'Flapping';
+                        }
                         if ($record->manual_lifecycle_status === 'reopen_candidate') {
                             return 'Manual reopen candidate';
                         }
-                        if ($record->manual_lifecycle_status === 'reopened') {
+                        if ($record->manual_lifecycle_status === 'reopened' || $record->manual_reopened_at !== null) {
                             return 'Reopened';
                         }
                         $isClosed = strtolower($record->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $record->znuny_state_name), 'closed');
                         if ($isClosed) {
                             return 'Closed';
-                        }
-                        if ($record->manual_lifecycle_status === 'flapping') {
-                            return 'Flapping';
                         }
                         if ($record->manual_lifecycle_status === 'close_candidate') {
                             return 'Ready';
@@ -115,18 +115,18 @@ class ZabbixTicketsTable
                         return 'Unknown';
                     })
                     ->color(function (ZabbixTicket $record) {
+                        if ($record->manual_lifecycle_status === 'flapping') {
+                            return 'danger';
+                        }
                         if ($record->manual_lifecycle_status === 'reopen_candidate') {
                             return 'warning';
                         }
-                        if ($record->manual_lifecycle_status === 'reopened') {
-                            return 'warning';
+                        if ($record->manual_lifecycle_status === 'reopened' || $record->manual_reopened_at !== null) {
+                            return 'info';
                         }
                         $isClosed = strtolower($record->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $record->znuny_state_name), 'closed');
                         if ($isClosed) {
                             return 'gray';
-                        }
-                        if ($record->manual_lifecycle_status === 'flapping') {
-                            return 'danger';
                         }
                         if ($record->manual_lifecycle_status === 'close_candidate') {
                             return 'success';
@@ -144,18 +144,18 @@ class ZabbixTicketsTable
                         return 'gray';
                     })
                     ->icon(function (ZabbixTicket $record) {
-                        if ($record->manual_lifecycle_status === 'reopen_candidate') {
+                        if ($record->manual_lifecycle_status === 'flapping') {
                             return 'heroicon-o-exclamation-triangle';
                         }
-                        if ($record->manual_lifecycle_status === 'reopened') {
-                            return 'heroicon-o-ticket';
+                        if ($record->manual_lifecycle_status === 'reopen_candidate') {
+                            return 'heroicon-o-arrow-path';
+                        }
+                        if ($record->manual_lifecycle_status === 'reopened' || $record->manual_reopened_at !== null) {
+                            return 'heroicon-o-arrow-uturn-left';
                         }
                         $isClosed = strtolower($record->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $record->znuny_state_name), 'closed');
                         if ($isClosed) {
                             return 'heroicon-o-check-circle';
-                        }
-                        if ($record->manual_lifecycle_status === 'flapping') {
-                            return 'heroicon-o-exclamation-triangle';
                         }
                         if ($record->manual_lifecycle_status === 'close_candidate') {
                             return 'heroicon-o-check-circle';
@@ -173,10 +173,13 @@ class ZabbixTicketsTable
                         return 'heroicon-o-question-mark-circle';
                     })
                     ->tooltip(function (ZabbixTicket $record) {
+                        if ($record->manual_lifecycle_status === 'flapping') {
+                            return 'Flapping problem detected';
+                        }
                         if ($record->manual_lifecycle_status === 'reopen_candidate') {
                             return 'Znuny ticket is closed, but the linked Zabbix problem is active again within the reopen window. Choose Reopen or Create Ticket manually.';
                         }
-                        if ($record->manual_lifecycle_status === 'reopened') {
+                        if ($record->manual_lifecycle_status === 'reopened' || $record->manual_reopened_at !== null) {
                             return 'Manually reopened ticket';
                         }
                         $isClosed = strtolower($record->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $record->znuny_state_name), 'closed');

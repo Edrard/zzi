@@ -588,6 +588,31 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $this->assertStringNotContainsString('Open in Zabbix', $html);
     }
 
+    public function test_expanded_detail_preserves_reopened_indicator_when_active()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt_old',
+            'zabbix_host_id' => '2001',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_severity' => 3,
+            'zabbix_problem_name' => 'Problem 1',
+            'znuny_ticket_id' => 50005,
+            'znuny_ticket_number' => '1005',
+            'zabbix_trigger_id' => '2001',
+            'manual_lifecycle_status' => 'active',
+            'manual_reopened_at' => now()->subMinutes(5),
+            'znuny_ticket_state_type' => 'open',
+        ]);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class);
+
+        $html = $component->html();
+        $this->assertStringContainsString('Manually reopened', $html);
+        $this->assertStringContainsString('Reopened at:', $html);
+    }
+
     public function test_refresh_from_zabbix_calls_poll_and_evaluate_lifecycle()
     {
         $admin = User::factory()->create(['role' => 'admin']);

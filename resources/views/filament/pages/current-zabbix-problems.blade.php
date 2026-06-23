@@ -821,12 +821,12 @@
                                                     <li><strong>Queue:</strong> {{ $linkedTicket->znuny_queue_name ?: 'N/A' }}</li>
                                                     <li><strong>Owner:</strong> {{ $this->getTicketOwnerDisplay($linkedTicket) }}</li>
                                                     <li><strong>Ticket Age:</strong> {{ $this->formatAge((int) $linkedTicket->created_at->diffInSeconds()) }}</li>
-                                                    @if($linkedTicket->manual_lifecycle_status === 'reopen_candidate')
-                                                        <li><strong class="text-orange-500 dark:text-orange-400 inline-flex items-center gap-1">Manual Reopen Candidate</strong></li>
-                                                    @elseif($linkedTicket->manual_lifecycle_status === 'reopened')
-                                                        <li><strong class="text-sky-500 dark:text-sky-400 inline-flex items-center gap-1">Manually reopened</strong></li>
-                                                    @elseif($linkedTicket->manual_lifecycle_status === 'flapping')
+                                                    @if($linkedTicket->manual_lifecycle_status === 'flapping')
                                                         <li><strong class="text-red-500 dark:text-red-400 inline-flex items-center gap-1">Flapping</strong></li>
+                                                    @elseif($linkedTicket->manual_lifecycle_status === 'reopen_candidate')
+                                                        <li><strong class="text-orange-500 dark:text-orange-400 inline-flex items-center gap-1">Manual Reopen Candidate</strong></li>
+                                                    @elseif($linkedTicket->manual_lifecycle_status === 'reopened' || $linkedTicket->manual_reopened_at !== null)
+                                                        <li><strong class="text-sky-500 dark:text-sky-400 inline-flex items-center gap-1">Manually reopened</strong></li>
                                                     @endif
                                                     @if($linkedTicket->manual_reopened_at)
                                                         <li><strong>Reopened at:</strong> {{ $linkedTicket->manual_reopened_at->format('Y-m-d H:i:s') }}</li>
@@ -886,24 +886,38 @@
             @endif
         </div>
 
-        <div class="mt-4 p-3 bg-white dark:bg-gray-900 shadow rounded-xl ring-1 ring-gray-950/5 dark:ring-white/10">
-            <h3 class="text-xs font-semibold mb-2">Icon legend</h3>
-            <ul class="text-xs space-y-1">
-                <li class="flex items-center gap-2">
+        <div class="mt-4 p-3 bg-white dark:bg-gray-900 shadow rounded-xl ring-1 ring-gray-950/5 dark:ring-white/10 text-xs">
+            <h3 class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Icon legend
+            </h3>
+            <ul class="grid gap-x-4 gap-y-1.5 sm:grid-cols-2 xl:grid-cols-4">
+                <li class="flex items-center gap-2 leading-5">
                     <x-filament::icon icon="heroicon-o-ticket" class="w-4 h-4 shrink-0 text-gray-500 dark:text-gray-400" />
-                    <span><strong>Linked ticket</strong> &mdash; <span class="text-gray-500 dark:text-gray-400">This problem already has a linked Znuny ticket.</span></span>
+                    <span>
+                        <span class="font-semibold text-gray-700 dark:text-gray-200">Linked ticket</span>
+                        <span class="text-gray-500 dark:text-gray-400">&mdash; This problem already has a linked Znuny ticket.</span>
+                    </span>
                 </li>
-                <li class="flex items-center gap-2">
+                <li class="flex items-center gap-2 leading-5">
                     <x-filament::icon icon="heroicon-o-arrow-path" class="w-4 h-4 shrink-0 !text-orange-500 dark:!text-orange-400" />
-                    <span><strong>Manual reopen candidate</strong> &mdash; <span class="text-gray-500 dark:text-gray-400">The linked ticket is closed, but the problem is active within the reopen window.</span></span>
+                    <span>
+                        <span class="font-semibold text-gray-700 dark:text-gray-200">Manual reopen candidate</span>
+                        <span class="text-gray-500 dark:text-gray-400">&mdash; The linked ticket is closed, but the problem is active within the reopen window.</span>
+                    </span>
                 </li>
-                <li class="flex items-center gap-2">
+                <li class="flex items-center gap-2 leading-5">
                     <x-filament::icon icon="heroicon-o-arrow-uturn-left" class="w-4 h-4 shrink-0 !text-sky-500 dark:!text-sky-400" />
-                    <span><strong>Manually reopened</strong> &mdash; <span class="text-gray-500 dark:text-gray-400">The linked ticket was reopened from this integration.</span></span>
+                    <span>
+                        <span class="font-semibold text-gray-700 dark:text-gray-200">Manually reopened</span>
+                        <span class="text-gray-500 dark:text-gray-400">&mdash; The linked ticket was reopened from this integration.</span>
+                    </span>
                 </li>
-                <li class="flex items-center gap-2">
+                <li class="flex items-center gap-2 leading-5">
                     <x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-4 h-4 shrink-0 !text-red-500 dark:!text-red-400" />
-                    <span><strong>Flapping detected</strong> &mdash; <span class="text-gray-500 dark:text-gray-400">Problem repeatedly resolved and returned.</span></span>
+                    <span>
+                        <span class="font-semibold text-gray-700 dark:text-gray-200">Flapping detected</span>
+                        <span class="text-gray-500 dark:text-gray-400">&mdash; Problem repeatedly resolved and returned.</span>
+                    </span>
                 </li>
             </ul>
         </div>

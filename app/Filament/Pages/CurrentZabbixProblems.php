@@ -316,6 +316,16 @@ class CurrentZabbixProblems extends Page
             return [];
         }
 
+        if ($ticket->manual_lifecycle_status === 'flapping') {
+            return [
+                'kind' => 'flapping',
+                'icon' => 'heroicon-o-exclamation-triangle',
+                'class' => 'w-4 h-4 text-danger-500 dark:text-danger-400 text-red-500',
+                'style' => '',
+                'title' => 'Flapping ticket. Ticket: '.$ticket->znuny_ticket_number,
+            ];
+        }
+
         if ($ticket->manual_lifecycle_status === 'reopen_candidate') {
             return [
                 'kind' => 'reopen_candidate',
@@ -326,23 +336,13 @@ class CurrentZabbixProblems extends Page
             ];
         }
 
-        if ($ticket->manual_lifecycle_status === 'reopened') {
+        if ($ticket->manual_lifecycle_status === 'reopened' || $ticket->manual_reopened_at !== null) {
             return [
                 'kind' => 'reopened',
                 'icon' => 'heroicon-o-arrow-uturn-left',
                 'class' => 'w-4 h-4 !text-sky-500 dark:!text-sky-400',
                 'style' => 'color: #0ea5e9;',
                 'title' => 'Manually reopened ticket. Ticket: '.$ticket->znuny_ticket_number,
-            ];
-        }
-
-        if ($ticket->manual_lifecycle_status === 'flapping') {
-            return [
-                'kind' => 'flapping',
-                'icon' => 'heroicon-o-exclamation-triangle',
-                'class' => 'w-4 h-4 text-danger-500 dark:text-danger-400 text-red-500',
-                'style' => '',
-                'title' => 'Flapping ticket. Ticket: '.$ticket->znuny_ticket_number,
             ];
         }
 

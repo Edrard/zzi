@@ -151,6 +151,38 @@ class CurrentZabbixProblemsTicketIndicatorTest extends TestCase
         $this->assertStringContainsString('text-sky-500', $indicator['class']);
     }
 
+    public function test_resolver_reopened_preserves_indicator_when_active()
+    {
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt_old',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_severity' => 3,
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_problem_name' => 'Problem 1',
+            'znuny_ticket_id' => 50002,
+            'znuny_ticket_number' => '1002',
+            'manual_lifecycle_status' => 'active',
+            'manual_reopened_at' => now()->subMinutes(5),
+        ]);
+
+        $page = new CurrentZabbixProblems;
+        $problems = [
+            [
+                'eventid' => 'evt_new',
+                'hosts' => [['hostid' => 'host1']],
+                'objectid' => 'trg1',
+            ],
+        ];
+
+        $resolved = $page->resolveLinkedTickets($problems);
+        $indicator = $page->getProblemTicketIndicator($resolved['evt_new']);
+
+        $this->assertEquals('reopened', $indicator['kind']);
+        $this->assertEquals('heroicon-o-arrow-uturn-left', $indicator['icon']);
+        $this->assertStringContainsString('text-sky-500', $indicator['class']);
+    }
+
     public function test_resolver_flapping_returns_flapping_icon()
     {
         $ticket = ZabbixTicket::create([
