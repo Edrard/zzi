@@ -624,4 +624,19 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->test(CurrentZabbixProblems::class)
             ->call('refreshFromZabbix');
     }
+
+    public function test_icon_legend_is_rendered()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class);
+
+        $html = $component->html();
+        $this->assertStringContainsString('Icon legend', $html);
+        $this->assertStringContainsString('Linked ticket', $html);
+        $this->assertStringContainsString('Manual reopen candidate', $html);
+        $this->assertStringContainsString('Manually reopened', $html);
+        $this->assertStringContainsString('Flapping detected', $html);
+    }
 }

@@ -113,10 +113,11 @@ class CurrentZabbixProblemsTicketIndicatorTest extends TestCase
 
         $indicator = $page->getProblemTicketIndicator($resolved['evt_new']);
         $this->assertEquals('reopen_candidate', $indicator['kind']);
-        $this->assertEquals('heroicon-o-exclamation-triangle', $indicator['icon']);
+        $this->assertEquals('heroicon-o-arrow-path', $indicator['icon']);
+        $this->assertStringContainsString('text-orange-500', $indicator['class']);
     }
 
-    public function test_resolver_reopened_returns_orange_ticket()
+    public function test_resolver_reopened_returns_blue_ticket()
     {
         $ticket = ZabbixTicket::create([
             'zabbix_event_id' => 'evt_old',
@@ -146,8 +147,8 @@ class CurrentZabbixProblemsTicketIndicatorTest extends TestCase
 
         $indicator = $page->getProblemTicketIndicator($resolved['evt_new']);
         $this->assertEquals('reopened', $indicator['kind']);
-        $this->assertEquals('heroicon-o-ticket', $indicator['icon']);
-        $this->assertStringContainsString('text-orange-500', $indicator['class']);
+        $this->assertEquals('heroicon-o-arrow-uturn-left', $indicator['icon']);
+        $this->assertStringContainsString('text-sky-500', $indicator['class']);
     }
 
     public function test_resolver_flapping_returns_flapping_icon()

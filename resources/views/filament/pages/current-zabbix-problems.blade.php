@@ -763,17 +763,7 @@
                                 </td>
                                 <td>
                                     @if($indicator)
-                                        @php
-                                            $iconClass = 'w-4 h-4';
-                                            if ($indicator['kind'] === 'reopen_candidate' || $indicator['kind'] === 'reopened') {
-                                                $iconClass .= ' !text-orange-500 dark:!text-orange-400';
-                                            } elseif ($indicator['kind'] === 'flapping') {
-                                                $iconClass .= ' !text-red-500 dark:!text-red-400';
-                                            } else {
-                                                $iconClass .= ' text-gray-500 dark:text-gray-400';
-                                            }
-                                        @endphp
-                                        <x-filament::icon icon="{{ $indicator['icon'] }}" class="{{ $iconClass }}" title="{{ $indicator['title'] }}" />
+                                        <x-filament::icon icon="{{ $indicator['icon'] }}" class="{{ $indicator['class'] ?? 'w-4 h-4' }}" title="{{ $indicator['title'] }}" />
                                     @endif
                                 </td>
                                 <td class="zbx-host-col">
@@ -834,7 +824,7 @@
                                                     @if($linkedTicket->manual_lifecycle_status === 'reopen_candidate')
                                                         <li><strong class="text-orange-500 dark:text-orange-400 inline-flex items-center gap-1">Manual Reopen Candidate</strong></li>
                                                     @elseif($linkedTicket->manual_lifecycle_status === 'reopened')
-                                                        <li><strong class="text-orange-500 dark:text-orange-400 inline-flex items-center gap-1">Manually reopened</strong></li>
+                                                        <li><strong class="text-sky-500 dark:text-sky-400 inline-flex items-center gap-1">Manually reopened</strong></li>
                                                     @elseif($linkedTicket->manual_lifecycle_status === 'flapping')
                                                         <li><strong class="text-red-500 dark:text-red-400 inline-flex items-center gap-1">Flapping</strong></li>
                                                     @endif
@@ -894,6 +884,28 @@
                     @endforeach
                 </table>
             @endif
+        </div>
+
+        <div class="mt-4 p-4 bg-white dark:bg-gray-900 shadow rounded-xl ring-1 ring-gray-950/5 dark:ring-white/10">
+            <h3 class="text-sm font-semibold mb-3">Icon legend</h3>
+            <ul class="text-sm space-y-2">
+                <li class="flex items-center gap-2">
+                    <x-filament::icon icon="heroicon-o-ticket" class="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                    <strong>Linked ticket</strong> &mdash; <span class="text-gray-500 dark:text-gray-400">This problem already has a linked Znuny ticket.</span>
+                </li>
+                <li class="flex items-center gap-2">
+                    <x-filament::icon icon="heroicon-o-arrow-path" class="w-4 h-4 !text-orange-500 dark:!text-orange-400" />
+                    <strong>Manual reopen candidate</strong> &mdash; <span class="text-gray-500 dark:text-gray-400">The linked ticket is closed, but the problem is active within the reopen window.</span>
+                </li>
+                <li class="flex items-center gap-2">
+                    <x-filament::icon icon="heroicon-o-arrow-uturn-left" class="w-4 h-4 !text-sky-500 dark:!text-sky-400" />
+                    <strong>Manually reopened</strong> &mdash; <span class="text-gray-500 dark:text-gray-400">The linked ticket was reopened from this integration.</span>
+                </li>
+                <li class="flex items-center gap-2">
+                    <x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-4 h-4 !text-red-500 dark:!text-red-400" />
+                    <strong>Flapping detected</strong> &mdash; <span class="text-gray-500 dark:text-gray-400">Problem repeatedly resolved and returned.</span>
+                </li>
+            </ul>
         </div>
     </div>
 

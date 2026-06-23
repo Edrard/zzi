@@ -79,11 +79,15 @@ class ZnunyLinkedTicketCloseService
         // Update local DB safely on verified success
         $ticket->update([
             'manual_lifecycle_status' => ZnunyManualTicketLifecycleService::STATUS_CLOSED,
+            'manual_lifecycle_closed_at' => now(),
+            'manual_close_eligible_at' => null,
             'manual_lifecycle_last_checked_at' => now(),
             'znuny_state_name' => $stateName,
             'znuny_ticket_state_type' => $stateType,
             'znuny_ticket_changed_at' => $ticketSnapshot['Changed'] ?? now(),
         ]);
+
+        app(ZnunyManualTicketLifecycleService::class)->evaluate($ticket->id);
 
         return [
             'success' => true,

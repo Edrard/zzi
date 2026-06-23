@@ -319,7 +319,7 @@ class CurrentZabbixProblems extends Page
         if ($ticket->manual_lifecycle_status === 'reopen_candidate') {
             return [
                 'kind' => 'reopen_candidate',
-                'icon' => 'heroicon-o-exclamation-triangle',
+                'icon' => 'heroicon-o-arrow-path',
                 'class' => 'w-4 h-4 !text-orange-500 dark:!text-orange-400',
                 'style' => 'color: #f97316;',
                 'title' => 'Manual reopen candidate. Ticket: '.$ticket->znuny_ticket_number,
@@ -329,9 +329,9 @@ class CurrentZabbixProblems extends Page
         if ($ticket->manual_lifecycle_status === 'reopened') {
             return [
                 'kind' => 'reopened',
-                'icon' => 'heroicon-o-ticket',
-                'class' => 'w-4 h-4 !text-orange-500 dark:!text-orange-400',
-                'style' => 'color: #f97316;',
+                'icon' => 'heroicon-o-arrow-uturn-left',
+                'class' => 'w-4 h-4 !text-sky-500 dark:!text-sky-400',
+                'style' => 'color: #0ea5e9;',
                 'title' => 'Manually reopened ticket. Ticket: '.$ticket->znuny_ticket_number,
             ];
         }

@@ -6,11 +6,13 @@ use App\Filament\Resources\ZabbixTickets\Pages\ListZabbixTickets;
 use App\Models\Setting;
 use App\Models\User;
 use App\Models\ZabbixTicket;
+use App\Services\Zabbix\ZabbixProblemCache;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyLinkedTicketCloseService;
 use App\Services\Znuny\ZnunyLinkedTicketSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Redis;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -348,5 +350,52 @@ class LinkedTicketsPageTest extends TestCase
         Livewire::test(ListZabbixTickets::class)
             ->callAction('sync_tickets')
             ->assertHasNoActionErrors();
+    }
+
+    public function test_manual_close_action_with_active_problem_results_in_reopen_candidate()
+    {
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => '1', 'zabbix_trigger_id' => '1', 'zabbix_host_id' => '1', 'zabbix_host_name' => 'host1', 'zabbix_problem_name' => 'prob1', 'zabbix_severity' => 1, 'zabbix_started_at' => now(), 'znuny_ticket_id' => 1, 'znuny_ticket_number' => '1', 'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open', 'znuny_state_name' => 'open', 'manual_lifecycle_status' => 'active',
+            'zabbix_problem_is_active' => true,
+        ]);
+
+        app(ZabbixProblemCache::class)->putMany([
+            [
+                'eventid' => '2',
+                'objectid' => '1',
+                'hosts' => [['hostid' => '1']],
+            ],
+        ], 60);
+
+        Redis::set('zabbix:problems:last_poll', json_encode([
+            'status' => 'success',
+            'polled_at' => now()->toIso8601String(),
+        ]));
+
+        $mockClient = $this->mock(ZnunyClient::class);
+        $mockClient->shouldReceive('closeTicket')
+            ->once()
+            ->andReturn([
+                'success' => true,
+                'state' => 'closed successful',
+                'state_type' => 'closed',
+            ]);
+        $mockClient->shouldReceive('ticketUrl')
+            ->andReturn('http://example.com');
+
+        // Simulate the action callback which executes the close service
+        $closeService = app(ZnunyLinkedTicketCloseService::class);
+        $closeService->closeTicket($ticket, 'Subject', 'Body', 'Reason');
+
+        $ticket->refresh();
+        $this->assertEquals('reopen_candidate', $ticket->manual_lifecycle_status);
+
+        // Verify the reopen button appears in the view slideover
+        Livewire::test(ListZabbixTickets::class)
+            ->mountTableAction('view', $ticket)
+            ->assertHasNoTableActionErrors();
     }
 }
