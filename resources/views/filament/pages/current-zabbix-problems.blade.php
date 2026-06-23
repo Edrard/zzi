@@ -346,34 +346,7 @@
             color: #f9fafb;
         }
 
-        /* Custom Zabbix problem link button */
-        .zbx-open-zabbix-button,
-        .zbx-open-zabbix-button:focus,
-        .zbx-open-zabbix-button:focus-visible {
-            --tw-ring-shadow: 0 0 #0000 !important;
-            --tw-ring-offset-shadow: 0 0 #0000 !important;
-            box-shadow: none !important;
-            outline: none !important;
-        }
-        .zbx-open-zabbix-button {
-            border-width: 1px !important;
-            border-style: solid !important;
-            border-color: rgb(56, 189, 248) !important; /* sky-400 */
-            color: rgb(2, 132, 199) !important; /* sky-600 */
-            background: transparent !important;
-            transition: all 0.2s ease;
-        }
-        .zbx-open-zabbix-button:hover {
-            background: rgb(240, 249, 255) !important; /* sky-50 */
-        }
-        :is(.dark) .zbx-open-zabbix-button {
-            border-color: rgb(56, 189, 248) !important; /* sky-400 */
-            color: rgb(125, 211, 252) !important; /* sky-300 */
-            background: transparent !important;
-        }
-        :is(.dark) .zbx-open-zabbix-button:hover {
-            background: rgba(14, 165, 233, 0.10) !important; /* sky-500 / 10% */
-        }
+
 
         /* Ticket Actions */
         .zbx-ticket-panel {
@@ -790,7 +763,17 @@
                                 </td>
                                 <td>
                                     @if($indicator)
-                                        <x-filament::icon icon="{{ $indicator['icon'] }}" class="{{ $indicator['class'] }}" style="{{ $indicator['style'] }}" title="{{ $indicator['title'] }}" />
+                                        @php
+                                            $iconClass = 'w-4 h-4';
+                                            if ($indicator['kind'] === 'reopen_candidate' || $indicator['kind'] === 'reopened') {
+                                                $iconClass .= ' !text-orange-500 dark:!text-orange-400';
+                                            } elseif ($indicator['kind'] === 'flapping') {
+                                                $iconClass .= ' !text-red-500 dark:!text-red-400';
+                                            } else {
+                                                $iconClass .= ' text-gray-500 dark:text-gray-400';
+                                            }
+                                        @endphp
+                                        <x-filament::icon icon="{{ $indicator['icon'] }}" class="{{ $iconClass }}" title="{{ $indicator['title'] }}" />
                                     @endif
                                 </td>
                                 <td class="zbx-host-col">
@@ -873,7 +856,7 @@
                                         <div class="zbx-ticket-panel" style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                                             <div class="zbx-problem-actions" style="display: flex; gap: 0.5rem; align-items: center;">
                                                 @if($zabbixProblemUrl)
-                                                    <x-filament::button tag="a" :href="$zabbixProblemUrl" target="_blank" color="info" outlined size="sm" icon="heroicon-o-arrow-top-right-on-square" class="zbx-open-zabbix-button">
+                                                    <x-filament::button tag="a" :href="$zabbixProblemUrl" target="_blank" class="bg-sky-600 hover:bg-sky-500 text-white dark:bg-sky-500 dark:hover:bg-sky-400" size="sm" icon="heroicon-o-arrow-top-right-on-square">
                                                         Open in Zabbix
                                                     </x-filament::button>
                                                 @endif
