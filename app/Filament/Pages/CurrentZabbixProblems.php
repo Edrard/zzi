@@ -320,7 +320,7 @@ class CurrentZabbixProblems extends Page
             return [
                 'kind' => 'flapping',
                 'icon' => 'heroicon-o-exclamation-triangle',
-                'class' => 'w-4 h-4 text-danger-500 dark:text-danger-400 text-red-500',
+                'class' => 'zbx-status-icon-flapping',
                 'style' => '',
                 'title' => 'Flapping ticket. Ticket: '.$ticket->znuny_ticket_number,
             ];
@@ -330,8 +330,8 @@ class CurrentZabbixProblems extends Page
             return [
                 'kind' => 'reopen_candidate',
                 'icon' => 'heroicon-o-arrow-path',
-                'class' => 'w-4 h-4 !text-orange-500 dark:!text-orange-400',
-                'style' => 'color: #f97316;',
+                'class' => 'zbx-status-icon-reopen-candidate',
+                'style' => '',
                 'title' => 'Manual reopen candidate. Ticket: '.$ticket->znuny_ticket_number,
             ];
         }
@@ -340,8 +340,8 @@ class CurrentZabbixProblems extends Page
             return [
                 'kind' => 'reopened',
                 'icon' => 'heroicon-o-arrow-uturn-left',
-                'class' => 'w-4 h-4 !text-sky-500 dark:!text-sky-400',
-                'style' => 'color: #0ea5e9;',
+                'class' => 'zbx-status-icon-reopened',
+                'style' => '',
                 'title' => 'Manually reopened ticket. Ticket: '.$ticket->znuny_ticket_number,
             ];
         }
@@ -349,7 +349,7 @@ class CurrentZabbixProblems extends Page
         return [
             'kind' => 'linked',
             'icon' => 'heroicon-o-ticket',
-            'class' => 'w-4 h-4 text-gray-500 dark:text-gray-400',
+            'class' => 'zbx-status-icon-linked',
             'style' => '',
             'title' => 'Ticket already linked: '.$ticket->znuny_ticket_number,
         ];

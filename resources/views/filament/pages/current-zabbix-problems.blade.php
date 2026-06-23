@@ -19,8 +19,54 @@
             max-width: none;
         }
 
+        .zbx-problem-row .zbx-status-icon,
+        .zbx-icon-legend .zbx-status-icon {
+            width: 0.875rem;
+            height: 0.875rem;
+            display: inline-block;
+            vertical-align: middle;
+            flex-shrink: 0;
+        }
 
+        .zbx-problem-row .zbx-status-icon-linked,
+        .zbx-icon-legend .zbx-status-icon-linked {
+            color: #64748b !important;
+        }
 
+        .zbx-problem-row .zbx-status-icon-reopen-candidate,
+        .zbx-icon-legend .zbx-status-icon-reopen-candidate {
+            color: #ea580c !important;
+        }
+
+        .zbx-problem-row .zbx-status-icon-reopened,
+        .zbx-icon-legend .zbx-status-icon-reopened {
+            color: #0284c7 !important;
+        }
+
+        .zbx-problem-row .zbx-status-icon-flapping,
+        .zbx-icon-legend .zbx-status-icon-flapping {
+            color: #dc2626 !important;
+        }
+
+        :is(.dark) .zbx-problem-row .zbx-status-icon-linked,
+        :is(.dark) .zbx-icon-legend .zbx-status-icon-linked {
+            color: #94a3b8 !important;
+        }
+
+        :is(.dark) .zbx-problem-row .zbx-status-icon-reopen-candidate,
+        :is(.dark) .zbx-icon-legend .zbx-status-icon-reopen-candidate {
+            color: #fb923c !important;
+        }
+
+        :is(.dark) .zbx-problem-row .zbx-status-icon-reopened,
+        :is(.dark) .zbx-icon-legend .zbx-status-icon-reopened {
+            color: #38bdf8 !important;
+        }
+
+        :is(.dark) .zbx-problem-row .zbx-status-icon-flapping,
+        :is(.dark) .zbx-icon-legend .zbx-status-icon-flapping {
+            color: #f87171 !important;
+        }
         .zbx-page-stack {
             display: flex;
             flex-direction: column;
@@ -886,7 +932,7 @@
             @endif
         </div>
 
-        <div style="margin-top: 16px; border-top: 1px solid rgba(148, 163, 184, 0.18); padding-top: 12px;">
+        <div class="zbx-icon-legend" style="margin-top: 16px; border-top: 1px solid rgba(148, 163, 184, 0.18); padding-top: 12px;">
             <div style="margin-bottom: 6px; font-size: 11px; line-height: 14px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: .04em;">
                 Icon legend
             </div>
@@ -895,7 +941,7 @@
                 <tbody>
                     <tr>
                         <td style="width: 18px; padding: 1px 6px 1px 0; vertical-align: middle;">
-                            <x-filament::icon icon="heroicon-o-ticket" style="width: 14px; height: 14px; color: #9ca3af; display: inline-block; vertical-align: middle;" />
+                            <x-filament::icon icon="heroicon-o-ticket" class="zbx-status-icon zbx-status-icon-linked" />
                         </td>
                         <td style="padding: 1px 8px 1px 0; vertical-align: middle; white-space: nowrap; font-weight: 600; color: #374151;" class="dark:!text-gray-300">
                             Linked ticket
@@ -907,7 +953,7 @@
 
                     <tr>
                         <td style="width: 18px; padding: 1px 6px 1px 0; vertical-align: middle;">
-                            <x-filament::icon icon="heroicon-o-arrow-path" style="width: 14px; height: 14px; color: #f97316; display: inline-block; vertical-align: middle;" />
+                            <x-filament::icon icon="heroicon-o-arrow-path" class="zbx-status-icon zbx-status-icon-reopen-candidate" />
                         </td>
                         <td style="padding: 1px 8px 1px 0; vertical-align: middle; white-space: nowrap; font-weight: 600; color: #374151;" class="dark:!text-gray-300">
                             Manual reopen candidate
@@ -919,7 +965,7 @@
 
                     <tr>
                         <td style="width: 18px; padding: 1px 6px 1px 0; vertical-align: middle;">
-                            <x-filament::icon icon="heroicon-o-arrow-uturn-left" style="width: 14px; height: 14px; color: #0ea5e9; display: inline-block; vertical-align: middle;" />
+                            <x-filament::icon icon="heroicon-o-arrow-uturn-left" class="zbx-status-icon zbx-status-icon-reopened" />
                         </td>
                         <td style="padding: 1px 8px 1px 0; vertical-align: middle; white-space: nowrap; font-weight: 600; color: #374151;" class="dark:!text-gray-300">
                             Manually reopened
@@ -931,7 +977,7 @@
 
                     <tr>
                         <td style="width: 18px; padding: 1px 6px 1px 0; vertical-align: middle;">
-                            <x-filament::icon icon="heroicon-o-exclamation-triangle" style="width: 14px; height: 14px; color: #ef4444; display: inline-block; vertical-align: middle;" />
+                            <x-filament::icon icon="heroicon-o-exclamation-triangle" class="zbx-status-icon zbx-status-icon-flapping" />
                         </td>
                         <td style="padding: 1px 8px 1px 0; vertical-align: middle; white-space: nowrap; font-weight: 600; color: #374151;" class="dark:!text-gray-300">
                             Flapping detected
