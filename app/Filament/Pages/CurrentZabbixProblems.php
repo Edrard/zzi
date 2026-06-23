@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Resources\ZabbixTickets\Schemas\ZabbixTicketInfolist;
 use App\Models\ZabbixTicket;
 use App\Services\SettingsService;
 use App\Services\Support\DateTimeDisplayService;
@@ -20,6 +21,7 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
@@ -143,6 +145,17 @@ class CurrentZabbixProblems extends Page
                 ->danger()
                 ->send();
         }
+    }
+
+    public function viewTicketAction(): Action
+    {
+        return Action::make('viewTicket')
+            ->slideOver()
+            ->modalHeading('Ticket details')
+            ->record(fn (array $arguments) => ZabbixTicket::find($arguments['ticket_id'] ?? null))
+            ->schema(fn (Schema $schema) => ZabbixTicketInfolist::configure($schema))
+            ->modalSubmitAction(false)
+            ->modalCancelActionLabel('Close');
     }
 
     public function reopenTicketAction(): Action

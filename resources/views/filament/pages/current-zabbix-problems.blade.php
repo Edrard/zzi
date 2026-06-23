@@ -67,6 +67,34 @@
         :is(.dark) .zbx-icon-legend .zbx-status-icon-flapping {
             color: #f87171 !important;
         }
+
+        .zbx-ticket-details-button {
+            color: #c2410c !important;
+            border-color: #cbd5e1 !important;
+            background: transparent !important;
+        }
+
+        .zbx-ticket-details-button:hover {
+            background: #fff7ed !important;
+        }
+
+        .zbx-ticket-details-button svg {
+            color: #c2410c !important;
+        }
+
+        :is(.dark) .zbx-ticket-details-button {
+            color: #fb923c !important;
+            border-color: #475569 !important;
+            background: transparent !important;
+        }
+
+        :is(.dark) .zbx-ticket-details-button:hover {
+            background: #1e293b !important;
+        }
+
+        :is(.dark) .zbx-ticket-details-button svg {
+            color: #fb923c !important;
+        }
         .zbx-page-stack {
             display: flex;
             flex-direction: column;
@@ -887,6 +915,9 @@
                                             if (!empty($zabbixUrlTemplate) && !empty($triggerId)) {
                                                 $zabbixProblemUrl = str_replace('{trigger_id}', urlencode((string)$triggerId), $zabbixUrlTemplate);
                                             }
+
+                                            $isLinkedTicketClosed = $linkedTicket && (strtolower($linkedTicket->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $linkedTicket->znuny_state_name), 'closed'));
+                                            $showTicketDetailsButton = $linkedTicket && !$isLinkedTicketClosed && $linkedTicket->manual_lifecycle_status !== 'reopen_candidate';
                                         @endphp
 
                                         <div class="zbx-ticket-panel" style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
@@ -894,6 +925,11 @@
                                                 @if($zabbixProblemUrl)
                                                     <x-filament::button tag="a" :href="$zabbixProblemUrl" target="_blank" color="gray" class="!bg-transparent !text-slate-600 dark:!text-slate-200 border border-slate-300 dark:border-slate-600 hover:!bg-slate-100 dark:hover:!bg-slate-800" size="sm" icon="heroicon-o-arrow-top-right-on-square">
                                                         Open in Zabbix
+                                                    </x-filament::button>
+                                                @endif
+                                                @if($showTicketDetailsButton)
+                                                    <x-filament::button wire:click="mountAction('viewTicket', { ticket_id: {{ $linkedTicket->id }} })" color="gray" class="zbx-ticket-details-button" size="sm" icon="heroicon-o-ticket">
+                                                        Ticket details
                                                     </x-filament::button>
                                                 @endif
                                             </div>
