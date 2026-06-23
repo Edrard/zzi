@@ -28,8 +28,8 @@ class ZnunyTicketCacheServiceTest extends TestCase
 
         // Ensure settings pretend cache is enabled
         Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
-        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_ttl_seconds'], ['value' => '900']);
-        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_closed_ttl_seconds'], ['value' => '86400']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_ttl_minutes'], ['value' => '15']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_closed_ttl_minutes'], ['value' => '1440']);
 
         $this->service = new ZnunyTicketCacheService;
     }

@@ -14,12 +14,12 @@ class ZnunyTicketCacheService
 
     protected function getTtl(): int
     {
-        return SettingsService::int('znuny_ticket_cache_ttl_seconds', 900) ?? 900;
+        return (SettingsService::int('znuny_ticket_cache_ttl_minutes', 15) ?? 15) * 60;
     }
 
     protected function getClosedTtl(): int
     {
-        return SettingsService::int('znuny_ticket_cache_closed_ttl_seconds', 86400) ?? 86400;
+        return (SettingsService::int('znuny_ticket_cache_closed_ttl_minutes', 1440) ?? 1440) * 60;
     }
 
     public function upsertTicket(array $ticket): void

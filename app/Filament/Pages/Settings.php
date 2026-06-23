@@ -286,7 +286,7 @@ class Settings extends Page implements HasForms
                 continue;
             }
 
-            if ($setting->type === 'json' && $setting->key === 'znuny_queue_host_mappings') {
+            if ($setting->type === 'json') {
                 $initialData[$setting->key] = json_decode($setting->value, true) ?? [];
 
                 continue;
@@ -497,6 +497,20 @@ class Settings extends Page implements HasForms
                     ->options(array_combine(\DateTimeZone::listIdentifiers(), \DateTimeZone::listIdentifiers()))
                     ->searchable()
                     ->required();
+            } elseif ($setting->key === 'znuny_ticket_workspace_active_state_type_ids') {
+                $component = Select::make($setting->key)
+                    ->label($label)
+                    ->helperText($description)
+                    ->multiple()
+                    ->options([
+                        'new' => 'New',
+                        'open' => 'Open',
+                        'pending_reminder' => 'Pending reminder',
+                        'pending_auto' => 'Pending auto',
+                        'closed' => 'Closed',
+                        'merged' => 'Merged',
+                    ])
+                    ->required();
             } else {
                 $input = TextInput::make($setting->key)
                     ->label($label)
@@ -602,9 +616,13 @@ class Settings extends Page implements HasForms
             if (array_key_exists($setting->key, $data)) {
                 $newValue = $data[$setting->key];
 
-                if ($setting->type === 'json' && $setting->key === 'znuny_queue_host_mappings') {
-                    $mappingService = app(ZnunyQueueHostMappingService::class);
-                    $newValue = json_encode($mappingService->normalizeMappings($newValue));
+                if ($setting->type === 'json') {
+                    if ($setting->key === 'znuny_queue_host_mappings') {
+                        $mappingService = app(ZnunyQueueHostMappingService::class);
+                        $newValue = json_encode($mappingService->normalizeMappings($newValue));
+                    } else {
+                        $newValue = is_array($newValue) ? json_encode($newValue) : $newValue;
+                    }
                 } elseif ($setting->type === 'boolean') {
                     $newValue = $newValue ? 'true' : 'false';
                 } else {

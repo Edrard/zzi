@@ -50,10 +50,10 @@ class SettingsSeeder extends Seeder
             ['key' => 'znuny_ticket_workspace_enabled', 'value' => 'true', 'type' => 'boolean', 'description' => 'Enable Redis-backed Ticket Workspace.'],
             ['key' => 'znuny_ticket_cache_refresh_interval_minutes', 'value' => '5', 'type' => 'integer', 'description' => 'Interval for the Ticket Workspace cache warmer in minutes.'],
             ['key' => 'znuny_ticket_cache_max_pages_per_run', 'value' => '3', 'type' => 'integer', 'description' => 'Safety limit for paginated ZnunyTicketSearch cache warming.'],
-            ['key' => 'znuny_ticket_cache_ttl_seconds', 'value' => '900', 'type' => 'integer', 'description' => 'Default TTL for cached active Znuny tickets in seconds.'],
-            ['key' => 'znuny_ticket_cache_closed_ttl_seconds', 'value' => '86400', 'type' => 'integer', 'description' => 'TTL for recently closed Znuny tickets in seconds.'],
+            ['key' => 'znuny_ticket_cache_ttl_minutes', 'value' => '15', 'type' => 'integer', 'description' => 'Default TTL for cached active Znuny tickets in minutes.'],
+            ['key' => 'znuny_ticket_cache_closed_ttl_minutes', 'value' => '1440', 'type' => 'integer', 'description' => 'TTL for recently closed Znuny tickets in minutes.'],
             ['key' => 'znuny_ticket_cache_default_limit', 'value' => '50', 'type' => 'integer', 'description' => 'Default page size for Znuny ticket cache warming/search.'],
-            ['key' => 'znuny_ticket_cache_active_state_types', 'value' => 'new,open,pending reminder,pending auto', 'type' => 'string', 'description' => 'Comma-separated list of active operational state types.'],
+            ['key' => 'znuny_ticket_workspace_active_state_type_ids', 'value' => '["new","open","pending_reminder","pending_auto"]', 'type' => 'json', 'description' => 'JSON array of active operational state type IDs.'],
         ];
 
         foreach ($settings as $setting) {
