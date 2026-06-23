@@ -886,24 +886,24 @@
             @endif
         </div>
 
-        <div class="mt-4 p-4 bg-white dark:bg-gray-900 shadow rounded-xl ring-1 ring-gray-950/5 dark:ring-white/10">
-            <h3 class="text-sm font-semibold mb-3">Icon legend</h3>
-            <ul class="text-sm space-y-2">
+        <div class="mt-4 p-3 bg-white dark:bg-gray-900 shadow rounded-xl ring-1 ring-gray-950/5 dark:ring-white/10">
+            <h3 class="text-xs font-semibold mb-2">Icon legend</h3>
+            <ul class="text-xs space-y-1">
                 <li class="flex items-center gap-2">
-                    <x-filament::icon icon="heroicon-o-ticket" class="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                    <strong>Linked ticket</strong> &mdash; <span class="text-gray-500 dark:text-gray-400">This problem already has a linked Znuny ticket.</span>
+                    <x-filament::icon icon="heroicon-o-ticket" class="w-4 h-4 shrink-0 text-gray-500 dark:text-gray-400" />
+                    <span><strong>Linked ticket</strong> &mdash; <span class="text-gray-500 dark:text-gray-400">This problem already has a linked Znuny ticket.</span></span>
                 </li>
                 <li class="flex items-center gap-2">
-                    <x-filament::icon icon="heroicon-o-arrow-path" class="w-4 h-4 !text-orange-500 dark:!text-orange-400" />
-                    <strong>Manual reopen candidate</strong> &mdash; <span class="text-gray-500 dark:text-gray-400">The linked ticket is closed, but the problem is active within the reopen window.</span>
+                    <x-filament::icon icon="heroicon-o-arrow-path" class="w-4 h-4 shrink-0 !text-orange-500 dark:!text-orange-400" />
+                    <span><strong>Manual reopen candidate</strong> &mdash; <span class="text-gray-500 dark:text-gray-400">The linked ticket is closed, but the problem is active within the reopen window.</span></span>
                 </li>
                 <li class="flex items-center gap-2">
-                    <x-filament::icon icon="heroicon-o-arrow-uturn-left" class="w-4 h-4 !text-sky-500 dark:!text-sky-400" />
-                    <strong>Manually reopened</strong> &mdash; <span class="text-gray-500 dark:text-gray-400">The linked ticket was reopened from this integration.</span>
+                    <x-filament::icon icon="heroicon-o-arrow-uturn-left" class="w-4 h-4 shrink-0 !text-sky-500 dark:!text-sky-400" />
+                    <span><strong>Manually reopened</strong> &mdash; <span class="text-gray-500 dark:text-gray-400">The linked ticket was reopened from this integration.</span></span>
                 </li>
                 <li class="flex items-center gap-2">
-                    <x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-4 h-4 !text-red-500 dark:!text-red-400" />
-                    <strong>Flapping detected</strong> &mdash; <span class="text-gray-500 dark:text-gray-400">Problem repeatedly resolved and returned.</span>
+                    <x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-4 h-4 shrink-0 !text-red-500 dark:!text-red-400" />
+                    <span><strong>Flapping detected</strong> &mdash; <span class="text-gray-500 dark:text-gray-400">Problem repeatedly resolved and returned.</span></span>
                 </li>
             </ul>
         </div>
