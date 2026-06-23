@@ -44,7 +44,7 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make()
                     ->label('Automation'),
                 NavigationGroup::make()
-                    ->label('Administration / Settings'),
+                    ->label('Administration'),
             ])
             ->pages([
                 Dashboard::class,

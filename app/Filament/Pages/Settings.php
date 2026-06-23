@@ -39,7 +39,7 @@ class Settings extends Page implements HasForms
 
     protected string $view = 'filament.pages.settings';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Administration / Settings';
+    protected static string|\UnitEnum|null $navigationGroup = 'Administration';
 
     protected static ?int $navigationSort = 1;
 
@@ -521,7 +521,7 @@ class Settings extends Page implements HasForms
                 $groups['Zabbix'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['znuny_queue_from_host_regex', 'znuny_customer_user_from_queue_template', 'znuny_queue_host_mappings', 'znuny_manual_ticket_footer', 'znuny_default_agent_id', 'linked_ticket_manual_close_default_reason', 'manual_ticket_reopen_note_template'])) {
                 $groups['Znuny Ticket Defaults'][$setting->key] = $component;
-            } elseif (in_array($setting->key, ['znuny_queue_cache_ttl_minutes', 'znuny_agent_cache_ttl_minutes', 'znuny_ticket_snapshot_cache_ttl_minutes'])) {
+            } elseif (in_array($setting->key, ['znuny_queue_cache_ttl_minutes', 'znuny_agent_cache_ttl_minutes', 'znuny_ticket_snapshot_cache_ttl_minutes', 'znuny_ticket_cache_enabled', 'znuny_ticket_cache_ttl_seconds', 'znuny_ticket_cache_closed_ttl_seconds', 'znuny_ticket_cache_default_limit', 'znuny_ticket_cache_active_state_types'])) {
                 $groups['Cache'][] = $component;
             } elseif (in_array($setting->key, ['znuny_linked_ticket_sync_interval_minutes', 'znuny_linked_ticket_sync_batch_size', 'znuny_detailed_sync_audit_enabled'])) {
                 $groups['Znuny Sync'][] = $component;

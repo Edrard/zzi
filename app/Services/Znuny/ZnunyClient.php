@@ -361,7 +361,56 @@ class ZnunyClient
      */
     public function searchTickets(array $filters = [], bool $isRetry = false): array
     {
-        throw new Exception('Znuny TicketSearch route has not been verified.');
+        if (empty($filters)) {
+            return [];
+        }
+
+        $validFilters = [
+            'TicketNumber', 'Queue', 'State', 'StateType', 'Owner',
+            'Limit', 'Offset', 'Page', 'SortBy', 'SortDirection',
+        ];
+
+        $payload = [];
+        $hasMeaningfulFilter = false;
+
+        foreach ($validFilters as $f) {
+            if (isset($filters[$f])) {
+                $payload[$f] = $filters[$f];
+                if (! in_array($f, ['Limit', 'Offset', 'Page', 'SortBy', 'SortDirection'])) {
+                    $hasMeaningfulFilter = true;
+                }
+            }
+        }
+
+        if (! $hasMeaningfulFilter) {
+            return [];
+        }
+
+        return $this->withSessionRetry(function ($session) use ($payload) {
+            $payload['SessionID'] = $session;
+
+            $response = $this->request()->post($this->apiUrl().'/ZnunyAgentListTicketSearch', $payload);
+
+            $data = $this->processResponse($response);
+
+            if (isset($data['Tickets']) && is_array($data['Tickets'])) {
+                return $data['Tickets'];
+            }
+
+            if (isset($data['Ticket']) && is_array($data['Ticket'])) {
+                if (isset($data['Ticket']['TicketID'])) {
+                    return [$data['Ticket']];
+                }
+
+                return $data['Ticket'];
+            }
+
+            if (is_array($data) && array_is_list($data)) {
+                return $data;
+            }
+
+            return is_array($data) ? $data : [];
+        });
     }
 
     /**

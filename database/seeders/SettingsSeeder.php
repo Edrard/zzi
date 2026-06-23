@@ -47,6 +47,11 @@ class SettingsSeeder extends Seeder
             ['key' => 'manual_ticket_auto_close_enabled', 'value' => 'true', 'type' => 'boolean', 'description' => 'Automatically close manually created linked tickets after the Zabbix problem stays resolved long enough.'],
             ['key' => 'manual_ticket_flap_threshold', 'value' => '3', 'type' => 'integer', 'description' => 'Number of repeated active/resolved cycles before a linked problem is considered flapping. 0 disables flapping detection.'],
             ['key' => 'manual_ticket_extra_flapping_delay_hours', 'value' => '4', 'type' => 'integer', 'description' => 'Additional close delay added after flapping is detected for a linked manual ticket.'],
+            ['key' => 'znuny_ticket_cache_enabled', 'value' => 'true', 'type' => 'boolean', 'description' => 'Enable Redis-backed Ticket Workspace cache layer.'],
+            ['key' => 'znuny_ticket_cache_ttl_seconds', 'value' => '900', 'type' => 'integer', 'description' => 'Default TTL for cached active Znuny tickets in seconds.'],
+            ['key' => 'znuny_ticket_cache_closed_ttl_seconds', 'value' => '86400', 'type' => 'integer', 'description' => 'TTL for recently closed Znuny tickets in seconds.'],
+            ['key' => 'znuny_ticket_cache_default_limit', 'value' => '50', 'type' => 'integer', 'description' => 'Default page size for Znuny ticket cache warming/search.'],
+            ['key' => 'znuny_ticket_cache_active_state_types', 'value' => 'new,open,pending reminder,pending auto', 'type' => 'string', 'description' => 'Comma-separated list of active operational state types.'],
         ];
 
         foreach ($settings as $setting) {

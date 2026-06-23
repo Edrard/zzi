@@ -344,4 +344,51 @@ class ZnunyClientTest extends TestCase
         $this->assertFalse($response['success']);
         $this->assertContains('Ticket is not closed.', $response['errors']);
     }
+
+    public function test_search_tickets_returns_empty_when_no_meaningful_filter()
+    {
+        $client = new ZnunyClient;
+        $response = $client->searchTickets([]);
+        $this->assertEmpty($response);
+
+        $response = $client->searchTickets(['Limit' => 50]);
+        $this->assertEmpty($response);
+    }
+
+    public function test_search_tickets_unwraps_tickets_array()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/ZnunyAgentListTicketSearch*' => Http::response([
+                'Tickets' => [
+                    ['TicketID' => 111],
+                    ['TicketID' => 222],
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $response = $client->searchTickets(['Queue' => 'Raw']);
+
+        $this->assertCount(2, $response);
+        $this->assertEquals(111, $response[0]['TicketID']);
+    }
+
+    public function test_search_tickets_unwraps_single_ticket()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/ZnunyAgentListTicketSearch*' => Http::response([
+                'Ticket' => [
+                    'TicketID' => 333,
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $response = $client->searchTickets(['TicketNumber' => '1234']);
+
+        $this->assertCount(1, $response);
+        $this->assertEquals(333, $response[0]['TicketID']);
+    }
 }
