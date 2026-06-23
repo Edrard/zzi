@@ -9,7 +9,7 @@ class ZnunyTicketCacheService
 {
     protected function isEnabled(): bool
     {
-        return SettingsService::bool('znuny_ticket_cache_enabled', true) ?? true;
+        return SettingsService::bool('znuny_ticket_workspace_enabled', true) ?? true;
     }
 
     protected function getTtl(): int

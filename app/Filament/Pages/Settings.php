@@ -521,10 +521,12 @@ class Settings extends Page implements HasForms
                 $groups['Zabbix'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['znuny_queue_from_host_regex', 'znuny_customer_user_from_queue_template', 'znuny_queue_host_mappings', 'znuny_manual_ticket_footer', 'znuny_default_agent_id', 'linked_ticket_manual_close_default_reason', 'manual_ticket_reopen_note_template'])) {
                 $groups['Znuny Ticket Defaults'][$setting->key] = $component;
-            } elseif (in_array($setting->key, ['znuny_queue_cache_ttl_minutes', 'znuny_agent_cache_ttl_minutes', 'znuny_ticket_snapshot_cache_ttl_minutes', 'znuny_ticket_cache_enabled', 'znuny_ticket_cache_ttl_seconds', 'znuny_ticket_cache_closed_ttl_seconds', 'znuny_ticket_cache_default_limit', 'znuny_ticket_cache_active_state_types'])) {
+            } elseif (in_array($setting->key, ['znuny_queue_cache_ttl_minutes', 'znuny_agent_cache_ttl_minutes', 'znuny_ticket_snapshot_cache_ttl_minutes'])) {
                 $groups['Cache'][] = $component;
             } elseif (in_array($setting->key, ['znuny_linked_ticket_sync_interval_minutes', 'znuny_linked_ticket_sync_batch_size', 'znuny_detailed_sync_audit_enabled'])) {
-                $groups['Znuny Sync'][] = $component;
+                $groups['Znuny Sync']['Linked Tickets'][] = $component;
+            } elseif (in_array($setting->key, ['znuny_ticket_workspace_enabled', 'znuny_ticket_cache_refresh_interval_minutes', 'znuny_ticket_cache_max_pages_per_run', 'znuny_ticket_cache_ttl_seconds', 'znuny_ticket_cache_closed_ttl_seconds', 'znuny_ticket_cache_default_limit', 'znuny_ticket_cache_active_state_types'])) {
+                $groups['Znuny Sync']['Ticket Workspace'][] = $component;
             } elseif (str_starts_with($setting->key, 'znuny_')) {
                 $groups['Znuny'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['default_close_delay_hours', 'default_reopen_window_hours', 'manual_ticket_auto_close_schedule_mode', 'manual_ticket_flap_threshold', 'manual_ticket_extra_flapping_delay_hours'])) {
@@ -544,6 +546,10 @@ class Settings extends Page implements HasForms
 
         if (! empty($groups['Znuny Ticket Defaults'])) {
             $groups['Znuny Ticket Defaults'] = $this->buildZnunyTicketDefaultsTabGroups($groups['Znuny Ticket Defaults']);
+        }
+
+        if (! empty($groups['Znuny Sync'])) {
+            $groups['Znuny Sync'] = $this->buildZnunySyncTabGroups($groups['Znuny Sync']);
         }
 
         if (! empty($groups['Retention'])) {
@@ -801,6 +807,21 @@ class Settings extends Page implements HasForms
                                 ->label('Auto Ticket Automation')
                                 ->content('Automatic ticket creation and auto-ticket lifecycle rules will be configured here later. No auto-ticket automation is active in this stage.'),
                         ])
+                        ->columns(1),
+                ]),
+        ];
+    }
+
+    private function buildZnunySyncTabGroups(array $zs): array
+    {
+        return [
+            Tabs::make('ZnunySyncTabs')
+                ->tabs([
+                    Tab::make('Linked Tickets')
+                        ->schema($zs['Linked Tickets'] ?? [])
+                        ->columns(1),
+                    Tab::make('Ticket Workspace')
+                        ->schema($zs['Ticket Workspace'] ?? [])
                         ->columns(1),
                 ]),
         ];

@@ -27,7 +27,7 @@ class ZnunyTicketCacheServiceTest extends TestCase
         Redis::shouldReceive('expire')->byDefault();
 
         // Ensure settings pretend cache is enabled
-        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_enabled'], ['value' => 'true']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
         Setting::updateOrCreate(['key' => 'znuny_ticket_cache_ttl_seconds'], ['value' => '900']);
         Setting::updateOrCreate(['key' => 'znuny_ticket_cache_closed_ttl_seconds'], ['value' => '86400']);
 
@@ -36,7 +36,7 @@ class ZnunyTicketCacheServiceTest extends TestCase
 
     public function test_it_does_not_cache_if_disabled(): void
     {
-        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_enabled'], ['value' => 'false']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'false']);
 
         Redis::shouldReceive('setex')->never();
 

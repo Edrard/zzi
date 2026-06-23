@@ -389,7 +389,7 @@ class ZnunyClient
         return $this->withSessionRetry(function ($session) use ($payload) {
             $payload['SessionID'] = $session;
 
-            $response = $this->request()->post($this->apiUrl().'/ZnunyAgentListTicketSearch', $payload);
+            $response = $this->request()->get($this->apiUrl().'/ZnunyAgentListTicketSearch', $payload);
 
             $data = $this->processResponse($response);
 
