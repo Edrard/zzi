@@ -31,17 +31,25 @@ class ZnunyTicketManagementActions
                     ->default(fn () => SettingsService::string('linked_ticket_manual_close_default_reason', 'Manual close from Linked Tickets UI.'))
                     ->required(),
             ])
-            ->visible(function (?ZabbixTicket $record) {
-                if (! $record || empty($record->znuny_ticket_id)) {
+            ->visible(function (?ZabbixTicket $record, array $arguments) {
+                if ($record) {
+                    return ! empty($record->znuny_ticket_id) && ! $record->isClosedInZnuny();
+                }
+
+                $ticketId = $arguments['ticket_id'] ?? null;
+                if (! $ticketId) {
                     return false;
                 }
 
-                return ! $record->isClosedInZnuny();
+                $ticket = ZabbixTicket::find($ticketId);
+
+                return $ticket && ! empty($ticket->znuny_ticket_id) && ! $ticket->isClosedInZnuny();
             })
             ->action(function (array $arguments, array $data, Action $action, ?ZabbixTicket $record = null) {
                 $ticketId = $record ? $record->id : ($arguments['ticket_id'] ?? null);
                 if (! $ticketId) {
                     Notification::make()->title('Ticket ID missing')->danger()->send();
+                    $action->halt();
 
                     return;
                 }
@@ -49,6 +57,7 @@ class ZnunyTicketManagementActions
                 $ticket = $record ?? ZabbixTicket::find($ticketId);
                 if (! $ticket) {
                     Notification::make()->title('Ticket not found')->danger()->send();
+                    $action->halt();
 
                     return;
                 }
@@ -125,18 +134,35 @@ class ZnunyTicketManagementActions
                     ->required()
                     ->default(fn () => SettingsService::string('manual_ticket_reopen_note_template', 'Reopening this ticket because the linked Zabbix problem became active again within the configured reopen window.')),
             ])
-            ->visible(fn (?ZabbixTicket $record) => $record && $record->isReopenCandidate())
+            ->visible(function (?ZabbixTicket $record, array $arguments) {
+                if ($record) {
+                    return $record->isReopenCandidate();
+                }
+
+                $ticketId = $arguments['ticket_id'] ?? null;
+                if (! $ticketId) {
+                    return false;
+                }
+
+                $ticket = ZabbixTicket::find($ticketId);
+
+                return $ticket && $ticket->isReopenCandidate();
+            })
             ->action(function (array $arguments, array $data, Action $action, ?ZabbixTicket $record = null) {
                 $ticketId = $record ? $record->id : ($arguments['ticket_id'] ?? null);
                 if (! $ticketId) {
                     Notification::make()->title('Ticket ID missing')->danger()->send();
                     $action->halt();
+
+                    return;
                 }
 
                 $ticket = $record ?? ZabbixTicket::find($ticketId);
                 if (! $ticket) {
                     Notification::make()->title('Ticket not found')->danger()->send();
                     $action->halt();
+
+                    return;
                 }
 
                 $reason = $data['reason'] ?? 'Reopening ticket.';
@@ -167,6 +193,7 @@ class ZnunyTicketManagementActions
             ->label('Open Ticket')
             ->icon('heroicon-o-arrow-top-right-on-square')
             ->url(fn (?ZabbixTicket $record) => $record ? app(ZnunyClient::class)->ticketUrl($record->znuny_ticket_id) : null)
+            ->visible(fn (?ZabbixTicket $record) => $record && ! empty($record->znuny_ticket_id))
             ->openUrlInNewTab();
     }
 }

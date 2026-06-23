@@ -761,4 +761,28 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->mountAction('viewTicket', ['ticket_id' => $ticket->id])
             ->assertActionMounted('viewTicket');
     }
+
+    public function test_reopen_action_can_be_mounted_for_reopen_candidate()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => '1001',
+            'zabbix_host_id' => '2001',
+            'zabbix_host_name' => 'TestCompany swiss test01',
+            'zabbix_severity' => 4,
+            'zabbix_trigger_id' => '2001',
+            'zabbix_problem_name' => 'TestCompany CPU Load',
+            'znuny_ticket_id' => 50001,
+            'znuny_ticket_number' => '1001',
+            'znuny_ticket_state_type' => 'closed',
+            'manual_lifecycle_status' => 'reopen_candidate',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->assertActionExists('reopenTicket')
+            ->mountAction('reopenTicket', ['ticket_id' => $ticket->id])
+            ->assertActionMounted('reopenTicket');
+    }
 }
