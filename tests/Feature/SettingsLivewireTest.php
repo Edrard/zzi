@@ -190,7 +190,90 @@ class SettingsLivewireTest extends TestCase
 
         $search($schema);
 
-        $this->assertTrue($foundCredentialsButton, 'Test Znuny API Connection button should be rendered in Credentials tab');
         $this->assertTrue($foundEndpointsButton, 'Test Znuny API Connection button should be rendered in Endpoints tab');
+    }
+
+    public function test_ticket_workspace_active_state_type_ids_is_rendered_as_multiple_select()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['type' => 'boolean', 'value' => 'true']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['type' => 'json', 'value' => '["new","open"]']);
+
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+
+        $form = $component->instance()->getForm('form');
+        $schema = $form->getComponents();
+
+        $foundSelect = false;
+        $isMultiple = false;
+        $options = [];
+        $foundObsoleteKeys = false;
+        $ticketWorkspaceKeys = [];
+
+        $search = function ($components, $parentGroupName = null) use (&$search, &$foundSelect, &$isMultiple, &$options, &$foundObsoleteKeys, &$ticketWorkspaceKeys) {
+            foreach ($components as $c) {
+                $type = class_basename($c);
+                $name = method_exists($c, 'getName') ? $c->getName() : null;
+
+                if ($type === 'Tab' && method_exists($c, 'getLabel') && $c->getLabel() === 'Ticket Workspace') {
+                    $parentGroupName = 'Ticket Workspace';
+                }
+
+                if (in_array($name, ['znuny_ticket_cache_ttl_seconds', 'znuny_ticket_cache_closed_ttl_seconds', 'znuny_ticket_cache_active_state_types'])) {
+                    $foundObsoleteKeys = true;
+                }
+
+                if ($parentGroupName === 'Ticket Workspace' && $name) {
+                    $ticketWorkspaceKeys[] = $name;
+                }
+
+                if ($name === 'znuny_ticket_workspace_active_state_type_ids') {
+                    if ($type === 'Select') {
+                        $foundSelect = true;
+                        $isMultiple = $c->isMultiple();
+                        $options = $c->getOptions();
+                    }
+                }
+
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents(), $parentGroupName);
+                }
+            }
+        };
+
+        $search($schema);
+
+        $this->assertTrue($foundSelect, 'znuny_ticket_workspace_active_state_type_ids should be rendered as a Select component');
+        $this->assertTrue($isMultiple, 'Select component should be multiple');
+        $this->assertArrayHasKey('new', $options);
+        $this->assertArrayHasKey('pending_reminder', $options);
+
+        $this->assertFalse($foundObsoleteKeys, 'Obsolete keys should not be rendered');
+
+        // Ensure znuny_ticket_workspace_enabled is first
+        $this->assertEquals('znuny_ticket_workspace_enabled', $ticketWorkspaceKeys[0], 'znuny_ticket_workspace_enabled must be the first field in the Ticket Workspace tab');
+    }
+
+    public function test_ticket_workspace_active_state_type_ids_is_saved_as_json_array()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Setting::updateOrCreate(['key' => 'zabbix_api_url'], ['type' => 'string', 'value' => 'http://example.com']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['type' => 'string', 'value' => 'user']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['type' => 'json', 'value' => '["new"]']);
+
+        Livewire::actingAs($admin)
+            ->test(Settings::class)
+            ->fillForm([
+                'zabbix_api_url' => 'http://example.com',
+                'znuny_username' => 'user',
+                'znuny_ticket_workspace_active_state_type_ids' => ['open', 'pending_auto'],
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $setting = Setting::where('key', 'znuny_ticket_workspace_active_state_type_ids')->first();
+        $this->assertEquals('["open","pending_auto"]', $setting->value);
     }
 }

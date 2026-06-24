@@ -386,6 +386,34 @@ class Settings extends Page implements HasForms
                     'label' => 'Extra Flapping Delay Hours',
                     'description' => 'Additional close delay added after flapping is detected for a linked manual ticket.',
                 ],
+                'znuny_ticket_workspace_enabled' => [
+                    'label' => 'Enable Ticket Workspace',
+                    'description' => $setting->description,
+                ],
+                'znuny_ticket_cache_refresh_interval_minutes' => [
+                    'label' => 'Refresh Interval Minutes',
+                    'description' => $setting->description,
+                ],
+                'znuny_ticket_cache_default_limit' => [
+                    'label' => 'Default Limit',
+                    'description' => $setting->description,
+                ],
+                'znuny_ticket_cache_max_pages_per_run' => [
+                    'label' => 'Max Pages Per Run',
+                    'description' => $setting->description,
+                ],
+                'znuny_ticket_cache_ttl_minutes' => [
+                    'label' => 'Ticket Cache TTL Minutes',
+                    'description' => $setting->description,
+                ],
+                'znuny_ticket_cache_closed_ttl_minutes' => [
+                    'label' => 'Closed Ticket Cache TTL Minutes',
+                    'description' => $setting->description,
+                ],
+                'znuny_ticket_workspace_active_state_type_ids' => [
+                    'label' => 'Active State Types',
+                    'description' => 'Select which Znuny state types should be included in the Ticket Workspace active working set.',
+                ],
             ];
 
             if (isset($overrides[$setting->key])) {
@@ -474,6 +502,20 @@ class Settings extends Page implements HasForms
                     ->required();
             } elseif ($setting->key === 'znuny_queue_host_mappings') {
                 $component = app(ZnunyQueueHostMappingSchemaBuilder::class)->buildRepeater($setting, $initialData);
+            } elseif ($setting->key === 'znuny_ticket_workspace_active_state_type_ids') {
+                $component = Select::make($setting->key)
+                    ->label($label)
+                    ->helperText($description)
+                    ->multiple()
+                    ->options([
+                        'new' => 'New',
+                        'open' => 'Open',
+                        'pending_reminder' => 'Pending reminder',
+                        'pending_auto' => 'Pending auto',
+                        'closed' => 'Closed',
+                        'merged' => 'Merged',
+                    ])
+                    ->required();
             } elseif ($setting->type === 'json') {
                 $component = Textarea::make($setting->key)
                     ->label($label)
@@ -496,20 +538,6 @@ class Settings extends Page implements HasForms
                     ->helperText('Timezone used to display dates and times in the admin interface. Backend timestamps and scheduler logic remain unchanged.')
                     ->options(array_combine(\DateTimeZone::listIdentifiers(), \DateTimeZone::listIdentifiers()))
                     ->searchable()
-                    ->required();
-            } elseif ($setting->key === 'znuny_ticket_workspace_active_state_type_ids') {
-                $component = Select::make($setting->key)
-                    ->label($label)
-                    ->helperText($description)
-                    ->multiple()
-                    ->options([
-                        'new' => 'New',
-                        'open' => 'Open',
-                        'pending_reminder' => 'Pending reminder',
-                        'pending_auto' => 'Pending auto',
-                        'closed' => 'Closed',
-                        'merged' => 'Merged',
-                    ])
                     ->required();
             } else {
                 $input = TextInput::make($setting->key)
