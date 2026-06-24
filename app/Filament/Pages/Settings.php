@@ -539,8 +539,8 @@ class Settings extends Page implements HasForms
                 $groups['Cache'][] = $component;
             } elseif (in_array($setting->key, ['znuny_linked_ticket_sync_interval_minutes', 'znuny_linked_ticket_sync_batch_size', 'znuny_detailed_sync_audit_enabled'])) {
                 $groups['Znuny Sync']['Linked Tickets'][] = $component;
-            } elseif (in_array($setting->key, ['znuny_ticket_workspace_enabled', 'znuny_ticket_cache_refresh_interval_minutes', 'znuny_ticket_cache_max_pages_per_run', 'znuny_ticket_cache_ttl_seconds', 'znuny_ticket_cache_closed_ttl_seconds', 'znuny_ticket_cache_default_limit', 'znuny_ticket_cache_active_state_types'])) {
-                $groups['Znuny Sync']['Ticket Workspace'][] = $component;
+            } elseif (in_array($setting->key, ['znuny_ticket_workspace_enabled', 'znuny_ticket_cache_refresh_interval_minutes', 'znuny_ticket_cache_max_pages_per_run', 'znuny_ticket_cache_ttl_minutes', 'znuny_ticket_cache_closed_ttl_minutes', 'znuny_ticket_cache_default_limit', 'znuny_ticket_workspace_active_state_type_ids'])) {
+                $groups['Znuny Sync']['Ticket Workspace'][$setting->key] = $component;
             } elseif (str_starts_with($setting->key, 'znuny_')) {
                 $groups['Znuny'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['default_close_delay_hours', 'default_reopen_window_hours', 'manual_ticket_auto_close_schedule_mode', 'manual_ticket_flap_threshold', 'manual_ticket_extra_flapping_delay_hours'])) {
@@ -832,6 +832,25 @@ class Settings extends Page implements HasForms
 
     private function buildZnunySyncTabGroups(array $zs): array
     {
+        $workspaceOrder = [
+            'znuny_ticket_workspace_enabled',
+            'znuny_ticket_cache_refresh_interval_minutes',
+            'znuny_ticket_cache_default_limit',
+            'znuny_ticket_cache_max_pages_per_run',
+            'znuny_ticket_cache_ttl_minutes',
+            'znuny_ticket_cache_closed_ttl_minutes',
+            'znuny_ticket_workspace_active_state_type_ids',
+        ];
+
+        $workspaceSchema = [];
+        if (isset($zs['Ticket Workspace'])) {
+            foreach ($workspaceOrder as $key) {
+                if (isset($zs['Ticket Workspace'][$key])) {
+                    $workspaceSchema[] = $zs['Ticket Workspace'][$key];
+                }
+            }
+        }
+
         return [
             Tabs::make('ZnunySyncTabs')
                 ->tabs([
@@ -839,7 +858,7 @@ class Settings extends Page implements HasForms
                         ->schema($zs['Linked Tickets'] ?? [])
                         ->columns(1),
                     Tab::make('Ticket Workspace')
-                        ->schema($zs['Ticket Workspace'] ?? [])
+                        ->schema($workspaceSchema)
                         ->columns(1),
                 ]),
         ];

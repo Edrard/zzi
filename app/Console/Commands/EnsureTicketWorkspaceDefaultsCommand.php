@@ -13,7 +13,7 @@ class EnsureTicketWorkspaceDefaultsCommand extends Command
 
     public function handle(): int
     {
-        $this->migrateOldKeys();
+        $this->deleteObsoleteKeys();
         $this->ensureDefaults();
 
         $this->info('Ticket Workspace settings ensured safely.');
@@ -21,61 +21,17 @@ class EnsureTicketWorkspaceDefaultsCommand extends Command
         return self::SUCCESS;
     }
 
-    private function migrateOldKeys(): void
+    private function deleteObsoleteKeys(): void
     {
-        // znuny_ticket_cache_ttl_seconds -> znuny_ticket_cache_ttl_minutes
-        $oldTtl = Setting::where('key', 'znuny_ticket_cache_ttl_seconds')->first();
-        if ($oldTtl && ! Setting::where('key', 'znuny_ticket_cache_ttl_minutes')->exists()) {
-            $minutes = max(1, (int) round(((int) $oldTtl->value) / 60));
-            Setting::create([
-                'key' => 'znuny_ticket_cache_ttl_minutes',
-                'value' => (string) $minutes,
-                'type' => 'integer',
-            ]);
-            $this->info("Migrated active TTL to {$minutes} minutes.");
-        }
+        $obsoleteKeys = [
+            'znuny_ticket_cache_ttl_seconds',
+            'znuny_ticket_cache_closed_ttl_seconds',
+            'znuny_ticket_cache_active_state_types',
+        ];
 
-        // znuny_ticket_cache_closed_ttl_seconds -> znuny_ticket_cache_closed_ttl_minutes
-        $oldClosedTtl = Setting::where('key', 'znuny_ticket_cache_closed_ttl_seconds')->first();
-        if ($oldClosedTtl && ! Setting::where('key', 'znuny_ticket_cache_closed_ttl_minutes')->exists()) {
-            $minutes = max(1, (int) round(((int) $oldClosedTtl->value) / 60));
-            Setting::create([
-                'key' => 'znuny_ticket_cache_closed_ttl_minutes',
-                'value' => (string) $minutes,
-                'type' => 'integer',
-            ]);
-            $this->info("Migrated closed TTL to {$minutes} minutes.");
-        }
-
-        // znuny_ticket_cache_active_state_types -> znuny_ticket_workspace_active_state_type_ids
-        $oldStateTypes = Setting::where('key', 'znuny_ticket_cache_active_state_types')->first();
-        if ($oldStateTypes && ! Setting::where('key', 'znuny_ticket_workspace_active_state_type_ids')->exists()) {
-            $rawStrings = array_map('trim', explode(',', $oldStateTypes->value));
-            $mappedIds = [];
-            $stringToId = [
-                'new' => 'new',
-                'open' => 'open',
-                'pending reminder' => 'pending_reminder',
-                'pending auto' => 'pending_auto',
-                'closed' => 'closed',
-                'merged' => 'merged',
-            ];
-            foreach ($rawStrings as $str) {
-                $strLower = strtolower($str);
-                if (isset($stringToId[$strLower])) {
-                    $mappedIds[] = $stringToId[$strLower];
-                }
-            }
-            if (empty($mappedIds)) {
-                $mappedIds = ['new', 'open', 'pending_reminder', 'pending_auto']; // fallback default
-            }
-
-            Setting::create([
-                'key' => 'znuny_ticket_workspace_active_state_type_ids',
-                'value' => json_encode(array_values(array_unique($mappedIds))),
-                'type' => 'json',
-            ]);
-            $this->info('Migrated active state types to IDs.');
+        $deletedCount = Setting::whereIn('key', $obsoleteKeys)->delete();
+        if ($deletedCount > 0) {
+            $this->info("Deleted {$deletedCount} obsolete Ticket Workspace setting(s).");
         }
     }
 
