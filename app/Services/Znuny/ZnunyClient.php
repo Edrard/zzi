@@ -417,12 +417,30 @@ class ZnunyClient
      */
     public function searchTicketsWithMetadata(array $filters = []): array
     {
-        $payload = [
-            'TicketSearch' => array_merge([
-                'DynamicField' => 0,
-                'Extended' => 0,
-            ], $filters),
+        if (empty($filters)) {
+            return $this->emptyMetadataResponse();
+        }
+
+        $validFilters = [
+            'TicketNumber', 'Queue', 'State', 'StateType', 'Owner',
+            'Limit', 'Offset', 'Page', 'SortBy', 'SortDirection', 'CountOnly',
         ];
+
+        $payload = [];
+        $hasMeaningfulFilter = false;
+
+        foreach ($validFilters as $f) {
+            if (isset($filters[$f])) {
+                $payload[$f] = $filters[$f];
+                if (! in_array($f, ['Limit', 'Offset', 'Page', 'SortBy', 'SortDirection', 'CountOnly'])) {
+                    $hasMeaningfulFilter = true;
+                }
+            }
+        }
+
+        if (! $hasMeaningfulFilter) {
+            return $this->emptyMetadataResponse();
+        }
 
         return $this->withSessionRetry(function ($session) use ($payload) {
             $payload['SessionID'] = $session;
@@ -469,7 +487,7 @@ class ZnunyClient
             }
 
             $countOnly = false;
-            if (! empty($payload['TicketSearch']['CountOnly'])) {
+            if (! empty($payload['CountOnly'])) {
                 $countOnly = true;
             }
 
@@ -484,12 +502,27 @@ class ZnunyClient
                 'total_count' => $totalCount,
                 'limit' => $limit,
                 'offset' => $offset,
-                'sort_by' => $payload['TicketSearch']['SortBy'] ?? null,
-                'sort_direction' => $payload['TicketSearch']['SortDirection'] ?? null,
+                'sort_by' => $payload['SortBy'] ?? null,
+                'sort_direction' => $payload['SortDirection'] ?? null,
                 'count_only' => $countOnly,
                 'warnings' => $warnings,
             ];
         });
+    }
+
+    private function emptyMetadataResponse(): array
+    {
+        return [
+            'tickets' => [],
+            'count' => 0,
+            'total_count' => 0,
+            'limit' => 0,
+            'offset' => 0,
+            'sort_by' => null,
+            'sort_direction' => null,
+            'count_only' => false,
+            'warnings' => [],
+        ];
     }
 
     private function mapTicketResponse(array $ticket): array

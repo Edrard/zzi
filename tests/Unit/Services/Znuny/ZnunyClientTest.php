@@ -6,6 +6,7 @@ use App\Models\Setting;
 use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -474,7 +475,7 @@ class ZnunyClientTest extends TestCase
 
         $client = new ZnunyClient;
         $response = $client->searchTicketsWithMetadata([
-            'StateType' => 'new,open',
+            'StateType' => 'new,open,pending reminder,pending auto',
             'CountOnly' => 1,
         ]);
 
@@ -482,6 +483,15 @@ class ZnunyClientTest extends TestCase
         $this->assertEquals(0, $response['count']);
         $this->assertEquals(150, $response['total_count']);
         $this->assertTrue($response['count_only']);
+
+        Http::assertSent(function (Request $request) {
+            if (str_contains($request->url(), 'ZnunyAgentListTicketSearch')) {
+                return $request['StateType'] === 'new,open,pending reminder,pending auto' &&
+                       $request['CountOnly'] == 1;
+            }
+
+            return true;
+        });
     }
 
     public function test_search_tickets_with_metadata_normalizes_numeric_strings()
