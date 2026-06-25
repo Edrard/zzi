@@ -179,7 +179,8 @@
     <div class="zbx-page-stack">
 
         @php
-            $tickets = $this->tickets;
+            $tickets = $this->tickets();
+            $filterOptions = $this->filterOptions();
             $count = count($tickets);
         @endphp
 
@@ -198,7 +199,7 @@
                 <div class="zbx-toolbar-select">
                     <x-filament::input.wrapper>
                         <x-filament::input.select wire:model.live="linkFilter">
-                            @foreach($this->filterOptions['link_status'] as $val => $label)
+                            @foreach($filterOptions['link_status'] as $val => $label)
                                 <option value="{{ $val }}">{{ $label }}</option>
                             @endforeach
                         </x-filament::input.select>
@@ -208,7 +209,7 @@
                 <div class="zbx-toolbar-select">
                     <x-filament::input.wrapper>
                         <x-filament::input.select wire:model.live="stateTypeFilter">
-                            @foreach($this->filterOptions['state_types'] as $val => $label)
+                            @foreach($filterOptions['state_types'] as $val => $label)
                                 <option value="{{ $val }}">{{ $label }}</option>
                             @endforeach
                         </x-filament::input.select>

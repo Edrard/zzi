@@ -40,7 +40,7 @@ class ZnunyTicketWorkspace extends Page
         return in_array(auth()->user()->role ?? '', ['admin', 'operator', 'viewer'], true);
     }
 
-    public function getTicketsProperty(): array
+    public function tickets(): array
     {
         $reader = app(ZnunyTicketWorkspaceCacheReader::class);
         $tickets = $reader->getTickets([
@@ -80,7 +80,7 @@ class ZnunyTicketWorkspace extends Page
         }
     }
 
-    public function getFilterOptionsProperty(): array
+    public function filterOptions(): array
     {
         return [
             'link_status' => [
