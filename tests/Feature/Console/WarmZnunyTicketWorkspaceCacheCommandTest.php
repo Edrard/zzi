@@ -5,7 +5,6 @@ namespace Tests\Feature\Console;
 use App\Models\Setting;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketCacheService;
-use App\Services\Znuny\ZnunyTicketWorkspaceStateTypeMapper;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery\MockInterface;
 use Tests\TestCase;
@@ -54,9 +53,6 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
         Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
         Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['value' => '["unknown"]']);
 
-        $mapper = $this->mock(ZnunyTicketWorkspaceStateTypeMapper::class);
-        $mapper->shouldReceive('mapInternalIdsToZnunyTypes')->with(['unknown'])->andReturn([]);
-
         $this->client->shouldNotReceive('searchTickets');
 
         $this->artisan('znuny:warm-ticket-workspace-cache')
@@ -71,9 +67,6 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
         Setting::updateOrCreate(['key' => 'znuny_ticket_cache_default_limit'], ['value' => '2']);
         Setting::updateOrCreate(['key' => 'znuny_ticket_cache_max_pages_per_run'], ['value' => '2']);
 
-        $mapper = $this->mock(ZnunyTicketWorkspaceStateTypeMapper::class);
-        $mapper->shouldReceive('mapInternalIdsToZnunyTypes')->with(['new'])->andReturn(['new']);
-
         // First page returns 2 tickets (full)
         $this->client->shouldReceive('searchTickets')
             ->once()
@@ -82,7 +75,7 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
                 'Limit' => 2,
                 'Offset' => 0,
                 'SortBy' => 'Changed',
-                'SortDirection' => 'Down',
+                'SortDirection' => 'DESC',
             ])
             ->andReturn([
                 ['TicketID' => 1],
@@ -97,7 +90,7 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
                 'Limit' => 2,
                 'Offset' => 2,
                 'SortBy' => 'Changed',
-                'SortDirection' => 'Down',
+                'SortDirection' => 'DESC',
             ])
             ->andReturn([
                 ['TicketID' => 3],
@@ -118,6 +111,7 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
                 ['refreshed_unchanged', 1],
                 ['updated_changed', 1],
                 ['skipped_missing_ticket_id', 0],
+                ['skipped_disabled', 0],
                 ['errors', 0],
             ])
             ->assertSuccessful();
@@ -128,9 +122,6 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
         Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
         Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['value' => '["new"]']);
         Setting::updateOrCreate(['key' => 'znuny_ticket_cache_default_limit'], ['value' => '2']);
-
-        $mapper = $this->mock(ZnunyTicketWorkspaceStateTypeMapper::class);
-        $mapper->shouldReceive('mapInternalIdsToZnunyTypes')->with(['new'])->andReturn(['new']);
 
         // Return 1 ticket so it doesn't trigger a second page request
         $this->client->shouldReceive('searchTickets')
@@ -151,7 +142,37 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
                 ['refreshed_unchanged', 0],
                 ['updated_changed', 0],
                 ['skipped_missing_ticket_id', 0],
+                ['skipped_disabled', 0],
                 ['errors', 1],
+            ])
+            ->assertSuccessful();
+    }
+
+    public function test_it_handles_skipped_disabled_without_crashing(): void
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['value' => '["new"]']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_default_limit'], ['value' => '2']);
+
+        $this->client->shouldReceive('searchTickets')
+            ->once()
+            ->andReturn([
+                ['TicketID' => 1],
+            ]);
+
+        $this->cacheService->shouldReceive('upsertOrRefreshFromSearchResult')->with(['TicketID' => 1])->andReturn('skipped_disabled');
+
+        $this->artisan('znuny:warm-ticket-workspace-cache')
+            ->expectsTable(['Metric', 'Count'], [
+                ['state_types', 1],
+                ['pages_requested', 1],
+                ['tickets_seen', 1],
+                ['cached_new', 0],
+                ['refreshed_unchanged', 0],
+                ['updated_changed', 0],
+                ['skipped_missing_ticket_id', 0],
+                ['skipped_disabled', 1],
+                ['errors', 0],
             ])
             ->assertSuccessful();
     }

@@ -408,4 +408,22 @@ class ZnunyClientTest extends TestCase
         $this->assertCount(1, $response);
         $this->assertEquals(333, $response[0]['TicketID']);
     }
+
+    public function test_search_tickets_ignores_non_ticket_metadata_safely()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/ZnunyAgentListTicketSearch*' => Http::response([
+                'Count' => 2,
+                'Limit' => 10,
+                'Offset' => 0,
+                'Warnings' => ['Some warning'],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $response = $client->searchTickets(['Queue' => 'Raw']);
+
+        $this->assertEmpty($response);
+    }
 }

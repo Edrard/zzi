@@ -404,8 +404,8 @@ class ZnunyClient
                 }
             } elseif (is_array($data) && array_is_list($data)) {
                 $tickets = $data;
-            } elseif (is_array($data)) {
-                $tickets = $data;
+            } elseif (is_array($data) && isset($data['TicketID'])) {
+                $tickets = [$data];
             }
 
             return array_map(function ($ticket) {

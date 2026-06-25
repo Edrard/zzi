@@ -25,4 +25,9 @@ class ZnunyTicketWorkspaceStateTypeMapper
 
         return $mapped;
     }
+
+    public function mapInternalIdsToZnunyTypes(array $ids): array
+    {
+        return self::idsToZnunyStateTypes($ids);
+    }
 }

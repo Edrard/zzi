@@ -56,6 +56,7 @@ class WarmZnunyTicketWorkspaceCacheCommand extends Command
             'refreshed_unchanged' => 0,
             'updated_changed' => 0,
             'skipped_missing_ticket_id' => 0,
+            'skipped_disabled' => 0,
             'errors' => 0,
         ];
 
@@ -71,7 +72,7 @@ class WarmZnunyTicketWorkspaceCacheCommand extends Command
                         'Limit' => $limit,
                         'Offset' => $offset,
                         'SortBy' => 'Changed',
-                        'SortDirection' => 'Down',
+                        'SortDirection' => 'DESC',
                     ];
 
                     $counters['pages_requested']++;
@@ -86,7 +87,11 @@ class WarmZnunyTicketWorkspaceCacheCommand extends Command
 
                         try {
                             $status = $cacheService->upsertOrRefreshFromSearchResult($ticket);
-                            $counters[$status]++;
+                            if (array_key_exists($status, $counters)) {
+                                $counters[$status]++;
+                            } else {
+                                $counters[$status] = 1;
+                            }
                         } catch (Throwable $e) {
                             $this->error('Error caching ticket: '.$e->getMessage());
                             $counters['errors']++;
