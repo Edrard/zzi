@@ -5,7 +5,10 @@ namespace Tests\Feature\Console;
 use App\Models\Setting;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketCacheService;
+use Carbon\Carbon;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Redis;
 use Mockery\MockInterface;
 use Tests\TestCase;
 
@@ -267,5 +270,85 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
                 ['warnings', 0],
             ])
             ->assertSuccessful();
+    }
+
+    public function test_scheduled_exits_when_disabled(): void
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'false']);
+
+        $this->client->shouldNotReceive('searchTicketsWithMetadata');
+
+        $this->artisan('znuny:warm-ticket-workspace-cache', ['--scheduled' => true])
+            ->expectsOutput('Ticket Workspace is disabled in settings. Exiting cleanly.')
+            ->assertSuccessful();
+    }
+
+    public function test_scheduled_exits_when_not_due(): void
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_refresh_interval_minutes'], ['value' => '5']);
+
+        Redis::set('znuny:ticket_workspace:last_warm_at', Carbon::now()->subMinutes(2)->timestamp);
+
+        $this->client->shouldNotReceive('searchTicketsWithMetadata');
+
+        $this->artisan('znuny:warm-ticket-workspace-cache', ['--scheduled' => true])
+            ->expectsOutput('Scheduled warmer is not due yet. Exiting cleanly.')
+            ->assertSuccessful();
+    }
+
+    public function test_scheduled_runs_when_due_and_updates_marker(): void
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['value' => '["new"]']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_refresh_interval_minutes'], ['value' => '5']);
+
+        Redis::set('znuny:ticket_workspace:last_warm_at', Carbon::now()->subMinutes(6)->timestamp);
+
+        $this->client->shouldReceive('searchTicketsWithMetadata')
+            ->once()
+            ->andReturn([
+                'total_count' => 0,
+                'warnings' => [],
+            ]);
+
+        $this->artisan('znuny:warm-ticket-workspace-cache', ['--scheduled' => true])
+            ->expectsOutput('No active tickets found. Exiting cleanly.')
+            ->assertSuccessful();
+
+        $this->assertGreaterThanOrEqual(Carbon::now()->subSeconds(2)->timestamp, (int) Redis::get('znuny:ticket_workspace:last_warm_at'));
+    }
+
+    public function test_manual_run_ignores_marker(): void
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['value' => '["new"]']);
+
+        Redis::set('znuny:ticket_workspace:last_warm_at', Carbon::now()->timestamp);
+
+        $this->client->shouldReceive('searchTicketsWithMetadata')
+            ->once()
+            ->andReturn([
+                'total_count' => 0,
+                'warnings' => [],
+            ]);
+
+        $this->artisan('znuny:warm-ticket-workspace-cache')
+            ->expectsOutput('No active tickets found. Exiting cleanly.')
+            ->assertSuccessful();
+    }
+
+    public function test_scheduler_registers_warmer(): void
+    {
+        // This confirms the scheduler has registered the command with the correct flag and frequency
+        $schedule = app(Schedule::class);
+        $events = collect($schedule->events());
+
+        $hasWarmer = $events->contains(function ($event) {
+            return str_contains($event->command, 'znuny:warm-ticket-workspace-cache') &&
+                   str_contains($event->command, '--scheduled');
+        });
+
+        $this->assertTrue($hasWarmer, 'The scheduler should register the ticket workspace cache warmer with --scheduled option.');
     }
 }

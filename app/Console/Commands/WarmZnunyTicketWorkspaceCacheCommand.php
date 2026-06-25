@@ -6,12 +6,14 @@ use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketCacheService;
 use App\Services\Znuny\ZnunyTicketWorkspaceStateTypeMapper;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Redis;
 use Throwable;
 
 class WarmZnunyTicketWorkspaceCacheCommand extends Command
 {
-    protected $signature = 'znuny:warm-ticket-workspace-cache';
+    protected $signature = 'znuny:warm-ticket-workspace-cache {--scheduled}';
 
     protected $description = 'Warm up the Ticket Workspace cache by polling active tickets from Znuny';
 
@@ -26,6 +28,23 @@ class WarmZnunyTicketWorkspaceCacheCommand extends Command
             $this->info('Ticket Workspace is disabled in settings. Exiting cleanly.');
 
             return self::SUCCESS;
+        }
+
+        if ($this->option('scheduled')) {
+            $interval = SettingsService::int('znuny_ticket_cache_refresh_interval_minutes', 5) ?? 5;
+            if ($interval <= 0) {
+                $interval = 5;
+            }
+
+            $lastWarmAt = Redis::get('znuny:ticket_workspace:last_warm_at');
+            if ($lastWarmAt) {
+                $dueAt = Carbon::createFromTimestamp($lastWarmAt)->addMinutes($interval);
+                if (Carbon::now()->lessThan($dueAt)) {
+                    $this->info('Scheduled warmer is not due yet. Exiting cleanly.');
+
+                    return self::SUCCESS;
+                }
+            }
         }
 
         $activeStateTypeIdsJson = SettingsService::string('znuny_ticket_workspace_active_state_type_ids', '[]');
@@ -146,6 +165,10 @@ class WarmZnunyTicketWorkspaceCacheCommand extends Command
             ['Metric', 'Count'],
             collect($counters)->map(fn ($value, $key) => [$key, $value])->toArray()
         );
+
+        if ($this->option('scheduled')) {
+            Redis::set('znuny:ticket_workspace:last_warm_at', Carbon::now()->timestamp);
+        }
 
         return self::SUCCESS;
     }
