@@ -408,40 +408,123 @@ class ZnunyClient
                 $tickets = [$data];
             }
 
-            return array_map(function ($ticket) {
-                return [
-                    'TicketID' => $ticket['TicketID'] ?? null,
-                    'TicketNumber' => $ticket['TicketNumber'] ?? null,
-                    'Title' => $ticket['Title'] ?? null,
-                    'QueueID' => $ticket['QueueID'] ?? null,
-                    'Queue' => $ticket['Queue'] ?? null,
-                    'OwnerID' => $ticket['OwnerID'] ?? null,
-                    'Owner' => $ticket['Owner'] ?? null,
-                    'ResponsibleID' => $ticket['ResponsibleID'] ?? null,
-                    'Responsible' => $ticket['Responsible'] ?? null,
-                    'CustomerID' => $ticket['CustomerID'] ?? null,
-                    'CustomerUserID' => $ticket['CustomerUserID'] ?? null,
-                    'CustomerUser' => $ticket['CustomerUser'] ?? null,
-                    'StateID' => $ticket['StateID'] ?? null,
-                    'State' => $ticket['State'] ?? null,
-                    'StateType' => $ticket['StateType'] ?? null,
-                    'PriorityID' => $ticket['PriorityID'] ?? null,
-                    'Priority' => $ticket['Priority'] ?? null,
-                    'TypeID' => $ticket['TypeID'] ?? null,
-                    'Type' => $ticket['Type'] ?? null,
-                    'ServiceID' => $ticket['ServiceID'] ?? null,
-                    'Service' => $ticket['Service'] ?? null,
-                    'SLAID' => $ticket['SLAID'] ?? null,
-                    'SLA' => $ticket['SLA'] ?? null,
-                    'Created' => $ticket['Created'] ?? null,
-                    'Changed' => $ticket['Changed'] ?? null,
-                    'ArticleCount' => $ticket['ArticleCount'] ?? null,
-                    'LastArticleID' => $ticket['LastArticleID'] ?? null,
-                    'LastArticleCreated' => $ticket['LastArticleCreated'] ?? null,
-                    'SyncFingerprint' => $ticket['SyncFingerprint'] ?? null,
-                ];
-            }, $tickets);
+            return array_map(fn ($ticket) => $this->mapTicketResponse($ticket), $tickets);
         });
+    }
+
+    /**
+     * Perform a ticket search and return tickets along with pagination and count metadata.
+     */
+    public function searchTicketsWithMetadata(array $filters = []): array
+    {
+        $payload = [
+            'TicketSearch' => array_merge([
+                'DynamicField' => 0,
+                'Extended' => 0,
+            ], $filters),
+        ];
+
+        return $this->withSessionRetry(function ($session) use ($payload) {
+            $payload['SessionID'] = $session;
+
+            $response = $this->request()->get($this->apiUrl().'/ZnunyAgentListTicketSearch', $payload);
+
+            $data = $this->processResponse($response);
+
+            $tickets = [];
+            if (isset($data['Tickets']) && is_array($data['Tickets'])) {
+                $tickets = $data['Tickets'];
+            } elseif (isset($data['Ticket']) && is_array($data['Ticket'])) {
+                if (isset($data['Ticket']['TicketID'])) {
+                    $tickets = [$data['Ticket']];
+                } else {
+                    $tickets = $data['Ticket'];
+                }
+            } elseif (is_array($data) && array_is_list($data)) {
+                $tickets = $data;
+            } elseif (is_array($data) && isset($data['TicketID'])) {
+                $tickets = [$data];
+            }
+
+            $mappedTickets = array_map(fn ($ticket) => $this->mapTicketResponse($ticket), $tickets);
+
+            $count = count($mappedTickets);
+            if (isset($data['Count'])) {
+                $count = (int) $data['Count'];
+            }
+
+            $totalCount = $count;
+            if (isset($data['TotalCount'])) {
+                $totalCount = (int) $data['TotalCount'];
+            }
+
+            $limit = 0;
+            if (isset($data['Limit'])) {
+                $limit = (int) $data['Limit'];
+            }
+
+            $offset = 0;
+            if (isset($data['Offset'])) {
+                $offset = (int) $data['Offset'];
+            }
+
+            $countOnly = false;
+            if (! empty($payload['TicketSearch']['CountOnly'])) {
+                $countOnly = true;
+            }
+
+            $warnings = [];
+            if (isset($data['Warnings']) && is_array($data['Warnings'])) {
+                $warnings = $data['Warnings'];
+            }
+
+            return [
+                'tickets' => $mappedTickets,
+                'count' => $count,
+                'total_count' => $totalCount,
+                'limit' => $limit,
+                'offset' => $offset,
+                'sort_by' => $payload['TicketSearch']['SortBy'] ?? null,
+                'sort_direction' => $payload['TicketSearch']['SortDirection'] ?? null,
+                'count_only' => $countOnly,
+                'warnings' => $warnings,
+            ];
+        });
+    }
+
+    private function mapTicketResponse(array $ticket): array
+    {
+        return [
+            'TicketID' => isset($ticket['TicketID']) ? (int) $ticket['TicketID'] : null,
+            'TicketNumber' => $ticket['TicketNumber'] ?? null,
+            'Title' => $ticket['Title'] ?? null,
+            'QueueID' => isset($ticket['QueueID']) ? (int) $ticket['QueueID'] : null,
+            'Queue' => $ticket['Queue'] ?? null,
+            'OwnerID' => isset($ticket['OwnerID']) ? (int) $ticket['OwnerID'] : null,
+            'Owner' => $ticket['Owner'] ?? null,
+            'ResponsibleID' => isset($ticket['ResponsibleID']) ? (int) $ticket['ResponsibleID'] : null,
+            'Responsible' => $ticket['Responsible'] ?? null,
+            'CustomerID' => $ticket['CustomerID'] ?? null,
+            'CustomerUserID' => $ticket['CustomerUserID'] ?? null,
+            'CustomerUser' => $ticket['CustomerUser'] ?? null,
+            'StateID' => isset($ticket['StateID']) ? (int) $ticket['StateID'] : null,
+            'State' => $ticket['State'] ?? null,
+            'StateType' => $ticket['StateType'] ?? null,
+            'PriorityID' => isset($ticket['PriorityID']) ? (int) $ticket['PriorityID'] : null,
+            'Priority' => $ticket['Priority'] ?? null,
+            'TypeID' => isset($ticket['TypeID']) ? (int) $ticket['TypeID'] : null,
+            'Type' => $ticket['Type'] ?? null,
+            'ServiceID' => isset($ticket['ServiceID']) ? (int) $ticket['ServiceID'] : null,
+            'Service' => $ticket['Service'] ?? null,
+            'SLAID' => isset($ticket['SLAID']) ? (int) $ticket['SLAID'] : null,
+            'SLA' => $ticket['SLA'] ?? null,
+            'Created' => $ticket['Created'] ?? null,
+            'Changed' => $ticket['Changed'] ?? null,
+            'ArticleCount' => isset($ticket['ArticleCount']) ? (int) $ticket['ArticleCount'] : null,
+            'LastArticleID' => isset($ticket['LastArticleID']) ? (int) $ticket['LastArticleID'] : null,
+            'LastArticleCreated' => $ticket['LastArticleCreated'] ?? null,
+            'SyncFingerprint' => $ticket['SyncFingerprint'] ?? null,
+        ];
     }
 
     /**

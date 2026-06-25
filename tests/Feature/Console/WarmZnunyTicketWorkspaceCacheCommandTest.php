@@ -67,8 +67,21 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
         Setting::updateOrCreate(['key' => 'znuny_ticket_cache_default_limit'], ['value' => '2']);
         Setting::updateOrCreate(['key' => 'znuny_ticket_cache_max_pages_per_run'], ['value' => '2']);
 
+        // First we do a CountOnly query
+        $this->client->shouldReceive('searchTicketsWithMetadata')
+            ->once()
+            ->with([
+                'StateType' => 'new',
+                'CountOnly' => 1,
+            ])
+            ->andReturn([
+                'total_count' => 3,
+                'count_only' => true,
+                'warnings' => [],
+            ]);
+
         // First page returns 2 tickets (full)
-        $this->client->shouldReceive('searchTickets')
+        $this->client->shouldReceive('searchTicketsWithMetadata')
             ->once()
             ->with([
                 'StateType' => 'new',
@@ -78,12 +91,15 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
                 'SortDirection' => 'DESC',
             ])
             ->andReturn([
-                ['TicketID' => 1],
-                ['TicketID' => 2],
+                'tickets' => [
+                    ['TicketID' => 1],
+                    ['TicketID' => 2],
+                ],
+                'warnings' => [],
             ]);
 
         // Second page returns 1 ticket (partial, will stop pagination)
-        $this->client->shouldReceive('searchTickets')
+        $this->client->shouldReceive('searchTicketsWithMetadata')
             ->once()
             ->with([
                 'StateType' => 'new',
@@ -93,7 +109,10 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
                 'SortDirection' => 'DESC',
             ])
             ->andReturn([
-                ['TicketID' => 3],
+                'tickets' => [
+                    ['TicketID' => 3],
+                ],
+                'warnings' => [],
             ]);
 
         $this->cacheService->shouldReceive('upsertOrRefreshFromSearchResult')->with(['TicketID' => 1])->andReturn('cached_new');
@@ -101,10 +120,13 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
         $this->cacheService->shouldReceive('upsertOrRefreshFromSearchResult')->with(['TicketID' => 3])->andReturn('updated_changed');
 
         $this->artisan('znuny:warm-ticket-workspace-cache')
-            ->expectsOutput('Warming cache for StateType: new')
+            ->expectsOutput('Warming cache for StateTypes: new')
+            ->expectsOutput('Total active tickets found: 3')
             ->expectsOutput('Cache warming complete.')
             ->expectsTable(['Metric', 'Count'], [
                 ['state_types', 1],
+                ['total_count', 3],
+                ['count_only_requests', 1],
                 ['pages_requested', 2],
                 ['tickets_seen', 3],
                 ['cached_new', 1],
@@ -113,6 +135,42 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
                 ['skipped_missing_ticket_id', 0],
                 ['skipped_disabled', 0],
                 ['errors', 0],
+                ['warnings', 0],
+            ])
+            ->assertSuccessful();
+    }
+
+    public function test_it_exits_early_if_total_count_is_zero(): void
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['value' => '["new"]']);
+
+        $this->client->shouldReceive('searchTicketsWithMetadata')
+            ->once()
+            ->with([
+                'StateType' => 'new',
+                'CountOnly' => 1,
+            ])
+            ->andReturn([
+                'total_count' => 0,
+                'warnings' => [],
+            ]);
+
+        $this->artisan('znuny:warm-ticket-workspace-cache')
+            ->expectsOutput('No active tickets found. Exiting cleanly.')
+            ->expectsTable(['Metric', 'Count'], [
+                ['state_types', 1],
+                ['total_count', 0],
+                ['count_only_requests', 1],
+                ['pages_requested', 0],
+                ['tickets_seen', 0],
+                ['cached_new', 0],
+                ['refreshed_unchanged', 0],
+                ['updated_changed', 0],
+                ['skipped_missing_ticket_id', 0],
+                ['skipped_disabled', 0],
+                ['errors', 0],
+                ['warnings', 0],
             ])
             ->assertSuccessful();
     }
@@ -123,11 +181,25 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
         Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['value' => '["new"]']);
         Setting::updateOrCreate(['key' => 'znuny_ticket_cache_default_limit'], ['value' => '2']);
 
+        $this->client->shouldReceive('searchTicketsWithMetadata')
+            ->once()
+            ->with([
+                'StateType' => 'new',
+                'CountOnly' => 1,
+            ])
+            ->andReturn([
+                'total_count' => 1,
+                'warnings' => ['A weird Znuny warning'],
+            ]);
+
         // Return 1 ticket so it doesn't trigger a second page request
-        $this->client->shouldReceive('searchTickets')
+        $this->client->shouldReceive('searchTicketsWithMetadata')
             ->once()
             ->andReturn([
-                ['TicketID' => 1],
+                'tickets' => [
+                    ['TicketID' => 1],
+                ],
+                'warnings' => [],
             ]);
 
         $this->cacheService->shouldReceive('upsertOrRefreshFromSearchResult')->with(['TicketID' => 1])->andThrow(new \Exception('Bad cache payload'));
@@ -136,6 +208,8 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
             ->expectsOutputToContain('Error caching ticket: Bad cache payload')
             ->expectsTable(['Metric', 'Count'], [
                 ['state_types', 1],
+                ['total_count', 1],
+                ['count_only_requests', 1],
                 ['pages_requested', 1],
                 ['tickets_seen', 1],
                 ['cached_new', 0],
@@ -144,6 +218,7 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
                 ['skipped_missing_ticket_id', 0],
                 ['skipped_disabled', 0],
                 ['errors', 1],
+                ['warnings', 1],
             ])
             ->assertSuccessful();
     }
@@ -154,10 +229,24 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
         Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['value' => '["new"]']);
         Setting::updateOrCreate(['key' => 'znuny_ticket_cache_default_limit'], ['value' => '2']);
 
-        $this->client->shouldReceive('searchTickets')
+        $this->client->shouldReceive('searchTicketsWithMetadata')
+            ->once()
+            ->with([
+                'StateType' => 'new',
+                'CountOnly' => 1,
+            ])
+            ->andReturn([
+                'total_count' => 1,
+                'warnings' => [],
+            ]);
+
+        $this->client->shouldReceive('searchTicketsWithMetadata')
             ->once()
             ->andReturn([
-                ['TicketID' => 1],
+                'tickets' => [
+                    ['TicketID' => 1],
+                ],
+                'warnings' => [],
             ]);
 
         $this->cacheService->shouldReceive('upsertOrRefreshFromSearchResult')->with(['TicketID' => 1])->andReturn('skipped_disabled');
@@ -165,6 +254,8 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
         $this->artisan('znuny:warm-ticket-workspace-cache')
             ->expectsTable(['Metric', 'Count'], [
                 ['state_types', 1],
+                ['total_count', 1],
+                ['count_only_requests', 1],
                 ['pages_requested', 1],
                 ['tickets_seen', 1],
                 ['cached_new', 0],
@@ -173,6 +264,7 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
                 ['skipped_missing_ticket_id', 0],
                 ['skipped_disabled', 1],
                 ['errors', 0],
+                ['warnings', 0],
             ])
             ->assertSuccessful();
     }

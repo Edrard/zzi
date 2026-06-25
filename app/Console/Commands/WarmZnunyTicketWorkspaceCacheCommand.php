@@ -48,8 +48,13 @@ class WarmZnunyTicketWorkspaceCacheCommand extends Command
         $limit = SettingsService::int('znuny_ticket_cache_default_limit', 50) ?? 50;
         $maxPages = SettingsService::int('znuny_ticket_cache_max_pages_per_run', 3) ?? 3;
 
+        $combinedStateTypes = implode(',', $mappedStateTypes);
+        $this->info("Warming cache for StateTypes: {$combinedStateTypes}");
+
         $counters = [
             'state_types' => count($mappedStateTypes),
+            'total_count' => 0,
+            'count_only_requests' => 0,
             'pages_requested' => 0,
             'tickets_seen' => 0,
             'cached_new' => 0,
@@ -58,17 +63,40 @@ class WarmZnunyTicketWorkspaceCacheCommand extends Command
             'skipped_missing_ticket_id' => 0,
             'skipped_disabled' => 0,
             'errors' => 0,
+            'warnings' => 0,
         ];
 
-        foreach ($mappedStateTypes as $stateType) {
-            $this->info("Warming cache for StateType: {$stateType}");
+        try {
+            $counters['count_only_requests']++;
+            $metadata = $client->searchTicketsWithMetadata([
+                'StateType' => $combinedStateTypes,
+                'CountOnly' => 1,
+            ]);
 
-            for ($page = 1; $page <= $maxPages; $page++) {
-                try {
+            if (! empty($metadata['warnings'])) {
+                foreach ($metadata['warnings'] as $warning) {
+                    $this->warn("Znuny Warning: {$warning}");
+                    $counters['warnings']++;
+                }
+            }
+
+            $totalCount = $metadata['total_count'] ?? 0;
+            $counters['total_count'] = $totalCount;
+
+            if ($totalCount === 0) {
+                $this->info('No active tickets found. Exiting cleanly.');
+            } else {
+                $this->info("Total active tickets found: {$totalCount}");
+
+                for ($page = 1; $page <= $maxPages; $page++) {
                     $offset = ($page - 1) * $limit;
 
+                    if ($offset >= $totalCount) {
+                        break;
+                    }
+
                     $filters = [
-                        'StateType' => $stateType,
+                        'StateType' => $combinedStateTypes,
                         'Limit' => $limit,
                         'Offset' => $offset,
                         'SortBy' => 'Changed',
@@ -76,10 +104,19 @@ class WarmZnunyTicketWorkspaceCacheCommand extends Command
                     ];
 
                     $counters['pages_requested']++;
-                    $tickets = $client->searchTickets($filters);
+                    $pageMetadata = $client->searchTicketsWithMetadata($filters);
+
+                    if (! empty($pageMetadata['warnings'])) {
+                        foreach ($pageMetadata['warnings'] as $warning) {
+                            $this->warn("Znuny Warning: {$warning}");
+                            $counters['warnings']++;
+                        }
+                    }
+
+                    $tickets = $pageMetadata['tickets'];
 
                     if (empty($tickets)) {
-                        break; // No more tickets for this state type
+                        break; // No more tickets
                     }
 
                     foreach ($tickets as $ticket) {
@@ -97,17 +134,11 @@ class WarmZnunyTicketWorkspaceCacheCommand extends Command
                             $counters['errors']++;
                         }
                     }
-
-                    if (count($tickets) < $limit) {
-                        break; // Last page reached for this state type
-                    }
-
-                } catch (Throwable $e) {
-                    $this->error("Error fetching tickets for StateType {$stateType} on page {$page}: ".$e->getMessage());
-                    $counters['errors']++;
-                    break; // Skip to next state type on api error
                 }
             }
+        } catch (Throwable $e) {
+            $this->error('Error warming cache: '.$e->getMessage());
+            $counters['errors']++;
         }
 
         $this->info('Cache warming complete.');

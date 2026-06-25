@@ -426,4 +426,90 @@ class ZnunyClientTest extends TestCase
 
         $this->assertEmpty($response);
     }
+
+    public function test_search_tickets_with_metadata_returns_full_metadata()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/ZnunyAgentListTicketSearch*' => Http::response([
+                'Tickets' => [
+                    ['TicketID' => 111],
+                    ['TicketID' => 222],
+                ],
+                'Count' => 2,
+                'TotalCount' => 50,
+                'Limit' => 2,
+                'Offset' => 0,
+                'Warnings' => ['Warning 1'],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $response = $client->searchTicketsWithMetadata([
+            'StateType' => 'new,open',
+            'SortBy' => 'Changed',
+            'SortDirection' => 'DESC',
+        ]);
+
+        $this->assertCount(2, $response['tickets']);
+        $this->assertEquals(2, $response['count']);
+        $this->assertEquals(50, $response['total_count']);
+        $this->assertEquals(2, $response['limit']);
+        $this->assertEquals(0, $response['offset']);
+        $this->assertEquals('Changed', $response['sort_by']);
+        $this->assertEquals('DESC', $response['sort_direction']);
+        $this->assertFalse($response['count_only']);
+        $this->assertEquals(['Warning 1'], $response['warnings']);
+    }
+
+    public function test_search_tickets_with_metadata_count_only()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/ZnunyAgentListTicketSearch*' => Http::response([
+                'Count' => 0,
+                'TotalCount' => 150,
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $response = $client->searchTicketsWithMetadata([
+            'StateType' => 'new,open',
+            'CountOnly' => 1,
+        ]);
+
+        $this->assertEmpty($response['tickets']);
+        $this->assertEquals(0, $response['count']);
+        $this->assertEquals(150, $response['total_count']);
+        $this->assertTrue($response['count_only']);
+    }
+
+    public function test_search_tickets_with_metadata_normalizes_numeric_strings()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/ZnunyAgentListTicketSearch*' => Http::response([
+                'Tickets' => [
+                    [
+                        'TicketID' => '111',
+                        'QueueID' => '5',
+                    ],
+                ],
+                'Count' => '1',
+                'TotalCount' => '1',
+                'Limit' => '10',
+                'Offset' => '0',
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $response = $client->searchTicketsWithMetadata(['Queue' => 'Raw']);
+
+        $this->assertSame(1, $response['count']);
+        $this->assertSame(1, $response['total_count']);
+        $this->assertSame(10, $response['limit']);
+        $this->assertSame(0, $response['offset']);
+        $this->assertSame(111, $response['tickets'][0]['TicketID']);
+        $this->assertSame(5, $response['tickets'][0]['QueueID']);
+    }
 }
