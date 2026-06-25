@@ -144,4 +144,108 @@ class ZnunyTicketCacheServiceTest extends TestCase
 
         $this->service->markClosedWithShortTtl($ticket);
     }
+
+    public function test_upsert_or_refresh_skipped_missing_ticket_id(): void
+    {
+        $result = $this->service->upsertOrRefreshFromSearchResult([]);
+        $this->assertEquals('skipped_missing_ticket_id', $result);
+    }
+
+    public function test_upsert_or_refresh_cached_new(): void
+    {
+        $ticket = [
+            'TicketID' => 500,
+            'SyncFingerprint' => 'fp1',
+        ];
+
+        Redis::shouldReceive('get')->with('znuny:ticket:500')->andReturn(null);
+
+        Redis::shouldReceive('setex')
+            ->once()
+            ->with('znuny:ticket:500', 900, json_encode($ticket));
+
+        Redis::shouldReceive('setex')
+            ->once()
+            ->with('znuny:ticket_indexes:500', \Mockery::any(), \Mockery::any());
+
+        $result = $this->service->upsertOrRefreshFromSearchResult($ticket);
+        $this->assertEquals('cached_new', $result);
+    }
+
+    public function test_upsert_or_refresh_refreshed_unchanged(): void
+    {
+        $ticket = [
+            'TicketID' => 600,
+            'SyncFingerprint' => 'fp_same',
+        ];
+
+        $existing = json_encode(['TicketID' => 600, 'SyncFingerprint' => 'fp_same']);
+
+        Redis::shouldReceive('get')->with('znuny:ticket:600')->andReturn($existing);
+        Redis::shouldReceive('get')->with('znuny:ticket_indexes:600')->andReturn(json_encode(['znuny:index:queue:1']));
+
+        // Should just expire
+        Redis::shouldReceive('expire')->with('znuny:ticket:600', 900)->once();
+        Redis::shouldReceive('expire')->with('znuny:ticket_indexes:600', \Mockery::any())->once();
+        Redis::shouldReceive('expire')->with('znuny:index:queue:1', \Mockery::any())->once();
+
+        // Should not set payload or rebuild indexes
+        Redis::shouldReceive('setex')->never();
+        Redis::shouldReceive('zadd')->never();
+
+        $result = $this->service->upsertOrRefreshFromSearchResult($ticket);
+        $this->assertEquals('refreshed_unchanged', $result);
+    }
+
+    public function test_upsert_or_refresh_updated_changed(): void
+    {
+        $ticket = [
+            'TicketID' => 700,
+            'SyncFingerprint' => 'fp_new',
+        ];
+
+        $existing = json_encode(['TicketID' => 700, 'SyncFingerprint' => 'fp_old']);
+
+        Redis::shouldReceive('get')->with('znuny:ticket:700')->andReturn($existing);
+        Redis::shouldReceive('get')->with('znuny:ticket_indexes:700')->andReturn(json_encode(['znuny:index:queue:1']));
+
+        Redis::shouldReceive('zrem')->with('znuny:index:queue:1', 700)->once();
+
+        Redis::shouldReceive('setex')
+            ->once()
+            ->with('znuny:ticket:700', 900, json_encode($ticket));
+
+        Redis::shouldReceive('setex')
+            ->once()
+            ->with('znuny:ticket_indexes:700', \Mockery::any(), \Mockery::any());
+
+        $result = $this->service->upsertOrRefreshFromSearchResult($ticket);
+        $this->assertEquals('updated_changed', $result);
+    }
+
+    public function test_index_keys_for_ticket_includes_new_fields(): void
+    {
+        $ticket = [
+            'TicketID' => 800,
+            'QueueID' => 1,
+            'OwnerID' => 2,
+            'StateID' => 3,
+            'StateType' => 'open',
+            'PriorityID' => 4,
+            'TypeID' => 5,
+            'ServiceID' => 6,
+            'SLAID' => 7,
+        ];
+
+        $keys = $this->service->indexKeysForTicket($ticket);
+
+        $this->assertContains('znuny:index:queue:1', $keys);
+        $this->assertContains('znuny:index:owner:2', $keys);
+        $this->assertContains('znuny:index:state:3', $keys);
+        $this->assertContains('znuny:index:statetype:open', $keys);
+        $this->assertContains('znuny:index:priority:4', $keys);
+        $this->assertContains('znuny:index:type:5', $keys);
+        $this->assertContains('znuny:index:service:6', $keys);
+        $this->assertContains('znuny:index:sla:7', $keys);
+    }
 }

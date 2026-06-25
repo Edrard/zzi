@@ -190,6 +190,7 @@ class SettingsLivewireTest extends TestCase
 
         $search($schema);
 
+        $this->assertTrue($foundCredentialsButton, 'Test Znuny API Connection button should be rendered in Credentials tab');
         $this->assertTrue($foundEndpointsButton, 'Test Znuny API Connection button should be rendered in Endpoints tab');
     }
 

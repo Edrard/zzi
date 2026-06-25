@@ -393,23 +393,54 @@ class ZnunyClient
 
             $data = $this->processResponse($response);
 
+            $tickets = [];
             if (isset($data['Tickets']) && is_array($data['Tickets'])) {
-                return $data['Tickets'];
-            }
-
-            if (isset($data['Ticket']) && is_array($data['Ticket'])) {
+                $tickets = $data['Tickets'];
+            } elseif (isset($data['Ticket']) && is_array($data['Ticket'])) {
                 if (isset($data['Ticket']['TicketID'])) {
-                    return [$data['Ticket']];
+                    $tickets = [$data['Ticket']];
+                } else {
+                    $tickets = $data['Ticket'];
                 }
-
-                return $data['Ticket'];
+            } elseif (is_array($data) && array_is_list($data)) {
+                $tickets = $data;
+            } elseif (is_array($data)) {
+                $tickets = $data;
             }
 
-            if (is_array($data) && array_is_list($data)) {
-                return $data;
-            }
-
-            return is_array($data) ? $data : [];
+            return array_map(function ($ticket) {
+                return [
+                    'TicketID' => $ticket['TicketID'] ?? null,
+                    'TicketNumber' => $ticket['TicketNumber'] ?? null,
+                    'Title' => $ticket['Title'] ?? null,
+                    'QueueID' => $ticket['QueueID'] ?? null,
+                    'Queue' => $ticket['Queue'] ?? null,
+                    'OwnerID' => $ticket['OwnerID'] ?? null,
+                    'Owner' => $ticket['Owner'] ?? null,
+                    'ResponsibleID' => $ticket['ResponsibleID'] ?? null,
+                    'Responsible' => $ticket['Responsible'] ?? null,
+                    'CustomerID' => $ticket['CustomerID'] ?? null,
+                    'CustomerUserID' => $ticket['CustomerUserID'] ?? null,
+                    'CustomerUser' => $ticket['CustomerUser'] ?? null,
+                    'StateID' => $ticket['StateID'] ?? null,
+                    'State' => $ticket['State'] ?? null,
+                    'StateType' => $ticket['StateType'] ?? null,
+                    'PriorityID' => $ticket['PriorityID'] ?? null,
+                    'Priority' => $ticket['Priority'] ?? null,
+                    'TypeID' => $ticket['TypeID'] ?? null,
+                    'Type' => $ticket['Type'] ?? null,
+                    'ServiceID' => $ticket['ServiceID'] ?? null,
+                    'Service' => $ticket['Service'] ?? null,
+                    'SLAID' => $ticket['SLAID'] ?? null,
+                    'SLA' => $ticket['SLA'] ?? null,
+                    'Created' => $ticket['Created'] ?? null,
+                    'Changed' => $ticket['Changed'] ?? null,
+                    'ArticleCount' => $ticket['ArticleCount'] ?? null,
+                    'LastArticleID' => $ticket['LastArticleID'] ?? null,
+                    'LastArticleCreated' => $ticket['LastArticleCreated'] ?? null,
+                    'SyncFingerprint' => $ticket['SyncFingerprint'] ?? null,
+                ];
+            }, $tickets);
         });
     }
 

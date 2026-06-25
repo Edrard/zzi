@@ -355,14 +355,23 @@ class ZnunyClientTest extends TestCase
         $this->assertEmpty($response);
     }
 
-    public function test_search_tickets_unwraps_tickets_array()
+    public function test_search_tickets_unwraps_tickets_array_and_preserves_new_fields()
     {
         Http::fake([
             'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
             'https://example.invalid/api/ZnunyAgentListTicketSearch*' => Http::response([
                 'Tickets' => [
-                    ['TicketID' => 111],
-                    ['TicketID' => 222],
+                    [
+                        'TicketID' => 111,
+                        'SyncFingerprint' => 'abc',
+                        'QueueID' => 5,
+                        'OwnerID' => 2,
+                        'StateID' => 1,
+                        'PriorityID' => 3,
+                        'TypeID' => 4,
+                        'ServiceID' => 6,
+                        'SLAID' => 7,
+                    ],
                 ],
             ], 200),
         ]);
@@ -370,8 +379,16 @@ class ZnunyClientTest extends TestCase
         $client = new ZnunyClient;
         $response = $client->searchTickets(['Queue' => 'Raw']);
 
-        $this->assertCount(2, $response);
+        $this->assertCount(1, $response);
         $this->assertEquals(111, $response[0]['TicketID']);
+        $this->assertEquals('abc', $response[0]['SyncFingerprint']);
+        $this->assertEquals(5, $response[0]['QueueID']);
+        $this->assertEquals(2, $response[0]['OwnerID']);
+        $this->assertEquals(1, $response[0]['StateID']);
+        $this->assertEquals(3, $response[0]['PriorityID']);
+        $this->assertEquals(4, $response[0]['TypeID']);
+        $this->assertEquals(6, $response[0]['ServiceID']);
+        $this->assertEquals(7, $response[0]['SLAID']);
     }
 
     public function test_search_tickets_unwraps_single_ticket()

@@ -88,6 +88,52 @@ class ZnunyTicketCacheService
         $this->updateIndexes($ticket, $ttl);
     }
 
+    public function upsertOrRefreshFromSearchResult(array $ticket): string
+    {
+        if (! $this->isEnabled()) {
+            return 'skipped_disabled';
+        }
+
+        $ticketId = $ticket['TicketID'] ?? null;
+        if (! $ticketId) {
+            return 'skipped_missing_ticket_id';
+        }
+
+        $isClosed = $this->isClosedState($ticket['StateType'] ?? '');
+        $ttl = $isClosed ? $this->getClosedTtl() : $this->getTtl();
+        $key = "znuny:ticket:{$ticketId}";
+
+        $existingDataRaw = Redis::get($key);
+        $existingData = $existingDataRaw ? json_decode($existingDataRaw, true) : null;
+
+        $newFingerprint = $ticket['SyncFingerprint'] ?? null;
+        $oldFingerprint = $existingData['SyncFingerprint'] ?? null;
+
+        if ($existingData && $newFingerprint && $oldFingerprint && $newFingerprint === $oldFingerprint) {
+            // refresh TTLs
+            Redis::expire($key, max(1, $ttl));
+
+            $reverseKey = "znuny:ticket_indexes:{$ticketId}";
+            Redis::expire($reverseKey, max($ttl, 86400 * 7));
+
+            $keysRaw = Redis::get($reverseKey);
+            if ($keysRaw) {
+                $keys = json_decode($keysRaw, true);
+                foreach ($keys as $k) {
+                    Redis::expire($k, max($ttl, 86400 * 7));
+                }
+            }
+
+            return 'refreshed_unchanged';
+        }
+
+        // new or fingerprint changed
+        Redis::setex($key, max(1, $ttl), json_encode($ticket));
+        $this->updateIndexes($ticket, $ttl);
+
+        return $existingData ? 'updated_changed' : 'cached_new';
+    }
+
     public function indexKeysForTicket(array $ticket): array
     {
         $ticketId = $ticket['TicketID'] ?? null;
@@ -108,6 +154,18 @@ class ZnunyTicketCacheService
         if (! empty($ticket['StateType'])) {
             $type = strtolower($ticket['StateType']);
             $keys[] = "znuny:index:statetype:{$type}";
+        }
+        if (! empty($ticket['PriorityID'])) {
+            $keys[] = "znuny:index:priority:{$ticket['PriorityID']}";
+        }
+        if (! empty($ticket['TypeID'])) {
+            $keys[] = "znuny:index:type:{$ticket['TypeID']}";
+        }
+        if (! empty($ticket['ServiceID'])) {
+            $keys[] = "znuny:index:service:{$ticket['ServiceID']}";
+        }
+        if (! empty($ticket['SLAID'])) {
+            $keys[] = "znuny:index:sla:{$ticket['SLAID']}";
         }
 
         return $keys;
