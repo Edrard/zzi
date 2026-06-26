@@ -75,7 +75,7 @@
                             <div><span style="color: #6b7280;">Problem:</span> {{ $ticket['zabbix_problem_name'] ?? '-' }}</div>
                             <div><span style="color: #6b7280;">Event ID:</span> {{ $ticket['zabbix_event_id'] ?? '-' }}</div>
                             <div>
-                                <span style="color: #6b7280;">Zabbix State:</span> 
+                                <span style="color: #6b7280;">Zabbix State:</span>
                                 @if($isResolved)
                                     <span style="color: #16a34a;">Resolved</span>
                                 @else
