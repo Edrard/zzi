@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Setting;
+use App\Support\Settings\DefaultSettings;
 use Illuminate\Database\Seeder;
 
 class SettingsSeeder extends Seeder
@@ -12,51 +13,7 @@ class SettingsSeeder extends Seeder
      */
     public function run(): void
     {
-        $settings = [
-            ['key' => 'retention_resolved_days', 'value' => '90', 'type' => 'integer', 'description' => 'Days to keep resolved problems'],
-            ['key' => 'retention_closed_tickets_days', 'value' => '180', 'type' => 'integer', 'description' => 'Days to keep closed tickets'],
-            ['key' => 'retention_action_logs_days', 'value' => '365', 'type' => 'integer', 'description' => 'Days to keep action logs'],
-            ['key' => 'retention_failed_jobs_days', 'value' => '30', 'type' => 'integer', 'description' => 'Days to keep failed jobs'],
-            ['key' => 'retention_statistics_days', 'value' => '730', 'type' => 'integer', 'description' => 'Days to keep daily statistics'],
-            ['key' => 'cleanup_enabled', 'value' => 'true', 'type' => 'boolean', 'description' => 'Enable automated cleanup'],
-            ['key' => 'cleanup_batch_size', 'value' => '1000', 'type' => 'integer', 'description' => 'Records to delete per cleanup batch'],
-            ['key' => 'default_close_delay_hours', 'value' => '4', 'type' => 'integer', 'description' => 'Hours before auto-closing tickets'],
-            ['key' => 'default_reopen_window_hours', 'value' => '24', 'type' => 'integer', 'description' => 'Hours window to reopen tickets'],
-            ['key' => 'zabbix_api_url', 'value' => '', 'type' => 'string', 'description' => 'Zabbix API endpoint URL'],
-            ['key' => 'zabbix_api_token', 'value' => '', 'type' => 'string', 'description' => 'Zabbix API token'],
-            ['key' => 'zabbix_api_timeout', 'value' => '15', 'type' => 'integer', 'description' => 'Zabbix API request timeout in seconds'],
-            ['key' => 'zabbix_api_verify_ssl', 'value' => 'true', 'type' => 'boolean', 'description' => 'Verify Zabbix API SSL certificate'],
-            ['key' => 'zabbix_poll_interval_minutes', 'value' => '1', 'type' => 'integer', 'description' => 'Zabbix polling interval in minutes'],
-            ['key' => 'zabbix_problem_cache_ttl_minutes', 'value' => '3', 'type' => 'integer', 'description' => 'Redis TTL for cached Zabbix problems in minutes'],
-            ['key' => 'zabbix_problem_limit', 'value' => '100', 'type' => 'integer', 'description' => 'Maximum number of Zabbix problems to fetch per poll'],
-            ['key' => 'zabbix_exclude_suppressed_problems', 'value' => 'true', 'type' => 'boolean', 'description' => 'Exclude suppressed Zabbix problems from polling results'],
-            ['key' => 'znuny_api_url', 'value' => 'https://otrs.vamark.net/otrs/nph-genericinterface.pl/Webservice/GenericTicketConnectorREST', 'type' => 'string', 'description' => 'Znuny GenericTicketConnectorREST base URL'],
-            ['key' => 'znuny_web_url', 'value' => 'https://otrs.vamark.net/otrs/index.pl', 'type' => 'string', 'description' => 'Znuny agent web interface URL'],
-            ['key' => 'znuny_ticket_url_template', 'value' => '', 'type' => 'string', 'description' => 'Znuny agent ticket URL template'],
-            ['key' => 'znuny_username', 'value' => '', 'type' => 'string', 'description' => 'Znuny integration agent login'],
-            ['key' => 'znuny_password', 'value' => '', 'type' => 'string', 'description' => 'Znuny integration agent password'],
-            ['key' => 'znuny_api_timeout', 'value' => '15', 'type' => 'integer', 'description' => 'Znuny API request timeout in seconds'],
-            ['key' => 'znuny_api_verify_ssl', 'value' => 'true', 'type' => 'boolean', 'description' => 'Verify Znuny API SSL certificate'],
-            ['key' => 'znuny_manual_ticket_footer', 'value' => 'Created manually by Zabbix Znuny Integration.', 'type' => 'string', 'description' => 'Optional text appended to manually created Znuny tickets. Leave empty to disable.'],
-            ['key' => 'znuny_queue_cache_ttl_minutes', 'value' => '15', 'type' => 'integer', 'description' => 'How long Znuny queue lists are cached. 0 disables this cache.'],
-            ['key' => 'znuny_agent_cache_ttl_minutes', 'value' => '15', 'type' => 'integer', 'description' => 'How long Znuny agent lists are cached. 0 disables this cache.'],
-            ['key' => 'znuny_ticket_snapshot_cache_ttl_minutes', 'value' => '5', 'type' => 'integer', 'description' => 'How long linked ticket snapshots may be cached. 0 disables this cache.'],
-            ['key' => 'znuny_linked_ticket_sync_interval_minutes', 'value' => '5', 'type' => 'integer', 'description' => 'How often linked Znuny tickets should be synchronized by the scheduler.'],
-            ['key' => 'znuny_linked_ticket_sync_batch_size', 'value' => '50', 'type' => 'integer', 'description' => 'Maximum linked tickets to synchronize per run. 0 means all eligible tickets.'],
-            ['key' => 'znuny_detailed_sync_audit_enabled', 'value' => 'false', 'type' => 'boolean', 'description' => 'When enabled, detailed ticket sync events are written to the audit log. Keep disabled unless debugging.'],
-            ['key' => 'manual_ticket_auto_close_enabled', 'value' => 'true', 'type' => 'boolean', 'description' => 'Automatically close manually created linked tickets after the Zabbix problem stays resolved long enough.'],
-            ['key' => 'manual_ticket_flap_threshold', 'value' => '3', 'type' => 'integer', 'description' => 'Number of repeated active/resolved cycles before a linked problem is considered flapping. 0 disables flapping detection.'],
-            ['key' => 'manual_ticket_extra_flapping_delay_hours', 'value' => '4', 'type' => 'integer', 'description' => 'Additional close delay added after flapping is detected for a linked manual ticket.'],
-            ['key' => 'znuny_ticket_workspace_enabled', 'value' => 'true', 'type' => 'boolean', 'description' => 'Enable Redis-backed Ticket Workspace.'],
-            ['key' => 'znuny_ticket_cache_refresh_interval_minutes', 'value' => '5', 'type' => 'integer', 'description' => 'Interval for the Ticket Workspace cache warmer in minutes.'],
-            ['key' => 'znuny_ticket_cache_max_pages_per_run', 'value' => '3', 'type' => 'integer', 'description' => 'Safety limit for paginated ZnunyTicketSearch cache warming.'],
-            ['key' => 'znuny_ticket_cache_ttl_minutes', 'value' => '15', 'type' => 'integer', 'description' => 'Default TTL for cached active Znuny tickets in minutes.'],
-            ['key' => 'znuny_ticket_cache_closed_ttl_minutes', 'value' => '1440', 'type' => 'integer', 'description' => 'TTL for recently closed Znuny tickets in minutes.'],
-            ['key' => 'znuny_ticket_cache_default_limit', 'value' => '50', 'type' => 'integer', 'description' => 'Default page size for Znuny ticket cache warming/search.'],
-            ['key' => 'znuny_ticket_workspace_active_state_type_ids', 'value' => '["new","open","pending_reminder","pending_auto"]', 'type' => 'json', 'description' => 'JSON array of active operational state type IDs.'],
-            ['key' => 'zabbix_problem_sync_audit_enabled', 'value' => 'false', 'type' => 'boolean', 'description' => 'Write summary audit records for scheduled Zabbix problem polling.'],
-            ['key' => 'znuny_ticket_workspace_sync_audit_enabled', 'value' => 'false', 'type' => 'boolean', 'description' => 'Write summary audit records for scheduled Ticket Workspace cache warming.'],
-        ];
+        $settings = DefaultSettings::all();
 
         foreach ($settings as $setting) {
             Setting::updateOrCreate(

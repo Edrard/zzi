@@ -12,12 +12,12 @@ return new class extends Migration
     {
         DB::table('settings')
             ->where('key', 'zabbix_problem_url_template')
-            ->where('value', 'https://zabbix.vamark.com/zabbix.php?show=1&action=problem.view&triggerids%5B%5D={trigger_id}')
+            ->where('value', 'https://zabbix.example.com/zabbix.php?show=1&action=problem.view&triggerids%5B%5D={trigger_id}')
             ->update(['value' => '']);
 
         DB::table('settings')
             ->where('key', 'znuny_ticket_url_template')
-            ->where('value', 'https://otrs.vamark.net/otrs/index.pl?Action=AgentTicketZoom;TicketID={ticket_id}')
+            ->where('value', 'https://znuny.example.com/otrs/index.pl?Action=AgentTicketZoom;TicketID={ticket_id}')
             ->update(['value' => '']);
     }
 

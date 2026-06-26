@@ -6,7 +6,9 @@ use App\Filament\Pages\Settings;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\Znuny\ZnunyClient;
+use App\Support\Settings\DefaultSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -365,5 +367,51 @@ class SettingsLivewireTest extends TestCase
         $this->assertTrue($workspaceSyncInAuditLog, 'znuny_ticket_workspace_sync_audit_enabled should be in Audit Log tab');
 
         $this->assertFalse($detailedSyncInLinkedTickets, 'znuny_detailed_sync_audit_enabled should no longer be in Linked Tickets tab');
+    }
+
+    public function test_all_settings_in_form_are_in_default_registry()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        // First, run the defaults command to seed everything
+        Artisan::call('app:ensure-settings-defaults');
+
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+        $form = $component->instance()->getForm('form');
+        $schema = $form->getComponents();
+
+        $formKeys = [];
+
+        $search = function ($components) use (&$search, &$formKeys) {
+            foreach ($components as $c) {
+                if (method_exists($c, 'getName')) {
+                    $name = $c->getName();
+                    if ($name && ! in_array($name, ['SettingsTabs', 'data', 'saveBottom', 'save'])) {
+                        // Skip actions or placeholders that are not actual setting keys
+                        if (! str_contains($name, 'testZnunyConnection') && ! str_starts_with($name, 'tester_help_') && $name !== 'testZabbixConnection' && $name !== 'zabbix_tester_help') {
+                            $formKeys[] = $name;
+                        }
+                    }
+                }
+
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents());
+                }
+            }
+        };
+
+        $search($schema);
+
+        $defaultSettings = collect(DefaultSettings::all())->pluck('key')->toArray();
+
+        foreach ($formKeys as $key) {
+            $this->assertContains($key, $defaultSettings, "Setting key '{$key}' rendered in UI is missing from DefaultSettings registry.");
+        }
+
+        // Also ensure explicitly ignored keys in the UI are in the defaults registry
+        $ignoredKeys = ['znuny_default_agent_login', 'znuny_default_agent_name', 'manual_ticket_auto_close_enabled'];
+        foreach ($ignoredKeys as $key) {
+            $this->assertContains($key, $defaultSettings, "Ignored setting key '{$key}' is missing from DefaultSettings registry.");
+        }
     }
 }

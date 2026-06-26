@@ -11,8 +11,8 @@ return new class extends Migration
     public function up(): void
     {
         $settings = [
-            ['key' => 'znuny_api_url', 'value' => 'https://otrs.vamark.net/otrs/nph-genericinterface.pl/Webservice/GenericTicketConnectorREST', 'type' => 'string', 'description' => 'Znuny GenericTicketConnectorREST base URL'],
-            ['key' => 'znuny_web_url', 'value' => 'https://otrs.vamark.net/otrs/index.pl', 'type' => 'string', 'description' => 'Znuny agent web interface URL'],
+            ['key' => 'znuny_api_url', 'value' => '', 'type' => 'string', 'description' => 'Znuny GenericTicketConnectorREST base URL'],
+            ['key' => 'znuny_web_url', 'value' => '', 'type' => 'string', 'description' => 'Znuny agent web interface URL'],
             ['key' => 'znuny_ticket_url_template', 'value' => '', 'type' => 'string', 'description' => 'Znuny agent ticket URL template'],
             ['key' => 'znuny_username', 'value' => '', 'type' => 'string', 'description' => 'Znuny integration agent login'],
             ['key' => 'znuny_password', 'value' => '', 'type' => 'string', 'description' => 'Znuny integration agent password'],

@@ -162,7 +162,7 @@ class ZnunyAgentSettingsTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
 
         Setting::where('key', 'znuny_default_agent_id')->update(['value' => '12']);
-        Setting::where('key', 'znuny_default_agent_login')->update(['value' => 'uav@vamark.com']);
+        Setting::where('key', 'znuny_default_agent_login')->update(['value' => 'uav@example.com']);
 
         Http::fake([
             'http://api.local/Session*' => Http::response(['SessionID' => 'fake-session']),
@@ -178,7 +178,7 @@ class ZnunyAgentSettingsTest extends TestCase
 
         // Snapshot is kept intact
         $this->assertEquals('12', Setting::where('key', 'znuny_default_agent_id')->value('value'));
-        $this->assertEquals('uav@vamark.com', Setting::where('key', 'znuny_default_agent_login')->value('value'));
+        $this->assertEquals('uav@example.com', Setting::where('key', 'znuny_default_agent_login')->value('value'));
     }
 
     public function test_invalid_agent_selection_is_not_saved()
@@ -186,7 +186,7 @@ class ZnunyAgentSettingsTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
 
         Setting::where('key', 'znuny_default_agent_id')->update(['value' => '12']);
-        Setting::where('key', 'znuny_default_agent_login')->update(['value' => 'uav@vamark.com']);
+        Setting::where('key', 'znuny_default_agent_login')->update(['value' => 'uav@example.com']);
 
         Http::fake([
             'http://api.local/Session*' => Http::response(['SessionID' => 'fake-session']),
@@ -206,7 +206,7 @@ class ZnunyAgentSettingsTest extends TestCase
 
         // Value should remain 12
         $this->assertEquals('12', Setting::where('key', 'znuny_default_agent_id')->value('value'));
-        $this->assertEquals('uav@vamark.com', Setting::where('key', 'znuny_default_agent_login')->value('value'));
+        $this->assertEquals('uav@example.com', Setting::where('key', 'znuny_default_agent_login')->value('value'));
     }
 
     public function test_excluded_logins_are_filtered_out_case_insensitively()
