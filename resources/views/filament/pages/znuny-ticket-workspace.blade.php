@@ -1,4 +1,4 @@
-<x-filament-panels::page class="zbx-current-problems-page" max-width="full">
+<x-filament-panels::page class="zbx-current-problems-page zbx-ticket-workspace" max-width="full">
     <style>
         [x-cloak] { display: none !important; }
 
@@ -235,6 +235,32 @@
             flex-shrink: 0;
         }
 
+        @media (max-width: 1500px) {
+            .zbx-ticket-workspace .zbx-col-ticket-number {
+                display: none;
+            }
+        }
+
+        @media (max-width: 1350px) {
+            .zbx-ticket-workspace .zbx-col-priority,
+            .zbx-ticket-workspace .zbx-col-articles {
+                display: none;
+            }
+        }
+
+        @media (max-width: 850px) {
+            .zbx-ticket-workspace .zbx-col-owner,
+            .zbx-ticket-workspace .zbx-col-state {
+                display: none;
+            }
+        }
+
+        @media (max-width: 500px) {
+            .zbx-ticket-workspace .zbx-col-changed {
+                display: none;
+            }
+        }
+
     </style>
 
     <div class="zbx-page-stack" wire:poll.{{ $this->getRefreshIntervalString() }}>
@@ -375,7 +401,7 @@
                     <thead>
                         <tr>
                             <th style="width: 42px;"></th>
-                            <th style="width: 140px;">
+                            <th style="width: 140px;" class="zbx-col-ticket-number">
                                 <button type="button" class="zbx-th-button" wire:click="sortBy('TicketNumber')">
                                     Ticket#
                                     @if($this->sortField === 'TicketNumber')
@@ -399,7 +425,7 @@
                                     @endif
                                 </button>
                             </th>
-                            <th>
+                            <th class="zbx-col-owner">
                                 <button type="button" class="zbx-th-button" wire:click="sortBy('Owner')">
                                     Owner
                                     @if($this->sortField === 'Owner')
@@ -407,7 +433,7 @@
                                     @endif
                                 </button>
                             </th>
-                            <th>
+                            <th class="zbx-col-state">
                                 <button type="button" class="zbx-th-button" wire:click="sortBy('State')">
                                     State / Type
                                     @if($this->sortField === 'State')
@@ -415,7 +441,7 @@
                                     @endif
                                 </button>
                             </th>
-                            <th>
+                            <th class="zbx-col-priority">
                                 <button type="button" class="zbx-th-button" wire:click="sortBy('Priority')">
                                     Priority
                                     @if($this->sortField === 'Priority')
@@ -423,10 +449,10 @@
                                     @endif
                                 </button>
                             </th>
-                            <th style="text-align: right;">
+                            <th style="text-align: right;" class="zbx-col-articles">
                                 Articles
                             </th>
-                            <th style="text-align: right;">
+                            <th style="text-align: right;" class="zbx-col-changed">
                                 <button type="button" class="zbx-th-button" style="justify-content: flex-end;" wire:click="sortBy('Changed')">
                                     Changed
                                     @if($this->sortField === 'Changed')
@@ -453,7 +479,7 @@
                                         </div>
                                     @endif
                                 </td>
-                                <td class="zbx-ticket-col">
+                                <td class="zbx-ticket-col zbx-col-ticket-number">
                                     {{ $ticket['TicketNumber'] }}
                                 </td>
                                 <td>
@@ -462,31 +488,31 @@
                                 <td>
                                     {{ $ticket['Queue'] }}
                                 </td>
-                                <td>
+                                <td class="zbx-col-owner">
                                     {{ $ticket['Owner'] }}
                                     @if(!empty($ticket['CustomerUserID']))
                                         <br><span class="zbx-muted-text" style="font-size: 0.7rem;">Cust: {{ $ticket['CustomerUserID'] }}</span>
                                     @endif
                                 </td>
-                                <td>
+                                <td class="zbx-col-state">
                                     {{ $ticket['State'] }}
                                     @if(!empty($ticket['StateType']))
                                         <span class="zbx-muted-text" style="font-size: 0.7rem;">({{ $ticket['StateType'] }})</span>
                                     @endif
                                 </td>
-                                <td>
+                                <td class="zbx-col-priority">
                                     {{ $ticket['Priority'] }}
                                 </td>
-                                <td style="text-align: right;">
+                                <td style="text-align: right;" class="zbx-col-articles">
                                     {{ $ticket['ArticleCount'] }}
                                 </td>
-                                <td style="text-align: right; white-space: nowrap;">
+                                <td style="text-align: right; white-space: nowrap;" class="zbx-col-changed">
                                     @if(!empty($ticket['Changed']))
                                         @php
                                             $changedAge = \Carbon\Carbon::parse($ticket['Changed'])->diffInSeconds(now());
                                             $changedStr = app(\App\Services\Zabbix\ZabbixProblemFormatter::class)->formatAge($changedAge);
                                         @endphp
-                                        {{ $changedStr }} ago
+                                        {{ $changedStr }}
                                     @else
                                         N/A
                                     @endif

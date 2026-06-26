@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament\Pages;
 
 use App\Filament\Pages\ZnunyTicketWorkspace;
+use App\Models\AuditLog;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\Znuny\ZnunyTicketCacheService;
@@ -267,11 +268,94 @@ class ZnunyTicketWorkspaceTest extends TestCase
     {
         $user = User::factory()->create(['role' => 'operator']);
 
+        $initialCount = AuditLog::count();
+
         Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
             ->assertSuccessful()
             ->call('$refresh');
 
-        $this->assertDatabaseCount('audit_logs', 0);
+        $this->assertEquals($initialCount, AuditLog::count());
+    }
+
+    public function test_ticket_number_column_has_responsive_class_and_css()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $this->seedTicket(['TicketID' => 101, 'TicketNumber' => 'TN101', 'Title' => 'Test Ticket', 'StateType' => 'new']);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->assertSuccessful()
+            ->assertSeeHtml('class="zbx-col-ticket-number"')
+            ->assertSeeHtml('@media (max-width: 1500px)')
+            ->assertSeeHtml('.zbx-ticket-workspace .zbx-col-ticket-number')
+            ->assertSeeHtml('display: none;');
+    }
+
+    public function test_priority_and_articles_columns_have_responsive_class_and_css()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $this->seedTicket(['TicketID' => 101, 'TicketNumber' => 'TN101', 'Title' => 'Test Ticket', 'StateType' => 'new']);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->assertSuccessful()
+            ->assertSeeHtml('class="zbx-col-priority"')
+            ->assertSeeHtml('class="zbx-col-articles"')
+            ->assertSeeHtml('@media (max-width: 1350px)')
+            ->assertSeeHtml('.zbx-ticket-workspace .zbx-col-priority,')
+            ->assertSeeHtml('.zbx-ticket-workspace .zbx-col-articles')
+            ->assertSeeHtml('display: none;');
+    }
+
+    public function test_changed_column_does_not_show_ago()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $this->seedTicket([
+            'TicketID' => 101,
+            'TicketNumber' => 'TN101',
+            'Title' => 'Changed Test',
+            'StateType' => 'new',
+            'Changed' => now()->subHours(2)->toDateTimeString(),
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->assertSuccessful()
+            ->assertSee('2h')
+            ->assertDontSee('2h ago');
+    }
+
+    public function test_owner_and_state_columns_have_responsive_class_and_css()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $this->seedTicket(['TicketID' => 101, 'TicketNumber' => 'TN101', 'Title' => 'Test Ticket', 'StateType' => 'new']);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->assertSuccessful()
+            ->assertSeeHtml('class="zbx-col-owner"')
+            ->assertSeeHtml('class="zbx-col-state"')
+            ->assertSeeHtml('@media (max-width: 850px)')
+            ->assertSeeHtml('.zbx-ticket-workspace .zbx-col-owner,')
+            ->assertSeeHtml('.zbx-ticket-workspace .zbx-col-state');
+    }
+
+    public function test_changed_column_has_responsive_class_and_css()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $this->seedTicket(['TicketID' => 101, 'TicketNumber' => 'TN101', 'Title' => 'Test Ticket', 'StateType' => 'new']);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->assertSuccessful()
+            ->assertSeeHtml('class="zbx-col-changed"')
+            ->assertSeeHtml('@media (max-width: 500px)')
+            ->assertSeeHtml('.zbx-ticket-workspace .zbx-col-changed');
     }
 }
