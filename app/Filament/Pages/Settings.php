@@ -309,6 +309,7 @@ class Settings extends Page implements HasForms
         $groups = [
             'General' => [],
             'Retention' => [],
+            'Audit Log' => [],
             'Cache' => [],
             'Zabbix' => [],
             'Znuny' => [],
@@ -347,8 +348,16 @@ class Settings extends Page implements HasForms
                     'description' => 'How long linked ticket snapshot data may be cached before refresh. 0 disables this cache.',
                 ],
                 'znuny_detailed_sync_audit_enabled' => [
-                    'label' => 'Enable Detailed Sync Audit Log',
-                    'description' => 'Write detailed linked-ticket sync events to the audit log. Keep disabled unless troubleshooting.',
+                    'label' => 'Linked Tickets Detailed Sync Audit',
+                    'description' => 'Write detailed per-ticket Linked Tickets sync audit events such as updated, missing, and failed. Keep disabled unless troubleshooting.',
+                ],
+                'zabbix_problem_sync_audit_enabled' => [
+                    'label' => 'Current Problems Sync Audit',
+                    'description' => 'Write summary audit records for scheduled Zabbix problem polling. Manual refreshes will be audited separately in a later stage regardless of this setting.',
+                ],
+                'znuny_ticket_workspace_sync_audit_enabled' => [
+                    'label' => 'Ticket Workspace Sync Audit',
+                    'description' => 'Write summary audit records for scheduled Ticket Workspace cache warming. Manual refreshes will be audited separately in a later stage regardless of this setting.',
                 ],
                 'znuny_ticket_url_template' => [
                     'label' => 'Znuny Ticket URL Template',
@@ -565,7 +574,9 @@ class Settings extends Page implements HasForms
                 $groups['Znuny Ticket Defaults'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['znuny_queue_cache_ttl_minutes', 'znuny_agent_cache_ttl_minutes', 'znuny_ticket_snapshot_cache_ttl_minutes'])) {
                 $groups['Cache'][] = $component;
-            } elseif (in_array($setting->key, ['znuny_linked_ticket_sync_interval_minutes', 'znuny_linked_ticket_sync_batch_size', 'znuny_detailed_sync_audit_enabled'])) {
+            } elseif (in_array($setting->key, ['znuny_detailed_sync_audit_enabled', 'zabbix_problem_sync_audit_enabled', 'znuny_ticket_workspace_sync_audit_enabled'])) {
+                $groups['Audit Log'][] = $component;
+            } elseif (in_array($setting->key, ['znuny_linked_ticket_sync_interval_minutes', 'znuny_linked_ticket_sync_batch_size'])) {
                 $groups['Znuny Sync']['Linked Tickets'][] = $component;
             } elseif (in_array($setting->key, ['znuny_ticket_workspace_enabled', 'znuny_ticket_cache_refresh_interval_minutes', 'znuny_ticket_cache_max_pages_per_run', 'znuny_ticket_cache_ttl_minutes', 'znuny_ticket_cache_closed_ttl_minutes', 'znuny_ticket_cache_default_limit', 'znuny_ticket_workspace_active_state_type_ids'])) {
                 $groups['Znuny Sync']['Ticket Workspace'][$setting->key] = $component;

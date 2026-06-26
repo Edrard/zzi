@@ -277,4 +277,93 @@ class SettingsLivewireTest extends TestCase
         $setting = Setting::where('key', 'znuny_ticket_workspace_active_state_type_ids')->first();
         $this->assertEquals('["open","pending_auto"]', $setting->value);
     }
+
+    public function test_audit_log_settings_have_default_false_from_migration()
+    {
+        $this->assertEquals('false', Setting::where('key', 'zabbix_problem_sync_audit_enabled')->value('value'));
+        $this->assertEquals('false', Setting::where('key', 'znuny_ticket_workspace_sync_audit_enabled')->value('value'));
+    }
+
+    public function test_audit_log_tab_is_rendered_with_correct_settings()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Setting::updateOrCreate(['key' => 'znuny_detailed_sync_audit_enabled'], ['type' => 'boolean', 'value' => 'false']);
+        Setting::updateOrCreate(['key' => 'zabbix_problem_sync_audit_enabled'], ['type' => 'boolean', 'value' => 'false']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_sync_audit_enabled'], ['type' => 'boolean', 'value' => 'false']);
+
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+
+        $form = $component->instance()->getForm('form');
+        $schema = $form->getComponents();
+
+        $auditLogTabFound = false;
+        $detailedSyncAuditFound = false;
+        $problemSyncAuditFound = false;
+        $workspaceSyncAuditFound = false;
+
+        $detailedSyncInAuditLog = false;
+        $problemSyncInAuditLog = false;
+        $workspaceSyncInAuditLog = false;
+
+        $detailedSyncInLinkedTickets = false;
+
+        $search = function ($components, $parentGroupName = null) use (&$search, &$auditLogTabFound, &$detailedSyncAuditFound, &$problemSyncAuditFound, &$workspaceSyncAuditFound, &$detailedSyncInAuditLog, &$problemSyncInAuditLog, &$workspaceSyncInAuditLog, &$detailedSyncInLinkedTickets) {
+            foreach ($components as $c) {
+                $type = class_basename($c);
+                $name = method_exists($c, 'getName') ? $c->getName() : null;
+                $label = method_exists($c, 'getLabel') ? $c->getLabel() : null;
+
+                if ($type === 'Tab') {
+                    if ($label === 'Audit Log') {
+                        $auditLogTabFound = true;
+                        $parentGroupName = 'Audit Log';
+                    } elseif ($label === 'Linked Tickets') {
+                        $parentGroupName = 'Linked Tickets';
+                    }
+                }
+
+                if ($name === 'znuny_detailed_sync_audit_enabled') {
+                    $detailedSyncAuditFound = true;
+                    if ($parentGroupName === 'Audit Log') {
+                        $detailedSyncInAuditLog = true;
+                    }
+                    if ($parentGroupName === 'Linked Tickets') {
+                        $detailedSyncInLinkedTickets = true;
+                    }
+                }
+
+                if ($name === 'zabbix_problem_sync_audit_enabled') {
+                    $problemSyncAuditFound = true;
+                    if ($parentGroupName === 'Audit Log') {
+                        $problemSyncInAuditLog = true;
+                    }
+                }
+
+                if ($name === 'znuny_ticket_workspace_sync_audit_enabled') {
+                    $workspaceSyncAuditFound = true;
+                    if ($parentGroupName === 'Audit Log') {
+                        $workspaceSyncInAuditLog = true;
+                    }
+                }
+
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents(), $parentGroupName);
+                }
+            }
+        };
+
+        $search($schema);
+
+        $this->assertTrue($auditLogTabFound, 'Audit Log tab should be rendered');
+        $this->assertTrue($detailedSyncAuditFound, 'znuny_detailed_sync_audit_enabled should be rendered');
+        $this->assertTrue($problemSyncAuditFound, 'zabbix_problem_sync_audit_enabled should be rendered');
+        $this->assertTrue($workspaceSyncAuditFound, 'znuny_ticket_workspace_sync_audit_enabled should be rendered');
+
+        $this->assertTrue($detailedSyncInAuditLog, 'znuny_detailed_sync_audit_enabled should be in Audit Log tab');
+        $this->assertTrue($problemSyncInAuditLog, 'zabbix_problem_sync_audit_enabled should be in Audit Log tab');
+        $this->assertTrue($workspaceSyncInAuditLog, 'znuny_ticket_workspace_sync_audit_enabled should be in Audit Log tab');
+
+        $this->assertFalse($detailedSyncInLinkedTickets, 'znuny_detailed_sync_audit_enabled should no longer be in Linked Tickets tab');
+    }
 }

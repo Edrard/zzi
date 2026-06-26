@@ -54,6 +54,8 @@ class SettingsSeeder extends Seeder
             ['key' => 'znuny_ticket_cache_closed_ttl_minutes', 'value' => '1440', 'type' => 'integer', 'description' => 'TTL for recently closed Znuny tickets in minutes.'],
             ['key' => 'znuny_ticket_cache_default_limit', 'value' => '50', 'type' => 'integer', 'description' => 'Default page size for Znuny ticket cache warming/search.'],
             ['key' => 'znuny_ticket_workspace_active_state_type_ids', 'value' => '["new","open","pending_reminder","pending_auto"]', 'type' => 'json', 'description' => 'JSON array of active operational state type IDs.'],
+            ['key' => 'zabbix_problem_sync_audit_enabled', 'value' => 'false', 'type' => 'boolean', 'description' => 'Write summary audit records for scheduled Zabbix problem polling.'],
+            ['key' => 'znuny_ticket_workspace_sync_audit_enabled', 'value' => 'false', 'type' => 'boolean', 'description' => 'Write summary audit records for scheduled Ticket Workspace cache warming.'],
         ];
 
         foreach ($settings as $setting) {
