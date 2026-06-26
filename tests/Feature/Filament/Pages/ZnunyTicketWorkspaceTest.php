@@ -173,6 +173,22 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->assertSuccessful()
             ->assertSee('Linked to active Zabbix problem')
             ->assertSee('Linked to resolved Zabbix problem')
-            ->assertSee('Linked problem warning');
+            ->assertSee('Active problem on closed/merged ticket');
+    }
+
+    public function test_state_type_filter_accepts_multiple_values()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $this->seedTicket(['TicketID' => 201, 'TicketNumber' => 'TN201', 'Title' => 'New', 'StateType' => 'new']);
+        $this->seedTicket(['TicketID' => 202, 'TicketNumber' => 'TN202', 'Title' => 'Open', 'StateType' => 'open']);
+        $this->seedTicket(['TicketID' => 203, 'TicketNumber' => 'TN203', 'Title' => 'Closed', 'StateType' => 'closed']);
+
+        \Livewire\Livewire::actingAs($user)
+            ->test(\App\Filament\Pages\ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['new', 'open'])
+            ->assertSee('TN201')
+            ->assertSee('TN202')
+            ->assertDontSee('TN203');
     }
 }

@@ -16,7 +16,7 @@
         .zbx-page-stack {
             display: flex;
             flex-direction: column;
-            gap: 24px;
+            gap: 5px;
         }
 
         /* Toolbar Section */
@@ -48,6 +48,36 @@
         .zbx-toolbar-select {
             flex: 1;
             max-width: 250px;
+        }
+
+        .zbx-dropdown-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            z-index: 50;
+            margin-top: 4px;
+            background-color: var(--zbx-table-bg);
+            border: 1px solid var(--zbx-table-border);
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            min-width: 200px;
+            padding: 0.5rem;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .zbx-dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.375rem 0.5rem;
+            cursor: pointer;
+            border-radius: 0.25rem;
+            color: var(--zbx-table-text);
+        }
+
+        .zbx-dropdown-item:hover {
+            background-color: var(--zbx-table-hover);
         }
 
         .zbx-toolbar-count {
@@ -221,7 +251,7 @@
             $endCount = min($offset + $perPage, $total);
         @endphp
 
-        <div class="zbx-legend" aria-label="Ticket Workspace legend" style="margin-bottom: 16px;">
+        <div class="zbx-legend" aria-label="Ticket Workspace legend">
             <span class="zbx-legend-item">
                 <x-filament::icon icon="heroicon-s-link" class="zbx-legend-icon zbx-icon-active" />
                 <span>Linked to active Zabbix problem</span>
@@ -234,7 +264,7 @@
 
             <span class="zbx-legend-item">
                 <x-filament::icon icon="heroicon-s-exclamation-triangle" class="zbx-legend-icon zbx-icon-warning" />
-                <span>Linked problem warning</span>
+                <span>Active problem on closed/merged ticket</span>
             </span>
         </div>
 
@@ -260,14 +290,32 @@
                     </x-filament::input.wrapper>
                 </div>
 
-                <div class="zbx-toolbar-select">
+                <div class="zbx-toolbar-select" x-data="{ open: false }" @click.outside="open = false" style="position: relative;">
+                    @php
+                        $selectedCount = count($this->stateTypeFilter);
+                        if ($selectedCount === 0) {
+                            $label = 'State Types';
+                        } elseif ($selectedCount === 1) {
+                            $label = $filterOptions['state_types'][reset($this->stateTypeFilter)] ?? reset($this->stateTypeFilter);
+                        } else {
+                            $label = $selectedCount . ' State Types';
+                        }
+                    @endphp
                     <x-filament::input.wrapper>
-                        <x-filament::input.select wire:model.live="stateTypeFilter" multiple size="3" style="min-height: 40px; padding: 4px;">
-                            @foreach($filterOptions['state_types'] as $val => $label)
-                                <option value="{{ $val }}">{{ $label }}</option>
-                            @endforeach
-                        </x-filament::input.select>
+                        <button type="button" @click.stop="open = !open" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; min-height: 36px; background: transparent; border: none; outline: none; cursor: pointer;">
+                            <span style="font-size: 0.875rem; color: var(--zbx-table-text);">{{ $label }}</span>
+                            <x-filament::icon icon="heroicon-m-chevron-down" style="width: 1rem; height: 1rem; color: var(--zbx-table-muted);" />
+                        </button>
                     </x-filament::input.wrapper>
+
+                    <div x-show="open" x-transition x-cloak @click.stop class="zbx-dropdown-menu">
+                        @foreach($filterOptions['state_types'] as $val => $typeLabel)
+                            <label class="zbx-dropdown-item">
+                                <input type="checkbox" wire:model.live="stateTypeFilter" value="{{ $val }}" style="border-radius: 0.25rem; border-color: var(--zbx-table-border); background-color: var(--zbx-table-bg); color: var(--primary-600);">
+                                <span style="font-size: 0.875rem;">{{ $typeLabel }}</span>
+                            </label>
+                        @endforeach
+                    </div>
                 </div>
 
                 <div class="zbx-toolbar-select">
