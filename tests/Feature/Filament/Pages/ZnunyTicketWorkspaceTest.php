@@ -163,4 +163,16 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->assertSee('client@example.com')
             ->assertDispatched('open-modal');
     }
+
+    public function test_icon_legend_is_rendered()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        \Livewire\Livewire::actingAs($user)
+            ->test(\App\Filament\Pages\ZnunyTicketWorkspace::class)
+            ->assertSuccessful()
+            ->assertSee('Linked to active Zabbix problem')
+            ->assertSee('Linked to resolved Zabbix problem')
+            ->assertSee('Linked problem warning');
+    }
 }

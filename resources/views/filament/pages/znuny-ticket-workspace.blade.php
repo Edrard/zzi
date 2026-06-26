@@ -59,16 +59,26 @@
 
         /* Table Section */
         .zbx-table-container {
-            background-color: var(--bg-color, #ffffff);
-            border: 1px solid var(--border-color, #e5e7eb);
+            --zbx-table-bg: var(--color-white);
+            --zbx-table-head-bg: var(--gray-50);
+            --zbx-table-border: var(--gray-200);
+            --zbx-table-text: var(--gray-950);
+            --zbx-table-muted: var(--gray-500);
+            --zbx-table-hover: #eaf3ff;
+            background-color: var(--zbx-table-bg);
+            border: 1px solid var(--zbx-table-border);
             border-radius: 12px;
             overflow: hidden;
             box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
             overflow-x: auto;
         }
         :is(.dark) .zbx-table-container {
-            --bg-color: #111827;
-            --border-color: rgba(255, 255, 255, 0.1);
+            --zbx-table-bg: var(--gray-900);
+            --zbx-table-head-bg: #ffffff0d;
+            --zbx-table-border: #ffffff0d;
+            --zbx-table-text: var(--color-white);
+            --zbx-table-muted: var(--gray-400);
+            --zbx-table-hover: #ffffff0d;
         }
 
         .zbx-table {
@@ -79,16 +89,12 @@
         }
 
         .zbx-table th {
-            background-color: #f9fafb;
-            color: #374151;
+            background-color: var(--zbx-table-head-bg);
+            color: var(--zbx-table-text);
             font-weight: 500;
             padding: 5px 10px;
-            border-bottom: 1px solid var(--border-color, #e5e7eb);
+            border-bottom: 1px solid var(--zbx-table-border);
             white-space: nowrap;
-        }
-        :is(.dark) .zbx-table th {
-            background-color: #1f2937;
-            color: #f9fafb;
         }
 
         .zbx-th-button {
@@ -104,8 +110,7 @@
             width: 100%;
             text-align: left;
         }
-        .zbx-th-button:hover { color: #111827; }
-        :is(.dark) .zbx-th-button:hover { color: #ffffff; }
+        .zbx-th-button:hover { color: var(--zbx-table-text); }
 
         .zbx-sort-icon {
             width: 14px;
@@ -114,22 +119,27 @@
         }
         .zbx-sort-icon.active { color: #3b82f6; }
 
-        .zbx-table tbody { border-bottom: 1px solid var(--border-color, #e5e7eb); }
+        .zbx-table tbody { border-bottom: 1px solid var(--zbx-table-border); }
+
+        .zbx-table tbody tr.zbx-problem-row:not(:last-child) > td {
+            border-bottom: 1px solid var(--zbx-table-border);
+        }
 
         .zbx-problem-row td {
             padding: 6px 10px;
-            color: #4b5563;
+            color: var(--zbx-table-text);
         }
         .zbx-problem-row > td { transition: background-color 0.12s ease-in-out; }
-        .zbx-table tbody tr.zbx-problem-row:hover > td { background-color: #eaf3ff !important; }
-        :is(.dark) .zbx-table tbody tr.zbx-problem-row:hover > td { background-color: rgba(59, 130, 246, 0.14) !important; }
-        :is(.dark) .zbx-problem-row td { color: #d1d5db; }
+        .zbx-table tbody tr.zbx-problem-row:hover > td { background-color: var(--zbx-table-hover) !important; }
 
         .zbx-ticket-col {
             font-weight: 600;
-            color: #111827;
+            color: var(--zbx-table-text);
         }
-        :is(.dark) .zbx-ticket-col { color: #f9fafb; }
+
+        .zbx-muted-text {
+            color: var(--zbx-table-muted);
+        }
 
         /* Empty states */
         .zbx-empty-state {
@@ -174,6 +184,27 @@
         :is(.dark) .zbx-icon-resolved { color: #94a3b8; }
         :is(.dark) .zbx-icon-warning { color: #fb923c; }
 
+        .zbx-legend {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.75rem;
+            color: var(--zbx-table-muted);
+            font-size: 0.75rem;
+        }
+
+        .zbx-legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+        }
+
+        .zbx-legend-icon {
+            width: 1rem;
+            height: 1rem;
+            flex-shrink: 0;
+        }
+
     </style>
 
     <div class="zbx-page-stack">
@@ -189,6 +220,23 @@
             $startCount = $total > 0 ? $offset + 1 : 0;
             $endCount = min($offset + $perPage, $total);
         @endphp
+
+        <div class="zbx-legend" aria-label="Ticket Workspace legend" style="margin-bottom: 16px;">
+            <span class="zbx-legend-item">
+                <x-filament::icon icon="heroicon-s-link" class="zbx-legend-icon zbx-icon-active" />
+                <span>Linked to active Zabbix problem</span>
+            </span>
+
+            <span class="zbx-legend-item">
+                <x-filament::icon icon="heroicon-s-link-slash" class="zbx-legend-icon zbx-icon-resolved" />
+                <span>Linked to resolved Zabbix problem</span>
+            </span>
+
+            <span class="zbx-legend-item">
+                <x-filament::icon icon="heroicon-s-exclamation-triangle" class="zbx-legend-icon zbx-icon-warning" />
+                <span>Linked problem warning</span>
+            </span>
+        </div>
 
         <div class="zbx-toolbar">
             <div class="zbx-toolbar-filters">
@@ -369,13 +417,13 @@
                                 <td>
                                     {{ $ticket['Owner'] }}
                                     @if(!empty($ticket['CustomerUserID']))
-                                        <br><span style="font-size: 0.7rem; color: #6b7280;">Cust: {{ $ticket['CustomerUserID'] }}</span>
+                                        <br><span class="zbx-muted-text" style="font-size: 0.7rem;">Cust: {{ $ticket['CustomerUserID'] }}</span>
                                     @endif
                                 </td>
                                 <td>
                                     {{ $ticket['State'] }}
                                     @if(!empty($ticket['StateType']))
-                                        <span style="font-size: 0.7rem; color: #6b7280;">({{ $ticket['StateType'] }})</span>
+                                        <span class="zbx-muted-text" style="font-size: 0.7rem;">({{ $ticket['StateType'] }})</span>
                                     @endif
                                 </td>
                                 <td>
