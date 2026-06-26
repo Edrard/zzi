@@ -19,7 +19,8 @@ class ZabbixTicketsTable
 
         return $table
             ->poll("{$seconds}s")
-            ->recordClasses(fn () => 'text-[13px] [&>td]:px-3 [&>td]:py-2')
+            ->recordClasses(fn () => 'text-[12px] [&>td]:px-2 [&>td]:py-1.5 leading-tight')
+            ->recordAction('viewTicket')
             ->columns([
                 TextColumn::make('zabbix_host_name')
                     ->label('Host')

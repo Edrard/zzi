@@ -59,15 +59,15 @@
 
         /* Table Section */
         .zbx-table-container {
-            background-color: var(--bg-color, #ffffff);
-            border: 1px solid var(--border-color, #e5e7eb);
+            background-color: var(--bg-color, #111827);
+            border: 1px solid var(--border-color, #374151);
             border-radius: 12px;
             overflow: hidden;
             box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
             overflow-x: auto;
         }
         :is(.dark) .zbx-table-container {
-            --bg-color: #111827;
+            --bg-color: #030712;
             --border-color: rgba(255, 255, 255, 0.1);
         }
 
@@ -79,15 +79,15 @@
         }
 
         .zbx-table th {
-            background-color: #f9fafb;
-            color: #374151;
+            background-color: #1f2937;
+            color: #e5e7eb;
             font-weight: 500;
             padding: 5px 10px;
-            border-bottom: 1px solid var(--border-color, #e5e7eb);
+            border-bottom: 1px solid var(--border-color, #374151);
             white-space: nowrap;
         }
         :is(.dark) .zbx-table th {
-            background-color: #1f2937;
+            background-color: #0f172a;
             color: #f9fafb;
         }
 
@@ -104,32 +104,32 @@
             width: 100%;
             text-align: left;
         }
-        .zbx-th-button:hover { color: #111827; }
+        .zbx-th-button:hover { color: #f9fafb; }
         :is(.dark) .zbx-th-button:hover { color: #ffffff; }
 
         .zbx-sort-icon {
             width: 14px;
             height: 14px;
-            color: #9ca3af;
+            color: #6b7280;
         }
-        .zbx-sort-icon.active { color: #3b82f6; }
+        .zbx-sort-icon.active { color: #eab308; } /* Yellow accent for sort instead of blue */
 
-        .zbx-table tbody { border-bottom: 1px solid var(--border-color, #e5e7eb); }
+        .zbx-table tbody { border-bottom: 1px solid var(--border-color, #374151); }
 
         .zbx-problem-row td {
             padding: 6px 10px;
-            color: #4b5563;
+            color: #9ca3af;
         }
         .zbx-problem-row > td { transition: background-color 0.12s ease-in-out; }
-        .zbx-table tbody tr.zbx-problem-row:hover > td { background-color: #eaf3ff !important; }
-        :is(.dark) .zbx-table tbody tr.zbx-problem-row:hover > td { background-color: rgba(59, 130, 246, 0.14) !important; }
-        :is(.dark) .zbx-problem-row td { color: #d1d5db; }
+        .zbx-table tbody tr.zbx-problem-row:hover > td { background-color: #1f2937 !important; }
+        :is(.dark) .zbx-table tbody tr.zbx-problem-row:hover > td { background-color: #1e293b !important; }
+        :is(.dark) .zbx-problem-row td { color: #cbd5e1; }
 
         .zbx-ticket-col {
             font-weight: 600;
-            color: #111827;
+            color: #f3f4f6;
         }
-        :is(.dark) .zbx-ticket-col { color: #f9fafb; }
+        :is(.dark) .zbx-ticket-col { color: #f8fafc; }
 
         /* Empty states */
         .zbx-empty-state {
@@ -212,14 +212,40 @@
                     </x-filament::input.wrapper>
                 </div>
 
-                <div class="zbx-toolbar-select">
-                    <x-filament::input.wrapper>
-                        <x-filament::input.select wire:model.live="stateTypeFilter" multiple size="3" style="min-height: 40px; padding: 4px;">
-                            @foreach($filterOptions['state_types'] as $val => $label)
-                                <option value="{{ $val }}">{{ $label }}</option>
-                            @endforeach
-                        </x-filament::input.select>
-                    </x-filament::input.wrapper>
+                <div class="zbx-toolbar-select" style="min-width: 140px;">
+                    <div x-data="{ open: false }" class="relative">
+                        <x-filament::button color="gray" icon="heroicon-m-chevron-down" icon-position="after" @click="open = !open" @click.away="open = false" style="width: 100%; justify-content: space-between;">
+                            State ({{ count($stateTypeFilter) }})
+                        </x-filament::button>
+                        <div x-show="open" style="display: none;" class="absolute z-10 mt-1 w-56 bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                            <div class="max-h-60 overflow-y-auto p-2 flex flex-col gap-1">
+                                @foreach($filterOptions['state_types'] as $val => $label)
+                                    <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 rounded cursor-pointer">
+                                        <input type="checkbox" wire:model.live="stateTypeFilter" value="{{ $val }}" class="rounded border-gray-300 dark:border-gray-600 text-primary-600 shadow-sm">
+                                        <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ $label }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="zbx-toolbar-select" style="min-width: 140px;">
+                    <div x-data="{ open: false }" class="relative">
+                        <x-filament::button color="gray" icon="heroicon-m-chevron-down" icon-position="after" @click="open = !open" @click.away="open = false" style="width: 100%; justify-content: space-between;">
+                            Priority ({{ count($priorityFilter ?? []) }})
+                        </x-filament::button>
+                        <div x-show="open" style="display: none;" class="absolute z-10 mt-1 w-56 bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                            <div class="max-h-60 overflow-y-auto p-2 flex flex-col gap-1">
+                                @foreach($filterOptions['priorities'] ?? ['1 very low' => '1 very low', '2 low' => '2 low', '3 normal' => '3 normal', '4 high' => '4 high', '5 very high' => '5 very high'] as $val => $label)
+                                    <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 rounded cursor-pointer">
+                                        <input type="checkbox" wire:model.live="priorityFilter" value="{{ $val }}" class="rounded border-gray-300 dark:border-gray-600 text-primary-600 shadow-sm">
+                                        <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ $label }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="zbx-toolbar-select">
@@ -248,6 +274,9 @@
             <div class="zbx-toolbar-count" style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
                 <span>Showing {{ $startCount }}-{{ $endCount }} of {{ $total }} tickets</span>
                 <div style="display: flex; align-items: center; gap: 8px;">
+                    <x-filament::button color="gray" icon="heroicon-o-arrow-path" wire:click="$refresh" size="sm" style="padding: 4px 8px; height: auto; min-height: unset;">
+                        Refresh
+                    </x-filament::button>
                     <span>Per page:</span>
                     <x-filament::input.wrapper style="width: auto;">
                         <x-filament::input.select wire:model.live="perPage">
@@ -403,8 +432,24 @@
 
             @if($total > 0)
                 <div style="padding: 16px; border-top: 1px solid var(--border-color, #e5e7eb); display: flex; justify-content: space-between; align-items: center; font-size: 0.875rem;">
-                    <div style="color: #6b7280;">
-                        Showing {{ $startCount }} to {{ $endCount }} of {{ $total }} results
+                    <div style="display: flex; align-items: center; gap: 24px;">
+                        <div style="color: #6b7280;">
+                            Showing {{ $startCount }} to {{ $endCount }} of {{ $total }} results
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 12px; color: #6b7280; font-size: 0.8125rem;">
+                            <div style="display: flex; align-items: center; gap: 4px;">
+                                <x-filament::icon icon="heroicon-s-link" class="zbx-link-icon zbx-icon-active" style="width: 14px; height: 14px;" />
+                                Active Problem
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 4px;">
+                                <x-filament::icon icon="heroicon-o-link" class="zbx-link-icon zbx-icon-resolved" style="width: 14px; height: 14px;" />
+                                Resolved Problem
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 4px;">
+                                <x-filament::icon icon="heroicon-s-exclamation-triangle" class="zbx-link-icon zbx-icon-warning" style="width: 14px; height: 14px;" />
+                                Sync Warning
+                            </div>
+                        </div>
                     </div>
                     <div style="display: flex; gap: 8px;">
                         <x-filament::button
@@ -427,92 +472,4 @@
             @endif
         </div>
     </div>
-
-    <x-filament::modal id="ticket-details-modal" width="2xl">
-        <x-slot name="heading">
-            Ticket Details
-        </x-slot>
-
-        <div>
-            @if($selectedTicket)
-                <div style="display: flex; flex-direction: column; gap: 16px;">
-                    <div>
-                        <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Ticket Number</strong>
-                        <div style="font-weight: 500;">{{ $selectedTicket['TicketNumber'] ?? '-' }}</div>
-                    </div>
-                    <div>
-                        <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Title</strong>
-                        <div>{{ $selectedTicket['Title'] ?? '-' }}</div>
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                        <div>
-                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Queue</strong>
-                            <div>{{ $selectedTicket['Queue'] ?? '-' }}</div>
-                        </div>
-                        <div>
-                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Owner</strong>
-                            <div>{{ $selectedTicket['Owner'] ?? '-' }}</div>
-                        </div>
-                        <div>
-                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Customer User</strong>
-                            <div>{{ $selectedTicket['CustomerUserID'] ?: '-' }}</div>
-                        </div>
-                        <div>
-                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">State / Type</strong>
-                            <div>
-                                <span>{{ $selectedTicket['State'] ?? '-' }}</span>
-                                @if(!empty($selectedTicket['StateType']))
-                                    <span style="color: #6b7280; font-size: 0.875rem;">({{ $selectedTicket['StateType'] }})</span>
-                                @endif
-                            </div>
-                        </div>
-                        <div>
-                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Priority</strong>
-                            <div>{{ $selectedTicket['Priority'] ?? '-' }}</div>
-                        </div>
-                        <div>
-                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Type</strong>
-                            <div>{{ $selectedTicket['Type'] ?: '-' }}</div>
-                        </div>
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; border-top: 1px solid var(--border-color, #e5e7eb); padding-top: 16px;">
-                        <div>
-                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Created</strong>
-                            <div>{{ $selectedTicket['Created'] ?? '-' }}</div>
-                        </div>
-                        <div>
-                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Changed</strong>
-                            <div>{{ $selectedTicket['Changed'] ?? '-' }}</div>
-                        </div>
-                        <div>
-                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Article Count</strong>
-                            <div>{{ $selectedTicket['ArticleCount'] ?? '-' }}</div>
-                        </div>
-                        <div>
-                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Last Article</strong>
-                            <div>{{ $selectedTicket['LastArticleCreated'] ?: '-' }}</div>
-                        </div>
-                    </div>
-
-                    @if(!empty($selectedTicket['is_linked_to_zabbix_problem']))
-                        <div style="margin-top: 16px; padding: 12px; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px;">
-                            <strong style="display: block; font-size: 0.875rem; color: #0369a1; margin-bottom: 8px;">Linked Zabbix Problem</strong>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.875rem;">
-                                <div><span style="color: #6b7280;">Host:</span> <span>{{ $selectedTicket['linked_problem_host'] ?? 'Unknown' }}</span></div>
-                                <div>
-                                    <span style="color: #6b7280;">State:</span>
-                                    <span style="{{ !empty($selectedTicket['linked_problem_is_active']) ? 'color: #ea580c; font-weight: 500;' : 'color: #059669;' }}">
-                                        {{ !empty($selectedTicket['linked_problem_is_active']) ? 'Active' : 'Resolved' }}
-                                    </span>
-                                </div>
-                                <div style="grid-column: span 2;"><span style="color: #6b7280;">Problem:</span> <span>{{ $selectedTicket['linked_problem_summary'] ?? 'Unknown' }}</span></div>
-                                <div><span style="color: #6b7280;">Event ID:</span> <span>{{ $selectedTicket['linked_problem_event_id'] ?? '-' }}</span></div>
-                                <div><span style="color: #6b7280;">Age:</span> <span>{{ $selectedTicket['linked_problem_age_label'] ?? 'N/A' }}</span></div>
-                            </div>
-                        </div>
-                    @endif
-                </div>
-            @endif
-        </div>
-    </x-filament::modal>
 </x-filament-panels::page>
