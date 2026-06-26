@@ -4,6 +4,7 @@ namespace Tests\Feature\Filament\Pages;
 
 use App\Filament\Pages\ZnunyTicketWorkspace;
 use App\Models\User;
+use App\Services\Znuny\ZnunyTicketCacheService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Redis;
@@ -20,6 +21,31 @@ class ZnunyTicketWorkspaceTest extends TestCase
         Redis::flushall();
     }
 
+    protected function seedTicket(array $ticketOverrides): void
+    {
+        $ticket = array_merge([
+            'TicketID' => 1,
+            'TicketNumber' => '100000000',
+            'Title' => 'Default',
+            'QueueID' => 1,
+            'Queue' => 'Raw',
+            'OwnerID' => 1,
+            'Owner' => 'Admin',
+            'StateID' => 1,
+            'State' => 'new',
+            'StateType' => 'new',
+            'PriorityID' => 1,
+            'Priority' => '3 normal',
+            'TypeID' => 1,
+            'Type' => 'Unclassified',
+            'Changed' => now()->toDateTimeString(),
+            'Created' => now()->subDay()->toDateTimeString(),
+            'ArticleCount' => 1,
+        ], $ticketOverrides);
+
+        app(ZnunyTicketCacheService::class)->upsertOrRefreshFromSearchResult($ticket);
+    }
+
     public function test_it_renders_without_calling_znuny_api()
     {
         $user = User::factory()->create(['role' => 'operator']);
@@ -29,8 +55,7 @@ class ZnunyTicketWorkspaceTest extends TestCase
             '*' => Http::response('Should not be called', 500),
         ]);
 
-        $ticket1 = ['TicketID' => 101, 'TicketNumber' => 'TN101', 'Title' => 'Test Ticket', 'StateType' => 'open'];
-        Redis::set('znuny:ticket:101', json_encode($ticket1));
+        $this->seedTicket(['TicketID' => 101, 'TicketNumber' => 'TN101', 'Title' => 'Test Ticket', 'StateType' => 'open']);
 
         Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
@@ -48,6 +73,7 @@ class ZnunyTicketWorkspaceTest extends TestCase
         Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
             ->assertSuccessful()
+            ->set('stateTypeFilter', [])
             ->assertSee('Ticket cache is empty')
             ->assertSee('Run the Ticket Workspace cache warmer');
     }
@@ -56,19 +82,17 @@ class ZnunyTicketWorkspaceTest extends TestCase
     {
         $user = User::factory()->create(['role' => 'operator']);
 
-        $ticket1 = ['TicketID' => 101, 'TicketNumber' => 'TN101', 'Title' => 'Apple issue', 'StateType' => 'new'];
-        $ticket2 = ['TicketID' => 102, 'TicketNumber' => 'TN102', 'Title' => 'Banana issue', 'StateType' => 'closed'];
-
-        Redis::set('znuny:ticket:101', json_encode($ticket1));
-        Redis::set('znuny:ticket:102', json_encode($ticket2));
+        $this->seedTicket(['TicketID' => 101, 'TicketNumber' => 'TN101', 'Title' => 'Apple issue', 'StateType' => 'new']);
+        $this->seedTicket(['TicketID' => 102, 'TicketNumber' => 'TN102', 'Title' => 'Banana issue', 'StateType' => 'closed']);
 
         Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['new', 'closed'])
             ->set('search', 'Apple')
             ->assertSee('TN101')
             ->assertDontSee('TN102')
             ->set('search', '')
-            ->set('stateTypeFilter', 'closed')
+            ->set('stateTypeFilter', ['closed'])
             ->assertSee('TN102')
             ->assertDontSee('TN101');
     }
@@ -77,15 +101,66 @@ class ZnunyTicketWorkspaceTest extends TestCase
     {
         $user = User::factory()->create(['role' => 'operator']);
 
-        $ticket1 = ['TicketID' => 101, 'TicketNumber' => 'TN101', 'Title' => 'A Ticket', 'Changed' => '2023-01-01 10:00:00'];
-        $ticket2 = ['TicketID' => 102, 'TicketNumber' => 'TN102', 'Title' => 'Z Ticket', 'Changed' => '2023-01-02 10:00:00'];
-
-        Redis::set('znuny:ticket:101', json_encode($ticket1));
-        Redis::set('znuny:ticket:102', json_encode($ticket2));
+        $this->seedTicket(['TicketID' => 101, 'TicketNumber' => 'TN101', 'Title' => 'A Ticket', 'Changed' => '2023-01-01 10:00:00', 'StateType' => 'new']);
+        $this->seedTicket(['TicketID' => 102, 'TicketNumber' => 'TN102', 'Title' => 'Z Ticket', 'Changed' => '2023-01-02 10:00:00', 'StateType' => 'new']);
 
         Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['new'])
             ->call('sortBy', 'Title')
             ->assertSeeInOrder(['Z Ticket', 'A Ticket']);
+    }
+
+    public function test_it_paginates_and_limits_per_page()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        for ($i = 1; $i <= 10; $i++) {
+            $this->seedTicket(['TicketID' => 100 + $i, 'TicketNumber' => 'TN'.(100 + $i), 'Title' => 'Ticket '.$i, 'StateType' => 'new']);
+        }
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['new'])
+            ->set('perPage', 5)
+            ->assertSee('TN110')
+            ->assertDontSee('TN101') // on page 2
+            ->set('page', 2)
+            ->assertDontSee('TN110')
+            ->assertSee('TN101');
+    }
+
+    public function test_queue_and_owner_filters_work()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $this->seedTicket(['TicketID' => 101, 'TicketNumber' => 'TN101', 'Title' => 'Q10_O20', 'QueueID' => 10, 'OwnerID' => 20, 'StateType' => 'new']);
+        $this->seedTicket(['TicketID' => 102, 'TicketNumber' => 'TN102', 'Title' => 'Q11_O21', 'QueueID' => 11, 'OwnerID' => 21, 'StateType' => 'new']);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['new'])
+            ->set('queueFilter', 10)
+            ->assertSee('TN101')
+            ->assertDontSee('TN102')
+            ->set('queueFilter', null)
+            ->set('ownerFilter', 21)
+            ->assertSee('TN102')
+            ->assertDontSee('TN101');
+    }
+
+    public function test_clicking_row_opens_details_modal_with_cached_data()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $this->seedTicket(['TicketID' => 101, 'TicketNumber' => 'TN101', 'Title' => 'Test Details', 'StateType' => 'new', 'CustomerUserID' => 'client@example.com']);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['new'])
+            ->call('openTicketDetails', 101)
+            ->assertSet('selectedTicketId', 101)
+            ->assertSee('client@example.com')
+            ->assertDispatched('open-modal');
     }
 }

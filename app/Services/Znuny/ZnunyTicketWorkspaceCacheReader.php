@@ -3,9 +3,8 @@
 namespace App\Services\Znuny;
 
 use App\Models\ZabbixTicket;
+use App\Services\Zabbix\ZabbixProblemCache;
 use App\Services\Zabbix\ZabbixProblemFormatter;
-use App\Services\Zabbix\ZabbixProblemQueryService;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\Redis;
 
 class ZnunyTicketWorkspaceCacheReader
@@ -15,46 +14,264 @@ class ZnunyTicketWorkspaceCacheReader
      */
     public function getTickets(array $filters = []): array
     {
+        $result = $this->getTicketsPaginated($filters, 1, 99999);
+
+        return $result['rows'] ?? [];
+    }
+
+    public function getTicketsPaginated(
+        array $filters = [],
+        int $page = 1,
+        int $perPage = 50,
+        string $sortField = 'Changed',
+        string $sortDirection = 'desc'
+    ): array {
         $redis = Redis::connection();
-        $keys = $redis->keys('znuny:ticket:*');
+        $stIds = null;
 
-        if (empty($keys)) {
-            return [];
+        // 1. Base candidate set from StateType
+        $stateTypes = $filters['state_types'] ?? null;
+        if (is_array($stateTypes) && ! empty($stateTypes)) {
+            $stIds = [];
+            foreach ($stateTypes as $st) {
+                if (empty($st)) {
+                    continue;
+                }
+                $ids = $redis->zrange('znuny:index:statetype:'.strtolower($st), 0, -1);
+                $stIds = array_merge($stIds, $ids);
+            }
+            $stIds = array_unique($stIds);
+        } else {
+            $keys = $redis->keys('znuny:ticket:*');
+            $prefix = config('database.redis.options.prefix', '');
+            try {
+                if (empty($prefix) && method_exists($redis->client(), 'getOption')) {
+                    $prefix = $redis->client()->getOption(\Redis::OPT_PREFIX) ?: '';
+                }
+            } catch (\Throwable $e) {
+            }
+
+            $stIds = [];
+            foreach ($keys as $k) {
+                $unprefixed = ($prefix !== '' && str_starts_with($k, $prefix)) ? substr($k, strlen($prefix)) : $k;
+                $stIds[] = str_replace('znuny:ticket:', '', $unprefixed);
+            }
         }
 
-        $prefix = config('database.redis.options.prefix', '');
-        try {
-            if (empty($prefix) && method_exists($redis->client(), 'getOption')) {
-                $prefix = $redis->client()->getOption(\Redis::OPT_PREFIX) ?: '';
+        // 2. Build options from candidate state type set (limit to 1000 to avoid 20k mget)
+        $optionIds = array_slice($stIds, 0, 1000);
+        $optionKeys = array_map(fn ($id) => "znuny:ticket:{$id}", $optionIds);
+        $optionTickets = [];
+        if (! empty($optionKeys)) {
+            $payloads = $redis->mget($optionKeys);
+            foreach ($payloads as $p) {
+                if ($p) {
+                    $t = json_decode($p, true);
+                    if (is_array($t)) {
+                        $optionTickets[] = $t;
+                    }
+                }
             }
-        } catch (\Throwable $e) {
-            // Ignore
+        }
+        $filterOptions = $this->extractFilterOptions($optionTickets);
+
+        // 3. Apply Queue & Owner index intersections
+        $filteredIds = $stIds;
+        if (! empty($filters['queue'])) {
+            $qIds = $redis->zrange("znuny:index:queue:{$filters['queue']}", 0, -1);
+            $filteredIds = array_intersect($filteredIds, $qIds);
+        }
+        if (! empty($filters['owner'])) {
+            $oIds = $redis->zrange("znuny:index:owner:{$filters['owner']}", 0, -1);
+            $filteredIds = array_intersect($filteredIds, $oIds);
         }
 
-        $unprefixedKeys = array_map(function ($key) use ($prefix) {
-            if ($prefix !== '' && str_starts_with($key, $prefix)) {
-                return substr($key, strlen($prefix));
+        // 4. Decide if we can paginate before mget
+        $hasTextSearch = ! empty($filters['search']);
+        $hasLinkFilter = ! empty($filters['link_status']) && $filters['link_status'] !== 'all';
+        $needsPostFetchFilter = $hasTextSearch || $hasLinkFilter;
+
+        $total = count($filteredIds);
+        $fetchIds = array_values($filteredIds);
+
+        if (! $needsPostFetchFilter) {
+            $lastPage = max(1, (int) ceil($total / $perPage));
+            if ($page > $lastPage) {
+                $page = 1;
+            }
+            $offset = ($page - 1) * $perPage;
+
+            // Approximate sort by ID since we lack payload
+            if (strtolower($sortDirection) === 'desc') {
+                rsort($fetchIds);
+            } else {
+                sort($fetchIds);
             }
 
-            return $key;
-        }, $keys);
+            $fetchIds = array_slice($fetchIds, $offset, $perPage);
+        }
 
-        $payloads = $redis->mget($unprefixedKeys);
-
+        // 5. Fetch payload
         $tickets = [];
-        foreach ($payloads as $payload) {
-            if ($payload) {
-                $ticket = json_decode($payload, true);
-                if (is_array($ticket) && isset($ticket['TicketID'])) {
-                    $tickets[] = $this->normalizeTicket($ticket);
+        $unprefixedKeys = array_map(fn ($id) => "znuny:ticket:{$id}", $fetchIds);
+        if (! empty($unprefixedKeys)) {
+            // TODO: Guard for huge sets if text search over closed tickets is needed in future
+            if ($needsPostFetchFilter && count($unprefixedKeys) > 5000) {
+                $unprefixedKeys = array_slice($unprefixedKeys, 0, 5000);
+            }
+
+            $payloads = $redis->mget($unprefixedKeys);
+            foreach ($payloads as $payload) {
+                if ($payload) {
+                    $ticket = json_decode($payload, true);
+                    if (is_array($ticket) && isset($ticket['TicketID'])) {
+                        $tickets[] = $this->normalizeTicket($ticket);
+                    }
                 }
             }
         }
 
         $tickets = $this->enrichWithZabbixLinks($tickets);
-        $tickets = $this->applyFilters($tickets, $filters);
 
-        return $tickets;
+        if ($needsPostFetchFilter) {
+            $tickets = $this->applyFilters($tickets, $filters);
+            $total = count($tickets);
+        }
+
+        usort($tickets, function ($a, $b) use ($sortField, $sortDirection) {
+            $valA = $a[$sortField] ?? null;
+            $valB = $b[$sortField] ?? null;
+            if ($valA === $valB) {
+                return 0;
+            }
+            $cmp = $valA <=> $valB;
+
+            return strtolower($sortDirection) === 'asc' ? $cmp : -$cmp;
+        });
+
+        if ($needsPostFetchFilter) {
+            $lastPage = max(1, (int) ceil($total / $perPage));
+            if ($page > $lastPage) {
+                $page = 1;
+            }
+            $offset = ($page - 1) * $perPage;
+            $rows = array_slice($tickets, $offset, $perPage);
+        } else {
+            $lastPage = max(1, (int) ceil($total / $perPage));
+            $rows = $tickets;
+        }
+
+        return [
+            'rows' => $rows,
+            'total' => $total,
+            'page' => $page,
+            'per_page' => $perPage,
+            'last_page' => $lastPage,
+            'filter_options' => $filterOptions,
+        ];
+    }
+
+    protected function extractFilterOptions(array $tickets): array
+    {
+        $queues = [];
+        $owners = [];
+
+        foreach ($tickets as $ticket) {
+            if (! empty($ticket['QueueID'])) {
+                $queues[$ticket['QueueID']] = $ticket['Queue'] ?? ('Queue '.$ticket['QueueID']);
+            }
+            if (! empty($ticket['OwnerID'])) {
+                $owners[$ticket['OwnerID']] = $ticket['Owner'] ?? ('Owner '.$ticket['OwnerID']);
+            }
+        }
+
+        asort($queues);
+        asort($owners);
+
+        return [
+            'queues' => $queues,
+            'owners' => $owners,
+            'link_status' => [
+                'all' => 'All tickets',
+                'linked' => 'Linked to Zabbix problem',
+                'linked_active' => 'Linked to active problem',
+                'linked_resolved' => 'Linked to resolved/recovered problem',
+                'unlinked' => 'Unlinked tickets',
+            ],
+            'state_types' => [
+                'new' => 'New',
+                'open' => 'Open',
+                'pending reminder' => 'Pending Reminder',
+                'pending auto' => 'Pending Auto',
+                'closed' => 'Closed',
+                'merged' => 'Merged',
+            ],
+        ];
+    }
+
+    protected function applyFilters(array $tickets, array $filters): array
+    {
+        $filtered = [];
+        $search = strtolower($filters['search'] ?? '');
+        $linkFilter = $filters['link_status'] ?? 'all';
+        $stateTypes = $filters['state_types'] ?? null;
+        $queue = $filters['queue'] ?? null;
+        $owner = $filters['owner'] ?? null;
+
+        foreach ($tickets as $ticket) {
+            if ($search !== '') {
+                $match = false;
+                if (str_contains(strtolower($ticket['TicketNumber'] ?? ''), $search)) {
+                    $match = true;
+                }
+                if (str_contains(strtolower($ticket['Title'] ?? ''), $search)) {
+                    $match = true;
+                }
+                if (str_contains(strtolower($ticket['CustomerUserID'] ?? ''), $search)) {
+                    $match = true;
+                }
+                if (! $match) {
+                    continue;
+                }
+            }
+
+            if ($linkFilter === 'linked' && ! $ticket['is_linked_to_zabbix_problem']) {
+                continue;
+            }
+            if ($linkFilter === 'unlinked' && $ticket['is_linked_to_zabbix_problem']) {
+                continue;
+            }
+            if ($linkFilter === 'linked_active' && ! $ticket['linked_problem_is_active']) {
+                continue;
+            }
+            if ($linkFilter === 'linked_resolved' && ! $ticket['linked_problem_is_resolved']) {
+                continue;
+            }
+
+            if (is_array($stateTypes) && ! empty($stateTypes)) {
+                $matchesState = false;
+                foreach ($stateTypes as $st) {
+                    if (strtolower($ticket['StateType'] ?? '') === strtolower($st)) {
+                        $matchesState = true;
+                        break;
+                    }
+                }
+                if (! $matchesState) {
+                    continue;
+                }
+            }
+
+            if ($queue && (string) ($ticket['QueueID'] ?? '') !== (string) $queue) {
+                continue;
+            }
+            if ($owner && (string) ($ticket['OwnerID'] ?? '') !== (string) $owner) {
+                continue;
+            }
+
+            $filtered[] = $ticket;
+        }
+
+        return $filtered;
     }
 
     protected function normalizeTicket(array $ticket): array
@@ -80,9 +297,10 @@ class ZnunyTicketWorkspaceCacheReader
             'ArticleCount' => $ticket['ArticleCount'] ?? 0,
             'LastArticleCreated' => $ticket['LastArticleCreated'] ?? null,
             'SyncFingerprint' => $ticket['SyncFingerprint'] ?? null,
-            // enrichment defaults
+
             'is_linked_to_zabbix_problem' => false,
             'linked_problem_status' => null,
+            'linked_problem_event_id' => null,
             'linked_problem_is_active' => false,
             'linked_problem_is_resolved' => false,
             'linked_problem_has_warning' => false,
@@ -95,110 +313,56 @@ class ZnunyTicketWorkspaceCacheReader
 
     protected function enrichWithZabbixLinks(array $tickets): array
     {
-        $ticketIds = array_filter(array_column($tickets, 'TicketID'));
-        if (empty($ticketIds)) {
+        if (empty($tickets)) {
+            return [];
+        }
+
+        $ticketIds = array_column($tickets, 'TicketID');
+        $links = ZabbixTicket::whereIn('znuny_ticket_id', $ticketIds)
+            ->get()
+            ->keyBy('znuny_ticket_id');
+
+        if ($links->isEmpty()) {
             return $tickets;
         }
 
-        $links = ZabbixTicket::whereIn('znuny_ticket_id', $ticketIds)->get()->keyBy('znuny_ticket_id');
+        $cache = app(ZabbixProblemCache::class);
+        $formatter = app(ZabbixProblemFormatter::class);
 
-        // Optional: fetch active problems from ZabbixProblemCache to enrich problem details if needed
-        // For Phase 1, we rely mostly on what ZabbixTicket gives us, or ZabbixProblemQueryService.
-        // Actually, ZabbixTicket has manual_lifecycle_status which we can use for icons.
-
-        $activeProblems = [];
-        try {
-            $problemQueryService = app(ZabbixProblemQueryService::class);
-            $activeProblemsResult = $problemQueryService->query('', 'age', 'asc');
-            $activeProblems = collect($activeProblemsResult['problems'])->keyBy('eventid')->toArray();
-        } catch (\Throwable $e) {
-        }
-
-        foreach ($tickets as &$ticket) {
-            $link = $links[$ticket['TicketID']] ?? null;
-            if ($link) {
-                $ticket['is_linked_to_zabbix_problem'] = true;
-                $ticket['linked_problem_status'] = $link->manual_lifecycle_status;
-
-                $eventId = $link->zabbix_event_id;
-                $problem = $activeProblems[$eventId] ?? null;
-
-                if ($problem) {
-                    $ticket['linked_problem_is_active'] = true;
-                    $ticket['linked_problem_summary'] = $problem['name'] ?? null;
-                    $ticket['linked_problem_host'] = $problem['hosts'][0]['host'] ?? $problem['host_name'] ?? null;
-                    $ticket['linked_problem_severity'] = $problem['severity'] ?? null;
-
-                    if (isset($problem['clock'])) {
-                        $ageSeconds = Carbon::parse($problem['clock'])->diffInSeconds(now());
-                        $ticket['linked_problem_age_label'] = app(ZabbixProblemFormatter::class)->formatAge($ageSeconds);
-                    }
-                } else {
-                    $ticket['linked_problem_is_resolved'] = true;
-                }
-
-                // Suspicious state warning (e.g. ticket is closed but problem is active)
-                $isClosed = in_array(strtolower($ticket['StateType'] ?? ''), ['closed', 'merged'], true);
-                if ($isClosed && $ticket['linked_problem_is_active']) {
-                    $ticket['linked_problem_has_warning'] = true;
-                }
-            }
-        }
-
-        return $tickets;
-    }
-
-    protected function applyFilters(array $tickets, array $filters): array
-    {
-        $filtered = [];
-
-        $search = strtolower($filters['search'] ?? '');
-        $linkFilter = $filters['link_status'] ?? 'all';
-        $stateType = $filters['state_type'] ?? null;
-
-        foreach ($tickets as $ticket) {
-            if ($search !== '') {
-                $match = false;
-                if (str_contains(strtolower($ticket['TicketNumber'] ?? ''), $search)) {
-                    $match = true;
-                }
-                if (str_contains(strtolower($ticket['Title'] ?? ''), $search)) {
-                    $match = true;
-                }
-                if (str_contains(strtolower($ticket['CustomerUserID'] ?? ''), $search)) {
-                    $match = true;
-                }
-
-                if (! $match) {
-                    continue;
-                }
-            }
-
-            if ($linkFilter === 'linked') {
-                if (! $ticket['is_linked_to_zabbix_problem']) {
-                    continue;
-                }
-            } elseif ($linkFilter === 'unlinked') {
-                if ($ticket['is_linked_to_zabbix_problem']) {
-                    continue;
-                }
-            } elseif ($linkFilter === 'linked_active') {
-                if (! $ticket['linked_problem_is_active']) {
-                    continue;
-                }
-            } elseif ($linkFilter === 'linked_resolved') {
-                if (! $ticket['linked_problem_is_resolved']) {
-                    continue;
-                }
-            }
-
-            if ($stateType && strtolower($ticket['StateType'] ?? '') !== strtolower($stateType)) {
+        foreach ($tickets as &$t) {
+            $id = $t['TicketID'] ?? null;
+            if (! $id || ! $links->has($id)) {
                 continue;
             }
 
-            $filtered[] = $ticket;
-        }
+            $link = $links->get($id);
+            $t['is_linked_to_zabbix_problem'] = true;
+            $t['linked_problem_status'] = $link->manual_lifecycle_status;
+            $t['linked_problem_event_id'] = $link->zabbix_event_id;
 
-        return $filtered;
+            $eventId = $link->zabbix_event_id;
+            $problem = $eventId ? $cache->find($eventId) : null;
+
+            if ($problem) {
+                $t['linked_problem_is_active'] = true;
+                $t['linked_problem_is_resolved'] = false;
+                $t['linked_problem_has_warning'] = true;
+                $t['linked_problem_summary'] = $problem['name'] ?? null;
+                $t['linked_problem_host'] = $problem['host_name'] ?? null;
+                $t['linked_problem_severity'] = $problem['severity'] ?? null;
+
+                $ageSecs = $formatter->getProblemAgeSeconds($problem);
+                $t['linked_problem_age_label'] = $formatter->formatAge($ageSecs);
+            } else {
+                $t['linked_problem_is_active'] = false;
+                $t['linked_problem_is_resolved'] = true;
+                $t['linked_problem_has_warning'] = false;
+                $t['linked_problem_summary'] = $link->zabbix_problem_name;
+                $t['linked_problem_host'] = $link->zabbix_host_name;
+            }
+        }
+        unset($t);
+
+        return $tickets;
     }
 }

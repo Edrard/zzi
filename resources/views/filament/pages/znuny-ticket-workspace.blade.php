@@ -44,7 +44,7 @@
             flex: 1;
             max-width: 300px;
         }
-        
+
         .zbx-toolbar-select {
             flex: 1;
             max-width: 250px;
@@ -124,7 +124,7 @@
         .zbx-table tbody tr.zbx-problem-row:hover > td { background-color: #eaf3ff !important; }
         :is(.dark) .zbx-table tbody tr.zbx-problem-row:hover > td { background-color: rgba(59, 130, 246, 0.14) !important; }
         :is(.dark) .zbx-problem-row td { color: #d1d5db; }
-        
+
         .zbx-ticket-col {
             font-weight: 600;
             color: #111827;
@@ -154,22 +154,22 @@
             font-size: 0.875rem;
         }
         :is(.dark) .zbx-empty-state p { color: #9ca3af; }
-        
+
         .zbx-link-icon-wrap {
             display: inline-flex;
             align-items: center;
             justify-content: center;
         }
-        
+
         .zbx-link-icon {
             width: 1.1rem;
             height: 1.1rem;
         }
-        
+
         .zbx-icon-active { color: #0284c7; }
         .zbx-icon-resolved { color: #64748b; opacity: 0.7; }
         .zbx-icon-warning { color: #ea580c; }
-        
+
         :is(.dark) .zbx-icon-active { color: #38bdf8; }
         :is(.dark) .zbx-icon-resolved { color: #94a3b8; }
         :is(.dark) .zbx-icon-warning { color: #fb923c; }
@@ -177,11 +177,17 @@
     </style>
 
     <div class="zbx-page-stack">
-
         @php
-            $tickets = $this->tickets();
-            $filterOptions = $this->filterOptions();
-            $count = count($tickets);
+            $data = $this->ticketData();
+            $tickets = $data['rows'];
+            $filterOptions = $data['filter_options'];
+            $total = $data['total'];
+            $page = $data['page'];
+            $perPage = $data['per_page'];
+            $lastPage = $data['last_page'];
+            $offset = ($page - 1) * $perPage;
+            $startCount = $total > 0 ? $offset + 1 : 0;
+            $endCount = min($offset + $perPage, $total);
         @endphp
 
         <div class="zbx-toolbar">
@@ -195,7 +201,7 @@
                         />
                     </x-filament::input.wrapper>
                 </div>
-                
+
                 <div class="zbx-toolbar-select">
                     <x-filament::input.wrapper>
                         <x-filament::input.select wire:model.live="linkFilter">
@@ -205,27 +211,60 @@
                         </x-filament::input.select>
                     </x-filament::input.wrapper>
                 </div>
-                
+
                 <div class="zbx-toolbar-select">
                     <x-filament::input.wrapper>
-                        <x-filament::input.select wire:model.live="stateTypeFilter">
+                        <x-filament::input.select wire:model.live="stateTypeFilter" multiple size="3" style="min-height: 40px; padding: 4px;">
                             @foreach($filterOptions['state_types'] as $val => $label)
                                 <option value="{{ $val }}">{{ $label }}</option>
                             @endforeach
                         </x-filament::input.select>
                     </x-filament::input.wrapper>
                 </div>
+
+                <div class="zbx-toolbar-select">
+                    <x-filament::input.wrapper>
+                        <x-filament::input.select wire:model.live="queueFilter">
+                            <option value="">Any Queue</option>
+                            @foreach($filterOptions['queues'] as $val => $label)
+                                <option value="{{ $val }}">{{ $label }}</option>
+                            @endforeach
+                        </x-filament::input.select>
+                    </x-filament::input.wrapper>
+                </div>
+
+                <div class="zbx-toolbar-select">
+                    <x-filament::input.wrapper>
+                        <x-filament::input.select wire:model.live="ownerFilter">
+                            <option value="">Any Owner</option>
+                            @foreach($filterOptions['owners'] as $val => $label)
+                                <option value="{{ $val }}">{{ $label }}</option>
+                            @endforeach
+                        </x-filament::input.select>
+                    </x-filament::input.wrapper>
+                </div>
             </div>
-            
-            <div class="zbx-toolbar-count">
-                Showing {{ $count }} tickets
+
+            <div class="zbx-toolbar-count" style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+                <span>Showing {{ $startCount }}-{{ $endCount }} of {{ $total }} tickets</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span>Per page:</span>
+                    <x-filament::input.wrapper style="width: auto;">
+                        <x-filament::input.select wire:model.live="perPage">
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                            <option value="250">250</option>
+                        </x-filament::input.select>
+                    </x-filament::input.wrapper>
+                </div>
             </div>
         </div>
 
         <div class="zbx-table-container">
             @if(empty($tickets))
                 <div class="zbx-empty-state">
-                    @if(empty($this->search) && $this->linkFilter === 'all' && empty($this->stateTypeFilter))
+                    @if(empty($this->search) && $this->linkFilter === 'all' && empty($this->stateTypeFilter) && empty($this->queueFilter) && empty($this->ownerFilter))
                         <x-filament::icon icon="heroicon-o-inbox" class="zbx-empty-icon" />
                         <h3>Ticket cache is empty</h3>
                         <p>Run the Ticket Workspace cache warmer.</p>
@@ -303,10 +342,10 @@
                     </thead>
                     <tbody>
                         @foreach($tickets as $ticket)
-                            <tr class="zbx-problem-row">
+                            <tr class="zbx-problem-row" style="cursor: pointer;" wire:click="openTicketDetails({{ $ticket['TicketID'] }})">
                                 <td style="text-align: center;">
                                     @if($ticket['is_linked_to_zabbix_problem'])
-                                        <div class="zbx-link-icon-wrap" 
+                                        <div class="zbx-link-icon-wrap"
                                              title="Host: {{ $ticket['linked_problem_host'] ?? 'Unknown' }}&#10;Problem: {{ $ticket['linked_problem_summary'] ?? 'Unknown' }}&#10;State: {{ $ticket['linked_problem_is_active'] ? 'Active' : 'Resolved' }}&#10;Age: {{ $ticket['linked_problem_age_label'] ?? 'N/A' }}">
                                             @if($ticket['linked_problem_has_warning'])
                                                 <x-filament::icon icon="heroicon-s-exclamation-triangle" class="zbx-link-icon zbx-icon-warning" />
@@ -334,7 +373,7 @@
                                     @endif
                                 </td>
                                 <td>
-                                    {{ $ticket['State'] }} 
+                                    {{ $ticket['State'] }}
                                     @if(!empty($ticket['StateType']))
                                         <span style="font-size: 0.7rem; color: #6b7280;">({{ $ticket['StateType'] }})</span>
                                     @endif
@@ -361,6 +400,119 @@
                     </tbody>
                 </table>
             @endif
+
+            @if($total > 0)
+                <div style="padding: 16px; border-top: 1px solid var(--border-color, #e5e7eb); display: flex; justify-content: space-between; align-items: center; font-size: 0.875rem;">
+                    <div style="color: #6b7280;">
+                        Showing {{ $startCount }} to {{ $endCount }} of {{ $total }} results
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <x-filament::button
+                            color="gray"
+                            wire:click="setPage({{ max($page - 1, 1) }})"
+                            :disabled="$page <= 1"
+                        >
+                            Previous
+                        </x-filament::button>
+
+                        <x-filament::button
+                            color="gray"
+                            wire:click="setPage({{ min($page + 1, $lastPage) }})"
+                            :disabled="$page >= $lastPage"
+                        >
+                            Next
+                        </x-filament::button>
+                    </div>
+                </div>
+            @endif
         </div>
     </div>
+
+    <x-filament::modal id="ticket-details-modal" width="2xl">
+        <x-slot name="heading">
+            Ticket Details
+        </x-slot>
+
+        <div>
+            @if($selectedTicket)
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    <div>
+                        <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Ticket Number</strong>
+                        <div style="font-weight: 500;">{{ $selectedTicket['TicketNumber'] ?? '-' }}</div>
+                    </div>
+                    <div>
+                        <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Title</strong>
+                        <div>{{ $selectedTicket['Title'] ?? '-' }}</div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div>
+                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Queue</strong>
+                            <div>{{ $selectedTicket['Queue'] ?? '-' }}</div>
+                        </div>
+                        <div>
+                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Owner</strong>
+                            <div>{{ $selectedTicket['Owner'] ?? '-' }}</div>
+                        </div>
+                        <div>
+                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Customer User</strong>
+                            <div>{{ $selectedTicket['CustomerUserID'] ?: '-' }}</div>
+                        </div>
+                        <div>
+                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">State / Type</strong>
+                            <div>
+                                <span>{{ $selectedTicket['State'] ?? '-' }}</span>
+                                @if(!empty($selectedTicket['StateType']))
+                                    <span style="color: #6b7280; font-size: 0.875rem;">({{ $selectedTicket['StateType'] }})</span>
+                                @endif
+                            </div>
+                        </div>
+                        <div>
+                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Priority</strong>
+                            <div>{{ $selectedTicket['Priority'] ?? '-' }}</div>
+                        </div>
+                        <div>
+                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Type</strong>
+                            <div>{{ $selectedTicket['Type'] ?: '-' }}</div>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; border-top: 1px solid var(--border-color, #e5e7eb); padding-top: 16px;">
+                        <div>
+                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Created</strong>
+                            <div>{{ $selectedTicket['Created'] ?? '-' }}</div>
+                        </div>
+                        <div>
+                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Changed</strong>
+                            <div>{{ $selectedTicket['Changed'] ?? '-' }}</div>
+                        </div>
+                        <div>
+                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Article Count</strong>
+                            <div>{{ $selectedTicket['ArticleCount'] ?? '-' }}</div>
+                        </div>
+                        <div>
+                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Last Article</strong>
+                            <div>{{ $selectedTicket['LastArticleCreated'] ?: '-' }}</div>
+                        </div>
+                    </div>
+
+                    @if(!empty($selectedTicket['is_linked_to_zabbix_problem']))
+                        <div style="margin-top: 16px; padding: 12px; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px;">
+                            <strong style="display: block; font-size: 0.875rem; color: #0369a1; margin-bottom: 8px;">Linked Zabbix Problem</strong>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.875rem;">
+                                <div><span style="color: #6b7280;">Host:</span> <span>{{ $selectedTicket['linked_problem_host'] ?? 'Unknown' }}</span></div>
+                                <div>
+                                    <span style="color: #6b7280;">State:</span>
+                                    <span style="{{ !empty($selectedTicket['linked_problem_is_active']) ? 'color: #ea580c; font-weight: 500;' : 'color: #059669;' }}">
+                                        {{ !empty($selectedTicket['linked_problem_is_active']) ? 'Active' : 'Resolved' }}
+                                    </span>
+                                </div>
+                                <div style="grid-column: span 2;"><span style="color: #6b7280;">Problem:</span> <span>{{ $selectedTicket['linked_problem_summary'] ?? 'Unknown' }}</span></div>
+                                <div><span style="color: #6b7280;">Event ID:</span> <span>{{ $selectedTicket['linked_problem_event_id'] ?? '-' }}</span></div>
+                                <div><span style="color: #6b7280;">Age:</span> <span>{{ $selectedTicket['linked_problem_age_label'] ?? 'N/A' }}</span></div>
+                            </div>
+                        </div>
+                    @endif
+                </div>
+            @endif
+        </div>
+    </x-filament::modal>
 </x-filament-panels::page>

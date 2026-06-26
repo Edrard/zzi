@@ -2,7 +2,9 @@
 
 namespace App\Filament\Pages;
 
+use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyTicketWorkspaceCacheReader;
+use App\Services\Znuny\ZnunyTicketWorkspaceStateTypeMapper;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
 
@@ -29,40 +31,87 @@ class ZnunyTicketWorkspace extends Page
 
     public string $linkFilter = 'all';
 
-    public ?string $stateTypeFilter = null;
+    public array $stateTypeFilter = [];
+
+    public ?string $queueFilter = null;
+
+    public ?string $ownerFilter = null;
+
+    public int $page = 1;
+
+    public int $perPage = 50;
 
     public string $sortField = 'Changed';
 
     public string $sortDirection = 'desc';
+
+    public ?int $selectedTicketId = null;
+
+    public ?array $selectedTicket = null;
+
+    public function openTicketDetails(int $ticketId): void
+    {
+        $this->selectedTicketId = $ticketId;
+        $data = $this->ticketData();
+        foreach ($data['rows'] as $row) {
+            if (($row['TicketID'] ?? 0) === $ticketId) {
+                $this->selectedTicket = $row;
+                break;
+            }
+        }
+
+        $this->dispatch('open-modal', id: 'ticket-details-modal');
+    }
+
+    public function mount()
+    {
+        $activeIdsJson = SettingsService::string('znuny_ticket_workspace_active_state_type_ids', '[]');
+        $activeIds = json_decode($activeIdsJson, true) ?? [];
+        if (! empty($activeIds) && is_array($activeIds)) {
+            $mapper = app(ZnunyTicketWorkspaceStateTypeMapper::class);
+            $mapped = $mapper->mapInternalIdsToZnunyTypes($activeIds);
+            if (! empty($mapped)) {
+                $this->stateTypeFilter = array_map('strtolower', $mapped);
+            }
+        } else {
+            $this->stateTypeFilter = ['new', 'open', 'pending reminder', 'pending auto'];
+        }
+    }
+
+    public function updated($property)
+    {
+        if (in_array($property, ['search', 'linkFilter', 'stateTypeFilter', 'queueFilter', 'ownerFilter', 'perPage'])) {
+            $this->page = 1;
+        }
+    }
 
     public static function canAccess(): bool
     {
         return in_array(auth()->user()->role ?? '', ['admin', 'operator', 'viewer'], true);
     }
 
-    public function tickets(): array
+    public function ticketData(): array
     {
         $reader = app(ZnunyTicketWorkspaceCacheReader::class);
-        $tickets = $reader->getTickets([
-            'search' => $this->search,
-            'link_status' => $this->linkFilter,
-            'state_type' => $this->stateTypeFilter,
-        ]);
 
-        usort($tickets, function ($a, $b) {
-            $valA = $a[$this->sortField] ?? null;
-            $valB = $b[$this->sortField] ?? null;
+        return $reader->getTicketsPaginated(
+            [
+                'search' => $this->search,
+                'link_status' => $this->linkFilter,
+                'state_types' => $this->stateTypeFilter,
+                'queue' => $this->queueFilter,
+                'owner' => $this->ownerFilter,
+            ],
+            $this->page,
+            $this->perPage,
+            $this->sortField,
+            $this->sortDirection
+        );
+    }
 
-            if ($valA === $valB) {
-                return 0;
-            }
-
-            $cmp = $valA <=> $valB;
-
-            return $this->sortDirection === 'asc' ? $cmp : -$cmp;
-        });
-
-        return $tickets;
+    public function setPage(int $page): void
+    {
+        $this->page = $page;
     }
 
     public function sortBy(string $field): void
@@ -78,29 +127,6 @@ class ZnunyTicketWorkspace extends Page
             $this->sortField = $field;
             $this->sortDirection = 'desc';
         }
-    }
-
-    public function filterOptions(): array
-    {
-        return [
-            'link_status' => [
-                'all' => 'All tickets',
-                'linked' => 'Linked to Zabbix problem',
-                'linked_active' => 'Linked to active problem',
-                'linked_resolved' => 'Linked to resolved/recovered problem',
-                'unlinked' => 'Unlinked tickets',
-            ],
-            // For now, state_type uses a few static known options or we could extract them dynamically.
-            // Using a simple set of common ones for Phase 1.
-            'state_types' => [
-                '' => 'Any State Type',
-                'new' => 'New',
-                'open' => 'Open',
-                'pending reminder' => 'Pending Reminder',
-                'pending auto' => 'Pending Auto',
-                'closed' => 'Closed',
-                'merged' => 'Merged',
-            ],
-        ];
+        $this->page = 1;
     }
 }
