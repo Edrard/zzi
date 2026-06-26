@@ -237,7 +237,7 @@
 
     </style>
 
-    <div class="zbx-page-stack">
+    <div class="zbx-page-stack" wire:poll.{{ $this->getRefreshIntervalString() }}>
         @php
             $data = $this->ticketData();
             $tickets = $data['rows'];

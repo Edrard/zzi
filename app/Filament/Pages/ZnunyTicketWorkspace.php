@@ -5,8 +5,11 @@ namespace App\Filament\Pages;
 use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyTicketWorkspaceCacheReader;
 use App\Services\Znuny\ZnunyTicketWorkspaceStateTypeMapper;
+use Filament\Actions\Action;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
+use Illuminate\Support\Facades\Artisan;
 
 class ZnunyTicketWorkspace extends Page
 {
@@ -128,5 +131,64 @@ class ZnunyTicketWorkspace extends Page
             $this->sortDirection = 'desc';
         }
         $this->page = 1;
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('refresh')
+                ->label('Refresh from Znuny')
+                ->icon('heroicon-o-arrow-path')
+                ->action('refreshFromZnuny')
+                ->visible(fn () => in_array(auth()->user()->role ?? '', ['admin', 'operator'], true)),
+        ];
+    }
+
+    public function refreshFromZnuny(): void
+    {
+        abort_unless(in_array(auth()->user()->role ?? '', ['admin', 'operator'], true), 403);
+
+        try {
+            $exitCode = Artisan::call('znuny:warm-ticket-workspace-cache');
+            $output = trim(Artisan::output());
+
+            if ($exitCode === 0) {
+                $this->page = 1;
+
+                $message = "Ticket Workspace cache refresh completed.";
+                if ($output !== '') {
+                    $message .= "\n".$output;
+                }
+
+                Notification::make()
+                    ->title('Ticket Workspace refreshed successfully')
+                    ->body($message)
+                    ->success()
+                    ->send();
+
+                return;
+            }
+
+            Notification::make()
+                ->title('Failed to refresh Ticket Workspace')
+                ->body($output !== '' ? $output : 'The cache warmer command failed.')
+                ->danger()
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()
+                ->title('An error occurred while refreshing Ticket Workspace')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    public function getRefreshIntervalString(): string
+    {
+        $minutes = SettingsService::int('znuny_ticket_cache_refresh_interval_minutes', 5) ?? 5;
+
+        $seconds = max(60, $minutes * 60);
+
+        return "{$seconds}s";
     }
 }
