@@ -56,7 +56,125 @@ class AuditLogResourceTest extends TestCase
         $this->actingAs($admin)
             ->get(AuditLogResource::getUrl('view', ['record' => $auditLog]))
             ->assertSuccessful()
-            ->assertSee('znuny_default_agent_name: Old Name → Роман Андрушкевич', false)
+            ->assertSee('znuny_default_agent_name: Old Name &rarr; Роман Андрушкевич', false)
             ->assertDontSee('\u0420\u043e');
+    }
+
+    public function test_audit_log_view_renders_simple_context_human_readable()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $auditLog = AuditLog::create([
+            'action' => 'zabbix.problems_poll_completed',
+            'context' => [
+                'source' => 'manual',
+                'manual' => true,
+                'scheduled' => false,
+                'cached_count' => 27,
+                'fetched_count' => 152,
+                'ttl_seconds' => 180,
+                'limit' => 1000,
+                'max_pages' => 3,
+                'total_count' => 152,
+            ],
+        ]);
+
+        $this->actingAs($admin)
+            ->get(AuditLogResource::getUrl('view', ['record' => $auditLog]))
+            ->assertSuccessful()
+            ->assertSee('display: grid', false)
+            ->assertSee('grid-template-columns: 170px minmax(0, 1fr)', false)
+            ->assertSee('column-gap: 12px', false)
+            ->assertSee('padding-left: 5px', false)
+            ->assertSee('Source:')
+            ->assertSee('Manual')
+            ->assertSee('Manual:')
+            ->assertSee('Yes')
+            ->assertSee('Scheduled:')
+            ->assertSee('No')
+            ->assertSee('Cached count:')
+            ->assertSee('27')
+            ->assertSee('Fetched count:')
+            ->assertSee('152')
+            ->assertSee('Limit:')
+            ->assertSee('1000')
+            ->assertSee('Max pages:')
+            ->assertSee('3')
+            ->assertSee('Total count:')
+            ->assertDontSee('Sourcescheduled')
+            ->assertDontSee('SourceScheduled')
+            ->assertDontSee('ManualNo');
+    }
+
+    public function test_audit_log_view_renders_nested_stats_human_readable()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $auditLog = AuditLog::create([
+            'action' => 'znuny.linked_tickets_sync.completed',
+            'context' => [
+                'source' => 'manual',
+                'stats' => [
+                    'cached_new' => 2,
+                    'refreshed_unchanged' => 10,
+                    'updated_changed' => 1,
+                    'errors' => 0,
+                ],
+            ],
+        ]);
+
+        $this->actingAs($admin)
+            ->get(AuditLogResource::getUrl('view', ['record' => $auditLog]))
+            ->assertSuccessful()
+            ->assertSee('display: grid', false)
+            ->assertSee('grid-template-columns: 170px minmax(0, 1fr)', false)
+            ->assertSee('column-gap: 12px', false)
+            ->assertSee('padding-left: 5px', false)
+            ->assertSee('Source:')
+            ->assertSee('Manual')
+            ->assertSee('Stats')
+            ->assertSee('Cached new:')
+            ->assertSee('2')
+            ->assertSee('Refreshed unchanged:')
+            ->assertSee('10')
+            ->assertSee('Updated changed:')
+            ->assertSee('Errors:')
+            ->assertDontSee('Cached new2')
+            ->assertDontSee('Cached new150')
+            ->assertDontSee('Refreshed unchanged150')
+            ->assertDontSee('Sourcescheduled');
+    }
+
+    public function test_audit_log_view_renders_state_types()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $auditLog = AuditLog::create([
+            'action' => 'zabbix.problems_poll_completed',
+            'context' => [
+                'state_types' => 'new,open,pending_reminder,pending_auto',
+            ],
+        ]);
+
+        $this->actingAs($admin)
+            ->get(AuditLogResource::getUrl('view', ['record' => $auditLog]))
+            ->assertSuccessful()
+            ->assertSee('State types:')
+            ->assertSee('new, open, pending reminder, pending auto');
+    }
+
+    public function test_audit_log_view_renders_empty_context()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $auditLog = AuditLog::create([
+            'action' => 'test.empty',
+            'context' => [],
+        ]);
+
+        $this->actingAs($admin)
+            ->get(AuditLogResource::getUrl('view', ['record' => $auditLog]))
+            ->assertSuccessful()
+            ->assertSee('No context');
     }
 }
