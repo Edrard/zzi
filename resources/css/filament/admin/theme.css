@@ -1,0 +1,39 @@
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+
+@source '../../../../app/Filament/**/*.php';
+@source '../../../../resources/views/filament/**/*.blade.php';
+
+/* Linked Tickets UX Scopes */
+.linked-tickets-compact-table .fi-ta-cell {
+    padding-block: 0 !important;
+    padding-inline: 0.5rem !important;
+    font-size: 13px !important;
+}
+
+.linked-tickets-compact-table .fi-ta-col {
+    align-items: center !important;
+    padding-block: 0 !important;
+}
+
+.linked-tickets-compact-table .fi-ta-text-item.fi-ta-text {
+    margin-block: 0 !important;
+    padding-block: 6px !important;
+    padding-inline: 0 !important;
+    line-height: 18px !important;
+}
+
+.linked-tickets-compact-table .fi-ta-cell:has(.fi-ta-actions) {
+    padding-block: 6px !important;
+    padding-inline: 0.5rem !important;
+}
+
+.linked-tickets-hidden-view-action {
+    display: none !important;
+}
+
+html:not(.dark) .linked-tickets-compact-table.fi-clickable:hover,
+html:not(.dark) .linked-tickets-compact-table.fi-clickable:hover > .fi-ta-cell,
+html:not(.dark) .linked-tickets-compact-table.fi-clickable:hover .fi-ta-col,
+html:not(.dark) .linked-tickets-compact-table.fi-clickable:hover .fi-ta-text-item.fi-ta-text {
+    background-color: #EAF3FF !important;
+}
