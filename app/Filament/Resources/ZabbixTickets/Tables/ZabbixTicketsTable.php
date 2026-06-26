@@ -19,8 +19,7 @@ class ZabbixTicketsTable
 
         return $table
             ->poll("{$seconds}s")
-            ->recordClasses(fn () => 'text-[12px] [&>td]:px-2 [&>td]:py-1.5 leading-tight')
-            ->recordAction('viewTicket')
+            ->recordClasses(fn () => 'text-[13px] [&>td]:px-3 [&>td]:py-2')
             ->columns([
                 TextColumn::make('zabbix_host_name')
                     ->label('Host')
@@ -96,12 +95,8 @@ class ZabbixTicketsTable
                 //
             ])
             ->recordActions([
-                ZabbixTicketDetailsAction::make('viewTicket')
-                    ->iconButton()
-                    ->extraAttributes(['class' => 'hidden']),
+                ZabbixTicketDetailsAction::make(),
                 ZnunyTicketManagementActions::openInZnunyAction('open_ticket'),
-                ZnunyTicketManagementActions::closeTicketAction('manual_close_ticket'),
-                ZnunyTicketManagementActions::reopenTicketAction('reopen_ticket'),
             ])
             ->toolbarActions([]);
     }

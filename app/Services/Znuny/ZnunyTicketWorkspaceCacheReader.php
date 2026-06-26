@@ -19,24 +19,6 @@ class ZnunyTicketWorkspaceCacheReader
         return $result['rows'] ?? [];
     }
 
-    public function getTicketById(int|string $ticketId): ?array
-    {
-        $payload = Redis::get("znuny:ticket:{$ticketId}");
-        if (! $payload) {
-            return null;
-        }
-
-        $rawTicket = json_decode($payload, true);
-        if (! is_array($rawTicket)) {
-            return null;
-        }
-
-        $normalized = $this->normalizeTicket($rawTicket);
-        $enrichedList = $this->enrichWithZabbixLinks([$normalized]);
-
-        return $enrichedList[0] ?? $normalized;
-    }
-
     public function getTicketsPaginated(
         array $filters = [],
         int $page = 1,
@@ -102,16 +84,6 @@ class ZnunyTicketWorkspaceCacheReader
         if (! empty($filters['owner'])) {
             $oIds = $redis->zrange("znuny:index:owner:{$filters['owner']}", 0, -1);
             $filteredIds = array_intersect($filteredIds, $oIds);
-        }
-        if (! empty($filters['priorities']) && is_array($filters['priorities'])) {
-            $pIds = [];
-            foreach ($filters['priorities'] as $pId) {
-                if (! empty($pId)) {
-                    $ids = $redis->zrange("znuny:index:priority:{$pId}", 0, -1);
-                    $pIds = array_merge($pIds, $ids);
-                }
-            }
-            $filteredIds = array_intersect($filteredIds, array_unique($pIds));
         }
 
         // 4. Decide if we can paginate before mget
@@ -203,7 +175,6 @@ class ZnunyTicketWorkspaceCacheReader
     {
         $queues = [];
         $owners = [];
-        $priorities = [];
 
         foreach ($tickets as $ticket) {
             if (! empty($ticket['QueueID'])) {
@@ -212,19 +183,14 @@ class ZnunyTicketWorkspaceCacheReader
             if (! empty($ticket['OwnerID'])) {
                 $owners[$ticket['OwnerID']] = $ticket['Owner'] ?? ('Owner '.$ticket['OwnerID']);
             }
-            if (! empty($ticket['PriorityID'])) {
-                $priorities[$ticket['PriorityID']] = $ticket['Priority'] ?? ('Priority '.$ticket['PriorityID']);
-            }
         }
 
         asort($queues);
         asort($owners);
-        asort($priorities);
 
         return [
             'queues' => $queues,
             'owners' => $owners,
-            'priorities' => $priorities,
             'link_status' => [
                 'all' => 'All tickets',
                 'linked' => 'Linked to Zabbix problem',
@@ -239,7 +205,6 @@ class ZnunyTicketWorkspaceCacheReader
                 'pending auto' => 'Pending Auto',
                 'closed' => 'Closed',
                 'merged' => 'Merged',
-                'removed' => 'Removed',
             ],
         ];
     }

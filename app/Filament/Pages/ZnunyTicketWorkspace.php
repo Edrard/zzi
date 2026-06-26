@@ -33,8 +33,6 @@ class ZnunyTicketWorkspace extends Page
 
     public array $stateTypeFilter = [];
 
-    public array $priorityFilter = [];
-
     public ?string $queueFilter = null;
 
     public ?string $ownerFilter = null;
@@ -53,7 +51,16 @@ class ZnunyTicketWorkspace extends Page
 
     public function openTicketDetails(int $ticketId): void
     {
-        $this->dispatch('open-shared-ticket-modal', ticketId: $ticketId);
+        $this->selectedTicketId = $ticketId;
+        $data = $this->ticketData();
+        foreach ($data['rows'] as $row) {
+            if (($row['TicketID'] ?? 0) === $ticketId) {
+                $this->selectedTicket = $row;
+                break;
+            }
+        }
+
+        $this->dispatch('open-modal', id: 'ticket-details-modal');
     }
 
     public function mount()
@@ -69,13 +76,11 @@ class ZnunyTicketWorkspace extends Page
         } else {
             $this->stateTypeFilter = ['new', 'open', 'pending reminder', 'pending auto'];
         }
-
-        $this->perPage = SettingsService::int('znuny_ticket_workspace_default_per_page', 50) ?: 50;
     }
 
     public function updated($property)
     {
-        if (in_array($property, ['search', 'linkFilter', 'stateTypeFilter', 'priorityFilter', 'queueFilter', 'ownerFilter', 'perPage'])) {
+        if (in_array($property, ['search', 'linkFilter', 'stateTypeFilter', 'queueFilter', 'ownerFilter', 'perPage'])) {
             $this->page = 1;
         }
     }
@@ -94,7 +99,6 @@ class ZnunyTicketWorkspace extends Page
                 'search' => $this->search,
                 'link_status' => $this->linkFilter,
                 'state_types' => $this->stateTypeFilter,
-                'priorities' => $this->priorityFilter,
                 'queue' => $this->queueFilter,
                 'owner' => $this->ownerFilter,
             ],

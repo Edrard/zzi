@@ -414,10 +414,6 @@ class Settings extends Page implements HasForms
                     'label' => 'Active State Types',
                     'description' => 'Select which Znuny state types should be included in the Ticket Workspace active working set.',
                 ],
-                'znuny_ticket_workspace_default_per_page' => [
-                    'label' => 'Default Items Per Page',
-                    'description' => 'Default number of tickets to show per page in the Ticket Workspace.',
-                ],
             ];
 
             if (isset($overrides[$setting->key])) {
@@ -427,18 +423,7 @@ class Settings extends Page implements HasForms
 
             $component = null;
 
-            if ($setting->key === 'znuny_ticket_workspace_default_per_page') {
-                $component = Select::make($setting->key)
-                    ->label($label)
-                    ->helperText($description)
-                    ->options([
-                        '10' => '10',
-                        '25' => '25',
-                        '50' => '50',
-                        '100' => '100',
-                    ])
-                    ->required();
-            } elseif ($setting->key === 'znuny_default_agent_id') {
+            if ($setting->key === 'znuny_default_agent_id') {
                 $component = app(ZnunyDefaultAgentSchemaBuilder::class)->build($setting);
             } elseif ($setting->key === 'znuny_agent_exclude_logins') {
                 $component = Textarea::make($setting->key)
@@ -570,7 +555,7 @@ class Settings extends Page implements HasForms
                 $component = $input;
             }
 
-            if (in_array($setting->key, ['cleanup_enabled', 'cleanup_batch_size', 'app_display_timezone', 'znuny_ticket_workspace_default_per_page'])) {
+            if (in_array($setting->key, ['cleanup_enabled', 'cleanup_batch_size', 'app_display_timezone'])) {
                 $groups['General'][] = $component;
             } elseif (in_array($setting->key, ['retention_action_logs_days', 'retention_closed_tickets_days', 'retention_failed_jobs_days', 'retention_resolved_days', 'retention_statistics_days'])) {
                 $groups['Retention'][] = $component;

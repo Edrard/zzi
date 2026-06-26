@@ -758,8 +758,8 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
             ->assertActionExists('viewTicket')
-            ->callAction('viewTicket', arguments: ['ticket_id' => $ticket->id])
-            ->assertDispatched('open-shared-ticket-modal');
+            ->mountAction('viewTicket', ['ticket_id' => $ticket->id])
+            ->assertActionMounted('viewTicket');
     }
 
     public function test_reopen_action_can_be_mounted_for_reopen_candidate()

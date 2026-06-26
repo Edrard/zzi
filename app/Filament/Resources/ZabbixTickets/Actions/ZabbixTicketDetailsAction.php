@@ -2,28 +2,32 @@
 
 namespace App\Filament\Resources\ZabbixTickets\Actions;
 
+use App\Filament\Resources\ZabbixTickets\Schemas\ZabbixTicketInfolist;
+use App\Filament\Support\ZnunyTicketManagementActions;
 use App\Models\ZabbixTicket;
 use Filament\Actions\Action;
-use Livewire\Component;
+use Filament\Actions\ViewAction;
+use Filament\Schemas\Schema;
+use Filament\Support\Enums\Width;
 
 class ZabbixTicketDetailsAction
 {
-    public static function make(string $name = 'viewTicket'): Action
+    public static function make(string $name = 'viewTicket'): ViewAction
     {
-        return Action::make($name)
-            ->label('View Details')
-            ->icon('heroicon-o-eye')
-            ->action(function (?ZabbixTicket $record, array $arguments, Component $livewire) {
-                $ticketId = $record?->znuny_ticket_id ?? null;
+        return ViewAction::make($name)
+            ->slideOver()
+            ->modalWidth(Width::FourExtraLarge)
+            ->schema(fn (Schema $schema) => ZabbixTicketInfolist::configure($schema))
+            ->mutateRecordDataUsing(function (ZabbixTicket $record, array $data) {
+                $record->refresh();
 
-                if (! $ticketId && ! empty($arguments['ticket_id'])) {
-                    $localTicket = ZabbixTicket::find($arguments['ticket_id']);
-                    $ticketId = $localTicket?->znuny_ticket_id;
-                }
-
-                if ($ticketId) {
-                    $livewire->dispatch('open-shared-ticket-modal', ticketId: $ticketId);
-                }
-            });
+                return $data;
+            })
+            ->extraModalFooterActions(fn (Action $action): array => [
+                ZnunyTicketManagementActions::closeTicketAction('manual_close_ticket')
+                    ->after(fn () => $action->cancel()),
+                ZnunyTicketManagementActions::reopenTicketAction('reopen_ticket')
+                    ->after(fn () => $action->cancel()),
+            ]);
     }
 }

@@ -159,6 +159,8 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->test(ZnunyTicketWorkspace::class)
             ->set('stateTypeFilter', ['new'])
             ->call('openTicketDetails', 101)
-            ->assertDispatched('open-shared-ticket-modal', ticketId: 101);
+            ->assertSet('selectedTicketId', 101)
+            ->assertSee('client@example.com')
+            ->assertDispatched('open-modal');
     }
 }
