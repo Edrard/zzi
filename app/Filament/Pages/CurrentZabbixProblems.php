@@ -115,7 +115,7 @@ class CurrentZabbixProblems extends Page
         );
 
         try {
-            $exitCode = Artisan::call('app:poll-zabbix-problems', ['--force' => true]);
+            $exitCode = Artisan::call('app:poll-zabbix-problems', ['--force' => true, '--manual' => true]);
 
             if ($exitCode === 0) {
                 $evalExitCode = Artisan::call('znuny:evaluate-manual-ticket-lifecycle');

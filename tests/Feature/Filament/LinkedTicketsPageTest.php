@@ -311,7 +311,7 @@ class LinkedTicketsPageTest extends TestCase
         $this->actingAs(User::factory()->create(['role' => 'admin']));
 
         Artisan::shouldReceive('call')
-            ->with('znuny:sync-linked-tickets')
+            ->with('znuny:sync-linked-tickets', ['--manual' => true])
             ->once()
             ->andReturn(0);
 
@@ -336,7 +336,7 @@ class LinkedTicketsPageTest extends TestCase
         $this->actingAs(User::factory()->create(['role' => 'admin']));
 
         Artisan::shouldReceive('call')
-            ->with('znuny:sync-linked-tickets')
+            ->with('znuny:sync-linked-tickets', ['--manual' => true])
             ->once()
             ->andReturn(1);
 

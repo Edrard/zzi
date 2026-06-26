@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AuditLog;
 use App\Models\Setting;
 use App\Models\ZabbixTicket;
 use App\Services\SettingsService;
@@ -317,5 +318,130 @@ class SyncLinkedZnunyTicketsCommandTest extends TestCase
         });
 
         $this->assertCount(0, $events);
+    }
+
+    public function test_scheduled_sync_no_summary_audit_when_disabled()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_detailed_sync_audit_enabled'], ['value' => 'false', 'type' => 'boolean']);
+
+        $mockSyncService = \Mockery::mock(ZnunyLinkedTicketSyncService::class);
+        $mockSyncService->shouldReceive('sync')->andReturn([
+            'scanned' => 0, 'synced' => 0, 'unchanged' => 0, 'missing' => 0, 'failed' => 0,
+        ]);
+        $this->app->instance(ZnunyLinkedTicketSyncService::class, $mockSyncService);
+
+        $this->artisan('znuny:sync-linked-tickets')->run();
+
+        $this->assertDatabaseMissing('audit_logs', [
+            'action' => 'znuny.linked_tickets_sync.completed',
+        ]);
+    }
+
+    public function test_scheduled_sync_summary_audit_when_enabled()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_detailed_sync_audit_enabled'], ['value' => 'true', 'type' => 'boolean']);
+
+        $mockSyncService = \Mockery::mock(ZnunyLinkedTicketSyncService::class);
+        $mockSyncService->shouldReceive('sync')->andReturn([
+            'scanned' => 0, 'synced' => 0, 'unchanged' => 0, 'missing' => 0, 'failed' => 0,
+        ]);
+        $this->app->instance(ZnunyLinkedTicketSyncService::class, $mockSyncService);
+
+        $this->artisan('znuny:sync-linked-tickets')->run();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'znuny.linked_tickets_sync.completed',
+        ]);
+        $log = AuditLog::where('action', 'znuny.linked_tickets_sync.completed')->latest()->first();
+        $this->assertEquals('scheduled', $log->context['source']);
+        $this->assertTrue($log->context['scheduled']);
+        $this->assertFalse($log->context['manual']);
+    }
+
+    public function test_manual_sync_summary_audit_when_disabled()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_detailed_sync_audit_enabled'], ['value' => 'false', 'type' => 'boolean']);
+
+        $mockSyncService = \Mockery::mock(ZnunyLinkedTicketSyncService::class);
+        $mockSyncService->shouldReceive('sync')->andReturn([
+            'scanned' => 0, 'synced' => 0, 'unchanged' => 0, 'missing' => 0, 'failed' => 0,
+        ]);
+        $this->app->instance(ZnunyLinkedTicketSyncService::class, $mockSyncService);
+
+        $this->artisan('znuny:sync-linked-tickets', ['--manual' => true])->run();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'znuny.linked_tickets_sync.completed',
+        ]);
+        $log = AuditLog::where('action', 'znuny.linked_tickets_sync.completed')->latest()->first();
+        $this->assertEquals('manual', $log->context['source']);
+        $this->assertFalse($log->context['scheduled']);
+        $this->assertTrue($log->context['manual']);
+    }
+
+    public function test_scheduled_sync_exception_no_audit_when_disabled()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_detailed_sync_audit_enabled'], ['value' => 'false', 'type' => 'boolean']);
+
+        $mockSyncService = \Mockery::mock(ZnunyLinkedTicketSyncService::class);
+        $mockSyncService->shouldReceive('sync')->andThrow(new \Exception('Test Error'));
+        $this->app->instance(ZnunyLinkedTicketSyncService::class, $mockSyncService);
+
+        $this->artisan('znuny:sync-linked-tickets')->assertFailed();
+
+        $this->assertDatabaseMissing('audit_logs', [
+            'action' => 'znuny.linked_tickets_sync.failed',
+        ]);
+    }
+
+    public function test_scheduled_sync_exception_audit_when_enabled()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_detailed_sync_audit_enabled'], ['value' => 'true', 'type' => 'boolean']);
+
+        $mockSyncService = \Mockery::mock(ZnunyLinkedTicketSyncService::class);
+        $mockSyncService->shouldReceive('sync')->andThrow(new \Exception('Test Error'));
+        $this->app->instance(ZnunyLinkedTicketSyncService::class, $mockSyncService);
+
+        $this->artisan('znuny:sync-linked-tickets')->assertFailed();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'znuny.linked_tickets_sync.failed',
+        ]);
+        $log = AuditLog::where('action', 'znuny.linked_tickets_sync.failed')->latest()->first();
+        $this->assertEquals('scheduled', $log->context['source']);
+    }
+
+    public function test_manual_sync_exception_audit_when_disabled()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_detailed_sync_audit_enabled'], ['value' => 'false', 'type' => 'boolean']);
+
+        $mockSyncService = \Mockery::mock(ZnunyLinkedTicketSyncService::class);
+        $mockSyncService->shouldReceive('sync')->andThrow(new \Exception('Test Error'));
+        $this->app->instance(ZnunyLinkedTicketSyncService::class, $mockSyncService);
+
+        $this->artisan('znuny:sync-linked-tickets', ['--manual' => true])->assertFailed();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'znuny.linked_tickets_sync.failed',
+        ]);
+        $log = AuditLog::where('action', 'znuny.linked_tickets_sync.failed')->latest()->first();
+        $this->assertEquals('manual', $log->context['source']);
+    }
+
+    public function test_stats_failed_greater_than_zero_creates_failed_action()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_detailed_sync_audit_enabled'], ['value' => 'false', 'type' => 'boolean']);
+
+        $mockSyncService = \Mockery::mock(ZnunyLinkedTicketSyncService::class);
+        $mockSyncService->shouldReceive('sync')->andReturn([
+            'scanned' => 1, 'synced' => 0, 'unchanged' => 0, 'missing' => 0, 'failed' => 1,
+        ]);
+        $this->app->instance(ZnunyLinkedTicketSyncService::class, $mockSyncService);
+
+        $this->artisan('znuny:sync-linked-tickets', ['--manual' => true])->assertSuccessful();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'znuny.linked_tickets_sync.failed',
+        ]);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Console;
 
+use App\Models\AuditLog;
 use App\Models\Setting;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketCacheService;
@@ -26,6 +27,7 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
 
         $this->client = $this->mock(ZnunyClient::class);
         $this->cacheService = $this->mock(ZnunyTicketCacheService::class);
+        Redis::del('znuny:ticket_workspace:last_warm_at');
     }
 
     public function test_it_exits_when_disabled(): void
@@ -350,5 +352,74 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
         });
 
         $this->assertTrue($hasWarmer, 'The scheduler should register the ticket workspace cache warmer with --scheduled option.');
+    }
+
+    public function test_scheduled_warmer_no_audit_when_disabled()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['value' => '["new"]']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_sync_audit_enabled'], ['value' => 'false']);
+
+        $this->client->shouldReceive('searchTicketsWithMetadata')->andReturn(['total_count' => 0, 'warnings' => []]);
+
+        $this->artisan('znuny:warm-ticket-workspace-cache', ['--scheduled' => true])->run();
+
+        $this->assertDatabaseMissing('audit_logs', [
+            'action' => 'znuny.ticket_workspace_sync.completed',
+        ]);
+    }
+
+    public function test_scheduled_warmer_audit_when_enabled()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['value' => '["new"]']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_sync_audit_enabled'], ['value' => 'true']);
+
+        $this->client->shouldReceive('searchTicketsWithMetadata')->andReturn(['total_count' => 0, 'warnings' => []]);
+
+        $this->artisan('znuny:warm-ticket-workspace-cache', ['--scheduled' => true])->run();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'znuny.ticket_workspace_sync.completed',
+        ]);
+        $log = AuditLog::where('action', 'znuny.ticket_workspace_sync.completed')->latest()->first();
+        $this->assertEquals('scheduled', $log->context['source']);
+        $this->assertTrue($log->context['scheduled']);
+        $this->assertFalse($log->context['manual']);
+    }
+
+    public function test_manual_warmer_audit_when_disabled()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['value' => '["new"]']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_sync_audit_enabled'], ['value' => 'false']);
+
+        $this->client->shouldReceive('searchTicketsWithMetadata')->andReturn(['total_count' => 0, 'warnings' => []]);
+
+        $this->artisan('znuny:warm-ticket-workspace-cache', ['--manual' => true])->run();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'znuny.ticket_workspace_sync.completed',
+        ]);
+        $log = AuditLog::where('action', 'znuny.ticket_workspace_sync.completed')->latest()->first();
+        $this->assertEquals('manual', $log->context['source']);
+        $this->assertFalse($log->context['scheduled']);
+        $this->assertTrue($log->context['manual']);
+    }
+
+    public function test_scheduled_warmer_skip_not_due_no_audit()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['value' => '["new"]']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_sync_audit_enabled'], ['value' => 'true']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_refresh_interval_minutes'], ['value' => '5']);
+
+        Redis::set('znuny:ticket_workspace:last_warm_at', Carbon::now()->subMinutes(2)->timestamp);
+
+        $this->artisan('znuny:warm-ticket-workspace-cache', ['--scheduled' => true])->run();
+
+        $this->assertDatabaseMissing('audit_logs', [
+            'action' => 'znuny.ticket_workspace_sync.completed',
+        ]);
     }
 }

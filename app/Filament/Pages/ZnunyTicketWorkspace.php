@@ -149,13 +149,13 @@ class ZnunyTicketWorkspace extends Page
         abort_unless(in_array(auth()->user()->role ?? '', ['admin', 'operator'], true), 403);
 
         try {
-            $exitCode = Artisan::call('znuny:warm-ticket-workspace-cache');
+            $exitCode = Artisan::call('znuny:warm-ticket-workspace-cache', ['--manual' => true]);
             $output = trim(Artisan::output());
 
             if ($exitCode === 0) {
                 $this->page = 1;
 
-                $message = "Ticket Workspace cache refresh completed.";
+                $message = 'Ticket Workspace cache refresh completed.';
                 if ($output !== '') {
                     $message .= "\n".$output;
                 }

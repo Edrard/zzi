@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\AuditLogger;
 use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketCacheService;
@@ -13,7 +14,7 @@ use Throwable;
 
 class WarmZnunyTicketWorkspaceCacheCommand extends Command
 {
-    protected $signature = 'znuny:warm-ticket-workspace-cache {--scheduled}';
+    protected $signature = 'znuny:warm-ticket-workspace-cache {--scheduled} {--manual : Indicates the cache warm was triggered manually by an operator}';
 
     protected $description = 'Warm up the Ticket Workspace cache by polling active tickets from Znuny';
 
@@ -23,9 +24,17 @@ class WarmZnunyTicketWorkspaceCacheCommand extends Command
         ZnunyTicketWorkspaceStateTypeMapper $mapper
     ): int {
         $enabled = SettingsService::bool('znuny_ticket_workspace_enabled', false) ?? false;
+        $isManual = (bool) $this->option('manual');
+        $shouldAudit = $isManual || SettingsService::bool('znuny_ticket_workspace_sync_audit_enabled', false);
 
         if (! $enabled) {
             $this->info('Ticket Workspace is disabled in settings. Exiting cleanly.');
+
+            if ($isManual) {
+                AuditLogger::log('znuny.ticket_workspace_sync.skipped', 'system', null, [
+                    'source' => 'manual', 'manual' => true, 'scheduled' => false, 'reason' => 'disabled',
+                ]);
+            }
 
             return self::SUCCESS;
         }
@@ -53,6 +62,12 @@ class WarmZnunyTicketWorkspaceCacheCommand extends Command
         if (empty($activeStateTypeIds) || ! is_array($activeStateTypeIds)) {
             $this->info('No active state type IDs configured. Exiting.');
 
+            if ($isManual) {
+                AuditLogger::log('znuny.ticket_workspace_sync.skipped', 'system', null, [
+                    'source' => 'manual', 'manual' => true, 'scheduled' => false, 'reason' => 'no_active_state_types',
+                ]);
+            }
+
             return self::SUCCESS;
         }
 
@@ -60,6 +75,12 @@ class WarmZnunyTicketWorkspaceCacheCommand extends Command
 
         if (empty($mappedStateTypes)) {
             $this->info('No matching Znuny StateTypes found for the configured IDs. Exiting.');
+
+            if ($isManual) {
+                AuditLogger::log('znuny.ticket_workspace_sync.skipped', 'system', null, [
+                    'source' => 'manual', 'manual' => true, 'scheduled' => false, 'reason' => 'no_mapped_state_types',
+                ]);
+            }
 
             return self::SUCCESS;
         }
@@ -165,6 +186,32 @@ class WarmZnunyTicketWorkspaceCacheCommand extends Command
             ['Metric', 'Count'],
             collect($counters)->map(fn ($value, $key) => [$key, $value])->toArray()
         );
+
+        if ($shouldAudit) {
+            $actionName = $counters['errors'] > 0 ? 'znuny.ticket_workspace_sync.failed' : 'znuny.ticket_workspace_sync.completed';
+            AuditLogger::log(
+                $actionName,
+                'system',
+                null,
+                [
+                    'source' => $isManual ? 'manual' : 'scheduled',
+                    'manual' => $isManual,
+                    'scheduled' => ! $isManual,
+                    'state_types' => $combinedStateTypes,
+                    'limit' => $limit,
+                    'max_pages' => $maxPages,
+                    'total_count' => $counters['total_count'],
+                    'stats' => [
+                        'cached_new' => $counters['cached_new'] ?? 0,
+                        'refreshed_unchanged' => $counters['refreshed_unchanged'] ?? 0,
+                        'updated_changed' => $counters['updated_changed'] ?? 0,
+                        'skipped_disabled' => $counters['skipped_disabled'] ?? 0,
+                        'errors' => $counters['errors'] ?? 0,
+                    ],
+                    'warnings' => $counters['warnings'] ?? 0,
+                ]
+            );
+        }
 
         if ($this->option('scheduled')) {
             Redis::set('znuny:ticket_workspace:last_warm_at', Carbon::now()->timestamp);

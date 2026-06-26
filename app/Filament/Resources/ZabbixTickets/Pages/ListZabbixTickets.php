@@ -26,7 +26,7 @@ class ListZabbixTickets extends ListRecords
                 ->icon('heroicon-o-cloud-arrow-down')
                 ->action(function () {
                     try {
-                        $syncExitCode = Artisan::call('znuny:sync-linked-tickets');
+                        $syncExitCode = Artisan::call('znuny:sync-linked-tickets', ['--manual' => true]);
                         $syncOutput = trim(Artisan::output());
 
                         if ($syncExitCode === 0) {

@@ -618,7 +618,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
 
         Artisan::shouldReceive('call')
-            ->with('app:poll-zabbix-problems', ['--force' => true])
+            ->with('app:poll-zabbix-problems', ['--force' => true, '--manual' => true])
             ->once()
             ->andReturn(0);
 
@@ -637,7 +637,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
 
         Artisan::shouldReceive('call')
-            ->with('app:poll-zabbix-problems', ['--force' => true])
+            ->with('app:poll-zabbix-problems', ['--force' => true, '--manual' => true])
             ->once()
             ->andReturn(1);
 
@@ -784,5 +784,17 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->assertActionExists('reopenTicket')
             ->mountAction('reopenTicket', ['ticket_id' => $ticket->id])
             ->assertActionMounted('reopenTicket');
+    }
+
+    public function test_audit_logs_are_not_created_on_ui_render()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->assertSuccessful()
+            ->call('$refresh');
+
+        $this->assertDatabaseCount('audit_logs', 0);
     }
 }

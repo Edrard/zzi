@@ -18,7 +18,7 @@ class PollZabbixProblems extends Command
      *
      * @var string
      */
-    protected $signature = 'app:poll-zabbix-problems {--force : Ignore poll interval and force polling now}';
+    protected $signature = 'app:poll-zabbix-problems {--force : Ignore poll interval and force polling now} {--manual : Indicates the poll was triggered manually by an operator}';
 
     /**
      * The console command description.
@@ -305,14 +305,43 @@ class PollZabbixProblems extends Command
                 $this->warn('Fetched problem count equals configured limit. There may be more non-suppressed problems in Zabbix.');
             }
 
-            if ($lastPoll && isset($lastPoll['status']) && $lastPoll['status'] === 'failed') {
-                AuditLogger::log(
-                    'zabbix.problems_poll_recovered',
-                    'system',
-                    null,
-                    ['cached_count' => $cachedCount, 'fetched_count' => $fetchedCount]
-                );
-                $this->info('Logged poll recovery to audit.');
+            $isManual = (bool) $this->option('manual');
+            $shouldAudit = $isManual || SettingsService::bool('zabbix_problem_sync_audit_enabled', false);
+
+            if ($shouldAudit) {
+                if ($lastPoll && isset($lastPoll['status']) && $lastPoll['status'] === 'failed') {
+                    AuditLogger::log(
+                        'zabbix.problems_poll_recovered',
+                        'system',
+                        null,
+                        [
+                            'source' => $isManual ? 'manual' : 'scheduled',
+                            'manual' => $isManual,
+                            'scheduled' => ! $isManual,
+                            'cached_count' => $cachedCount,
+                            'fetched_count' => $fetchedCount,
+                            'ttl_seconds' => $ttlSeconds,
+                            'limit' => $limit,
+                        ]
+                    );
+                    $this->info('Logged poll recovery to audit.');
+                } else {
+                    AuditLogger::log(
+                        'zabbix.problems_poll_completed',
+                        'system',
+                        null,
+                        [
+                            'source' => $isManual ? 'manual' : 'scheduled',
+                            'manual' => $isManual,
+                            'scheduled' => ! $isManual,
+                            'cached_count' => $cachedCount,
+                            'fetched_count' => $fetchedCount,
+                            'ttl_seconds' => $ttlSeconds,
+                            'limit' => $limit,
+                        ]
+                    );
+                    $this->info('Logged poll summary to audit.');
+                }
             }
 
         } catch (Exception $e) {
@@ -330,13 +359,22 @@ class PollZabbixProblems extends Command
             $cache->markLastPollFailure($errorMessage, $ttlSeconds);
 
             $wasPreviouslyFailed = $lastPoll && isset($lastPoll['status']) && $lastPoll['status'] === 'failed';
+            $isManual = (bool) $this->option('manual');
 
-            if (! $wasPreviouslyFailed) {
+            $shouldAuditFailure = $isManual
+                || (SettingsService::bool('zabbix_problem_sync_audit_enabled', false) && ! $wasPreviouslyFailed);
+
+            if ($shouldAuditFailure) {
                 AuditLogger::log(
                     'zabbix.problems_poll_failed',
                     'system',
                     null,
-                    ['error' => $errorMessage]
+                    [
+                        'source' => $isManual ? 'manual' : 'scheduled',
+                        'manual' => $isManual,
+                        'scheduled' => ! $isManual,
+                        'error' => $errorMessage,
+                    ]
                 );
             }
 

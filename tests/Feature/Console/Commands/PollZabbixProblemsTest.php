@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Console\Commands;
 
+use App\Models\AuditLog;
+use App\Models\Setting;
 use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixClient;
 use App\Services\Zabbix\ZabbixProblemCache;
@@ -153,5 +155,172 @@ class PollZabbixProblemsTest extends TestCase
         $this->app->instance(ZabbixProblemCache::class, $cache);
 
         $this->artisan('app:poll-zabbix-problems', ['--force' => true])->run();
+    }
+
+    public function test_scheduled_success_no_audit_when_disabled()
+    {
+        $client = Mockery::mock(ZabbixClient::class);
+        $cache = Mockery::mock(ZabbixProblemCache::class);
+
+        $cache->shouldReceive('lastPoll')->andReturn(null);
+        $client->shouldReceive('getProblemsForPolling')->andReturn([]);
+        $client->shouldReceive('getEventHosts')->andReturn([]);
+        $client->shouldReceive('getHostInterfaces')->andReturn([]);
+        $client->shouldReceive('getTriggersForProblems')->andReturn([]);
+        $cache->shouldReceive('putMany');
+        $cache->shouldReceive('markLastPollSuccess');
+
+        $this->app->instance(ZabbixClient::class, $client);
+        $this->app->instance(ZabbixProblemCache::class, $cache);
+
+        Setting::updateOrCreate(['key' => 'zabbix_problem_sync_audit_enabled'], ['value' => 'false', 'type' => 'boolean']);
+
+        $this->artisan('app:poll-zabbix-problems')->run();
+
+        $this->assertDatabaseMissing('audit_logs', [
+            'action' => 'zabbix.problems_poll_completed',
+        ]);
+    }
+
+    public function test_scheduled_success_audit_when_enabled()
+    {
+        $client = Mockery::mock(ZabbixClient::class);
+        $cache = Mockery::mock(ZabbixProblemCache::class);
+
+        $cache->shouldReceive('lastPoll')->andReturn(null);
+        $client->shouldReceive('getProblemsForPolling')->andReturn([]);
+        $client->shouldReceive('getEventHosts')->andReturn([]);
+        $client->shouldReceive('getHostInterfaces')->andReturn([]);
+        $client->shouldReceive('getTriggersForProblems')->andReturn([]);
+        $cache->shouldReceive('putMany');
+        $cache->shouldReceive('markLastPollSuccess');
+
+        $this->app->instance(ZabbixClient::class, $client);
+        $this->app->instance(ZabbixProblemCache::class, $cache);
+
+        Setting::updateOrCreate(['key' => 'zabbix_problem_sync_audit_enabled'], ['value' => 'true', 'type' => 'boolean']);
+
+        $this->artisan('app:poll-zabbix-problems')->run();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'zabbix.problems_poll_completed',
+        ]);
+        $log = AuditLog::where('action', 'zabbix.problems_poll_completed')->latest()->first();
+        $this->assertEquals('scheduled', $log->context['source']);
+        $this->assertTrue($log->context['scheduled']);
+        $this->assertFalse($log->context['manual']);
+    }
+
+    public function test_manual_success_audit_when_disabled()
+    {
+        $client = Mockery::mock(ZabbixClient::class);
+        $cache = Mockery::mock(ZabbixProblemCache::class);
+
+        $cache->shouldReceive('lastPoll')->andReturn(null);
+        $client->shouldReceive('getProblemsForPolling')->andReturn([]);
+        $client->shouldReceive('getEventHosts')->andReturn([]);
+        $client->shouldReceive('getHostInterfaces')->andReturn([]);
+        $client->shouldReceive('getTriggersForProblems')->andReturn([]);
+        $cache->shouldReceive('putMany');
+        $cache->shouldReceive('markLastPollSuccess');
+
+        $this->app->instance(ZabbixClient::class, $client);
+        $this->app->instance(ZabbixProblemCache::class, $cache);
+
+        Setting::updateOrCreate(['key' => 'zabbix_problem_sync_audit_enabled'], ['value' => 'false', 'type' => 'boolean']);
+
+        $this->artisan('app:poll-zabbix-problems', ['--force' => true, '--manual' => true])->run();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'zabbix.problems_poll_completed',
+        ]);
+        $log = AuditLog::where('action', 'zabbix.problems_poll_completed')->latest()->first();
+        $this->assertEquals('manual', $log->context['source']);
+        $this->assertFalse($log->context['scheduled']);
+        $this->assertTrue($log->context['manual']);
+    }
+
+    public function test_scheduled_failure_no_audit_when_disabled()
+    {
+        $client = Mockery::mock(ZabbixClient::class);
+        $cache = Mockery::mock(ZabbixProblemCache::class);
+
+        $cache->shouldReceive('lastPoll')->andReturn(null);
+        $client->shouldReceive('getProblemsForPolling')->andThrow(new \Exception('Test Error'));
+        $cache->shouldReceive('markLastPollFailure');
+
+        $this->app->instance(ZabbixClient::class, $client);
+        $this->app->instance(ZabbixProblemCache::class, $cache);
+
+        Setting::updateOrCreate(['key' => 'zabbix_problem_sync_audit_enabled'], ['value' => 'false', 'type' => 'boolean']);
+
+        $this->artisan('app:poll-zabbix-problems')->run();
+
+        $this->assertDatabaseMissing('audit_logs', [
+            'action' => 'zabbix.problems_poll_failed',
+        ]);
+    }
+
+    public function test_manual_failure_audit_when_disabled()
+    {
+        $client = Mockery::mock(ZabbixClient::class);
+        $cache = Mockery::mock(ZabbixProblemCache::class);
+
+        $cache->shouldReceive('lastPoll')->andReturn(null);
+        $client->shouldReceive('getProblemsForPolling')->andThrow(new \Exception('Test Error'));
+        $cache->shouldReceive('markLastPollFailure');
+
+        $this->app->instance(ZabbixClient::class, $client);
+        $this->app->instance(ZabbixProblemCache::class, $cache);
+
+        Setting::updateOrCreate(['key' => 'zabbix_problem_sync_audit_enabled'], ['value' => 'false', 'type' => 'boolean']);
+
+        $this->artisan('app:poll-zabbix-problems', ['--force' => true, '--manual' => true])->run();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'zabbix.problems_poll_failed',
+        ]);
+    }
+
+    public function test_scheduled_failure_no_spam_when_previously_failed()
+    {
+        $client = Mockery::mock(ZabbixClient::class);
+        $cache = Mockery::mock(ZabbixProblemCache::class);
+
+        $cache->shouldReceive('lastPoll')->andReturn(['status' => 'failed']);
+        $client->shouldReceive('getProblemsForPolling')->andThrow(new \Exception('Test Error'));
+        $cache->shouldReceive('markLastPollFailure');
+
+        $this->app->instance(ZabbixClient::class, $client);
+        $this->app->instance(ZabbixProblemCache::class, $cache);
+
+        Setting::updateOrCreate(['key' => 'zabbix_problem_sync_audit_enabled'], ['value' => 'true', 'type' => 'boolean']);
+
+        $this->artisan('app:poll-zabbix-problems')->run();
+
+        $this->assertDatabaseMissing('audit_logs', [
+            'action' => 'zabbix.problems_poll_failed',
+        ]);
+    }
+
+    public function test_manual_failure_audits_even_when_previously_failed()
+    {
+        $client = Mockery::mock(ZabbixClient::class);
+        $cache = Mockery::mock(ZabbixProblemCache::class);
+
+        $cache->shouldReceive('lastPoll')->andReturn(['status' => 'failed']);
+        $client->shouldReceive('getProblemsForPolling')->andThrow(new \Exception('Test Error'));
+        $cache->shouldReceive('markLastPollFailure');
+
+        $this->app->instance(ZabbixClient::class, $client);
+        $this->app->instance(ZabbixProblemCache::class, $cache);
+
+        Setting::updateOrCreate(['key' => 'zabbix_problem_sync_audit_enabled'], ['value' => 'false', 'type' => 'boolean']);
+
+        $this->artisan('app:poll-zabbix-problems', ['--force' => true, '--manual' => true])->run();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'zabbix.problems_poll_failed',
+        ]);
     }
 }

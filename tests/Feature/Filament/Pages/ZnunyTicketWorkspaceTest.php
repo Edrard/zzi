@@ -3,9 +3,11 @@
 namespace Tests\Feature\Filament\Pages;
 
 use App\Filament\Pages\ZnunyTicketWorkspace;
+use App\Models\Setting;
 use App\Models\User;
 use App\Services\Znuny\ZnunyTicketCacheService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Redis;
 use Livewire\Livewire;
@@ -168,8 +170,8 @@ class ZnunyTicketWorkspaceTest extends TestCase
     {
         $user = User::factory()->create(['role' => 'operator']);
 
-        \Livewire\Livewire::actingAs($user)
-            ->test(\App\Filament\Pages\ZnunyTicketWorkspace::class)
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
             ->assertSuccessful()
             ->assertSee('Linked to active Zabbix problem')
             ->assertSee('Linked to resolved Zabbix problem')
@@ -184,8 +186,8 @@ class ZnunyTicketWorkspaceTest extends TestCase
         $this->seedTicket(['TicketID' => 202, 'TicketNumber' => 'TN202', 'Title' => 'Open', 'StateType' => 'open']);
         $this->seedTicket(['TicketID' => 203, 'TicketNumber' => 'TN203', 'Title' => 'Closed', 'StateType' => 'closed']);
 
-        \Livewire\Livewire::actingAs($user)
-            ->test(\App\Filament\Pages\ZnunyTicketWorkspace::class)
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
             ->set('stateTypeFilter', ['new', 'open'])
             ->assertSee('TN201')
             ->assertSee('TN202')
@@ -196,15 +198,15 @@ class ZnunyTicketWorkspaceTest extends TestCase
     {
         $user = User::factory()->create(['role' => 'operator']);
 
-        \App\Models\Setting::updateOrCreate(
+        Setting::updateOrCreate(
             ['key' => 'znuny_ticket_cache_refresh_interval_minutes'],
             ['value' => 5, 'type' => 'integer']
         );
 
-        $page = new \App\Filament\Pages\ZnunyTicketWorkspace();
+        $page = new ZnunyTicketWorkspace;
         $this->assertEquals('300s', $page->getRefreshIntervalString());
 
-        \App\Models\Setting::updateOrCreate(
+        Setting::updateOrCreate(
             ['key' => 'znuny_ticket_cache_refresh_interval_minutes'],
             ['value' => 1, 'type' => 'integer']
         );
@@ -216,13 +218,13 @@ class ZnunyTicketWorkspaceTest extends TestCase
     {
         $user = User::factory()->create(['role' => 'operator']);
 
-        \App\Models\Setting::updateOrCreate(
+        Setting::updateOrCreate(
             ['key' => 'znuny_ticket_cache_refresh_interval_minutes'],
             ['value' => 5, 'type' => 'integer']
         );
 
-        \Livewire\Livewire::actingAs($user)
-            ->test(\App\Filament\Pages\ZnunyTicketWorkspace::class)
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
             ->assertSeeHtml('wire:poll.300s');
     }
 
@@ -230,15 +232,15 @@ class ZnunyTicketWorkspaceTest extends TestCase
     {
         $user = User::factory()->create(['role' => 'operator']);
 
-        \Illuminate\Support\Facades\Artisan::shouldReceive('call')
+        Artisan::shouldReceive('call')
             ->once()
-            ->with('znuny:warm-ticket-workspace-cache')
+            ->with('znuny:warm-ticket-workspace-cache', ['--manual' => true])
             ->andReturn(0);
-        \Illuminate\Support\Facades\Artisan::shouldReceive('output')
+        Artisan::shouldReceive('output')
             ->andReturn('Cache warming complete.');
 
-        \Livewire\Livewire::actingAs($user)
-            ->test(\App\Filament\Pages\ZnunyTicketWorkspace::class)
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
             ->call('refreshFromZnuny')
             ->assertNotified()
             ->assertSet('page', 1);
@@ -248,16 +250,28 @@ class ZnunyTicketWorkspaceTest extends TestCase
     {
         $user = User::factory()->create(['role' => 'operator']);
 
-        \Illuminate\Support\Facades\Artisan::shouldReceive('call')
+        Artisan::shouldReceive('call')
             ->once()
-            ->with('znuny:warm-ticket-workspace-cache')
+            ->with('znuny:warm-ticket-workspace-cache', ['--manual' => true])
             ->andReturn(1);
-        \Illuminate\Support\Facades\Artisan::shouldReceive('output')
+        Artisan::shouldReceive('output')
             ->andReturn('Failed output');
 
-        \Livewire\Livewire::actingAs($user)
-            ->test(\App\Filament\Pages\ZnunyTicketWorkspace::class)
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
             ->call('refreshFromZnuny')
             ->assertNotified();
+    }
+
+    public function test_audit_logs_are_not_created_on_ui_render()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->assertSuccessful()
+            ->call('$refresh');
+
+        $this->assertDatabaseCount('audit_logs', 0);
     }
 }
