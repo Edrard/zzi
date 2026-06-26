@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\ZabbixTicket;
+use App\Services\Zabbix\ZabbixProblemFormatter;
 use App\Services\Znuny\ZnunyTicketWorkspaceCacheReader;
 use Illuminate\Support\Facades\Redis;
 use Livewire\Component;
@@ -54,6 +55,13 @@ class SharedTicketModal extends Component
             } else {
                 $this->ticket = null;
             }
+        }
+
+        if ($this->ticket && isset($this->ticket['zabbix_severity'])) {
+            $formatter = app(ZabbixProblemFormatter::class);
+            $this->ticket['zabbix_severity_label'] = is_numeric($this->ticket['zabbix_severity'])
+                ? $formatter->getSeverityFallback((int) $this->ticket['zabbix_severity'])
+                : $this->ticket['zabbix_severity'];
         }
 
         $this->dispatch('open-modal', id: 'shared-ticket-details-modal');

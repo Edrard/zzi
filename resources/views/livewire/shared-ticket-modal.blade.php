@@ -82,7 +82,7 @@
                                     <span style="color: #dc2626;">Active</span>
                                 @endif
                             </div>
-                            <div><span style="color: #6b7280;">Severity:</span> {{ \App\Services\Zabbix\ZabbixSeverityEnum::tryFrom((int)($ticket['zabbix_severity'] ?? -1))?->getLabel() ?? $ticket['zabbix_severity'] ?? '-' }}</div>
+                            <div><span style="color: #6b7280;">Severity:</span> {{ $ticket['zabbix_severity_label'] ?? $ticket['zabbix_severity'] ?? '-' }}</div>
                             <div><span style="color: #6b7280;">Age:</span> {{ !empty($ticket['zabbix_problem_started_at']) ? \Carbon\Carbon::parse($ticket['zabbix_problem_started_at'])->diffForHumans() : '-' }}</div>
                             <div><span style="color: #6b7280;">Lifecycle:</span> {{ $ticket['manual_lifecycle_status'] ?? '-' }}</div>
                         </div>

@@ -96,8 +96,12 @@ class ZabbixTicketsTable
                 //
             ])
             ->recordActions([
-                ZabbixTicketDetailsAction::make(),
+                ZabbixTicketDetailsAction::make('viewTicket')
+                    ->iconButton()
+                    ->extraAttributes(['class' => 'hidden']),
                 ZnunyTicketManagementActions::openInZnunyAction('open_ticket'),
+                ZnunyTicketManagementActions::closeTicketAction('manual_close_ticket'),
+                ZnunyTicketManagementActions::reopenTicketAction('reopen_ticket'),
             ])
             ->toolbarActions([]);
     }
