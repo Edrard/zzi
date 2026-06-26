@@ -143,4 +143,74 @@ class ZnunyTicketWorkspaceCacheReaderTest extends TestCase
         $this->assertCount(1, $res['rows']);
         $this->assertEquals(102, $res['rows'][0]['TicketID']);
     }
+
+    public function test_linked_problem_warning_logic()
+    {
+        $this->mock(\App\Services\Zabbix\ZabbixProblemCache::class, function ($mock) {
+            $mock->shouldReceive('find')->with('evt-1')->andReturn(['name' => 'Active Problem 1', 'severity' => 2]);
+            $mock->shouldReceive('find')->with('evt-2')->andReturn(['name' => 'Active Problem 2', 'severity' => 2]);
+            $mock->shouldReceive('find')->with('evt-3')->andReturn(['name' => 'Active Problem 3', 'severity' => 2]);
+            $mock->shouldReceive('find')->with('evt-99')->andReturn(null);
+        });
+
+        $this->seedTicket(['TicketID' => 101, 'TicketNumber' => 'TN101', 'Title' => 'New', 'StateType' => 'new']);
+        $this->seedTicket(['TicketID' => 102, 'TicketNumber' => 'TN102', 'Title' => 'Open', 'StateType' => 'open']);
+        $this->seedTicket(['TicketID' => 103, 'TicketNumber' => 'TN103', 'Title' => 'Closed', 'StateType' => 'closed']);
+        $this->seedTicket(['TicketID' => 104, 'TicketNumber' => 'TN104', 'Title' => 'Resolved', 'StateType' => 'closed']);
+
+        ZabbixTicket::create([
+            'zabbix_event_id' => 'evt-1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'znuny_ticket_id' => 101,
+            'znuny_ticket_number' => 'TN101',
+        ]);
+        ZabbixTicket::create([
+            'zabbix_event_id' => 'evt-2',
+            'zabbix_host_name' => 'Host 2',
+            'zabbix_problem_name' => 'Problem 2',
+            'znuny_ticket_id' => 102,
+            'znuny_ticket_number' => 'TN102',
+        ]);
+        ZabbixTicket::create([
+            'zabbix_event_id' => 'evt-3',
+            'zabbix_host_name' => 'Host 3',
+            'zabbix_problem_name' => 'Problem 3',
+            'znuny_ticket_id' => 103,
+            'znuny_ticket_number' => 'TN103',
+        ]);
+        ZabbixTicket::create([
+            'zabbix_event_id' => 'evt-99',
+            'zabbix_host_name' => 'Host 99',
+            'zabbix_problem_name' => 'Problem 99',
+            'znuny_ticket_id' => 104,
+            'znuny_ticket_number' => 'TN104',
+        ]);
+
+        $reader = app(\App\Services\Znuny\ZnunyTicketWorkspaceCacheReader::class);
+        $res = $reader->getTicketsPaginated(['state_types' => ['new', 'open', 'closed']], 1, 50);
+        $tickets = collect($res['rows'])->keyBy('TicketID');
+
+        // 1. Active linked problem with StateType: new does not set warning
+        $t101 = $tickets[101];
+        $this->assertTrue($t101['linked_problem_is_active']);
+        $this->assertFalse($t101['linked_problem_is_resolved']);
+        $this->assertFalse($t101['linked_problem_has_warning']);
+
+        // 2. Active linked problem with StateType: open does not set warning
+        $t102 = $tickets[102];
+        $this->assertTrue($t102['linked_problem_is_active']);
+        $this->assertFalse($t102['linked_problem_has_warning']);
+
+        // 3. Active linked problem with StateType: closed DOES set warning
+        $t103 = $tickets[103];
+        $this->assertTrue($t103['linked_problem_is_active']);
+        $this->assertTrue($t103['linked_problem_has_warning']);
+
+        // 4. Resolved/missing active problem keeps warning false
+        $t104 = $tickets[104];
+        $this->assertFalse($t104['linked_problem_is_active']);
+        $this->assertTrue($t104['linked_problem_is_resolved']);
+        $this->assertFalse($t104['linked_problem_has_warning']);
+    }
 }

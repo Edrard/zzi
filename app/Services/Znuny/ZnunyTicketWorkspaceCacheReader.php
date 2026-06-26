@@ -346,7 +346,15 @@ class ZnunyTicketWorkspaceCacheReader
             if ($problem) {
                 $t['linked_problem_is_active'] = true;
                 $t['linked_problem_is_resolved'] = false;
-                $t['linked_problem_has_warning'] = true;
+
+                $stateType = strtolower((string) ($t['StateType'] ?? ''));
+                $state = strtolower((string) ($t['State'] ?? ''));
+
+                $ticketLooksClosedOrMerged = in_array($stateType, ['closed', 'merged'], true)
+                    || str_contains($state, 'closed')
+                    || str_contains($state, 'merged');
+
+                $t['linked_problem_has_warning'] = $ticketLooksClosedOrMerged;
                 $t['linked_problem_summary'] = $problem['name'] ?? null;
                 $t['linked_problem_host'] = $problem['host_name'] ?? null;
                 $t['linked_problem_severity'] = $problem['severity'] ?? null;
