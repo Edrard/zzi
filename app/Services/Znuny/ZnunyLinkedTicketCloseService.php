@@ -76,6 +76,17 @@ class ZnunyLinkedTicketCloseService
             ];
         }
 
+        // Close succeeded! Now attempt unlock
+        $unlockWarning = null;
+        try {
+            $unlockResponse = $this->znunyClient->unlockTicket($ticket->znuny_ticket_id);
+            if (! $unlockResponse['success']) {
+                $unlockWarning = 'Ticket was closed, but unlock failed. '.implode(', ', $unlockResponse['warnings'] ?? $unlockResponse['errors'] ?? []);
+            }
+        } catch (\Throwable $e) {
+            $unlockWarning = 'Ticket was closed, but unlock failed. '.$e->getMessage();
+        }
+
         // Update local DB safely on verified success
         $ticket->update([
             'manual_lifecycle_status' => ZnunyManualTicketLifecycleService::STATUS_CLOSED,
@@ -93,6 +104,7 @@ class ZnunyLinkedTicketCloseService
             'success' => true,
             'ticket_number' => $ticket->znuny_ticket_number,
             'reason' => 'Closed successfully.',
+            'warning' => $unlockWarning,
         ];
     }
 }

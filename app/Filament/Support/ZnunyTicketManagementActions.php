@@ -73,25 +73,38 @@ class ZnunyTicketManagementActions
                 );
 
                 if ($result['success']) {
+                    $logContext = [
+                        'message' => "Ticket {$ticket->znuny_ticket_number} manually closed via UI.",
+                        'znuny_ticket_id' => $ticket->znuny_ticket_id,
+                        'znuny_ticket_number' => $ticket->znuny_ticket_number,
+                        'host' => $ticket->zabbix_host_name,
+                        'problem' => $ticket->zabbix_problem_name,
+                        'previous_state' => $ticket->znuny_state_name,
+                        'source' => 'linked_tickets_ui',
+                    ];
+                    if (! empty($result['warning'])) {
+                        $logContext['warning'] = $result['warning'];
+                    }
+
                     AuditLogger::log(
                         'znuny.auto_close.success',
                         'zabbix_ticket',
                         $ticket->id,
-                        [
-                            'message' => "Ticket {$ticket->znuny_ticket_number} manually closed via UI.",
-                            'znuny_ticket_id' => $ticket->znuny_ticket_id,
-                            'znuny_ticket_number' => $ticket->znuny_ticket_number,
-                            'host' => $ticket->zabbix_host_name,
-                            'problem' => $ticket->zabbix_problem_name,
-                            'previous_state' => $ticket->znuny_state_name,
-                            'source' => 'linked_tickets_ui',
-                        ]
+                        $logContext
                     );
-                    Notification::make()
-                        ->title('Ticket Closed')
-                        ->body('Znuny ticket successfully closed.')
-                        ->success()
-                        ->send();
+                    if (! empty($result['warning'])) {
+                        Notification::make()
+                            ->title('Ticket Closed with Warning')
+                            ->body($result['warning'])
+                            ->warning()
+                            ->send();
+                    } else {
+                        Notification::make()
+                            ->title('Ticket Closed')
+                            ->body('Znuny ticket successfully closed.')
+                            ->success()
+                            ->send();
+                    }
                 } else {
                     AuditLogger::log(
                         'znuny.auto_close.failed',

@@ -130,22 +130,33 @@ class AutoCloseManualTicketsCommand extends Command
 
             $outcome = $autoCloseService->executeClose($ticket);
 
+            $resultMessage = $outcome['reason'];
+            if (! empty($outcome['warning'])) {
+                $resultMessage .= ' (Warning: '.$outcome['warning'].')';
+            }
+
             $results[] = array_merge($c, [
                 'action' => 'execute',
-                'result' => $outcome['reason'],
+                'result' => $resultMessage,
             ]);
 
             if ($outcome['success']) {
                 $summary['closed']++;
+
+                $logContext = [
+                    'ticket_number' => $ticket->znuny_ticket_number,
+                    'host' => $ticket->zabbix_host_name,
+                    'problem' => $ticket->zabbix_problem_name,
+                ];
+                if (! empty($outcome['warning'])) {
+                    $logContext['warning'] = $outcome['warning'];
+                }
+
                 AuditLogger::log(
                     'znuny.auto_close.success',
                     'zabbix_ticket',
                     $ticket->id,
-                    [
-                        'ticket_number' => $ticket->znuny_ticket_number,
-                        'host' => $ticket->zabbix_host_name,
-                        'problem' => $ticket->zabbix_problem_name,
-                    ]
+                    $logContext
                 );
             } elseif ($outcome['skipped']) {
                 $summary['skipped']++;

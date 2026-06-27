@@ -58,6 +58,10 @@ class ZnunyLinkedTicketCloseServiceTest extends TestCase
                 'state' => 'closed successful',
                 'state_type' => 'closed',
             ]);
+        $mockClient->shouldReceive('unlockTicket')
+            ->once()
+            ->with(10)
+            ->andReturn(['success' => true]);
 
         $service = app(ZnunyLinkedTicketCloseService::class);
         $result = $service->closeTicket($ticket, 'Subject', 'Body', 'Reason');
@@ -110,16 +114,66 @@ class ZnunyLinkedTicketCloseServiceTest extends TestCase
                 'state' => 'closed successful',
                 'state_type' => 'closed',
             ]);
+        $mockClient->shouldReceive('unlockTicket')
+            ->once()
+            ->with(10)
+            ->andReturn(['success' => true]);
 
         $service = app(ZnunyLinkedTicketCloseService::class);
         $result = $service->closeTicket($ticket, 'Subject', 'Body', 'Reason');
 
         $this->assertTrue($result['success']);
+        $this->assertNull($result['warning']);
 
         $ticket->refresh();
 
         $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_REOPEN_CANDIDATE, $ticket->manual_lifecycle_status);
         $this->assertEquals(now()->toDateTimeString(), $ticket->manual_lifecycle_closed_at->toDateTimeString());
         $this->assertTrue($ticket->zabbix_problem_is_active);
+    }
+
+    public function test_successful_manual_close_with_unlock_failure_returns_warning_but_succeeds()
+    {
+        Carbon::setTestNow(now());
+
+        $ticket = ZabbixTicket::create([
+            'znuny_ticket_id' => 10,
+            'znuny_ticket_number' => '123456',
+            'zabbix_event_id' => 'evt1',
+            'zabbix_trigger_id' => 'trg1',
+            'zabbix_host_id' => 'host1',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+            'creation_source' => 'manual',
+            'znuny_ticket_state_type' => 'open',
+            'manual_lifecycle_status' => 'active',
+            'zabbix_problem_is_active' => false,
+        ]);
+
+        $mockClient = $this->mock(ZnunyClient::class);
+        $mockClient->shouldReceive('closeTicket')
+            ->once()
+            ->with(10, \Mockery::type('array'))
+            ->andReturn([
+                'success' => true,
+                'state' => 'closed successful',
+                'state_type' => 'closed',
+            ]);
+        $mockClient->shouldReceive('unlockTicket')
+            ->once()
+            ->with(10)
+            ->andReturn([
+                'success' => false,
+                'errors' => ['Cannot unlock'],
+            ]);
+
+        $service = app(ZnunyLinkedTicketCloseService::class);
+        $result = $service->closeTicket($ticket, 'Subject', 'Body', 'Reason');
+
+        $this->assertTrue($result['success']);
+        $this->assertStringContainsString('Cannot unlock', $result['warning']);
+
+        $ticket->refresh();
+        $this->assertEquals(ZnunyManualTicketLifecycleService::STATUS_CLOSED, $ticket->manual_lifecycle_status);
     }
 }

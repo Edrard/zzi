@@ -522,4 +522,60 @@ class ZnunyClientTest extends TestCase
         $this->assertSame(111, $response['tickets'][0]['TicketID']);
         $this->assertSame(5, $response['tickets'][0]['QueueID']);
     }
+
+    public function test_unlock_ticket_normalization_success()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/TicketUnlock*' => Http::response([
+                'Success' => 1,
+                'Data' => [
+                    'Ticket' => [
+                        'TicketID' => 57115,
+                        'TicketNumber' => '2026061846000189',
+                        'State' => 'closed successful',
+                        'StateType' => 'closed',
+                        'LockID' => 1,
+                        'Lock' => 'unlock',
+                    ],
+                    'Lock' => 'unlock',
+                    'Warnings' => [],
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $response = $client->unlockTicket(57115);
+
+        $this->assertTrue($response['success']);
+        $this->assertEquals(57115, $response['ticket_id']);
+        $this->assertEquals('2026061846000189', $response['ticket_number']);
+        $this->assertEquals('unlock', $response['lock']);
+        $this->assertEmpty($response['errors']);
+    }
+
+    public function test_unlock_ticket_normalization_error()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/TicketUnlock*' => Http::response([
+                'Success' => 1,
+                'Data' => [
+                    'Ticket' => [
+                        'TicketID' => 57115,
+                        'TicketNumber' => '2026061846000189',
+                        'Lock' => 'lock',
+                    ],
+                    'Errors' => ['Ticket could not be unlocked.'],
+                    'Warnings' => [],
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $response = $client->unlockTicket(57115);
+
+        $this->assertFalse($response['success']);
+        $this->assertContains('Ticket could not be unlocked.', $response['errors']);
+    }
 }

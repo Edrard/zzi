@@ -242,6 +242,8 @@ class ZnunyClient
                 'StateID' => $ticket['StateID'] ?? null,
                 'State' => $ticket['State'] ?? null,
                 'StateType' => $ticket['StateType'] ?? null,
+                'LockID' => $ticket['LockID'] ?? null,
+                'Lock' => $ticket['Lock'] ?? null,
                 'PriorityID' => $ticket['PriorityID'] ?? null,
                 'Priority' => $ticket['Priority'] ?? null,
                 'CustomerID' => $ticket['CustomerID'] ?? null,
@@ -543,6 +545,8 @@ class ZnunyClient
             'StateID' => isset($ticket['StateID']) ? (int) $ticket['StateID'] : null,
             'State' => $ticket['State'] ?? null,
             'StateType' => $ticket['StateType'] ?? null,
+            'LockID' => isset($ticket['LockID']) ? (int) $ticket['LockID'] : null,
+            'Lock' => $ticket['Lock'] ?? null,
             'PriorityID' => isset($ticket['PriorityID']) ? (int) $ticket['PriorityID'] : null,
             'Priority' => $ticket['Priority'] ?? null,
             'TypeID' => isset($ticket['TypeID']) ? (int) $ticket['TypeID'] : null,
@@ -1088,6 +1092,64 @@ class ZnunyClient
             $data = $this->processResponse($response);
 
             return $this->normalizeControlledTicketWriteResponse($data);
+        });
+    }
+
+    /**
+     * Call POST /TicketUnlock to safely unlock a ticket.
+     */
+    public function unlockTicket(int|string $ticketIdOrNumber): array
+    {
+        return $this->withSessionRetry(function ($session) use ($ticketIdOrNumber) {
+            $payload = ['SessionID' => $session];
+
+            if (is_numeric($ticketIdOrNumber)) {
+                $payload['TicketID'] = $this->normalizeTicketId($ticketIdOrNumber);
+            } else {
+                $payload['TicketNumber'] = $ticketIdOrNumber;
+            }
+
+            try {
+                $response = $this->request()->post($this->apiUrl().'/TicketUnlock', $payload);
+                $data = $this->processResponse($response);
+            } catch (Throwable $e) {
+                return [
+                    'success' => false,
+                    'warnings' => ['Unlock failed or route not available: '.$this->sanitizeExceptionMessage($e->getMessage())],
+                    'errors' => [],
+                ];
+            }
+
+            $ticket = $data['Ticket'] ?? [];
+            $ticketId = $data['TicketID'] ?? $ticket['TicketID'] ?? null;
+            $ticketNumber = $data['TicketNumber'] ?? $ticket['TicketNumber'] ?? null;
+            $lockId = $data['LockID'] ?? $ticket['LockID'] ?? null;
+            $lock = $data['Lock'] ?? $ticket['Lock'] ?? null;
+            $state = $data['State'] ?? $ticket['State'] ?? null;
+            $stateType = $data['StateType'] ?? $ticket['StateType'] ?? null;
+
+            $errors = $data['Errors'] ?? [];
+            $warnings = $data['Warnings'] ?? [];
+
+            // ZnunyAgentList TicketUnlock returns Lock => 'unlock'
+            $success = empty($errors) && $lock === 'unlock';
+
+            if (! $success && empty($errors)) {
+                $errors[] = 'Missing unlock confirmation in response.';
+            }
+
+            return [
+                'success' => $success,
+                'ticket_id' => $ticketId,
+                'ticket_number' => $ticketNumber,
+                'lock_id' => $lockId,
+                'lock' => $lock,
+                'state' => $state,
+                'state_type' => $stateType,
+                'warnings' => $warnings,
+                'errors' => $errors,
+                'raw' => $data,
+            ];
         });
     }
 }
