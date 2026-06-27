@@ -41,7 +41,7 @@ class EnsureTicketWorkspaceDefaultsCommand extends Command
             'znuny_ticket_workspace_enabled' => ['value' => 'true', 'type' => 'boolean'],
             'znuny_ticket_cache_refresh_interval_minutes' => ['value' => '5', 'type' => 'integer'],
             'znuny_ticket_cache_max_pages_per_run' => ['value' => '3', 'type' => 'integer'],
-            'znuny_ticket_cache_ttl_minutes' => ['value' => '15', 'type' => 'integer'],
+            'znuny_ticket_cache_ttl_minutes' => ['value' => '10', 'type' => 'integer'],
             'znuny_ticket_cache_closed_ttl_minutes' => ['value' => '1440', 'type' => 'integer'],
             'znuny_ticket_cache_default_limit' => ['value' => '50', 'type' => 'integer'],
             'znuny_ticket_workspace_active_state_type_ids' => ['value' => '["new","open","pending_reminder","pending_auto"]', 'type' => 'json'],

@@ -3,6 +3,7 @@
 namespace App\Services\Znuny;
 
 use App\Services\SettingsService;
+use App\Support\Polling\UiPollInterval;
 use Illuminate\Support\Facades\Redis;
 
 class ZnunyTicketCacheService
@@ -14,7 +15,14 @@ class ZnunyTicketCacheService
 
     protected function getTtl(): int
     {
-        return (SettingsService::int('znuny_ticket_cache_ttl_minutes', 15) ?? 15) * 60;
+        $configuredActiveTtlMinutes = SettingsService::int('znuny_ticket_cache_ttl_minutes', 10) ?? 10;
+        $cacheRefreshIntervalMinutes = SettingsService::int('znuny_ticket_cache_refresh_interval_minutes', 5) ?? 5;
+        $uiPollIntervalSeconds = UiPollInterval::getSeconds();
+
+        $configuredActiveTtlSeconds = $configuredActiveTtlMinutes * 60;
+        $safeRefreshTtlSeconds = ($cacheRefreshIntervalMinutes * 60) + $uiPollIntervalSeconds;
+
+        return (int) max($configuredActiveTtlSeconds, $safeRefreshTtlSeconds);
     }
 
     protected function getClosedTtl(): int

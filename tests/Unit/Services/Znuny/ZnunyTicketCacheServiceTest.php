@@ -28,7 +28,7 @@ class ZnunyTicketCacheServiceTest extends TestCase
 
         // Ensure settings pretend cache is enabled
         Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
-        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_ttl_minutes'], ['value' => '15']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_ttl_minutes'], ['value' => '10']);
         Setting::updateOrCreate(['key' => 'znuny_ticket_cache_closed_ttl_minutes'], ['value' => '1440']);
 
         $this->service = new ZnunyTicketCacheService;
@@ -43,17 +43,50 @@ class ZnunyTicketCacheServiceTest extends TestCase
         $this->service->upsertTicket(['TicketID' => 123]);
     }
 
-    public function test_it_caches_ticket_payload_with_default_ttl(): void
+    public function test_it_applies_active_ttl_guard_when_configured_ttl_is_less_than_safe_ttl(): void
     {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_ttl_minutes'], ['value' => '5']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_refresh_interval_minutes'], ['value' => '5']);
+        config(['app.ui_poll_interval_seconds' => 60]);
+
         $ticket = [
             'TicketID' => 101,
             'StateType' => 'open',
             'QueueID' => 5,
         ];
 
+        // Safe TTL = (5 * 60) + 60 = 360
         Redis::shouldReceive('setex')
             ->once()
-            ->with('znuny:ticket:101', 900, json_encode($ticket));
+            ->with('znuny:ticket:101', 360, json_encode($ticket));
+
+        // And reverse index
+        Redis::shouldReceive('setex')
+            ->once()
+            ->with('znuny:ticket_indexes:101', \Mockery::any(), \Mockery::any());
+
+        Redis::shouldReceive('zadd')->times(2); // state type and queue
+        Redis::shouldReceive('expire')->times(2);
+
+        $this->service->upsertTicket($ticket);
+    }
+
+    public function test_it_uses_configured_active_ttl_when_greater_than_safe_ttl(): void
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_ttl_minutes'], ['value' => '10']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_refresh_interval_minutes'], ['value' => '5']);
+        config(['app.ui_poll_interval_seconds' => 60]);
+
+        $ticket = [
+            'TicketID' => 101,
+            'StateType' => 'open',
+            'QueueID' => 5,
+        ];
+
+        // Configured TTL = 10 * 60 = 600, Safe TTL = (5 * 60) + 60 = 360. Max = 600.
+        Redis::shouldReceive('setex')
+            ->once()
+            ->with('znuny:ticket:101', 600, json_encode($ticket));
 
         // And reverse index
         Redis::shouldReceive('setex')
@@ -162,7 +195,7 @@ class ZnunyTicketCacheServiceTest extends TestCase
 
         Redis::shouldReceive('setex')
             ->once()
-            ->with('znuny:ticket:500', 900, json_encode($ticket));
+            ->with('znuny:ticket:500', 600, json_encode($ticket));
 
         Redis::shouldReceive('setex')
             ->once()
@@ -185,7 +218,7 @@ class ZnunyTicketCacheServiceTest extends TestCase
         Redis::shouldReceive('get')->with('znuny:ticket_indexes:600')->andReturn(json_encode(['znuny:index:queue:1']));
 
         // Should just expire
-        Redis::shouldReceive('expire')->with('znuny:ticket:600', 900)->once();
+        Redis::shouldReceive('expire')->with('znuny:ticket:600', 600)->once();
         Redis::shouldReceive('expire')->with('znuny:ticket_indexes:600', \Mockery::any())->once();
         Redis::shouldReceive('expire')->with('znuny:index:queue:1', \Mockery::any())->once();
 
@@ -213,7 +246,7 @@ class ZnunyTicketCacheServiceTest extends TestCase
 
         Redis::shouldReceive('setex')
             ->once()
-            ->with('znuny:ticket:700', 900, json_encode($ticket));
+            ->with('znuny:ticket:700', 600, json_encode($ticket));
 
         Redis::shouldReceive('setex')
             ->once()

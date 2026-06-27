@@ -4,7 +4,6 @@ namespace Tests\Feature\Filament\Pages;
 
 use App\Filament\Pages\ZnunyTicketWorkspace;
 use App\Models\AuditLog;
-use App\Models\Setting;
 use App\Models\User;
 use App\Services\Znuny\ZnunyTicketCacheService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -195,38 +194,23 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->assertDontSee('TN203');
     }
 
-    public function test_get_refresh_interval_string_uses_setting()
+    public function test_get_refresh_interval_string_uses_global_ui_polling_setting(): void
     {
-        $user = User::factory()->create(['role' => 'operator']);
-
-        Setting::updateOrCreate(
-            ['key' => 'znuny_ticket_cache_refresh_interval_minutes'],
-            ['value' => 5, 'type' => 'integer']
-        );
+        config(['app.ui_poll_interval_seconds' => 120]);
 
         $page = new ZnunyTicketWorkspace;
-        $this->assertEquals('300s', $page->getRefreshIntervalString());
-
-        Setting::updateOrCreate(
-            ['key' => 'znuny_ticket_cache_refresh_interval_minutes'],
-            ['value' => 1, 'type' => 'integer']
-        );
-
-        $this->assertEquals('60s', $page->getRefreshIntervalString());
+        $this->assertEquals('120s', $page->getRefreshIntervalString());
     }
 
     public function test_page_includes_livewire_polling()
     {
         $user = User::factory()->create(['role' => 'operator']);
 
-        Setting::updateOrCreate(
-            ['key' => 'znuny_ticket_cache_refresh_interval_minutes'],
-            ['value' => 5, 'type' => 'integer']
-        );
+        config(['app.ui_poll_interval_seconds' => 120]);
 
         Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
-            ->assertSeeHtml('wire:poll.300s');
+            ->assertSeeHtml('wire:poll.120s');
     }
 
     public function test_manual_refresh_calls_existing_command()

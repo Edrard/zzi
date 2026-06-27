@@ -5,9 +5,9 @@ namespace App\Filament\Resources\ZabbixTickets\Tables;
 use App\Filament\Resources\ZabbixTickets\Actions\ZabbixTicketDetailsAction;
 use App\Filament\Support\ZnunyTicketManagementActions;
 use App\Models\ZabbixTicket;
-use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixTicketStatusPresenter;
 use App\Support\Pagination\PaginationSettings;
+use App\Support\Polling\UiPollInterval;
 use Filament\Support\Enums\Size;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -16,13 +16,10 @@ class ZabbixTicketsTable
 {
     public static function configure(Table $table): Table
     {
-        $minutes = SettingsService::int('zabbix_poll_interval_minutes', 1) ?? 1;
-        $seconds = max((int) round(($minutes * 60) / 2), 10);
-
         return $table
             ->defaultPaginationPageOption(app(PaginationSettings::class)->defaultPerPage())
             ->paginationPageOptions(app(PaginationSettings::class)->perPageOptions())
-            ->poll("{$seconds}s")
+            ->poll(UiPollInterval::getLivewireString())
             ->recordClasses(fn () => 'linked-tickets-compact-table')
             ->recordAction('viewTicket')
             ->columns([

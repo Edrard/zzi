@@ -6,6 +6,7 @@ use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyTicketWorkspaceCacheReader;
 use App\Services\Znuny\ZnunyTicketWorkspaceStateTypeMapper;
 use App\Support\Pagination\PaginationSettings;
+use App\Support\Polling\UiPollInterval;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -192,10 +193,6 @@ class ZnunyTicketWorkspace extends Page
 
     public function getRefreshIntervalString(): string
     {
-        $minutes = SettingsService::int('znuny_ticket_cache_refresh_interval_minutes', 5) ?? 5;
-
-        $seconds = max(60, $minutes * 60);
-
-        return "{$seconds}s";
+        return UiPollInterval::getLivewireString();
     }
 }

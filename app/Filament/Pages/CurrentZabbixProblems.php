@@ -5,7 +5,6 @@ namespace App\Filament\Pages;
 use App\Filament\Resources\ZabbixTickets\Actions\ZabbixTicketDetailsAction;
 use App\Filament\Support\ZnunyTicketManagementActions;
 use App\Models\ZabbixTicket;
-use App\Services\SettingsService;
 use App\Services\Support\DateTimeDisplayService;
 use App\Services\Zabbix\ZabbixProblemCache;
 use App\Services\Zabbix\ZabbixProblemFormatter;
@@ -18,6 +17,7 @@ use App\Services\Znuny\ZnunyManualTicketLifecycleService;
 use App\Services\Znuny\ZnunyTicketCreationService;
 use App\Services\Znuny\ZnunyTicketModalStateBuilder;
 use App\Services\Znuny\ZnunyTicketTextBuilder;
+use App\Support\Polling\UiPollInterval;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
 use Filament\Notifications\Notification;
@@ -284,12 +284,7 @@ class CurrentZabbixProblems extends Page
 
     public function getRefreshIntervalString(): string
     {
-        $minutes = SettingsService::int('zabbix_poll_interval_minutes', 1) ?? 1;
-        $seconds = (int) round(($minutes * 60) / 2);
-
-        $finalSeconds = max($seconds, 10);
-
-        return "{$finalSeconds}s";
+        return UiPollInterval::getLivewireString();
     }
 
     public function getProblemAgeSeconds(array $problem): int

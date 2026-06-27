@@ -123,4 +123,15 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Global UI Poll Interval
+    |--------------------------------------------------------------------------
+    |
+    | This value dictates the global default interval in seconds that UI
+    | components should wait before polling the server for new data.
+    |
+    */
+    'ui_poll_interval_seconds' => env('APP_UI_POLL_INTERVAL_SECONDS', 60),
+
 ];

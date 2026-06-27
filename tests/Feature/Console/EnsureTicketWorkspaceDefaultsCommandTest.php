@@ -23,7 +23,7 @@ class EnsureTicketWorkspaceDefaultsCommandTest extends TestCase
         ]);
         $this->assertDatabaseHas('settings', [
             'key' => 'znuny_ticket_cache_ttl_minutes',
-            'value' => '15',
+            'value' => '10',
         ]);
         $this->assertDatabaseHas('settings', [
             'key' => 'znuny_ticket_workspace_active_state_type_ids',

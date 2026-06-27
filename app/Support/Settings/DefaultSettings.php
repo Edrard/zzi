@@ -75,7 +75,7 @@ class DefaultSettings
             ['key' => 'znuny_ticket_workspace_enabled', 'value' => 'true', 'type' => 'boolean', 'description' => 'Enable Redis-backed Ticket Workspace.'],
             ['key' => 'znuny_ticket_cache_refresh_interval_minutes', 'value' => '5', 'type' => 'integer', 'description' => 'Interval for the Ticket Workspace cache warmer in minutes.'],
             ['key' => 'znuny_ticket_cache_max_pages_per_run', 'value' => '3', 'type' => 'integer', 'description' => 'Safety limit for paginated ZnunyTicketSearch cache warming.'],
-            ['key' => 'znuny_ticket_cache_ttl_minutes', 'value' => '15', 'type' => 'integer', 'description' => 'Default TTL for cached active Znuny tickets in minutes.'],
+            ['key' => 'znuny_ticket_cache_ttl_minutes', 'value' => '10', 'type' => 'integer', 'description' => 'Default TTL for cached active Znuny tickets in minutes.'],
             ['key' => 'znuny_ticket_cache_closed_ttl_minutes', 'value' => '1440', 'type' => 'integer', 'description' => 'TTL for recently closed Znuny tickets in minutes.'],
             ['key' => 'znuny_ticket_cache_default_limit', 'value' => '50', 'type' => 'integer', 'description' => 'Default page size for Znuny ticket cache warming/search.'],
             ['key' => 'znuny_ticket_workspace_default_per_page', 'value' => '50', 'type' => 'integer', 'description' => 'Default per page value for Ticket Workspace UI.'],
