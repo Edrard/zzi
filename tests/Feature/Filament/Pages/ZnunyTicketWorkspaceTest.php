@@ -358,4 +358,21 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->assertSeeHtml('@media (max-width: 500px)')
             ->assertSeeHtml('.zbx-ticket-workspace .zbx-col-changed');
     }
+
+    public function test_workspace_css_variables_and_dropdown_fallbacks()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->assertSuccessful()
+            ->assertSeeHtml('.zbx-ticket-workspace {')
+            ->assertSeeHtml('--zbx-table-bg: var(--color-white);')
+            ->assertSeeHtml('--zbx-table-border: var(--gray-200);')
+            ->assertSeeHtml('--zbx-table-text: var(--gray-950);')
+            ->assertSeeHtml('--zbx-table-muted: var(--gray-500);')
+            ->assertSeeHtml('.zbx-dropdown-menu {')
+            ->assertSeeHtml('background-color: var(--zbx-table-bg, #ffffff);')
+            ->assertSeeHtml('border: 1px solid var(--zbx-table-border, #e5e7eb);');
+    }
 }

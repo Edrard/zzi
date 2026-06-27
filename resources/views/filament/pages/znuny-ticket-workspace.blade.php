@@ -56,8 +56,8 @@
             left: 0;
             z-index: 50;
             margin-top: 4px;
-            background-color: var(--zbx-table-bg);
-            border: 1px solid var(--zbx-table-border);
+            background-color: var(--zbx-table-bg, #ffffff);
+            border: 1px solid var(--zbx-table-border, #e5e7eb);
             border-radius: 0.5rem;
             box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
             min-width: 200px;
@@ -73,11 +73,11 @@
             padding: 0.375rem 0.5rem;
             cursor: pointer;
             border-radius: 0.25rem;
-            color: var(--zbx-table-text);
+            color: var(--zbx-table-text, #111827);
         }
 
         .zbx-dropdown-item:hover {
-            background-color: var(--zbx-table-hover);
+            background-color: var(--zbx-table-hover, #f3f4f6);
         }
 
         .zbx-toolbar-count {
@@ -87,28 +87,32 @@
         }
         :is(.dark) .zbx-toolbar-count { color: #d1d5db; }
 
-        /* Table Section */
-        .zbx-table-container {
+        /* Workspace Variables Scope */
+        .zbx-ticket-workspace {
             --zbx-table-bg: var(--color-white);
             --zbx-table-head-bg: var(--gray-50);
             --zbx-table-border: var(--gray-200);
             --zbx-table-text: var(--gray-950);
             --zbx-table-muted: var(--gray-500);
             --zbx-table-hover: #eaf3ff;
-            background-color: var(--zbx-table-bg);
-            border: 1px solid var(--zbx-table-border);
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-            overflow-x: auto;
         }
-        :is(.dark) .zbx-table-container {
+        :is(.dark) .zbx-ticket-workspace {
             --zbx-table-bg: var(--gray-900);
             --zbx-table-head-bg: #ffffff0d;
             --zbx-table-border: #ffffff0d;
             --zbx-table-text: var(--color-white);
             --zbx-table-muted: var(--gray-400);
             --zbx-table-hover: #ffffff0d;
+        }
+
+        /* Table Section */
+        .zbx-table-container {
+            background-color: var(--zbx-table-bg);
+            border: 1px solid var(--zbx-table-border);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            overflow-x: auto;
         }
 
         .zbx-table {
