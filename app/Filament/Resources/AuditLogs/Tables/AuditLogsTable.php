@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\AuditLogs\Tables;
 
+use App\Support\Pagination\PaginationSettings;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -19,6 +20,8 @@ class AuditLogsTable
                 TextColumn::make('entity_id')->searchable(),
                 TextColumn::make('ip_address')->searchable(),
             ])
+            ->defaultPaginationPageOption(app(PaginationSettings::class)->defaultPerPage())
+            ->paginationPageOptions(app(PaginationSettings::class)->perPageOptions())
             ->defaultSort('created_at', 'desc')
             ->filters([
                 //

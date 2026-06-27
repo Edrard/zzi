@@ -373,10 +373,9 @@
                     <span>Per page:</span>
                     <x-filament::input.wrapper style="width: auto;">
                         <x-filament::input.select wire:model.live="perPage">
-                            <option value="25">25</option>
-                            <option value="50">50</option>
-                            <option value="100">100</option>
-                            <option value="250">250</option>
+                            @foreach(app(\App\Support\Pagination\PaginationSettings::class)->perPageOptions() as $option)
+                                <option value="{{ $option }}">{{ $option }}</option>
+                            @endforeach
                         </x-filament::input.select>
                     </x-filament::input.wrapper>
                 </div>

@@ -4,6 +4,7 @@ namespace App\Filament\Resources\ZabbixProblemFilters;
 
 use App\Filament\Resources\ZabbixProblemFilters\Pages\ManageZabbixProblemFilters;
 use App\Models\ZabbixProblemFilter;
+use App\Support\Pagination\PaginationSettings;
 use BackedEnum;
 use Closure;
 use Filament\Actions\DeleteAction;
@@ -83,6 +84,8 @@ class ZabbixProblemFilterResource extends Resource
     {
         return $table
             ->recordTitleAttribute('name')
+            ->defaultPaginationPageOption(app(PaginationSettings::class)->defaultPerPage())
+            ->paginationPageOptions(app(PaginationSettings::class)->perPageOptions())
             ->columns([
                 IconColumn::make('enabled')
                     ->boolean(),

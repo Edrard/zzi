@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\CurrentZabbixProblems;
+use App\Models\AuditLog;
 use App\Models\Setting;
 use App\Models\User;
 use App\Models\ZabbixTicket;
@@ -789,12 +790,13 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
     public function test_audit_logs_are_not_created_on_ui_render()
     {
         $admin = User::factory()->create(['role' => 'admin']);
+        $initialCount = AuditLog::count();
 
         Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
             ->assertSuccessful()
             ->call('$refresh');
 
-        $this->assertDatabaseCount('audit_logs', 0);
+        $this->assertDatabaseCount('audit_logs', $initialCount);
     }
 }

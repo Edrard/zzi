@@ -500,6 +500,8 @@ class Settings extends Page implements HasForms
                 $min = 0;
                 if ($setting->key === 'cleanup_batch_size' || $setting->key === 'znuny_linked_ticket_sync_interval_minutes') {
                     $min = 1;
+                } elseif ($setting->key === 'pagination_per_page_base') {
+                    $min = 11;
                 }
 
                 $component = TextInput::make($setting->key)
@@ -564,7 +566,7 @@ class Settings extends Page implements HasForms
                 $component = $input;
             }
 
-            if (in_array($setting->key, ['cleanup_enabled', 'cleanup_batch_size', 'app_display_timezone'])) {
+            if (in_array($setting->key, ['cleanup_enabled', 'cleanup_batch_size', 'app_display_timezone', 'pagination_per_page_base'])) {
                 $groups['General'][] = $component;
             } elseif (in_array($setting->key, ['retention_action_logs_days', 'retention_closed_tickets_days', 'retention_failed_jobs_days', 'retention_resolved_days', 'retention_statistics_days'])) {
                 $groups['Retention'][] = $component;

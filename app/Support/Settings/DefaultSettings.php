@@ -8,6 +8,7 @@ class DefaultSettings
     {
         return [
             // General
+            ['key' => 'pagination_per_page_base', 'value' => '100', 'type' => 'integer', 'description' => 'Base page size used across paginated tables. Available page sizes are generated as N/2 rounded up to the nearest multiple of 5, N, 2N, and 3N.'],
             ['key' => 'cleanup_enabled', 'value' => 'true', 'type' => 'boolean', 'description' => 'Enable automated cleanup'],
             ['key' => 'cleanup_batch_size', 'value' => '1000', 'type' => 'integer', 'description' => 'Records to delete per cleanup batch'],
             ['key' => 'app_display_timezone', 'value' => 'UTC', 'type' => 'string', 'description' => 'Timezone used to display dates and times in the admin interface.'],

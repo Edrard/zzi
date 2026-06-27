@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyTicketWorkspaceCacheReader;
 use App\Services\Znuny\ZnunyTicketWorkspaceStateTypeMapper;
+use App\Support\Pagination\PaginationSettings;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -42,7 +43,7 @@ class ZnunyTicketWorkspace extends Page
 
     public int $page = 1;
 
-    public int $perPage = 50;
+    public int $perPage;
 
     public string $sortField = 'Changed';
 
@@ -68,6 +69,7 @@ class ZnunyTicketWorkspace extends Page
 
     public function mount()
     {
+        $this->perPage = app(PaginationSettings::class)->defaultPerPage();
         $activeIdsJson = SettingsService::string('znuny_ticket_workspace_active_state_type_ids', '[]');
         $activeIds = json_decode($activeIdsJson, true) ?? [];
         if (! empty($activeIds) && is_array($activeIds)) {
@@ -79,6 +81,11 @@ class ZnunyTicketWorkspace extends Page
         } else {
             $this->stateTypeFilter = ['new', 'open', 'pending reminder', 'pending auto'];
         }
+    }
+
+    public function updatedPerPage($value)
+    {
+        $this->perPage = app(PaginationSettings::class)->normalizePerPage($value);
     }
 
     public function updated($property)

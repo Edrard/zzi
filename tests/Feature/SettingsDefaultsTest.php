@@ -78,4 +78,10 @@ class SettingsDefaultsTest extends TestCase
         $output = Artisan::output();
         $this->assertStringContainsString('Done!', $output);
     }
+
+    public function test_default_registry_contains_pagination_base_setting()
+    {
+        $defaults = DefaultSettings::all();
+        $this->assertContains('pagination_per_page_base', array_column($defaults, 'key'));
+    }
 }

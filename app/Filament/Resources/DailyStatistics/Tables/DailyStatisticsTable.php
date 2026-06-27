@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\DailyStatistics\Tables;
 
+use App\Support\Pagination\PaginationSettings;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -11,6 +12,8 @@ class DailyStatisticsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->defaultPaginationPageOption(app(PaginationSettings::class)->defaultPerPage())
+            ->paginationPageOptions(app(PaginationSettings::class)->perPageOptions())
             ->columns([
                 TextColumn::make('date')->date()->sortable(),
                 TextColumn::make('zabbix_problems_seen')->sortable(),

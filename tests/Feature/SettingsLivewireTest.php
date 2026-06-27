@@ -22,7 +22,10 @@ class SettingsLivewireTest extends TestCase
 
         // Create the settings needed to pass validation
         Setting::updateOrCreate(['key' => 'zabbix_api_url'], ['type' => 'string', 'value' => 'http://example.com']);
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['type' => 'string', 'value' => 'http://example.com']);
+        Setting::updateOrCreate(['key' => 'znuny_web_url'], ['type' => 'string', 'value' => 'http://example.com']);
         Setting::updateOrCreate(['key' => 'znuny_username'], ['type' => 'string', 'value' => 'user']);
+        Setting::updateOrCreate(['key' => 'pagination_per_page_base'], ['type' => 'integer', 'value' => '100']);
         Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], ['type' => 'json', 'value' => json_encode([])]);
 
         $mockClient = \Mockery::mock(ZnunyClient::class);
@@ -262,8 +265,12 @@ class SettingsLivewireTest extends TestCase
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
+        // Set minimum required to pass form validation
         Setting::updateOrCreate(['key' => 'zabbix_api_url'], ['type' => 'string', 'value' => 'http://example.com']);
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['type' => 'string', 'value' => 'http://example.com']);
+        Setting::updateOrCreate(['key' => 'znuny_web_url'], ['type' => 'string', 'value' => 'http://example.com']);
         Setting::updateOrCreate(['key' => 'znuny_username'], ['type' => 'string', 'value' => 'user']);
+        Setting::updateOrCreate(['key' => 'pagination_per_page_base'], ['type' => 'integer', 'value' => '100']);
         Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['type' => 'json', 'value' => '["new"]']);
 
         Livewire::actingAs($admin)
@@ -388,7 +395,7 @@ class SettingsLivewireTest extends TestCase
                     $name = $c->getName();
                     if ($name && ! in_array($name, ['SettingsTabs', 'data', 'saveBottom', 'save'])) {
                         // Skip actions or placeholders that are not actual setting keys
-                        if (! str_contains($name, 'testZnunyConnection') && ! str_starts_with($name, 'tester_help_') && $name !== 'testZabbixConnection' && $name !== 'zabbix_tester_help') {
+                        if (! str_contains($name, 'testZnunyConnection') && ! str_starts_with($name, 'tester_help_') && $name !== 'testZabbixConnection' && $name !== 'zabbix_tester_help' && $name !== 'host_prefix' && $name !== 'queue_name' && $name !== 'note' && $name !== 'auto_tickets_placeholder') {
                             $formKeys[] = $name;
                         }
                     }

@@ -118,18 +118,18 @@ class ZnunyTicketWorkspaceTest extends TestCase
     {
         $user = User::factory()->create(['role' => 'operator']);
 
-        for ($i = 1; $i <= 10; $i++) {
+        for ($i = 1; $i <= 51; $i++) {
             $this->seedTicket(['TicketID' => 100 + $i, 'TicketNumber' => 'TN'.(100 + $i), 'Title' => 'Ticket '.$i, 'StateType' => 'new']);
         }
 
         Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
             ->set('stateTypeFilter', ['new'])
-            ->set('perPage', 5)
-            ->assertSee('TN110')
+            ->set('perPage', 50)
+            ->assertSee('TN151')
             ->assertDontSee('TN101') // on page 2
             ->set('page', 2)
-            ->assertDontSee('TN110')
+            ->assertDontSee('TN151')
             ->assertSee('TN101');
     }
 

@@ -7,6 +7,8 @@ use App\Filament\Support\ZnunyTicketManagementActions;
 use App\Models\ZabbixTicket;
 use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixTicketStatusPresenter;
+use App\Support\Pagination\PaginationSettings;
+use Filament\Support\Enums\Size;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -18,6 +20,8 @@ class ZabbixTicketsTable
         $seconds = max((int) round(($minutes * 60) / 2), 10);
 
         return $table
+            ->defaultPaginationPageOption(app(PaginationSettings::class)->defaultPerPage())
+            ->paginationPageOptions(app(PaginationSettings::class)->perPageOptions())
             ->poll("{$seconds}s")
             ->recordClasses(fn () => 'linked-tickets-compact-table')
             ->recordAction('viewTicket')
@@ -99,7 +103,7 @@ class ZabbixTicketsTable
                 ZabbixTicketDetailsAction::make()
                     ->extraAttributes(['class' => 'linked-tickets-hidden-view-action']),
                 ZnunyTicketManagementActions::openInZnunyAction('open_ticket')
-                    ->size(\Filament\Support\Enums\Size::Small),
+                    ->size(Size::Small),
             ])
             ->toolbarActions([]);
     }
