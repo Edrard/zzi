@@ -126,22 +126,39 @@ class ClosedTicketSyncService
         $limit = 100;
         $fetchedCount = 0;
         $cachedCount = 0;
-        $page = 1;
+        $offset = 0;
+        $maxPages = 1000;
+        $pageCount = 0;
+        $allFetchedIds = [];
 
         $boundaryTimestamp = time() - ($lookbackMinutes * 60);
 
         try {
             while (true) {
+                if ($pageCount >= $maxPages) {
+                    throw new \Exception("Max pages limit ({$maxPages}) exceeded during small sync.");
+                }
+                $pageCount++;
+
                 $tickets = $this->znunyClient->searchTickets([
                     'StateType' => 'closed',
                     'SortBy' => 'Changed',
                     'SortDirection' => 'Down',
                     'Limit' => $limit,
-                    'Page' => $page,
+                    'Offset' => $offset,
                 ]);
 
                 if (empty($tickets)) {
                     break;
+                }
+
+                $pageTicketIds = array_column($tickets, 'TicketID');
+                $newTicketIds = array_diff($pageTicketIds, $allFetchedIds);
+                if (empty($newTicketIds)) {
+                    throw new \Exception('Repeated closed-ticket search page detected before sync completion.');
+                }
+                foreach ($newTicketIds as $id) {
+                    $allFetchedIds[] = $id;
                 }
 
                 $fetchedCount += count($tickets);
@@ -163,7 +180,7 @@ class ClosedTicketSyncService
                     break;
                 }
 
-                $page++;
+                $offset += $limit;
             }
 
             $metadata['last_small_completed_at'] = now()->toDateTimeString();
@@ -223,7 +240,10 @@ class ClosedTicketSyncService
         $limit = 100;
         $fetchedCount = 0;
         $cachedCount = 0;
-        $page = 1;
+        $offset = 0;
+        $maxPages = 1000;
+        $pageCount = 0;
+        $allFetchedIds = [];
 
         $boundaryTimestamp = time() - ($windowDays * 86400);
 
@@ -233,17 +253,31 @@ class ClosedTicketSyncService
 
         try {
             while (true) {
+                if ($pageCount >= $maxPages) {
+                    throw new \Exception("Max pages limit ({$maxPages}) exceeded during full sync.");
+                }
+                $pageCount++;
+
                 $tickets = $this->znunyClient->searchTickets([
                     'StateType' => 'closed',
                     'SortBy' => 'Changed',
                     'SortDirection' => 'Down',
                     'Limit' => $limit,
-                    'Page' => $page,
+                    'Offset' => $offset,
                 ]);
 
                 if (empty($tickets)) {
                     $exhausted = true;
                     break;
+                }
+
+                $pageTicketIds = array_column($tickets, 'TicketID');
+                $newTicketIds = array_diff($pageTicketIds, $allFetchedIds);
+                if (empty($newTicketIds)) {
+                    throw new \Exception('Repeated closed-ticket search page detected before sync completion.');
+                }
+                foreach ($newTicketIds as $id) {
+                    $allFetchedIds[] = $id;
                 }
 
                 $fetchedCount += count($tickets);
@@ -278,7 +312,7 @@ class ClosedTicketSyncService
                     break;
                 }
 
-                $page++;
+                $offset += $limit;
             }
 
             if ($exhausted && ($oldestLoaded === null || $oldestLoaded > $boundaryTimestamp)) {

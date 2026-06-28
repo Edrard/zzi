@@ -355,4 +355,127 @@ class ClosedTicketSyncServiceTest extends TestCase
         $this->assertEquals('auto', $log->context['mode']);
         $this->assertEquals('Znuny API failed', $log->context['error_message']);
     }
+
+    public function test_full_sync_uses_offset_pagination_not_page()
+    {
+        $this->cacheServiceMock->shouldReceive('getMetadata')->andReturn(null);
+
+        // Need 100 tickets to prevent exhaustion break
+        $page1 = [];
+        for ($i = 1; $i <= 100; $i++) {
+            $page1[] = ['TicketID' => $i, 'Changed' => now()->subDays(1)->toDateTimeString()];
+        }
+        $page2 = [];
+        for ($i = 101; $i <= 102; $i++) {
+            $page2[] = ['TicketID' => $i, 'Changed' => now()->subDays(31)->toDateTimeString()];
+        }
+
+        $this->znunyClientMock->shouldReceive('searchTickets')
+            ->withArgs(function ($args) {
+                return $args['Offset'] === 0 && ! isset($args['Page']) && ! isset($args['Queue']) && ! isset($args['QueueID']);
+            })
+            ->once()
+            ->andReturn($page1);
+
+        $this->znunyClientMock->shouldReceive('searchTickets')
+            ->withArgs(function ($args) {
+                return $args['Offset'] === 100 && ! isset($args['Page']) && ! isset($args['Queue']) && ! isset($args['QueueID']);
+            })
+            ->once()
+            ->andReturn($page2);
+
+        $this->cacheServiceMock->shouldReceive('upsertTicket')->times(102);
+        $this->cacheServiceMock->shouldReceive('setMetadata')->once();
+
+        $result = $this->syncService->syncFull();
+        $this->assertEquals('full', $result['effective_mode']);
+        $this->assertEquals(102, $result['fetched_count']);
+    }
+
+    public function test_small_sync_uses_offset_pagination_not_page()
+    {
+        $this->cacheServiceMock->shouldReceive('validateMetadata')->andReturn(['is_valid' => true]);
+        $this->cacheServiceMock->shouldReceive('getMetadata')->andReturn(['last_small_completed_at' => now()->subMinutes(10)->toDateTimeString()]);
+
+        $this->znunyClientMock->shouldReceive('searchTickets')
+            ->withArgs(function ($args) {
+                return $args['Offset'] === 0 && ! isset($args['Page']) && ! isset($args['Queue']) && ! isset($args['QueueID']);
+            })
+            ->once()
+            ->andReturn([]);
+
+        $this->cacheServiceMock->shouldReceive('setMetadata')->once();
+
+        $result = $this->syncService->syncAuto();
+        $this->assertEquals('small', $result['effective_mode']);
+    }
+
+    public function test_full_sync_aborts_on_repeated_page()
+    {
+        $this->cacheServiceMock->shouldReceive('getMetadata')->andReturn(null);
+
+        $page1 = [];
+        for ($i = 1; $i <= 100; $i++) {
+            $page1[] = ['TicketID' => $i, 'Changed' => now()->subDays(1)->toDateTimeString()];
+        }
+
+        $this->znunyClientMock->shouldReceive('searchTickets')->twice()->andReturn($page1);
+
+        $this->cacheServiceMock->shouldReceive('upsertTicket')->times(100);
+        $this->cacheServiceMock->shouldReceive('setMetadata')->once()->withArgs(function ($args) {
+            return isset($args['last_error']) && str_contains($args['last_error'], 'Repeated closed-ticket search page detected');
+        });
+
+        $result = $this->syncService->syncFull();
+
+        $this->assertStringContainsString('Repeated closed-ticket search page detected', $result['error_message']);
+        $this->assertEquals('incomplete', $result['metadata_status']);
+    }
+
+    public function test_small_sync_aborts_on_repeated_page()
+    {
+        $this->cacheServiceMock->shouldReceive('validateMetadata')->andReturn(['is_valid' => true]);
+        $this->cacheServiceMock->shouldReceive('getMetadata')->andReturn(['last_small_completed_at' => now()->subMinutes(10)->toDateTimeString()]);
+
+        $page1 = [];
+        for ($i = 1; $i <= 100; $i++) {
+            $page1[] = ['TicketID' => $i, 'Changed' => now()->subMinutes(1)->toDateTimeString()];
+        }
+
+        $this->znunyClientMock->shouldReceive('searchTickets')->twice()->andReturn($page1);
+
+        $this->cacheServiceMock->shouldReceive('upsertTicket')->times(100);
+        $this->cacheServiceMock->shouldReceive('setMetadata')->once()->withArgs(function ($args) {
+            return isset($args['last_error']) && str_contains($args['last_error'], 'Repeated closed-ticket search page detected');
+        });
+
+        $result = $this->syncService->syncAuto();
+
+        $this->assertStringContainsString('Repeated closed-ticket search page detected', $result['error_message']);
+    }
+
+    public function test_full_sync_aborts_on_max_pages()
+    {
+        $this->cacheServiceMock->shouldReceive('getMetadata')->andReturn(null);
+
+        $callCount = 0;
+        $this->znunyClientMock->shouldReceive('searchTickets')->andReturnUsing(function () use (&$callCount) {
+            $callCount++;
+            $page = [];
+            for ($i = 1; $i <= 100; $i++) {
+                $page[] = ['TicketID' => ($callCount * 1000) + $i, 'Changed' => now()->toDateTimeString()];
+            }
+
+            return $page;
+        });
+
+        $this->cacheServiceMock->shouldReceive('upsertTicket')->times(100000);
+        $this->cacheServiceMock->shouldReceive('setMetadata')->once()->withArgs(function ($args) {
+            return isset($args['last_error']) && str_contains($args['last_error'], 'Max pages limit (1000) exceeded');
+        });
+
+        $result = $this->syncService->syncFull();
+
+        $this->assertStringContainsString('Max pages limit (1000) exceeded', $result['error_message']);
+    }
 }
