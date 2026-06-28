@@ -23,6 +23,34 @@ class ClosedTicketCacheService
         Redis::set(self::METADATA_KEY, json_encode($metadata));
     }
 
+    public function getRecentTicketIds(): array
+    {
+        $keys = Redis::keys('znuny:closed_ticket:index:*');
+
+        $prefix = config('database.redis.options.prefix', '');
+        try {
+            if (empty($prefix) && method_exists(Redis::client(), 'getOption')) {
+                $prefix = Redis::client()->getOption(\Redis::OPT_PREFIX) ?: '';
+            }
+        } catch (\Throwable $e) {
+        }
+
+        $ids = [];
+        if (is_array($keys)) {
+            foreach ($keys as $k) {
+                $unprefixed = ($prefix !== '' && str_starts_with($k, $prefix)) ? substr($k, strlen($prefix)) : $k;
+                $dailyIds = Redis::zrange($unprefixed, 0, -1);
+                if (! empty($dailyIds)) {
+                    foreach ($dailyIds as $id) {
+                        $ids[(string) $id] = true;
+                    }
+                }
+            }
+        }
+
+        return array_keys($ids);
+    }
+
     public function upsertTicket(array $ticket, int $retentionDays): void
     {
         if (empty($ticket['TicketID'])) {

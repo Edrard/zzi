@@ -26,21 +26,27 @@ class ZnunyTicketWorkspaceCacheReader
         string $sortField = 'Changed',
         string $sortDirection = 'desc'
     ): array {
+        $activeStIds = [];
+        $closedStIds = [];
         $redis = Redis::connection();
-        $stIds = null;
 
         // 1. Base candidate set from StateType
         $stateTypes = $filters['state_types'] ?? null;
         if (is_array($stateTypes) && ! empty($stateTypes)) {
-            $stIds = [];
+            $closedTypes = array_filter($stateTypes, fn ($st) => in_array(strtolower($st), ['closed', 'merged'], true));
+
             foreach ($stateTypes as $st) {
                 if (empty($st)) {
                     continue;
                 }
                 $ids = $redis->zrange('znuny:index:statetype:'.strtolower($st), 0, -1);
-                $stIds = array_merge($stIds, $ids);
+                $activeStIds = array_merge($activeStIds, $ids);
             }
-            $stIds = array_unique($stIds);
+            $activeStIds = array_unique($activeStIds);
+
+            if (! empty($closedTypes)) {
+                $closedStIds = app(ClosedTicketCacheService::class)->getRecentTicketIds();
+            }
         } else {
             $keys = $redis->keys('znuny:ticket:*');
             $prefix = config('database.redis.options.prefix', '');
@@ -51,16 +57,33 @@ class ZnunyTicketWorkspaceCacheReader
             } catch (\Throwable $e) {
             }
 
-            $stIds = [];
             foreach ($keys as $k) {
                 $unprefixed = ($prefix !== '' && str_starts_with($k, $prefix)) ? substr($k, strlen($prefix)) : $k;
-                $stIds[] = str_replace('znuny:ticket:', '', $unprefixed);
+                $activeStIds[] = str_replace('znuny:ticket:', '', $unprefixed);
             }
+
+            $closedStIds = [];
         }
 
-        // 2. Build options from candidate state type set (limit to 1000 to avoid 20k mget)
-        $optionIds = array_slice($stIds, 0, 1000);
-        $optionKeys = array_map(fn ($id) => "znuny:ticket:{$id}", $optionIds);
+        // 2. Apply Queue & Owner index intersections to Active tickets ONLY
+        $filteredActiveIds = $activeStIds;
+        if (! empty($filters['queue'])) {
+            $qIds = $redis->zrange("znuny:index:queue:{$filters['queue']}", 0, -1);
+            $filteredActiveIds = array_intersect($filteredActiveIds, $qIds);
+        }
+        if (! empty($filters['owner'])) {
+            $oIds = $redis->zrange("znuny:index:owner:{$filters['owner']}", 0, -1);
+            $filteredActiveIds = array_intersect($filteredActiveIds, $oIds);
+        }
+
+        // Build filter options (use a sample of both)
+        $optionIdsActive = array_slice($filteredActiveIds, 0, 500);
+        $optionIdsClosed = array_slice($closedStIds, 0, 500);
+
+        $optionKeysActive = array_map(fn ($id) => "znuny:ticket:{$id}", $optionIdsActive);
+        $optionKeysClosed = array_map(fn ($id) => "znuny:closed_ticket:ticket:{$id}", $optionIdsClosed);
+
+        $optionKeys = array_merge($optionKeysActive, $optionKeysClosed);
         $optionTickets = [];
         if (! empty($optionKeys)) {
             $payloads = $redis->mget($optionKeys);
@@ -75,33 +98,30 @@ class ZnunyTicketWorkspaceCacheReader
         }
         $filterOptions = $this->extractFilterOptions($optionTickets);
 
-        // 3. Apply Queue & Owner index intersections
-        $filteredIds = $stIds;
-        if (! empty($filters['queue'])) {
-            $qIds = $redis->zrange("znuny:index:queue:{$filters['queue']}", 0, -1);
-            $filteredIds = array_intersect($filteredIds, $qIds);
-        }
-        if (! empty($filters['owner'])) {
-            $oIds = $redis->zrange("znuny:index:owner:{$filters['owner']}", 0, -1);
-            $filteredIds = array_intersect($filteredIds, $oIds);
-        }
-
-        // 4. Decide if we can paginate before mget
+        // 3. Decide if we can paginate before mget
         $hasTextSearch = ! empty($filters['search']);
         $hasLinkFilter = ! empty($filters['link_status']) && $filters['link_status'] !== 'all';
-        $needsPostFetchFilter = $hasTextSearch || $hasLinkFilter;
+        $hasQueueFilter = ! empty($filters['queue']);
+        $hasOwnerFilter = ! empty($filters['owner']);
 
-        $total = count($filteredIds);
-        $fetchIds = array_values($filteredIds);
+        $hasClosedTickets = ! empty($closedStIds);
+        $needsPostFetchFilterForClosed = $hasClosedTickets && ($hasQueueFilter || $hasOwnerFilter);
+
+        $needsPostFetchFilter = $hasTextSearch || $hasLinkFilter || $needsPostFetchFilterForClosed || $hasClosedTickets;
+
+        $fetchActiveKeys = [];
+        $fetchClosedKeys = [];
+        $totalActive = count($filteredActiveIds);
 
         if (! $needsPostFetchFilter) {
+            $total = $totalActive;
             $lastPage = max(1, (int) ceil($total / $perPage));
             if ($page > $lastPage) {
                 $page = 1;
             }
             $offset = ($page - 1) * $perPage;
 
-            // Approximate sort by ID since we lack payload
+            $fetchIds = array_values($filteredActiveIds);
             if (strtolower($sortDirection) === 'desc') {
                 rsort($fetchIds);
             } else {
@@ -109,18 +129,28 @@ class ZnunyTicketWorkspaceCacheReader
             }
 
             $fetchIds = array_slice($fetchIds, $offset, $perPage);
-        }
+            $fetchActiveKeys = array_map(fn ($id) => "znuny:ticket:{$id}", $fetchIds);
+        } else {
+            $fetchIdsActive = array_values($filteredActiveIds);
+            $fetchIdsClosed = array_values($closedStIds);
 
-        // 5. Fetch payload
-        $tickets = [];
-        $unprefixedKeys = array_map(fn ($id) => "znuny:ticket:{$id}", $fetchIds);
-        if (! empty($unprefixedKeys)) {
-            // TODO: Guard for huge sets if text search over closed tickets is needed in future
-            if ($needsPostFetchFilter && count($unprefixedKeys) > 5000) {
-                $unprefixedKeys = array_slice($unprefixedKeys, 0, 5000);
+            if (count($fetchIdsActive) > 5000) {
+                $fetchIdsActive = array_slice($fetchIdsActive, 0, 5000);
+            }
+            if (count($fetchIdsClosed) > 5000) {
+                $fetchIdsClosed = array_slice($fetchIdsClosed, 0, 5000);
             }
 
-            $payloads = $redis->mget($unprefixedKeys);
+            $fetchActiveKeys = array_map(fn ($id) => "znuny:ticket:{$id}", $fetchIdsActive);
+            $fetchClosedKeys = array_map(fn ($id) => "znuny:closed_ticket:ticket:{$id}", $fetchIdsClosed);
+        }
+
+        // 4. Fetch payload
+        $tickets = [];
+        $allKeysToFetch = array_merge($fetchActiveKeys, $fetchClosedKeys);
+
+        if (! empty($allKeysToFetch)) {
+            $payloads = $redis->mget($allKeysToFetch);
             foreach ($payloads as $payload) {
                 if ($payload) {
                     $ticket = json_decode($payload, true);
@@ -131,11 +161,36 @@ class ZnunyTicketWorkspaceCacheReader
             }
         }
 
+        // Deduplicate
+        $dedupedTickets = [];
+        foreach ($tickets as $t) {
+            $id = $t['TicketID'] ?? null;
+            if (! $id) {
+                continue;
+            }
+            if (! isset($dedupedTickets[$id])) {
+                $dedupedTickets[$id] = $t;
+
+                continue;
+            }
+
+            $existing = $dedupedTickets[$id];
+            $newChanged = strtotime($t['Changed'] ?? '1970-01-01');
+            $existingChanged = strtotime($existing['Changed'] ?? '1970-01-01');
+
+            if ($newChanged > $existingChanged) {
+                $dedupedTickets[$id] = $t;
+            }
+        }
+        $tickets = array_values($dedupedTickets);
+
         $tickets = $this->enrichWithZabbixLinks($tickets);
 
         if ($needsPostFetchFilter) {
             $tickets = $this->applyFilters($tickets, $filters);
             $total = count($tickets);
+        } else {
+            $total = $totalActive;
         }
 
         usort($tickets, function ($a, $b) use ($sortField, $sortDirection) {

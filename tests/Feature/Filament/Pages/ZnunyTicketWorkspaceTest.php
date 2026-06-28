@@ -197,6 +197,283 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->assertDontSee('TN203');
     }
 
+    public function test_render_closed_tickets_only_reads_from_cache()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        // Seed an active ticket just to prove it doesn't show up
+        $this->seedTicket(['TicketID' => 201, 'TicketNumber' => 'TN201', 'Title' => 'New Ticket', 'StateType' => 'new']);
+
+        // Mock ClosedTicketCacheService to return a closed ticket
+        $mock = \Mockery::mock(ClosedTicketCacheService::class)->makePartial();
+        $mock->shouldReceive('getRecentTicketIds')->andReturn([301]);
+        $this->app->instance(ClosedTicketCacheService::class, $mock);
+
+        // Put closed ticket payload in Redis
+        Redis::set('znuny:closed_ticket:ticket:301', json_encode([
+            'TicketID' => 301,
+            'TicketNumber' => 'TN301',
+            'Title' => 'Closed Ticket from Cache',
+            'StateType' => 'closed',
+            'Changed' => '2023-10-01 12:00:00',
+        ]));
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['closed'])
+            ->assertDontSee('TN201') // Active ticket not shown
+            ->assertSee('TN301') // Closed ticket shown
+            ->assertSee('Closed Ticket from Cache');
+    }
+
+    public function test_mixed_filter_renders_both_active_and_closed()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $this->seedTicket(['TicketID' => 201, 'TicketNumber' => 'TN201', 'Title' => 'New Ticket', 'StateType' => 'new']);
+
+        $mock = \Mockery::mock(ClosedTicketCacheService::class)->makePartial();
+        $mock->shouldReceive('getRecentTicketIds')->andReturn([301, 201]); // 201 added to test deduplication
+        $this->app->instance(ClosedTicketCacheService::class, $mock);
+
+        Redis::set('znuny:closed_ticket:ticket:301', json_encode([
+            'TicketID' => 301,
+            'TicketNumber' => 'TN301',
+            'Title' => 'Closed Ticket from Cache',
+            'StateType' => 'closed',
+            'Changed' => '2023-10-01 12:00:00',
+        ]));
+
+        Redis::set('znuny:closed_ticket:ticket:201', json_encode([
+            'TicketID' => 201,
+            'TicketNumber' => 'TN201',
+            'Title' => 'New Ticket Duplicate in Closed',
+            'StateType' => 'closed',
+        ]));
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['new', 'closed'])
+            ->assertSee('TN201')
+            ->assertSee('New Ticket') // Active payload is preferred during deduplication if it comes first, or deduplicated correctly.
+            ->assertSee('TN301')
+            ->assertSee('Closed Ticket from Cache');
+    }
+
+    public function test_default_empty_filter_excludes_closed_tickets()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $this->seedTicket(['TicketID' => 201, 'TicketNumber' => 'TN201', 'Title' => 'New Ticket', 'StateType' => 'new']);
+
+        $mock = \Mockery::mock(ClosedTicketCacheService::class)->makePartial();
+        $mock->shouldReceive('getRecentTicketIds')->andReturn([301]);
+        $this->app->instance(ClosedTicketCacheService::class, $mock);
+
+        Redis::set('znuny:closed_ticket:ticket:301', json_encode([
+            'TicketID' => 301,
+            'TicketNumber' => 'TN301',
+            'Title' => 'Closed Ticket from Cache',
+            'StateType' => 'closed',
+            'Changed' => '2023-10-01 12:00:00',
+        ]));
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', []) // Empty filter
+            ->assertSee('TN201') // Active ticket shown
+            ->assertDontSee('TN301') // Closed ticket NOT shown
+            ->assertDontSee('Closed Ticket from Cache');
+    }
+
+    public function test_deduplication_prefers_newer_changed_timestamp()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        // Active cache ticket is older
+        $this->seedTicket(['TicketID' => 201, 'TicketNumber' => 'TN201', 'Title' => 'Older Active', 'StateType' => 'open', 'Changed' => '2023-10-01 10:00:00']);
+
+        $mock = \Mockery::mock(ClosedTicketCacheService::class)->makePartial();
+        $mock->shouldReceive('getRecentTicketIds')->andReturn([201]);
+        $this->app->instance(ClosedTicketCacheService::class, $mock);
+
+        // Closed cache ticket is newer
+        Redis::set('znuny:closed_ticket:ticket:201', json_encode([
+            'TicketID' => 201,
+            'TicketNumber' => 'TN201',
+            'Title' => 'Newer Closed',
+            'StateType' => 'closed',
+            'Changed' => '2023-10-01 12:00:00',
+        ]));
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['open', 'closed'])
+            ->assertSee('Newer Closed')
+            ->assertDontSee('Older Active');
+    }
+
+    public function test_deduplication_prefers_active_payload_if_changed_equal()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        // Active cache ticket
+        $this->seedTicket(['TicketID' => 201, 'TicketNumber' => 'TN201', 'Title' => 'Active Payload', 'StateType' => 'open', 'Changed' => '2023-10-01 12:00:00']);
+
+        $mock = \Mockery::mock(ClosedTicketCacheService::class)->makePartial();
+        $mock->shouldReceive('getRecentTicketIds')->andReturn([201]);
+        $this->app->instance(ClosedTicketCacheService::class, $mock);
+
+        // Closed cache ticket with exact same timestamp
+        Redis::set('znuny:closed_ticket:ticket:201', json_encode([
+            'TicketID' => 201,
+            'TicketNumber' => 'TN201',
+            'Title' => 'Closed Payload',
+            'StateType' => 'closed',
+            'Changed' => '2023-10-01 12:00:00',
+        ]));
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['open', 'closed'])
+            ->assertSee('Active Payload')
+            ->assertDontSee('Closed Payload');
+    }
+
+    public function test_search_closed_ticket()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $mock = \Mockery::mock(ClosedTicketCacheService::class)->makePartial();
+        $mock->shouldReceive('getRecentTicketIds')->andReturn([401]);
+        $this->app->instance(ClosedTicketCacheService::class, $mock);
+
+        Redis::set('znuny:closed_ticket:ticket:401', json_encode([
+            'TicketID' => 401,
+            'TicketNumber' => 'TN401',
+            'Title' => 'Unique Secret Title',
+            'StateType' => 'closed',
+            'Changed' => '2023-10-01 12:00:00',
+        ]));
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['closed'])
+            ->set('search', 'Secret')
+            ->assertSee('TN401')
+            ->set('search', 'NonMatching')
+            ->assertDontSee('TN401');
+    }
+
+    public function test_queue_filter_closed_ticket()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $mock = \Mockery::mock(ClosedTicketCacheService::class)->makePartial();
+        $mock->shouldReceive('getRecentTicketIds')->andReturn([401, 402]);
+        $this->app->instance(ClosedTicketCacheService::class, $mock);
+
+        Redis::set('znuny:closed_ticket:ticket:401', json_encode([
+            'TicketID' => 401,
+            'TicketNumber' => 'TN401',
+            'QueueID' => 10,
+            'Queue' => 'Support',
+            'Title' => 'Support Ticket',
+            'StateType' => 'closed',
+            'Changed' => '2023-10-01 12:00:00',
+        ]));
+
+        Redis::set('znuny:closed_ticket:ticket:402', json_encode([
+            'TicketID' => 402,
+            'TicketNumber' => 'TN402',
+            'QueueID' => 20,
+            'Queue' => 'Sales',
+            'Title' => 'Sales Ticket',
+            'StateType' => 'closed',
+            'Changed' => '2023-10-01 12:00:00',
+        ]));
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['closed'])
+            ->set('queueFilter', 10)
+            ->assertSee('TN401')
+            ->assertDontSee('TN402');
+    }
+
+    public function test_owner_filter_closed_ticket()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $mock = \Mockery::mock(ClosedTicketCacheService::class)->makePartial();
+        $mock->shouldReceive('getRecentTicketIds')->andReturn([401, 402]);
+        $this->app->instance(ClosedTicketCacheService::class, $mock);
+
+        Redis::set('znuny:closed_ticket:ticket:401', json_encode([
+            'TicketID' => 401,
+            'TicketNumber' => 'TN401',
+            'OwnerID' => 50,
+            'Owner' => 'Alice',
+            'Title' => 'Alice Ticket',
+            'StateType' => 'closed',
+            'Changed' => '2023-10-01 12:00:00',
+        ]));
+
+        Redis::set('znuny:closed_ticket:ticket:402', json_encode([
+            'TicketID' => 402,
+            'TicketNumber' => 'TN402',
+            'OwnerID' => 60,
+            'Owner' => 'Bob',
+            'Title' => 'Bob Ticket',
+            'StateType' => 'closed',
+            'Changed' => '2023-10-01 12:00:00',
+        ]));
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['closed'])
+            ->set('ownerFilter', 60)
+            ->assertSee('TN402')
+            ->assertDontSee('TN401');
+    }
+
+    public function test_sort_by_changed_works_for_closed_tickets()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $mock = \Mockery::mock(ClosedTicketCacheService::class)->makePartial();
+        $mock->shouldReceive('getRecentTicketIds')->andReturn([401, 402]);
+        $this->app->instance(ClosedTicketCacheService::class, $mock);
+
+        Redis::set('znuny:closed_ticket:ticket:401', json_encode([
+            'TicketID' => 401,
+            'TicketNumber' => 'TN401',
+            'Title' => 'Older',
+            'StateType' => 'closed',
+            'Changed' => '2023-10-01 10:00:00',
+        ]));
+
+        Redis::set('znuny:closed_ticket:ticket:402', json_encode([
+            'TicketID' => 402,
+            'TicketNumber' => 'TN402',
+            'Title' => 'Newer',
+            'StateType' => 'closed',
+            'Changed' => '2023-10-01 12:00:00',
+        ]));
+
+        $component = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['closed'])
+            ->set('sortField', 'Changed')
+            ->set('sortDirection', 'desc');
+
+        $data = $component->instance()->ticketData();
+        $rows = $data['rows'] ?? [];
+        $this->assertCount(2, $rows);
+        $this->assertEquals(402, $rows[0]['TicketID']);
+        $this->assertEquals(401, $rows[1]['TicketID']);
+    }
+
     public function test_get_refresh_interval_string_uses_global_ui_polling_setting(): void
     {
         config(['app.ui_poll_interval_seconds' => 120]);
