@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\AuditLogs\AuditLogResource;
 use App\Models\AuditLog;
+use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -176,5 +177,27 @@ class AuditLogResourceTest extends TestCase
             ->get(AuditLogResource::getUrl('view', ['record' => $auditLog]))
             ->assertSuccessful()
             ->assertSee('No context');
+    }
+
+    public function test_audit_log_view_displays_created_at_in_configured_timezone()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Setting::updateOrCreate(['key' => 'app_display_timezone'], ['value' => 'Europe/Kyiv']);
+
+        $auditLog = AuditLog::create([
+            'action' => 'test.timezone',
+            'context' => [],
+        ]);
+        $auditLog->created_at = '2026-06-21 12:00:00';
+        $auditLog->save();
+
+        $expected = 'Jun 21, 2026 15:00:00';
+
+        $this->actingAs($admin)
+            ->get(AuditLogResource::getUrl('view', ['record' => $auditLog]))
+            ->assertSuccessful()
+            ->assertSee($expected)
+            ->assertDontSee('Europe/Kyiv');
     }
 }

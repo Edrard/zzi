@@ -5,6 +5,7 @@ namespace App\Filament\Resources\ZabbixTickets\Tables;
 use App\Filament\Resources\ZabbixTickets\Actions\ZabbixTicketDetailsAction;
 use App\Filament\Support\ZnunyTicketManagementActions;
 use App\Models\ZabbixTicket;
+use App\Services\Support\DateTimeDisplayService;
 use App\Services\Zabbix\ZabbixTicketStatusPresenter;
 use App\Support\Pagination\PaginationSettings;
 use App\Support\Polling\UiPollInterval;
@@ -89,7 +90,7 @@ class ZabbixTicketsTable
 
                 TextColumn::make('created_at')
                     ->label('Ticket Age')
-                    ->since()
+                    ->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->diffForHumans($state))
                     ->sortable(),
             ])
             ->defaultSort('created_at', 'desc')

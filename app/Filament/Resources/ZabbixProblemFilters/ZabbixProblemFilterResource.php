@@ -4,6 +4,7 @@ namespace App\Filament\Resources\ZabbixProblemFilters;
 
 use App\Filament\Resources\ZabbixProblemFilters\Pages\ManageZabbixProblemFilters;
 use App\Models\ZabbixProblemFilter;
+use App\Services\Support\DateTimeDisplayService;
 use App\Support\Pagination\PaginationSettings;
 use BackedEnum;
 use Closure;
@@ -96,7 +97,7 @@ class ZabbixProblemFilterResource extends Resource
                 TextColumn::make('pattern')
                     ->limit(30),
                 TextColumn::make('updated_at')
-                    ->dateTime()
+                    ->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatDateTime($state))
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])

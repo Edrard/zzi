@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\AuditLogs\Tables;
 
+use App\Services\Support\DateTimeDisplayService;
 use App\Support\Pagination\PaginationSettings;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
@@ -13,7 +14,9 @@ class AuditLogsTable
     {
         return $table
             ->columns([
-                TextColumn::make('created_at')->dateTime()->sortable(),
+                TextColumn::make('created_at')
+                    ->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatDateTime($state))
+                    ->sortable(),
                 TextColumn::make('user.name')->searchable(),
                 TextColumn::make('action')->searchable(),
                 TextColumn::make('entity_type')->searchable(),

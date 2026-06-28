@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\DailyStatistics\Schemas;
 
+use App\Services\Support\DateTimeDisplayService;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
 
@@ -20,8 +21,8 @@ class DailyStatisticInfolist
                 TextEntry::make('pattern_matched')->numeric(),
                 TextEntry::make('pattern_unmatched')->numeric(),
                 TextEntry::make('failed_actions')->numeric(),
-                TextEntry::make('created_at')->dateTime(),
-                TextEntry::make('updated_at')->dateTime(),
+                TextEntry::make('created_at')->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatDateTime($state)),
+                TextEntry::make('updated_at')->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatDateTime($state)),
             ]);
     }
 }

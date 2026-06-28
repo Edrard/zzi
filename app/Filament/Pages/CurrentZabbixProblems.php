@@ -303,7 +303,7 @@ class CurrentZabbixProblems extends Page
             return 'N/A';
         }
 
-        return app(DateTimeDisplayService::class)->formatDateTimeWithTimezone($value) ?? 'N/A';
+        return app(DateTimeDisplayService::class)->formatDateTime($value) ?? 'N/A';
     }
 
     public function getSeverityColor(int $severity): string

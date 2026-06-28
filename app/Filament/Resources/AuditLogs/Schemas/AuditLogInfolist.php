@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\AuditLogs\Schemas;
 
+use App\Services\Support\DateTimeDisplayService;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Components\ViewEntry;
 use Filament\Schemas\Schema;
@@ -12,7 +13,8 @@ class AuditLogInfolist
     {
         return $schema
             ->components([
-                TextEntry::make('created_at')->dateTime(),
+                TextEntry::make('created_at')
+                    ->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatDateTime($state)),
                 TextEntry::make('user.name'),
                 TextEntry::make('user.email'),
                 TextEntry::make('action'),
