@@ -517,4 +517,15 @@ class SettingsLivewireTest extends TestCase
             $this->assertContains($key, $defaultSettings, "Ignored setting key '{$key}' is missing from DefaultSettings registry.");
         }
     }
+
+    public function test_closed_ticket_operational_ui_is_not_in_settings()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Livewire::actingAs($admin)->test(Settings::class)
+            ->assertSuccessful()
+            ->assertDontSee('Sync Recent Closed Tickets')
+            ->assertDontSee('Recent Closed Ticket Cache Status')
+            ->assertDontSee('closed_ticket_sync_status');
+    }
 }

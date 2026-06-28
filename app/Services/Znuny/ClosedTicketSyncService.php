@@ -43,6 +43,29 @@ class ClosedTicketSyncService
             $validation = $this->cacheService->validateMetadata($windowDays);
 
             if ($validation['is_valid']) {
+                $metadata = $this->cacheService->getMetadata() ?? [];
+                $lastSuccess = $metadata['last_small_completed_at'] ?? null;
+                $smallSyncInterval = $settings['small_sync_interval'];
+
+                if ($lastSuccess) {
+                    $minutesSinceLast = (time() - strtotime($lastSuccess)) / 60;
+                    if ($minutesSinceLast < $smallSyncInterval) {
+                        $result = [
+                            'mode' => 'auto',
+                            'effective_mode' => 'skipped',
+                            'reason' => 'interval_not_due',
+                            'window_days' => $windowDays,
+                            'lookback_minutes' => (int) max(2 * $smallSyncInterval, $minutesSinceLast + 1),
+                            'fetched_count' => 0,
+                            'cached_count' => 0,
+                        ];
+
+                        $this->auditIfApplicable($result);
+
+                        return $result;
+                    }
+                }
+
                 return $this->runSmallSync('auto', 'scheduled');
             } else {
                 return $this->runFullSync('auto', $validation['reason']);

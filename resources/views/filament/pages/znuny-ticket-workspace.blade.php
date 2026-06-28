@@ -298,6 +298,36 @@
             </span>
         </div>
 
+        @php
+            $syncMeta = app(\App\Services\Znuny\ClosedTicketCacheService::class)->getMetadata();
+        @endphp
+        <div style="padding: 12px; margin-bottom: 8px; background-color: var(--zbx-table-bg); border: 1px solid var(--zbx-table-border); border-radius: 8px; font-size: 0.8125rem;">
+            <div style="font-weight: 600; margin-bottom: 4px;">Recent Closed Ticket Cache Status</div>
+            @if(Cache::has('znuny:closed_ticket:sync:lock'))
+                <div style="color: #ea580c; font-weight: 500; margin-bottom: 8px;">Sync is currently running.</div>
+            @endif
+            @if(empty($syncMeta))
+                <div style="color: var(--zbx-table-muted);">Recent closed ticket cache has not completed a full sync yet.</div>
+            @else
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; color: var(--zbx-table-text);">
+                    <div><span style="color: var(--zbx-table-muted);">Status:</span> {{ $syncMeta['integrity_status'] ?? 'N/A' }}</div>
+                    <div><span style="color: var(--zbx-table-muted);">Window Days:</span> {{ $syncMeta['window_days'] ?? 'N/A' }}</div>
+                    <div><span style="color: var(--zbx-table-muted);">Retention Days:</span> {{ $syncMeta['retention_days'] ?? 'N/A' }}</div>
+                    <div><span style="color: var(--zbx-table-muted);">Last Mode:</span> {{ $syncMeta['last_mode'] ?? 'N/A' }}</div>
+                    <div><span style="color: var(--zbx-table-muted);">Last Reason:</span> {{ $syncMeta['last_reason'] ?? 'N/A' }}</div>
+                    <div><span style="color: var(--zbx-table-muted);">Last Small Completed At:</span> {{ $syncMeta['last_small_completed_at'] ?? 'N/A' }}</div>
+                    <div><span style="color: var(--zbx-table-muted);">Last Full Completed At:</span> {{ $syncMeta['last_full_completed_at'] ?? 'N/A' }}</div>
+                    <div><span style="color: var(--zbx-table-muted);">Oldest Loaded Closed At:</span> {{ $syncMeta['oldest_loaded_closed_at'] ?? 'N/A' }}</div>
+                    <div><span style="color: var(--zbx-table-muted);">Newest Loaded Closed At:</span> {{ $syncMeta['newest_loaded_closed_at'] ?? 'N/A' }}</div>
+                    <div><span style="color: var(--zbx-table-muted);">Last Run Started At:</span> {{ $syncMeta['last_run_started_at'] ?? 'N/A' }}</div>
+                    <div><span style="color: var(--zbx-table-muted);">Last Run Completed At:</span> {{ $syncMeta['last_run_completed_at'] ?? 'N/A' }}</div>
+                    @if(!empty($syncMeta['last_error']))
+                        <div style="color: #dc2626; grid-column: 1 / -1;"><span style="color: var(--zbx-table-muted);">Last Error:</span> {{ $syncMeta['last_error'] }}</div>
+                    @endif
+                </div>
+            @endif
+        </div>
+
         <div class="zbx-toolbar">
             <div class="zbx-toolbar-filters">
                 <div class="zbx-toolbar-search">

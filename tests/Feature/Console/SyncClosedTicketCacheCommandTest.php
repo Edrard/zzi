@@ -82,6 +82,25 @@ class SyncClosedTicketCacheCommandTest extends TestCase
             ->assertSuccessful();
     }
 
+    public function test_it_reports_interval_not_due_gracefully()
+    {
+        $mock = $this->mock(ClosedTicketSyncService::class);
+        $mock->shouldReceive('syncAuto')->once()->andReturn([
+            'mode' => 'auto',
+            'effective_mode' => 'skipped',
+            'reason' => 'interval_not_due',
+            'window_days' => 30,
+            'lookback_minutes' => 10,
+            'fetched_count' => 0,
+            'cached_count' => 0,
+        ]);
+
+        $this->artisan('znuny:sync-closed-ticket-cache')
+            ->expectsOutput('Starting auto closed ticket sync...')
+            ->expectsOutput('Sync skipped: interval_not_due')
+            ->assertSuccessful();
+    }
+
     public function test_it_reports_errors()
     {
         $mock = $this->mock(ClosedTicketSyncService::class);

@@ -5,9 +5,12 @@ namespace Tests\Feature\Filament\Pages;
 use App\Filament\Pages\ZnunyTicketWorkspace;
 use App\Models\AuditLog;
 use App\Models\User;
+use App\Services\Znuny\ClosedTicketCacheService;
+use App\Services\Znuny\ClosedTicketSyncService;
 use App\Services\Znuny\ZnunyTicketCacheService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Redis;
 use Livewire\Livewire;
@@ -213,7 +216,18 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->assertSeeHtml('wire:poll.120s');
     }
 
-    public function test_manual_refresh_calls_existing_command()
+    public function test_single_refresh_action_renders_and_separate_closed_sync_is_removed()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->assertSuccessful()
+            ->assertActionExists('refresh')
+            ->assertActionDoesNotExist('syncClosedTickets');
+    }
+
+    public function test_manual_refresh_success_for_both_active_and_closed()
     {
         $user = User::factory()->create(['role' => 'operator']);
 
@@ -224,14 +238,73 @@ class ZnunyTicketWorkspaceTest extends TestCase
         Artisan::shouldReceive('output')
             ->andReturn('Cache warming complete.');
 
+        $mock = \Mockery::mock(ClosedTicketSyncService::class);
+        $mock->shouldReceive('syncManual')->once()->andReturn([
+            'mode' => 'manual',
+            'effective_mode' => 'small',
+            'fetched_count' => 10,
+            'cached_count' => 10,
+        ]);
+        $this->app->instance(ClosedTicketSyncService::class, $mock);
+
         Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
             ->call('refreshFromZnuny')
-            ->assertNotified()
-            ->assertSet('page', 1);
+            ->assertSet('page', 1)
+            ->assertNotified('Ticket Workspace refreshed successfully');
     }
 
-    public function test_manual_refresh_handles_failure()
+    public function test_manual_refresh_active_success_closed_skipped()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        Artisan::shouldReceive('call')
+            ->once()
+            ->with('znuny:warm-ticket-workspace-cache', ['--manual' => true])
+            ->andReturn(0);
+        Artisan::shouldReceive('output')
+            ->andReturn('Cache warming complete.');
+
+        $mock = \Mockery::mock(ClosedTicketSyncService::class);
+        $mock->shouldReceive('syncManual')->once()->andReturn([
+            'mode' => 'manual',
+            'effective_mode' => 'skipped',
+            'reason' => 'locked',
+        ]);
+        $this->app->instance(ClosedTicketSyncService::class, $mock);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->call('refreshFromZnuny')
+            ->assertSet('page', 1)
+            ->assertNotified('Ticket Workspace refreshed successfully');
+    }
+
+    public function test_manual_refresh_active_success_closed_error()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        Artisan::shouldReceive('call')
+            ->once()
+            ->with('znuny:warm-ticket-workspace-cache', ['--manual' => true])
+            ->andReturn(0);
+        Artisan::shouldReceive('output')
+            ->andReturn('Cache warming complete.');
+
+        $mock = \Mockery::mock(ClosedTicketSyncService::class);
+        $mock->shouldReceive('syncManual')->once()->andReturn([
+            'error_message' => 'Znuny API failed',
+        ]);
+        $this->app->instance(ClosedTicketSyncService::class, $mock);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->call('refreshFromZnuny')
+            ->assertSet('page', 1)
+            ->assertNotified('Ticket Workspace refreshed successfully');
+    }
+
+    public function test_manual_refresh_active_failure_skips_closed()
     {
         $user = User::factory()->create(['role' => 'operator']);
 
@@ -242,10 +315,24 @@ class ZnunyTicketWorkspaceTest extends TestCase
         Artisan::shouldReceive('output')
             ->andReturn('Failed output');
 
+        $mock = \Mockery::mock(ClosedTicketSyncService::class);
+        $mock->shouldNotReceive('syncManual');
+        $this->app->instance(ClosedTicketSyncService::class, $mock);
+
         Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
             ->call('refreshFromZnuny')
-            ->assertNotified();
+            ->assertNotified('Failed to refresh Ticket Workspace');
+    }
+
+    public function test_manual_refresh_authorization()
+    {
+        $user = User::factory()->create(['role' => 'viewer']); // Not admin/operator
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->call('refreshFromZnuny')
+            ->assertForbidden();
     }
 
     public function test_audit_logs_are_not_created_on_ui_render()
@@ -358,5 +445,78 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->assertSeeHtml('.zbx-dropdown-menu {')
             ->assertSeeHtml('background-color: var(--zbx-table-bg, #ffffff);')
             ->assertSeeHtml('border: 1px solid var(--zbx-table-border, #e5e7eb);');
+    }
+
+    public function test_recent_closed_ticket_status_is_rendered()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->assertSuccessful()
+            ->assertSee('Recent Closed Ticket Cache Status')
+            ->assertSee('Recent closed ticket cache has not completed a full sync yet.');
+    }
+
+    public function test_recent_closed_ticket_status_complete_metadata_is_rendered()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $mock = \Mockery::mock(ClosedTicketCacheService::class)->makePartial();
+        $mock->shouldReceive('getMetadata')->andReturn([
+            'integrity_status' => 'complete',
+            'window_days' => 30,
+            'retention_days' => 180,
+            'last_mode' => 'full',
+            'last_reason' => 'metadata_missing',
+            'last_small_completed_at' => '2026-06-28 10:00:00',
+            'last_full_completed_at' => '2026-06-28 09:00:00',
+            'oldest_loaded_closed_at' => '2026-05-29 00:00:00',
+            'newest_loaded_closed_at' => '2026-06-28 09:59:00',
+            'last_run_started_at' => '2026-06-28 09:58:00',
+            'last_run_completed_at' => '2026-06-28 10:00:00',
+            'last_error' => 'Previous sync warning',
+        ]);
+        $this->app->instance(ClosedTicketCacheService::class, $mock);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->assertSuccessful()
+            ->assertSee('Recent Closed Ticket Cache Status')
+            ->assertSee('complete')
+            ->assertSee('Window Days')
+            ->assertSee('30')
+            ->assertSee('Retention Days')
+            ->assertSee('180')
+            ->assertSee('Last Mode')
+            ->assertSee('full')
+            ->assertSee('Last Reason')
+            ->assertSee('metadata_missing')
+            ->assertSee('Last Small Completed At')
+            ->assertSee('2026-06-28 10:00:00')
+            ->assertSee('Last Full Completed At')
+            ->assertSee('2026-06-28 09:00:00')
+            ->assertSee('Oldest Loaded Closed At')
+            ->assertSee('2026-05-29 00:00:00')
+            ->assertSee('Newest Loaded Closed At')
+            ->assertSee('2026-06-28 09:59:00')
+            ->assertSee('Last Run Started At')
+            ->assertSee('2026-06-28 09:58:00')
+            ->assertSee('Last Run Completed At')
+            ->assertSee('2026-06-28 10:00:00')
+            ->assertSee('Last Error')
+            ->assertSee('Previous sync warning');
+    }
+
+    public function test_recent_closed_ticket_status_lock_is_rendered()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        Cache::put('znuny:closed_ticket:sync:lock', true, 10);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->assertSuccessful()
+            ->assertSee('Sync is currently running.');
     }
 }

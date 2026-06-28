@@ -20,6 +20,8 @@ Schedule::command('app:cleanup')->dailyAt('02:30');
 Schedule::command('app:collect-daily-statistics')->dailyAt('23:55');
 Schedule::command('znuny:evaluate-manual-ticket-lifecycle')->everyMinute()->withoutOverlapping();
 Schedule::command('znuny:warm-ticket-workspace-cache --scheduled')->everyMinute()->withoutOverlapping();
+Schedule::command('znuny:sync-closed-ticket-cache')->everyMinute()->withoutOverlapping();
+Schedule::command('znuny:sync-closed-ticket-cache --full')->dailyAt('02:30')->withoutOverlapping();
 
 $syncInterval = 5;
 

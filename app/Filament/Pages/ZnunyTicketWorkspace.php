@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Services\SettingsService;
+use App\Services\Znuny\ClosedTicketSyncService;
 use App\Services\Znuny\ZnunyTicketWorkspaceCacheReader;
 use App\Services\Znuny\ZnunyTicketWorkspaceStateTypeMapper;
 use App\Support\Pagination\PaginationSettings;
@@ -141,7 +142,7 @@ class ZnunyTicketWorkspace extends Page
         $this->page = 1;
     }
 
-    protected function getHeaderActions(): array
+    protected function getActions(): array
     {
         return [
             Action::make('refresh')
@@ -160,28 +161,56 @@ class ZnunyTicketWorkspace extends Page
             $exitCode = Artisan::call('znuny:warm-ticket-workspace-cache', ['--manual' => true]);
             $output = trim(Artisan::output());
 
-            if ($exitCode === 0) {
-                $this->page = 1;
-
-                $message = 'Ticket Workspace cache refresh completed.';
-                if ($output !== '') {
-                    $message .= "\n".$output;
-                }
-
+            if ($exitCode !== 0) {
                 Notification::make()
-                    ->title('Ticket Workspace refreshed successfully')
-                    ->body($message)
-                    ->success()
+                    ->title('Failed to refresh Ticket Workspace')
+                    ->body($output !== '' ? $output : 'The cache warmer command failed.')
+                    ->danger()
                     ->send();
 
                 return;
             }
 
-            Notification::make()
-                ->title('Failed to refresh Ticket Workspace')
-                ->body($output !== '' ? $output : 'The cache warmer command failed.')
-                ->danger()
-                ->send();
+            $this->page = 1;
+
+            $closedSyncMessage = '';
+            $isWarning = false;
+
+            try {
+                $service = app(ClosedTicketSyncService::class);
+                $result = $service->syncManual();
+
+                if (! empty($result['error_message'])) {
+                    $closedSyncMessage = "\nRecent closed sync failed: {$result['error_message']}";
+                    $isWarning = true;
+                } elseif (($result['effective_mode'] ?? '') === 'skipped') {
+                    $closedSyncMessage = "\nRecent closed sync skipped (locked).";
+                    $isWarning = true;
+                } else {
+                    $closedSyncMessage = "\nRecent closed sync completed (Fetched {$result['fetched_count']}, Cached {$result['cached_count']}).";
+                }
+            } catch (\Throwable $e) {
+                $closedSyncMessage = "\nRecent closed sync failed: ".$e->getMessage();
+                $isWarning = true;
+            }
+
+            $message = 'Active refresh completed.';
+            if ($output !== '') {
+                $message .= "\n".$output;
+            }
+            $message .= $closedSyncMessage;
+
+            $notification = Notification::make()
+                ->title('Ticket Workspace refreshed successfully')
+                ->body($message);
+
+            if ($isWarning) {
+                $notification->warning();
+            } else {
+                $notification->success();
+            }
+
+            $notification->send();
         } catch (\Throwable $e) {
             Notification::make()
                 ->title('An error occurred while refreshing Ticket Workspace')

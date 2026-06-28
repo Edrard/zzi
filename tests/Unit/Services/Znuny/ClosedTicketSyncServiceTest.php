@@ -43,7 +43,7 @@ class ClosedTicketSyncServiceTest extends TestCase
             'metadata_status' => 'complete',
         ]);
         $this->cacheServiceMock->shouldReceive('getMetadata')->andReturn([
-            'last_small_completed_at' => now()->subMinutes(2)->toDateTimeString(),
+            'last_small_completed_at' => now()->subMinutes(6)->toDateTimeString(),
         ]);
 
         $this->znunyClientMock->shouldReceive('searchTickets')->once()->andReturn([]);
@@ -54,17 +54,43 @@ class ClosedTicketSyncServiceTest extends TestCase
         $this->assertEquals('auto', $result['mode']);
         $this->assertEquals('small', $result['effective_mode']);
         $this->assertEquals('scheduled', $result['reason']);
-        $this->assertEquals(10, $result['lookback_minutes']); // max(2*5, 2+1)
+        $this->assertEquals(10, $result['lookback_minutes']); // max(2*5, 6+1) = 10
     }
 
-    public function test_sync_auto_with_bad_metadata_escalates_to_full_sync()
+    public function test_sync_auto_with_recent_small_sync_skips_interval()
+    {
+        $this->cacheServiceMock->shouldReceive('validateMetadata')->with(30)->andReturn([
+            'is_valid' => true,
+            'reason' => 'complete',
+            'metadata_status' => 'complete',
+        ]);
+        $this->cacheServiceMock->shouldReceive('getMetadata')->andReturn([
+            'last_small_completed_at' => now()->subMinutes(2)->toDateTimeString(),
+        ]);
+
+        $this->znunyClientMock->shouldNotReceive('searchTickets');
+        $this->cacheServiceMock->shouldNotReceive('setMetadata');
+
+        $result = $this->syncService->syncAuto();
+
+        $this->assertEquals('auto', $result['mode']);
+        $this->assertEquals('skipped', $result['effective_mode']);
+        $this->assertEquals('interval_not_due', $result['reason']);
+        $this->assertEquals(0, $result['fetched_count']);
+        $this->assertEquals(0, $result['cached_count']);
+    }
+
+    public function test_sync_auto_with_bad_metadata_escalates_to_full_sync_even_if_recent()
     {
         $this->cacheServiceMock->shouldReceive('validateMetadata')->with(30)->andReturn([
             'is_valid' => false,
             'reason' => 'metadata_missing',
             'metadata_status' => 'incomplete',
         ]);
-        $this->cacheServiceMock->shouldReceive('getMetadata')->andReturn(null);
+        // Even if interval is strictly "not due", invalid metadata forces full sync
+        $this->cacheServiceMock->shouldReceive('getMetadata')->andReturn([
+            'last_small_completed_at' => now()->subMinutes(1)->toDateTimeString(),
+        ]);
 
         $this->znunyClientMock->shouldReceive('searchTickets')->once()->andReturn([]);
         $this->cacheServiceMock->shouldReceive('setMetadata')->once();
@@ -203,7 +229,7 @@ class ClosedTicketSyncServiceTest extends TestCase
             'metadata_status' => 'complete',
         ]);
         $this->cacheServiceMock->shouldReceive('getMetadata')->andReturn([
-            'last_small_completed_at' => now()->subMinutes(2)->toDateTimeString(),
+            'last_small_completed_at' => now()->subMinutes(6)->toDateTimeString(),
         ]);
         $this->znunyClientMock->shouldReceive('searchTickets')->once()->andReturn([]);
         $this->cacheServiceMock->shouldReceive('setMetadata')->once();
@@ -224,7 +250,7 @@ class ClosedTicketSyncServiceTest extends TestCase
             'metadata_status' => 'complete',
         ]);
         $this->cacheServiceMock->shouldReceive('getMetadata')->andReturn([
-            'last_small_completed_at' => now()->subMinutes(2)->toDateTimeString(),
+            'last_small_completed_at' => now()->subMinutes(6)->toDateTimeString(),
         ]);
         $this->znunyClientMock->shouldReceive('searchTickets')->once()->andReturn([]);
         $this->cacheServiceMock->shouldReceive('setMetadata')->once();
@@ -299,7 +325,7 @@ class ClosedTicketSyncServiceTest extends TestCase
             'metadata_status' => 'complete',
         ]);
         $this->cacheServiceMock->shouldReceive('getMetadata')->andReturn([
-            'last_small_completed_at' => now()->subMinutes(2)->toDateTimeString(),
+            'last_small_completed_at' => now()->subMinutes(6)->toDateTimeString(),
         ]);
         $this->znunyClientMock->shouldReceive('searchTickets')->once()->andThrow(new \Exception('Znuny API failed'));
         $this->cacheServiceMock->shouldReceive('setMetadata')->once();
@@ -317,7 +343,7 @@ class ClosedTicketSyncServiceTest extends TestCase
             'metadata_status' => 'complete',
         ]);
         $this->cacheServiceMock->shouldReceive('getMetadata')->andReturn([
-            'last_small_completed_at' => now()->subMinutes(2)->toDateTimeString(),
+            'last_small_completed_at' => now()->subMinutes(6)->toDateTimeString(),
         ]);
         $this->znunyClientMock->shouldReceive('searchTickets')->once()->andThrow(new \Exception('Znuny API failed'));
         $this->cacheServiceMock->shouldReceive('setMetadata')->once();
