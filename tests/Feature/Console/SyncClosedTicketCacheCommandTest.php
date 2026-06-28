@@ -3,6 +3,7 @@
 namespace Tests\Feature\Console;
 
 use App\Services\Znuny\ClosedTicketSyncService;
+use Illuminate\Support\Facades\Redis;
 use Tests\TestCase;
 
 class SyncClosedTicketCacheCommandTest extends TestCase
@@ -118,5 +119,30 @@ class SyncClosedTicketCacheCommandTest extends TestCase
         $this->artisan('znuny:sync-closed-ticket-cache')
             ->expectsOutput('Completed with errors: API failed')
             ->assertFailed();
+    }
+
+    public function test_it_runs_purge_mode()
+    {
+        $mock = $this->mock(ClosedTicketSyncService::class);
+        $mock->shouldNotReceive('syncAuto');
+        $mock->shouldNotReceive('syncManual');
+        $mock->shouldNotReceive('syncFull');
+
+        // Seed some data in Redis
+        Redis::set('znuny:closed_ticket:ticket:123', 'foo');
+        Redis::set('znuny:closed_ticket:index:2026-06-01', 'bar');
+        Redis::set('znuny:closed_ticket:sync:metadata', 'baz');
+        Redis::set('znuny:ticket:123', 'active'); // Should not be deleted
+
+        $this->artisan('znuny:sync-closed-ticket-cache', ['--purge' => true])
+            ->expectsOutput('Purging closed-ticket cache...')
+            ->assertSuccessful();
+
+        $this->assertNull(Redis::get('znuny:closed_ticket:ticket:123'));
+        $this->assertNull(Redis::get('znuny:closed_ticket:index:2026-06-01'));
+        $this->assertNull(Redis::get('znuny:closed_ticket:sync:metadata'));
+        $this->assertEquals('active', Redis::get('znuny:ticket:123'));
+
+        Redis::del('znuny:ticket:123');
     }
 }

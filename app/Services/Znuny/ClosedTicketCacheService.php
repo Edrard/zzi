@@ -57,9 +57,17 @@ class ClosedTicketCacheService
             return;
         }
 
+        if (empty($ticket['Created'])) {
+            return;
+        }
+
         $ticketId = $ticket['TicketID'];
-        $changedAt = $ticket['Changed'] ?? $ticket['Created'] ?? date('Y-m-d H:i:s');
-        $timestamp = strtotime($changedAt);
+        $timestamp = strtotime($ticket['Created']);
+
+        if ($timestamp === false || $timestamp <= 0) {
+            return;
+        }
+
         $date = date('Y-m-d', $timestamp);
         $retentionSeconds = $retentionDays * 86400;
 

@@ -7,12 +7,16 @@ use Illuminate\Console\Command;
 
 class SyncClosedTicketCacheCommand extends Command
 {
-    protected $signature = 'znuny:sync-closed-ticket-cache {--manual} {--full}';
+    protected $signature = 'znuny:sync-closed-ticket-cache {--manual} {--full} {--purge}';
 
     protected $description = 'Sync recent closed tickets from Znuny to Redis cache';
 
     public function handle(ClosedTicketSyncService $syncService): int
     {
+        if ($this->option('purge')) {
+            return $this->purge();
+        }
+
         $isManual = $this->option('manual');
         $isFull = $this->option('full');
 
@@ -58,6 +62,44 @@ class SyncClosedTicketCacheCommand extends Command
 
             return self::FAILURE;
         }
+
+        return self::SUCCESS;
+    }
+
+    private function purge(): int
+    {
+        $this->info('Purging closed-ticket cache...');
+
+        $prefix = config('database.redis.options.prefix', '');
+        try {
+            if (empty($prefix) && method_exists(\Illuminate\Support\Facades\Redis::client(), 'getOption')) {
+                $prefix = \Illuminate\Support\Facades\Redis::client()->getOption(\Redis::OPT_PREFIX) ?: '';
+            }
+        } catch (\Throwable $e) {
+        }
+
+        $ticketKeys = \Illuminate\Support\Facades\Redis::keys('znuny:closed_ticket:ticket:*');
+        $indexKeys = \Illuminate\Support\Facades\Redis::keys('znuny:closed_ticket:index:*');
+
+        $allKeys = array_merge(
+            is_array($ticketKeys) ? $ticketKeys : [],
+            is_array($indexKeys) ? $indexKeys : []
+        );
+
+        $keysToDelete = [];
+        foreach ($allKeys as $k) {
+            $unprefixed = ($prefix !== '' && str_starts_with($k, $prefix)) ? substr($k, strlen($prefix)) : $k;
+            $keysToDelete[] = (string) $unprefixed;
+        }
+
+        $keysToDelete[] = 'znuny:closed_ticket:sync:metadata';
+
+        $deletedCount = 0;
+        foreach ($keysToDelete as $key) {
+            $deletedCount += \Illuminate\Support\Facades\Redis::del($key);
+        }
+
+        $this->info("Purge complete. Deleted {$deletedCount} keys.");
 
         return self::SUCCESS;
     }

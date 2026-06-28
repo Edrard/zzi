@@ -21,7 +21,7 @@ class ClosedTicketCacheServiceTest extends TestCase
     {
         $ticket = [
             'TicketID' => 123,
-            'Changed' => '2023-10-01 12:00:00',
+            'Created' => '2023-10-01 12:00:00',
         ];
 
         $retentionDays = 180; // 30 * 6
@@ -39,6 +39,20 @@ class ClosedTicketCacheServiceTest extends TestCase
             ['123'],
             Redis::zrange('znuny:closed_ticket:index:2023-10-01', 0, -1)
         );
+    }
+
+    public function test_missing_created_does_not_create_wrong_changed_based_index()
+    {
+        $ticket = [
+            'TicketID' => 124,
+            'Changed' => '2023-10-01 12:00:00',
+        ];
+
+        $this->service->upsertTicket($ticket, 180);
+
+        $this->assertNull(Redis::get('znuny:closed_ticket:ticket:124'));
+        $keys = Redis::keys('znuny:closed_ticket:index:*');
+        $this->assertEmpty($keys ? $keys : []);
     }
 
     public function test_validate_metadata_missing_returns_false()

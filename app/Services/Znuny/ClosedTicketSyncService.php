@@ -132,6 +132,7 @@ class ClosedTicketSyncService
         $allFetchedIds = [];
 
         $boundaryTimestamp = time() - ($lookbackMinutes * 60);
+        $createdBoundary = time() - ($windowDays * 86400);
 
         try {
             while (true) {
@@ -165,15 +166,20 @@ class ClosedTicketSyncService
 
                 $oldestInPage = time();
                 foreach ($tickets as $ticket) {
-                    $changedAt = $ticket['Changed'] ?? $ticket['Created'] ?? date('Y-m-d H:i:s');
+                    $changedAt = $ticket['Changed'] ?? date('Y-m-d H:i:s');
                     $timestamp = strtotime($changedAt);
 
                     if ($timestamp < $oldestInPage) {
                         $oldestInPage = $timestamp;
                     }
 
-                    $this->cacheService->upsertTicket($ticket, $windowDays * 6);
-                    $cachedCount++;
+                    if (! empty($ticket['Created'])) {
+                        $createdTs = strtotime($ticket['Created']);
+                        if ($createdTs !== false && $createdTs >= $createdBoundary) {
+                            $this->cacheService->upsertTicket($ticket, $windowDays * 6);
+                            $cachedCount++;
+                        }
+                    }
                 }
 
                 if ($oldestInPage < $boundaryTimestamp || count($tickets) < $limit) {
@@ -260,7 +266,7 @@ class ClosedTicketSyncService
 
                 $tickets = $this->znunyClient->searchTickets([
                     'StateType' => 'closed',
-                    'SortBy' => 'Changed',
+                    'SortBy' => 'Created',
                     'SortDirection' => 'Down',
                     'Limit' => $limit,
                     'Offset' => $offset,
@@ -273,19 +279,47 @@ class ClosedTicketSyncService
 
                 $pageTicketIds = array_column($tickets, 'TicketID');
                 $newTicketIds = array_diff($pageTicketIds, $allFetchedIds);
+
+                $fetchedCount += count($tickets);
+
+                $oldestInPage = time();
+                $pageHasValidCreates = false;
+
+                // Check valid creates early for the duplicate check
+                foreach ($tickets as $ticket) {
+                    if (! empty($ticket['Created']) && strtotime($ticket['Created']) > 0) {
+                        $pageHasValidCreates = true;
+                        $ts = strtotime($ticket['Created']);
+                        if ($ts < $oldestInPage) {
+                            $oldestInPage = $ts;
+                        }
+                    }
+                }
+
+                // Duplicate check
                 if (empty($newTicketIds)) {
-                    throw new \Exception('Repeated closed-ticket search page detected before sync completion.');
+                    // If we haven't reached the boundary, a duplicate page is an error.
+                    // If we reached it, we can safely treat it as exhausted.
+                    if (! $pageHasValidCreates || $oldestInPage < $boundaryTimestamp) {
+                        $exhausted = true;
+                        break;
+                    } else {
+                        throw new \Exception('Repeated closed-ticket search page detected before sync completion.');
+                    }
                 }
                 foreach ($newTicketIds as $id) {
                     $allFetchedIds[] = $id;
                 }
 
-                $fetchedCount += count($tickets);
-
-                $oldestInPage = time();
                 foreach ($tickets as $ticket) {
-                    $changedAt = $ticket['Changed'] ?? $ticket['Created'] ?? date('Y-m-d H:i:s');
-                    $timestamp = strtotime($changedAt);
+                    if (empty($ticket['Created'])) {
+                        continue;
+                    }
+
+                    $timestamp = strtotime($ticket['Created']);
+                    if ($timestamp === false || $timestamp <= 0) {
+                        continue;
+                    }
 
                     if ($newestLoaded === null || $timestamp > $newestLoaded) {
                         $newestLoaded = $timestamp;
@@ -295,15 +329,13 @@ class ClosedTicketSyncService
                         $oldestLoaded = $timestamp;
                     }
 
-                    if ($timestamp < $oldestInPage) {
-                        $oldestInPage = $timestamp;
+                    if ($timestamp >= $boundaryTimestamp) {
+                        $this->cacheService->upsertTicket($ticket, $windowDays * 6);
+                        $cachedCount++;
                     }
-
-                    $this->cacheService->upsertTicket($ticket, $windowDays * 6);
-                    $cachedCount++;
                 }
 
-                if ($oldestInPage < $boundaryTimestamp) {
+                if ($pageHasValidCreates && $oldestInPage < $boundaryTimestamp) {
                     break;
                 }
 

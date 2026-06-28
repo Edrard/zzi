@@ -123,7 +123,7 @@ class ClosedTicketSyncServiceTest extends TestCase
 
         $ticket = [
             'TicketID' => 123,
-            'Changed' => now()->subDays(31)->toDateTimeString(), // Older than boundary
+            'Created' => now()->subDays(29)->toDateTimeString(), // Older than boundary
         ];
 
         $this->znunyClientMock->shouldReceive('searchTickets')->once()->andReturn([$ticket]);
@@ -163,7 +163,7 @@ class ClosedTicketSyncServiceTest extends TestCase
 
         $ticket = [
             'TicketID' => 123,
-            'Changed' => now()->subDays(2)->toDateTimeString(), // Newer than boundary
+            'Created' => now()->subDays(2)->toDateTimeString(), // Newer than boundary
         ];
 
         // Returns 1 ticket, which is < limit (100), meaning pagination is exhausted.
@@ -363,11 +363,11 @@ class ClosedTicketSyncServiceTest extends TestCase
         // Need 100 tickets to prevent exhaustion break
         $page1 = [];
         for ($i = 1; $i <= 100; $i++) {
-            $page1[] = ['TicketID' => $i, 'Changed' => now()->subDays(1)->toDateTimeString()];
+            $page1[] = ['TicketID' => $i, 'Created' => now()->subDays(1)->toDateTimeString()];
         }
         $page2 = [];
         for ($i = 101; $i <= 102; $i++) {
-            $page2[] = ['TicketID' => $i, 'Changed' => now()->subDays(31)->toDateTimeString()];
+            $page2[] = ['TicketID' => $i, 'Created' => now()->subDays(29)->toDateTimeString()];
         }
 
         $this->znunyClientMock->shouldReceive('searchTickets')
@@ -416,7 +416,7 @@ class ClosedTicketSyncServiceTest extends TestCase
 
         $page1 = [];
         for ($i = 1; $i <= 100; $i++) {
-            $page1[] = ['TicketID' => $i, 'Changed' => now()->subDays(1)->toDateTimeString()];
+            $page1[] = ['TicketID' => $i, 'Created' => now()->subDays(1)->toDateTimeString()];
         }
 
         $this->znunyClientMock->shouldReceive('searchTickets')->twice()->andReturn($page1);
@@ -439,7 +439,7 @@ class ClosedTicketSyncServiceTest extends TestCase
 
         $page1 = [];
         for ($i = 1; $i <= 100; $i++) {
-            $page1[] = ['TicketID' => $i, 'Changed' => now()->subMinutes(1)->toDateTimeString()];
+            $page1[] = ['TicketID' => $i, 'Changed' => now()->subMinutes(1)->toDateTimeString(), 'Created' => now()->subMinutes(1)->toDateTimeString()];
         }
 
         $this->znunyClientMock->shouldReceive('searchTickets')->twice()->andReturn($page1);
@@ -463,7 +463,7 @@ class ClosedTicketSyncServiceTest extends TestCase
             $callCount++;
             $page = [];
             for ($i = 1; $i <= 100; $i++) {
-                $page[] = ['TicketID' => ($callCount * 1000) + $i, 'Changed' => now()->toDateTimeString()];
+                $page[] = ['TicketID' => ($callCount * 1000) + $i, 'Created' => now()->toDateTimeString()];
             }
 
             return $page;
@@ -477,5 +477,98 @@ class ClosedTicketSyncServiceTest extends TestCase
         $result = $this->syncService->syncFull();
 
         $this->assertStringContainsString('Max pages limit (1000) exceeded', $result['error_message']);
+    }
+
+    public function test_full_sync_uses_sort_by_created_and_caches_valid_tickets()
+    {
+        $this->cacheServiceMock->shouldReceive('getMetadata')->andReturn(null);
+
+        $ticketValid = [
+            'TicketID' => 123,
+            'Created' => now()->subDays(5)->toDateTimeString(),
+        ];
+        $ticketOld = [
+            'TicketID' => 124,
+            'Created' => now()->subDays(35)->toDateTimeString(),
+        ];
+        $ticketMissingCreated = [
+            'TicketID' => 125,
+        ];
+
+        $this->znunyClientMock->shouldReceive('searchTickets')
+            ->withArgs(function ($args) {
+                return $args['SortBy'] === 'Created' && $args['SortDirection'] === 'Down';
+            })
+            ->once()
+            ->andReturn([$ticketValid, $ticketOld, $ticketMissingCreated]);
+
+        // Only valid ticket is upserted
+        $this->cacheServiceMock->shouldReceive('upsertTicket')->once()->withArgs(function ($t) {
+            return $t['TicketID'] === 123;
+        });
+        $this->cacheServiceMock->shouldReceive('setMetadata')->once();
+
+        $result = $this->syncService->syncFull();
+        $this->assertEquals('full', $result['effective_mode']);
+        $this->assertEquals(1, $result['cached_count']);
+    }
+
+    public function test_small_sync_skips_old_created_tickets_even_if_changed_is_recent()
+    {
+        $this->cacheServiceMock->shouldReceive('validateMetadata')->andReturn(['is_valid' => true]);
+        $this->cacheServiceMock->shouldReceive('getMetadata')->andReturn(['last_small_completed_at' => now()->subMinutes(10)->toDateTimeString()]);
+
+        $ticketValid = [
+            'TicketID' => 123,
+            'Changed' => now()->subMinutes(1)->toDateTimeString(),
+            'Created' => now()->subDays(5)->toDateTimeString(),
+        ];
+        $ticketOldWithRecentChange = [
+            'TicketID' => 124,
+            'Changed' => now()->subMinutes(1)->toDateTimeString(),
+            'Created' => now()->subDays(35)->toDateTimeString(),
+        ];
+
+        $this->znunyClientMock->shouldReceive('searchTickets')
+            ->withArgs(function ($args) {
+                return $args['SortBy'] === 'Changed';
+            })
+            ->once()
+            ->andReturn([$ticketValid, $ticketOldWithRecentChange]);
+
+        $this->cacheServiceMock->shouldReceive('upsertTicket')->once()->withArgs(function ($t) {
+            return $t['TicketID'] === 123;
+        });
+        $this->cacheServiceMock->shouldReceive('setMetadata')->once();
+
+        $result = $this->syncService->syncAuto();
+        $this->assertEquals('small', $result['effective_mode']);
+        $this->assertEquals(1, $result['cached_count']);
+    }
+
+    public function test_duplicate_page_after_boundary_completes_safely()
+    {
+        $this->cacheServiceMock->shouldReceive('getMetadata')->andReturn(null);
+
+        // A duplicate page that contains tickets without Created, preventing it from breaking naturally,
+        // but it is considered past the boundary because it has no valid creates.
+        $page1 = [];
+        for ($i = 1; $i <= 100; $i++) {
+            $page1[] = ['TicketID' => $i];
+        }
+
+        $this->znunyClientMock->shouldReceive('searchTickets')->twice()->andReturn($page1);
+
+        // None are upserted because they have no valid creates
+        $this->cacheServiceMock->shouldReceive('upsertTicket')->never();
+
+        // Metadata is saved without an error
+        $this->cacheServiceMock->shouldReceive('setMetadata')->once()->withArgs(function ($args) {
+            return ! isset($args['last_error']) && $args['integrity_status'] === 'complete';
+        });
+
+        $result = $this->syncService->syncFull();
+        $this->assertEquals('full', $result['effective_mode']);
+        $this->assertEquals('complete', $result['metadata_status']);
     }
 }
