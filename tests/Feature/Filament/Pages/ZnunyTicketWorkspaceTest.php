@@ -724,8 +724,10 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->assertSeeHtml('border: 1px solid var(--zbx-table-border, #e5e7eb);');
     }
 
-    public function test_recent_closed_ticket_status_is_rendered()
+    public function test_recent_closed_ticket_status_is_rendered_when_enabled()
     {
+        config(['znuny.closed_ticket_status_panel_enabled' => true]);
+
         $user = User::factory()->create(['role' => 'operator']);
 
         Livewire::actingAs($user)
@@ -735,8 +737,20 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->assertSee('Recent closed ticket cache has not completed a full sync yet.');
     }
 
-    public function test_recent_closed_ticket_status_complete_metadata_is_rendered()
+    public function test_recent_closed_ticket_status_is_hidden_by_default()
     {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->assertSuccessful()
+            ->assertDontSee('Recent Closed Ticket Cache Status');
+    }
+
+    public function test_recent_closed_ticket_status_complete_metadata_is_rendered_when_enabled()
+    {
+        config(['znuny.closed_ticket_status_panel_enabled' => true]);
+
         $user = User::factory()->create(['role' => 'operator']);
 
         $mock = \Mockery::mock(ClosedTicketCacheService::class)->makePartial();
@@ -785,8 +799,9 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->assertSee('Previous sync warning');
     }
 
-    public function test_recent_closed_ticket_status_lock_is_rendered()
+    public function test_recent_closed_ticket_status_lock_is_rendered_when_enabled()
     {
+        config(['znuny.closed_ticket_status_panel_enabled' => true]);
         $user = User::factory()->create(['role' => 'operator']);
 
         Cache::put('znuny:closed_ticket:sync:lock', true, 10);
