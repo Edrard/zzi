@@ -739,6 +739,7 @@ class ZnunyTicketWorkspaceTest extends TestCase
 
     public function test_recent_closed_ticket_status_is_hidden_by_default()
     {
+        config(['znuny.closed_ticket_status_panel_enabled' => false]);
         $user = User::factory()->create(['role' => 'operator']);
 
         Livewire::actingAs($user)

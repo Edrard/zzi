@@ -128,13 +128,10 @@ class WarmZnunyTicketWorkspaceCacheCommand extends Command
             } else {
                 $this->info("Total active tickets found: {$totalCount}");
 
-                for ($page = 1; $page <= $maxPages; $page++) {
-                    $offset = ($page - 1) * $limit;
+                $offset = 0;
+                $pagesRequested = 0;
 
-                    if ($offset >= $totalCount) {
-                        break;
-                    }
-
+                while ($offset < $totalCount && $pagesRequested < $maxPages) {
                     $filters = [
                         'StateType' => $combinedStateTypes,
                         'Limit' => $limit,
@@ -144,6 +141,7 @@ class WarmZnunyTicketWorkspaceCacheCommand extends Command
                     ];
 
                     $counters['pages_requested']++;
+                    $pagesRequested++;
                     $pageMetadata = $client->searchTicketsWithMetadata($filters);
 
                     if (! empty($pageMetadata['warnings'])) {
@@ -174,6 +172,8 @@ class WarmZnunyTicketWorkspaceCacheCommand extends Command
                             $counters['errors']++;
                         }
                     }
+
+                    $offset += count($tickets);
                 }
             }
         } catch (Throwable $e) {

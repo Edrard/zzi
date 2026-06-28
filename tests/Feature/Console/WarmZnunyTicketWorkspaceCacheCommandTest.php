@@ -422,4 +422,84 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
             'action' => 'znuny.ticket_workspace_sync.completed',
         ]);
     }
+
+    public function test_it_handles_153_total_count_with_100_returned_per_page(): void
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['value' => '["new"]']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_default_limit'], ['value' => '200']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_max_pages_per_run'], ['value' => '3']);
+
+        $this->client->shouldReceive('searchTicketsWithMetadata')
+            ->once()
+            ->withArgs(function ($args) {
+                return isset($args['CountOnly']) && $args['CountOnly'] === 1;
+            })
+            ->andReturn([
+                'total_count' => 153,
+                'count_only' => true,
+                'warnings' => [],
+            ]);
+
+        $page1Tickets = [];
+        for ($i = 1; $i <= 100; $i++) {
+            $page1Tickets[] = ['TicketID' => $i];
+        }
+
+        $page2Tickets = [];
+        for ($i = 101; $i <= 153; $i++) {
+            $page2Tickets[] = ['TicketID' => $i];
+        }
+
+        // First page request
+        $this->client->shouldReceive('searchTicketsWithMetadata')
+            ->once()
+            ->withArgs(function ($args) {
+                return $args['Offset'] === 0
+                    && $args['Limit'] === 200
+                    && ! isset($args['Page'])
+                    && ! isset($args['Queue'])
+                    && ! isset($args['QueueID']);
+            })
+            ->andReturn([
+                'tickets' => $page1Tickets,
+                'warnings' => [],
+            ]);
+
+        // Second page request (offset should be 100, not 200)
+        $this->client->shouldReceive('searchTicketsWithMetadata')
+            ->once()
+            ->withArgs(function ($args) {
+                return $args['Offset'] === 100
+                    && $args['Limit'] === 200
+                    && ! isset($args['Page'])
+                    && ! isset($args['Queue'])
+                    && ! isset($args['QueueID']);
+            })
+            ->andReturn([
+                'tickets' => $page2Tickets,
+                'warnings' => [],
+            ]);
+
+        $this->cacheService->shouldReceive('upsertOrRefreshFromSearchResult')
+            ->times(153)
+            ->andReturn('cached_new');
+
+        $this->artisan('znuny:warm-ticket-workspace-cache')
+            ->expectsTable(['Metric', 'Count'], [
+                ['state_types', 1],
+                ['total_count', 153],
+                ['count_only_requests', 1],
+                ['pages_requested', 2],
+                ['tickets_seen', 153],
+                ['cached_new', 153],
+                ['refreshed_unchanged', 0],
+                ['updated_changed', 0],
+                ['skipped_missing_ticket_id', 0],
+                ['skipped_disabled', 0],
+                ['errors', 0],
+                ['warnings', 0],
+            ])
+            ->assertSuccessful();
+    }
 }
