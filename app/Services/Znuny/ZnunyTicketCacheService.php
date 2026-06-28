@@ -25,11 +25,6 @@ class ZnunyTicketCacheService
         return (int) max($configuredActiveTtlSeconds, $safeRefreshTtlSeconds);
     }
 
-    protected function getClosedTtl(): int
-    {
-        return (SettingsService::int('znuny_ticket_cache_closed_ttl_minutes', 1440) ?? 1440) * 60;
-    }
-
     public function upsertTicket(array $ticket): void
     {
         if (! $this->isEnabled()) {
@@ -42,7 +37,7 @@ class ZnunyTicketCacheService
         }
 
         $isClosed = $this->isClosedState($ticket['StateType'] ?? '');
-        $ttl = $isClosed ? $this->getClosedTtl() : $this->getTtl();
+        $ttl = $this->getTtl();
 
         $key = "znuny:ticket:{$ticketId}";
 
@@ -89,7 +84,7 @@ class ZnunyTicketCacheService
             return;
         }
 
-        $ttl = $this->getClosedTtl();
+        $ttl = $this->getTtl();
         $key = "znuny:ticket:{$ticketId}";
 
         Redis::setex($key, max(1, $ttl), json_encode($ticket));
@@ -108,7 +103,7 @@ class ZnunyTicketCacheService
         }
 
         $isClosed = $this->isClosedState($ticket['StateType'] ?? '');
-        $ttl = $isClosed ? $this->getClosedTtl() : $this->getTtl();
+        $ttl = $this->getTtl();
         $key = "znuny:ticket:{$ticketId}";
 
         $existingDataRaw = Redis::get($key);

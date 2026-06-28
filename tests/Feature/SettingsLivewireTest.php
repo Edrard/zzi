@@ -162,6 +162,102 @@ class SettingsLivewireTest extends TestCase
         $this->assertFalse($foundOtherTab, 'Other tab should not be rendered when empty');
     }
 
+    public function test_ticket_workspace_tab_sections_and_fields()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Artisan::call('app:ensure-settings-defaults');
+
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+        $form = $component->instance()->getForm('form');
+        $schema = $form->getComponents();
+
+        $sections = [];
+
+        $search = function ($components, $parentGroupName = null) use (&$search, &$sections) {
+            foreach ($components as $c) {
+                $type = class_basename($c);
+                $name = method_exists($c, 'getName') ? $c->getName() : null;
+                $label = method_exists($c, 'getHeading') ? $c->getHeading() : (method_exists($c, 'getLabel') ? $c->getLabel() : null);
+
+                // Keep track of the current section
+                if ($type === 'Section' && $label) {
+                    $parentGroupName = $label;
+                    if (! isset($sections[$parentGroupName])) {
+                        $sections[$parentGroupName] = [];
+                    }
+                }
+
+                if ($name && $parentGroupName) {
+                    $sections[$parentGroupName][] = $name;
+                }
+
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents(), $parentGroupName);
+                }
+            }
+        };
+
+        $search($schema);
+
+        // Assert Core Workspace settings
+        $this->assertContains('znuny_ticket_workspace_enabled', $sections['Ticket Workspace'] ?? []);
+        $this->assertContains('znuny_ticket_workspace_active_state_type_ids', $sections['Ticket Workspace'] ?? []);
+
+        // Assert Active Ticket Cache settings
+        $this->assertContains('znuny_ticket_cache_refresh_interval_minutes', $sections['Active Ticket Cache'] ?? []);
+        $this->assertContains('znuny_ticket_cache_default_limit', $sections['Active Ticket Cache'] ?? []);
+        $this->assertContains('znuny_ticket_cache_max_pages_per_run', $sections['Active Ticket Cache'] ?? []);
+        $this->assertContains('znuny_ticket_cache_ttl_minutes', $sections['Active Ticket Cache'] ?? []);
+
+        // Assert Legacy Closed Ticket Cache setting is completely removed
+        $this->assertArrayNotHasKey('Legacy Closed Ticket Cache', $sections);
+        $this->assertArrayNotHasKey('Advanced / Internal', $sections);
+
+        // Assert Recent Closed Tickets settings
+        $this->assertContains('znuny_closed_ticket_window_days', $sections['Recent Closed Tickets'] ?? []);
+        $this->assertContains('znuny_closed_ticket_small_sync_interval_minutes', $sections['Recent Closed Tickets'] ?? []);
+        $this->assertNotContains('znuny_closed_ticket_sync_audit_auto_enabled', $sections['Recent Closed Tickets'] ?? []);
+
+        // Assert all form settings exist in DefaultSettings
+        $allDefaults = collect(DefaultSettings::all())->pluck('key')->toArray();
+        $renderedSettings = collect($sections)->flatten()->unique()->toArray();
+        foreach ($renderedSettings as $renderedSetting) {
+            // Some keys are dynamic or not settings, but all 'znuny_' or standard setting keys should exist
+            if (in_array($renderedSetting, ['znuny_queue_host_mappings', 'host_prefix', 'queue_name', 'note'])) {
+                continue;
+            } // Mappings are handled specially
+            $this->assertContains($renderedSetting, $allDefaults, "Setting $renderedSetting rendered in form but not found in DefaultSettings");
+        }
+    }
+
+    public function test_audit_log_tab_contains_audit_settings()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Artisan::call('app:ensure-settings-defaults');
+
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+        $form = $component->instance()->getForm('form');
+        $schema = $form->getComponents();
+
+        $found = false;
+
+        $search = function ($components) use (&$search, &$found) {
+            foreach ($components as $c) {
+                if (method_exists($c, 'getName') && $c->getName() === 'znuny_closed_ticket_sync_audit_auto_enabled') {
+                    $found = true;
+                }
+
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents());
+                }
+            }
+        };
+
+        $search($schema);
+
+        $this->assertTrue($found, 'Audit Log setting should be rendered in the form.');
+    }
+
     public function test_znuny_connection_test_button_is_rendered_in_credentials_and_endpoints_tabs()
     {
         $admin = User::factory()->create(['role' => 'admin']);

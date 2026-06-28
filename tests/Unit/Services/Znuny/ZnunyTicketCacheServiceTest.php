@@ -29,7 +29,6 @@ class ZnunyTicketCacheServiceTest extends TestCase
         // Ensure settings pretend cache is enabled
         Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
         Setting::updateOrCreate(['key' => 'znuny_ticket_cache_ttl_minutes'], ['value' => '10']);
-        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_closed_ttl_minutes'], ['value' => '1440']);
 
         $this->service = new ZnunyTicketCacheService;
     }
@@ -99,7 +98,7 @@ class ZnunyTicketCacheServiceTest extends TestCase
         $this->service->upsertTicket($ticket);
     }
 
-    public function test_it_caches_closed_ticket_with_closed_ttl(): void
+    public function test_it_caches_closed_ticket_with_active_ttl(): void
     {
         $ticket = [
             'TicketID' => 102,
@@ -108,7 +107,7 @@ class ZnunyTicketCacheServiceTest extends TestCase
 
         Redis::shouldReceive('setex')
             ->once()
-            ->with('znuny:ticket:102', 86400, json_encode($ticket));
+            ->with('znuny:ticket:102', 600, json_encode($ticket));
 
         // And reverse index
         Redis::shouldReceive('setex')
@@ -165,7 +164,7 @@ class ZnunyTicketCacheServiceTest extends TestCase
 
         Redis::shouldReceive('setex')
             ->once()
-            ->with('znuny:ticket:400', 86400, json_encode($ticket));
+            ->with('znuny:ticket:400', 600, json_encode($ticket));
 
         // And reverse index
         Redis::shouldReceive('setex')

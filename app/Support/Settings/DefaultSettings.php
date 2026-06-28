@@ -76,11 +76,13 @@ class DefaultSettings
             ['key' => 'znuny_ticket_cache_refresh_interval_minutes', 'value' => '5', 'type' => 'integer', 'description' => 'Interval for the Ticket Workspace cache warmer in minutes.'],
             ['key' => 'znuny_ticket_cache_max_pages_per_run', 'value' => '3', 'type' => 'integer', 'description' => 'Safety limit for paginated ZnunyTicketSearch cache warming.'],
             ['key' => 'znuny_ticket_cache_ttl_minutes', 'value' => '10', 'type' => 'integer', 'description' => 'Default TTL for cached active Znuny tickets in minutes.'],
-            ['key' => 'znuny_ticket_cache_closed_ttl_minutes', 'value' => '1440', 'type' => 'integer', 'description' => 'TTL for recently closed Znuny tickets in minutes.'],
             ['key' => 'znuny_ticket_cache_default_limit', 'value' => '50', 'type' => 'integer', 'description' => 'Default page size for Znuny ticket cache warming/search.'],
             ['key' => 'znuny_ticket_workspace_default_per_page', 'value' => '50', 'type' => 'integer', 'description' => 'Default per page value for Ticket Workspace UI.'],
             ['key' => 'znuny_ticket_workspace_active_state_type_ids', 'value' => '["new","open","pending_reminder","pending_auto"]', 'type' => 'json', 'description' => 'JSON array of active operational state type IDs.'],
             ['key' => 'znuny_ticket_workspace_sync_audit_enabled', 'value' => 'false', 'type' => 'boolean', 'description' => 'Write summary audit records for scheduled Ticket Workspace cache warming.'],
+            ['key' => 'znuny_closed_ticket_window_days', 'value' => '30', 'type' => 'integer', 'description' => 'Number of recent days to retain in the closed ticket cache.'],
+            ['key' => 'znuny_closed_ticket_small_sync_interval_minutes', 'value' => '5', 'type' => 'integer', 'description' => 'Interval for small closed ticket sync in minutes.'],
+            ['key' => 'znuny_closed_ticket_sync_audit_auto_enabled', 'value' => 'false', 'type' => 'boolean', 'description' => 'Write summary audit records for automatic closed ticket syncs.'],
         ];
     }
 }

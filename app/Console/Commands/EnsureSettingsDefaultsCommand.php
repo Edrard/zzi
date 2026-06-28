@@ -29,6 +29,15 @@ class EnsureSettingsDefaultsCommand extends Command
     {
         $this->info('Ensuring settings defaults...');
 
+        $obsoleteKeys = [
+            'znuny_ticket_cache_closed_ttl_minutes',
+        ];
+
+        $deletedCount = Setting::whereIn('key', $obsoleteKeys)->delete();
+        if ($deletedCount > 0) {
+            $this->info("Deleted {$deletedCount} obsolete setting(s).");
+        }
+
         $defaults = DefaultSettings::all();
         $created = 0;
         $existing = 0;

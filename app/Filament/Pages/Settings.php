@@ -400,11 +400,11 @@ class Settings extends Page implements HasForms
                     'description' => $setting->description,
                 ],
                 'znuny_ticket_cache_refresh_interval_minutes' => [
-                    'label' => 'Refresh Interval Minutes',
+                    'label' => 'Active Cache Refresh Interval (Minutes)',
                     'description' => $setting->description,
                 ],
                 'znuny_ticket_cache_default_limit' => [
-                    'label' => 'Default Limit',
+                    'label' => 'Default Page Size',
                     'description' => $setting->description,
                 ],
                 'znuny_ticket_cache_max_pages_per_run' => [
@@ -412,16 +412,25 @@ class Settings extends Page implements HasForms
                     'description' => $setting->description,
                 ],
                 'znuny_ticket_cache_ttl_minutes' => [
-                    'label' => 'Ticket Cache TTL Minutes',
+                    'label' => 'Active Ticket Cache TTL (Minutes)',
                     'description' => $setting->description,
                 ],
-                'znuny_ticket_cache_closed_ttl_minutes' => [
-                    'label' => 'Closed Ticket Cache TTL Minutes',
-                    'description' => $setting->description,
-                ],
+
                 'znuny_ticket_workspace_active_state_type_ids' => [
                     'label' => 'Active State Types',
                     'description' => 'Select which Znuny state types should be included in the Ticket Workspace active working set.',
+                ],
+                'znuny_closed_ticket_window_days' => [
+                    'label' => 'Recent Closed Window (Days)',
+                    'description' => 'How many recent days of closed tickets will be available in Ticket Workspace. Physical Redis retention is managed automatically and equals 6× this window.',
+                ],
+                'znuny_closed_ticket_small_sync_interval_minutes' => [
+                    'label' => 'Small Sync Interval (Minutes)',
+                    'description' => 'How often the small closed-ticket sync should refresh recent closed tickets.',
+                ],
+                'znuny_closed_ticket_sync_audit_auto_enabled' => [
+                    'label' => 'Log Automatic Closed-Ticket Syncs',
+                    'description' => 'Write Audit Log entries for automatic closed-ticket syncs. Manual syncs are always audited.',
                 ],
             ];
 
@@ -498,7 +507,7 @@ class Settings extends Page implements HasForms
                     ->required();
             } elseif ($setting->type === 'integer') {
                 $min = 0;
-                if ($setting->key === 'cleanup_batch_size' || $setting->key === 'znuny_linked_ticket_sync_interval_minutes') {
+                if ($setting->key === 'cleanup_batch_size' || $setting->key === 'znuny_linked_ticket_sync_interval_minutes' || $setting->key === 'znuny_closed_ticket_window_days' || $setting->key === 'znuny_closed_ticket_small_sync_interval_minutes') {
                     $min = 1;
                 } elseif ($setting->key === 'pagination_per_page_base') {
                     $min = 11;
@@ -576,11 +585,11 @@ class Settings extends Page implements HasForms
                 $groups['Znuny Ticket Defaults'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['znuny_queue_cache_ttl_minutes', 'znuny_agent_cache_ttl_minutes', 'znuny_ticket_snapshot_cache_ttl_minutes'])) {
                 $groups['Cache'][] = $component;
-            } elseif (in_array($setting->key, ['znuny_detailed_sync_audit_enabled', 'zabbix_problem_sync_audit_enabled', 'znuny_ticket_workspace_sync_audit_enabled'])) {
+            } elseif (in_array($setting->key, ['znuny_detailed_sync_audit_enabled', 'zabbix_problem_sync_audit_enabled', 'znuny_ticket_workspace_sync_audit_enabled', 'znuny_closed_ticket_sync_audit_auto_enabled'])) {
                 $groups['Audit Log'][] = $component;
             } elseif (in_array($setting->key, ['znuny_linked_ticket_sync_interval_minutes', 'znuny_linked_ticket_sync_batch_size'])) {
                 $groups['Znuny Sync']['Linked Tickets'][] = $component;
-            } elseif (in_array($setting->key, ['znuny_ticket_workspace_enabled', 'znuny_ticket_cache_refresh_interval_minutes', 'znuny_ticket_cache_max_pages_per_run', 'znuny_ticket_cache_ttl_minutes', 'znuny_ticket_cache_closed_ttl_minutes', 'znuny_ticket_cache_default_limit', 'znuny_ticket_workspace_active_state_type_ids'])) {
+            } elseif (in_array($setting->key, ['znuny_ticket_workspace_enabled', 'znuny_ticket_cache_refresh_interval_minutes', 'znuny_ticket_cache_max_pages_per_run', 'znuny_ticket_cache_ttl_minutes', 'znuny_ticket_cache_default_limit', 'znuny_ticket_workspace_active_state_type_ids', 'znuny_closed_ticket_window_days', 'znuny_closed_ticket_small_sync_interval_minutes'])) {
                 $groups['Znuny Sync']['Ticket Workspace'][$setting->key] = $component;
             } elseif (str_starts_with($setting->key, 'znuny_')) {
                 $groups['Znuny'][$setting->key] = $component;
@@ -873,22 +882,40 @@ class Settings extends Page implements HasForms
 
     private function buildZnunySyncTabGroups(array $zs): array
     {
-        $workspaceOrder = [
-            'znuny_ticket_workspace_enabled',
-            'znuny_ticket_cache_refresh_interval_minutes',
-            'znuny_ticket_cache_default_limit',
-            'znuny_ticket_cache_max_pages_per_run',
-            'znuny_ticket_cache_ttl_minutes',
-            'znuny_ticket_cache_closed_ttl_minutes',
-            'znuny_ticket_workspace_active_state_type_ids',
-        ];
-
         $workspaceSchema = [];
         if (isset($zs['Ticket Workspace'])) {
-            foreach ($workspaceOrder as $key) {
-                if (isset($zs['Ticket Workspace'][$key])) {
-                    $workspaceSchema[] = $zs['Ticket Workspace'][$key];
-                }
+            $ws = $zs['Ticket Workspace'];
+
+            $coreFields = array_filter([
+                $ws['znuny_ticket_workspace_enabled'] ?? null,
+                $ws['znuny_ticket_workspace_active_state_type_ids'] ?? null,
+            ]);
+            if (! empty($coreFields)) {
+                $workspaceSchema[] = Section::make('Ticket Workspace')
+                    ->description('Core Ticket Workspace behavior.')
+                    ->schema($coreFields)->columns(1);
+            }
+
+            $activeFields = array_filter([
+                $ws['znuny_ticket_cache_refresh_interval_minutes'] ?? null,
+                $ws['znuny_ticket_cache_default_limit'] ?? null,
+                $ws['znuny_ticket_cache_max_pages_per_run'] ?? null,
+                $ws['znuny_ticket_cache_ttl_minutes'] ?? null,
+            ]);
+            if (! empty($activeFields)) {
+                $workspaceSchema[] = Section::make('Active Ticket Cache')
+                    ->description('Redis cache warmer settings for active Znuny tickets.')
+                    ->schema($activeFields)->columns(1);
+            }
+
+            $recentFields = array_filter([
+                $ws['znuny_closed_ticket_window_days'] ?? null,
+                $ws['znuny_closed_ticket_small_sync_interval_minutes'] ?? null,
+            ]);
+            if (! empty($recentFields)) {
+                $workspaceSchema[] = Section::make('Recent Closed Tickets')
+                    ->description('Redis-only recent closed-ticket window configuration.')
+                    ->schema($recentFields)->columns(1);
             }
         }
 

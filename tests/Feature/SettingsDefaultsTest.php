@@ -84,4 +84,22 @@ class SettingsDefaultsTest extends TestCase
         $defaults = DefaultSettings::all();
         $this->assertContains('pagination_per_page_base', array_column($defaults, 'key'));
     }
+
+    public function test_ensure_settings_defaults_deletes_obsolete_closed_ttl()
+    {
+        Setting::create([
+            'key' => 'znuny_ticket_cache_closed_ttl_minutes',
+            'value' => '1440',
+            'type' => 'integer',
+        ]);
+
+        $this->assertDatabaseHas('settings', ['key' => 'znuny_ticket_cache_closed_ttl_minutes']);
+
+        Artisan::call('app:ensure-settings-defaults');
+
+        $this->assertDatabaseMissing('settings', ['key' => 'znuny_ticket_cache_closed_ttl_minutes']);
+
+        $defaults = DefaultSettings::all();
+        $this->assertNotContains('znuny_ticket_cache_closed_ttl_minutes', array_column($defaults, 'key'));
+    }
 }

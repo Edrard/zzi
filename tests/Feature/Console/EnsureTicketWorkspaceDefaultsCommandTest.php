@@ -29,6 +29,18 @@ class EnsureTicketWorkspaceDefaultsCommandTest extends TestCase
             'key' => 'znuny_ticket_workspace_active_state_type_ids',
             'value' => '["new","open","pending_reminder","pending_auto"]',
         ]);
+        $this->assertDatabaseHas('settings', [
+            'key' => 'znuny_closed_ticket_window_days',
+            'value' => '30',
+        ]);
+        $this->assertDatabaseHas('settings', [
+            'key' => 'znuny_closed_ticket_small_sync_interval_minutes',
+            'value' => '5',
+        ]);
+        $this->assertDatabaseHas('settings', [
+            'key' => 'znuny_closed_ticket_sync_audit_auto_enabled',
+            'value' => 'false',
+        ]);
     }
 
     public function test_it_deletes_obsolete_keys()
