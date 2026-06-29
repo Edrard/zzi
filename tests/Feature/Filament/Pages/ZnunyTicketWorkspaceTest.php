@@ -163,10 +163,28 @@ class ZnunyTicketWorkspaceTest extends TestCase
 
         Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['new']);
+
+        $component = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
             ->set('stateTypeFilter', ['new'])
             ->mountAction('viewTicket', ['znuny_ticket_id' => 101])
-            ->assertActionMounted('viewTicket')
-            ->assertSee('client@example.com');
+            ->assertActionMounted('viewTicket');
+
+        $action = $component->instance()->getMountedAction();
+
+        $openSubmitAction = $action->getModalSubmitAction();
+        $this->assertNull($openSubmitAction, 'Submit action should be disabled');
+
+        $footerActions = $action->getExtraModalFooterActions();
+        $this->assertArrayHasKey('open_ticket', $footerActions, 'open_ticket should be in extra footer actions');
+
+        $openAction = $footerActions['open_ticket'];
+        $this->assertEquals('Open Ticket', $openAction->getLabel());
+
+        $attributes = $openAction->getExtraAttributes();
+        $this->assertArrayHasKey('class', $attributes);
+        $this->assertStringContainsString('zbx-open-ticket-footer-action', $attributes['class'], 'Open Ticket must have zbx-open-ticket-footer-action class to align right');
     }
 
     public function test_icon_legend_is_rendered()

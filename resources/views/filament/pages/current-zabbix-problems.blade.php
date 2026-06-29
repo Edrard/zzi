@@ -949,9 +949,6 @@
                                                             </x-filament::button>
                                                         @endif
                                                     @else
-                                                        <x-filament::button tag="a" :href="app(\App\Services\Znuny\ZnunyClient::class)->ticketUrl($linkedTicket->znuny_ticket_id)" target="_blank" color="info" size="sm" icon="heroicon-o-arrow-top-right-on-square">
-                                                            Open Ticket
-                                                        </x-filament::button>
                                                     @endif
                                                 @elseif($canCreateTicket)
                                                     <x-filament::button wire:click="openCreateTicketModal('{{ $problem['eventid'] }}')" icon="heroicon-o-ticket" size="sm" color="primary">

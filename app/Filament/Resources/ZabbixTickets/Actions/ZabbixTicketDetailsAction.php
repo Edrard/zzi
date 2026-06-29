@@ -18,13 +18,19 @@ class ZabbixTicketDetailsAction
             ->modalWidth(Width::FourExtraLarge)
             ->modalHeading(fn (array $arguments, $record = null) => TicketDetailsPayload::fromRecord($record, $arguments)->title ?? 'Ticket Details')
             ->modalSubmitAction(false)
-            ->modalCancelAction(fn ($action) => $action->label('Close'))
+            ->modalCancelAction(false)
             ->schema(fn (Schema $schema) => ZabbixTicketInfolist::configure($schema))
             ->extraModalFooterActions(fn (Action $action): array => [
                 ZnunyTicketManagementActions::closeTicketAction('manual_close_ticket')
                     ->after(fn () => $action->cancel()),
                 ZnunyTicketManagementActions::reopenTicketAction('reopen_ticket')
                     ->after(fn () => $action->cancel()),
+                Action::make('cancel')
+                    ->label('Close')
+                    ->close()
+                    ->color('gray'),
+                ZnunyTicketManagementActions::openInZnunyAction('open_ticket')
+                    ->extraAttributes(['class' => 'zbx-open-ticket-footer-action']),
             ]);
     }
 }

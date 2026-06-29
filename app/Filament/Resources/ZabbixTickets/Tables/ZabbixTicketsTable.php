@@ -3,13 +3,11 @@
 namespace App\Filament\Resources\ZabbixTickets\Tables;
 
 use App\Filament\Resources\ZabbixTickets\Actions\ZabbixTicketDetailsAction;
-use App\Filament\Support\ZnunyTicketManagementActions;
 use App\Models\ZabbixTicket;
 use App\Services\Support\DateTimeDisplayService;
 use App\Services\Zabbix\ZabbixTicketStatusPresenter;
 use App\Support\Pagination\PaginationSettings;
 use App\Support\Polling\UiPollInterval;
-use Filament\Support\Enums\Size;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -100,8 +98,6 @@ class ZabbixTicketsTable
             ->recordActions([
                 ZabbixTicketDetailsAction::make()
                     ->extraAttributes(['class' => 'linked-tickets-hidden-view-action']),
-                ZnunyTicketManagementActions::openInZnunyAction('open_ticket')
-                    ->size(Size::Small),
             ])
             ->toolbarActions([]);
     }

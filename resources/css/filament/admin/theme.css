@@ -37,3 +37,12 @@ html:not(.dark) .linked-tickets-compact-table.fi-clickable:hover .fi-ta-col,
 html:not(.dark) .linked-tickets-compact-table.fi-clickable:hover .fi-ta-text-item.fi-ta-text {
     background-color: #EAF3FF !important;
 }
+
+/* Shared Modal Footer Right Alignment */
+.fi-modal-footer-actions:has(.zbx-open-ticket-footer-action) {
+    width: 100%;
+}
+
+.zbx-open-ticket-footer-action {
+    margin-inline-start: auto !important;
+}

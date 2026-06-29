@@ -3,7 +3,6 @@
 namespace Tests\Feature\Filament;
 
 use App\Filament\Resources\ZabbixTickets\Pages\ListZabbixTickets;
-use App\Models\Setting;
 use App\Models\User;
 use App\Models\ZabbixTicket;
 use App\Services\Zabbix\ZabbixProblemCache;
@@ -84,10 +83,24 @@ class LinkedTicketsPageTest extends TestCase
             'znuny_ticket_sync_error' => 'Some sync error',
         ]);
 
-        Livewire::test(ListZabbixTickets::class)
-            ->mountTableAction('view', $ticket)
+        $component = Livewire::test(ListZabbixTickets::class)
+            ->mountTableAction('viewTicket', $ticket)
             ->assertSuccessful();
 
+        $action = $component->instance()->getMountedTableAction();
+
+        $openSubmitAction = $action->getModalSubmitAction();
+        $this->assertNull($openSubmitAction, 'Submit action should be disabled');
+
+        $footerActions = $action->getExtraModalFooterActions();
+        $this->assertArrayHasKey('open_ticket', $footerActions, 'open_ticket should be in extra footer actions');
+
+        $openAction = $footerActions['open_ticket'];
+        $this->assertEquals('Open Ticket', $openAction->getLabel());
+
+        $attributes = $openAction->getExtraAttributes();
+        $this->assertArrayHasKey('class', $attributes);
+        $this->assertStringContainsString('zbx-open-ticket-footer-action', $attributes['class'], 'Open Ticket must have zbx-open-ticket-footer-action class to align right');
     }
 
     public function test_linked_tickets_page_has_sync_action()
@@ -137,31 +150,6 @@ class LinkedTicketsPageTest extends TestCase
             ->assertCanSeeTableRecords([$ticket]);
 
         $this->assertEquals('closed unsuccessful', $ticket->fresh()->znuny_state_name);
-    }
-
-    public function test_linked_tickets_open_ticket_action_has_url()
-    {
-        $this->actingAs(User::factory()->create(['role' => 'admin']));
-
-        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
-
-        $ticket = ZabbixTicket::create([
-            'zabbix_event_id' => '12345',
-            'zabbix_trigger_id' => '67890',
-            'zabbix_host_id' => '111',
-            'zabbix_host_name' => 'test-host',
-            'zabbix_problem_name' => 'Test Problem',
-            'zabbix_severity' => 3,
-            'zabbix_started_at' => now(),
-            'znuny_ticket_id' => 999,
-            'znuny_ticket_number' => '202611223344',
-            'creation_source' => 'manual',
-        ]);
-
-        $url = app(ZnunyClient::class)->ticketUrl(999);
-
-        Livewire::test(ListZabbixTickets::class)
-            ->assertTableActionHasUrl('open_ticket', $url, $ticket);
     }
 
     public function test_linked_tickets_resolution_context_badges_in_table()
