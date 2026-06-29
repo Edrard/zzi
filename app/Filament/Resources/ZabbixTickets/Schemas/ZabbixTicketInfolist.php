@@ -4,7 +4,9 @@ namespace App\Filament\Resources\ZabbixTickets\Schemas;
 
 use App\Filament\Support\TicketDetailsPayload;
 use App\Services\Support\DateTimeDisplayService;
+use App\Services\Znuny\ZnunyTicketArticleCacheService;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Components\ViewEntry;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
@@ -112,6 +114,21 @@ class ZabbixTicketInfolist
                                         ->placeholder('-'),
                                 ])->columns(1),
                         ]),
+                    ]),
+                Section::make('Articles / Notes')
+                    ->compact()
+                    ->schema([
+                        ViewEntry::make('articles_notes')
+                            ->hiddenLabel()
+                            ->getStateUsing(function ($record) {
+                                $payload = TicketDetailsPayload::fromRecord($record);
+                                if (! $payload->znuny_ticket_id) {
+                                    return [];
+                                }
+
+                                return app(ZnunyTicketArticleCacheService::class)->get($payload->znuny_ticket_id);
+                            })
+                            ->view('filament.infolists.articles-accordion'),
                     ]),
             ]);
     }

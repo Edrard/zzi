@@ -46,3 +46,17 @@ html:not(.dark) .linked-tickets-compact-table.fi-clickable:hover .fi-ta-text-ite
 .zbx-open-ticket-footer-action {
     margin-inline-start: auto !important;
 }
+
+/* Custom Articles / Notes Accordion Classes for specific targeting if needed */
+.zbx-ticket-articles {}
+.zbx-ticket-article-item {}
+.zbx-ticket-article-header {}
+.zbx-ticket-article-body {}
+.zbx-ticket-article-text {}
+
+/* Custom Articles / Notes Accordion Classes for specific targeting if needed */
+.zbx-ticket-articles { display: flex; }
+.zbx-ticket-article-item { position: relative; }
+.zbx-ticket-article-header { cursor: pointer; }
+.zbx-ticket-article-body { /* wrapper */ }
+.zbx-ticket-article-text { /* content */ }

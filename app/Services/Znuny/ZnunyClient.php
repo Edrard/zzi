@@ -264,6 +264,64 @@ class ZnunyClient
     }
 
     /**
+     * Get ticket articles through standard TicketGet operation
+     */
+    public function getTicketArticles(int|string $ticketId): array
+    {
+        return $this->withSessionRetry(function ($session) use ($ticketId) {
+            $normalizedId = $this->normalizeTicketId($ticketId);
+
+            $response = $this->request()->get($this->apiUrl().'/Ticket/'.rawurlencode((string) $normalizedId), [
+                'SessionID' => $session,
+                'AllArticles' => 1,
+                'DynamicFields' => 0,
+                'Attachments' => 0,
+            ]);
+
+            $data = $this->processResponse($response);
+
+            $ticketData = [];
+            if (isset($data['Ticket']) && is_array($data['Ticket'])) {
+                if (isset($data['Ticket'][0]) && is_array($data['Ticket'][0])) {
+                    $ticketData = $data['Ticket'][0];
+                } elseif (isset($data['Ticket']['TicketID'])) {
+                    $ticketData = $data['Ticket'];
+                }
+            } elseif (isset($data[0]) && is_array($data[0])) {
+                $ticketData = $data[0];
+            }
+
+            $articles = [];
+            if (isset($ticketData['Article']) && is_array($ticketData['Article'])) {
+                $articles = $ticketData['Article'];
+                // Handle case where single article is returned as dict instead of list of dicts
+                if (isset($articles['ArticleID'])) {
+                    $articles = [$articles];
+                }
+            }
+
+            return array_map(function ($article) {
+                return [
+                    'article_id' => isset($article['ArticleID']) ? (int) $article['ArticleID'] : null,
+                    'article_number' => isset($article['ArticleNumber']) ? (int) $article['ArticleNumber'] : null,
+                    'ticket_id' => isset($article['TicketID']) ? (int) $article['TicketID'] : null,
+                    'subject' => $article['Subject'] ?? null,
+                    'body' => $article['Body'] ?? null,
+                    'from' => $article['From'] ?? null,
+                    'to' => $article['To'] ?? null,
+                    'sender_type' => $article['SenderType'] ?? null,
+                    'communication_channel' => $article['CommunicationChannel'] ?? null,
+                    'is_visible_for_customer' => isset($article['IsVisibleForCustomer']) ? (bool) $article['IsVisibleForCustomer'] : false,
+                    'mime_type' => $article['MimeType'] ?? null,
+                    'content_type' => $article['ContentType'] ?? null,
+                    'created_at' => $article['CreateTime'] ?? null,
+                    'changed_at' => $article['ChangeTime'] ?? null,
+                ];
+            }, $articles);
+        });
+    }
+
+    /**
      * Get list of agents from Znuny Agent endpoint.
      */
     public function getAgents(bool $isRetry = false): array
