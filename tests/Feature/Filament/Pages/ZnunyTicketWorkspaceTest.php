@@ -4,6 +4,7 @@ namespace Tests\Feature\Filament\Pages;
 
 use App\Filament\Pages\ZnunyTicketWorkspace;
 use App\Models\AuditLog;
+use App\Models\Setting;
 use App\Models\User;
 use App\Services\Znuny\ClosedTicketCacheService;
 use App\Services\Znuny\ClosedTicketSyncService;
@@ -750,6 +751,7 @@ class ZnunyTicketWorkspaceTest extends TestCase
     public function test_recent_closed_ticket_status_complete_metadata_is_rendered_when_enabled()
     {
         config(['znuny.closed_ticket_status_panel_enabled' => true]);
+        Setting::updateOrCreate(['key' => 'app_display_timezone'], ['value' => 'Asia/Tokyo']);
 
         $user = User::factory()->create(['role' => 'operator']);
 
@@ -760,12 +762,12 @@ class ZnunyTicketWorkspaceTest extends TestCase
             'retention_days' => 180,
             'last_mode' => 'full',
             'last_reason' => 'metadata_missing',
-            'last_small_completed_at' => '2026-06-28 10:00:00',
-            'last_full_completed_at' => '2026-06-28 09:00:00',
-            'oldest_loaded_closed_at' => '2026-05-29 00:00:00',
-            'newest_loaded_closed_at' => '2026-06-28 09:59:00',
-            'last_run_started_at' => '2026-06-28 09:58:00',
-            'last_run_completed_at' => '2026-06-28 10:00:00',
+            'last_small_completed_at' => '2026-06-28 10:00:00', // UTC
+            'last_full_completed_at' => '2026-06-28 09:00:00', // UTC
+            'oldest_loaded_closed_at' => '2026-05-29 00:00:00', // UTC
+            'newest_loaded_closed_at' => '2026-06-28 09:59:00', // UTC
+            'last_run_started_at' => '2026-06-28 09:58:00', // UTC
+            'last_run_completed_at' => '2026-06-28 10:00:00', // UTC
             'last_error' => 'Previous sync warning',
         ]);
         $this->app->instance(ClosedTicketCacheService::class, $mock);
@@ -784,17 +786,18 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->assertSee('Last Reason')
             ->assertSee('metadata_missing')
             ->assertSee('Last Small Completed At')
-            ->assertSee('2026-06-28 10:00:00')
+            ->assertSee('Jun 28, 2026 19:00:00') // 10:00 + 9 hours
             ->assertSee('Last Full Completed At')
-            ->assertSee('2026-06-28 09:00:00')
+            ->assertSee('Jun 28, 2026 18:00:00') // 09:00 + 9 hours
             ->assertSee('Oldest Loaded Closed At')
-            ->assertSee('2026-05-29 00:00:00')
+            ->assertSee('May 29, 2026 09:00:00') // 00:00 + 9 hours
             ->assertSee('Newest Loaded Closed At')
-            ->assertSee('2026-06-28 09:59:00')
+            ->assertSee('Jun 28, 2026 18:59:00') // 09:59 + 9 hours
             ->assertSee('Last Run Started At')
-            ->assertSee('2026-06-28 09:58:00')
+            ->assertSee('Jun 28, 2026 18:58:00') // 09:58 + 9 hours
             ->assertSee('Last Run Completed At')
-            ->assertSee('2026-06-28 10:00:00')
+            ->assertSee('Jun 28, 2026 19:00:00') // 10:00 + 9 hours
+            ->assertDontSee('Asia/Tokyo')
             ->assertSee('Last Error')
             ->assertSee('Previous sync warning');
     }

@@ -316,12 +316,12 @@
                         <div><span style="color: var(--zbx-table-muted);">Retention Days:</span> {{ $syncMeta['retention_days'] ?? 'N/A' }}</div>
                         <div><span style="color: var(--zbx-table-muted);">Last Mode:</span> {{ $syncMeta['last_mode'] ?? 'N/A' }}</div>
                         <div><span style="color: var(--zbx-table-muted);">Last Reason:</span> {{ $syncMeta['last_reason'] ?? 'N/A' }}</div>
-                        <div><span style="color: var(--zbx-table-muted);">Last Small Completed At:</span> {{ $syncMeta['last_small_completed_at'] ?? 'N/A' }}</div>
-                        <div><span style="color: var(--zbx-table-muted);">Last Full Completed At:</span> {{ $syncMeta['last_full_completed_at'] ?? 'N/A' }}</div>
-                        <div><span style="color: var(--zbx-table-muted);">Oldest Loaded Closed At:</span> {{ $syncMeta['oldest_loaded_closed_at'] ?? 'N/A' }}</div>
-                        <div><span style="color: var(--zbx-table-muted);">Newest Loaded Closed At:</span> {{ $syncMeta['newest_loaded_closed_at'] ?? 'N/A' }}</div>
-                        <div><span style="color: var(--zbx-table-muted);">Last Run Started At:</span> {{ $syncMeta['last_run_started_at'] ?? 'N/A' }}</div>
-                        <div><span style="color: var(--zbx-table-muted);">Last Run Completed At:</span> {{ $syncMeta['last_run_completed_at'] ?? 'N/A' }}</div>
+                        <div><span style="color: var(--zbx-table-muted);">Last Small Completed At:</span> {{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($syncMeta['last_small_completed_at'] ?? null) ?? 'N/A' }}</div>
+                        <div><span style="color: var(--zbx-table-muted);">Last Full Completed At:</span> {{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($syncMeta['last_full_completed_at'] ?? null) ?? 'N/A' }}</div>
+                        <div><span style="color: var(--zbx-table-muted);">Oldest Loaded Closed At:</span> {{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($syncMeta['oldest_loaded_closed_at'] ?? null) ?? 'N/A' }}</div>
+                        <div><span style="color: var(--zbx-table-muted);">Newest Loaded Closed At:</span> {{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($syncMeta['newest_loaded_closed_at'] ?? null) ?? 'N/A' }}</div>
+                        <div><span style="color: var(--zbx-table-muted);">Last Run Started At:</span> {{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($syncMeta['last_run_started_at'] ?? null) ?? 'N/A' }}</div>
+                        <div><span style="color: var(--zbx-table-muted);">Last Run Completed At:</span> {{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($syncMeta['last_run_completed_at'] ?? null) ?? 'N/A' }}</div>
                         @if(!empty($syncMeta['last_error']))
                             <div style="color: #dc2626; grid-column: 1 / -1;"><span style="color: var(--zbx-table-muted);">Last Error:</span> {{ $syncMeta['last_error'] }}</div>
                         @endif
