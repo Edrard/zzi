@@ -690,7 +690,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->test(CurrentZabbixProblems::class)
             ->assertSeeHtml('Ticket details')
             ->assertSeeHtml('zbx-ticket-details-button')
-            ->assertSeeHtml("mountAction('viewTicket', { ticket_id: {$ticket->id} })");
+            ->assertSeeHtml("mountAction('viewTicket', { zabbix_ticket_id: {$ticket->id} })");
     }
 
     public function test_ticket_details_button_hidden_for_closed_ticket()
@@ -759,7 +759,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
             ->assertActionExists('viewTicket')
-            ->mountAction('viewTicket', ['ticket_id' => $ticket->id])
+            ->mountAction('viewTicket', ['zabbix_ticket_id' => $ticket->id])
             ->assertActionMounted('viewTicket');
     }
 
@@ -783,7 +783,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
             ->assertActionExists('reopenTicket')
-            ->mountAction('reopenTicket', ['ticket_id' => $ticket->id])
+            ->mountAction('reopenTicket', ['zabbix_ticket_id' => $ticket->id])
             ->assertActionMounted('reopenTicket');
     }
 

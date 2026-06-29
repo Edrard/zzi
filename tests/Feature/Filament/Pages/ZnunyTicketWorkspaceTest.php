@@ -163,10 +163,9 @@ class ZnunyTicketWorkspaceTest extends TestCase
         Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
             ->set('stateTypeFilter', ['new'])
-            ->call('openTicketDetails', 101)
-            ->assertSet('selectedTicketId', 101)
-            ->assertSee('client@example.com')
-            ->assertDispatched('open-modal');
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 101])
+            ->assertActionMounted('viewTicket')
+            ->assertSee('client@example.com');
     }
 
     public function test_icon_legend_is_rendered()

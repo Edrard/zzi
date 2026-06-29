@@ -19,7 +19,6 @@ use App\Services\Znuny\ZnunyTicketModalStateBuilder;
 use App\Services\Znuny\ZnunyTicketTextBuilder;
 use App\Support\Polling\UiPollInterval;
 use Filament\Actions\Action;
-use Filament\Actions\ViewAction;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
@@ -152,11 +151,11 @@ class CurrentZabbixProblems extends Page
         return ZnunyTicketManagementActions::reopenTicketAction('reopenTicket');
     }
 
-    public function viewTicketAction(): ViewAction
+    public function viewTicketAction(): Action
     {
         return ZabbixTicketDetailsAction::make('viewTicket')
             ->record(function (array $arguments) {
-                return ZabbixTicket::find($arguments['ticket_id'] ?? null);
+                return ZabbixTicket::find($arguments['zabbix_ticket_id'] ?? null);
             });
     }
 

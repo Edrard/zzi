@@ -3,26 +3,23 @@
 namespace App\Filament\Resources\ZabbixTickets\Actions;
 
 use App\Filament\Resources\ZabbixTickets\Schemas\ZabbixTicketInfolist;
+use App\Filament\Support\TicketDetailsPayload;
 use App\Filament\Support\ZnunyTicketManagementActions;
-use App\Models\ZabbixTicket;
 use Filament\Actions\Action;
-use Filament\Actions\ViewAction;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
 
 class ZabbixTicketDetailsAction
 {
-    public static function make(string $name = 'viewTicket'): ViewAction
+    public static function make(string $name = 'viewTicket'): Action
     {
-        return ViewAction::make($name)
+        return Action::make($name)
             ->slideOver()
             ->modalWidth(Width::FourExtraLarge)
+            ->modalHeading(fn (array $arguments, $record = null) => TicketDetailsPayload::fromRecord($record, $arguments)->title ?? 'Ticket Details')
+            ->modalSubmitAction(false)
+            ->modalCancelAction(fn ($action) => $action->label('Close'))
             ->schema(fn (Schema $schema) => ZabbixTicketInfolist::configure($schema))
-            ->mutateRecordDataUsing(function (ZabbixTicket $record, array $data) {
-                $record->refresh();
-
-                return $data;
-            })
             ->extraModalFooterActions(fn (Action $action): array => [
                 ZnunyTicketManagementActions::closeTicketAction('manual_close_ticket')
                     ->after(fn () => $action->cancel()),

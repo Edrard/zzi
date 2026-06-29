@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Resources\ZabbixTickets\Actions\ZabbixTicketDetailsAction;
 use App\Services\SettingsService;
 use App\Services\Znuny\ClosedTicketSyncService;
 use App\Services\Znuny\ZnunyTicketWorkspaceCacheReader;
@@ -51,22 +52,26 @@ class ZnunyTicketWorkspace extends Page
 
     public string $sortDirection = 'desc';
 
-    public ?int $selectedTicketId = null;
-
-    public ?array $selectedTicket = null;
-
-    public function openTicketDetails(int $ticketId): void
+    public function viewTicketAction(): Action
     {
-        $this->selectedTicketId = $ticketId;
-        $data = $this->ticketData();
-        foreach ($data['rows'] as $row) {
-            if (($row['TicketID'] ?? 0) === $ticketId) {
-                $this->selectedTicket = $row;
-                break;
-            }
-        }
+        return ZabbixTicketDetailsAction::make('viewTicket')
+            ->record(function (array $arguments) {
+                $ticketId = $arguments['znuny_ticket_id'] ?? null;
+                if (! $ticketId) {
+                    return null;
+                }
 
-        $this->dispatch('open-modal', id: 'ticket-details-modal');
+                $data = $this->ticketData();
+                foreach ($data['rows'] as $row) {
+                    if (($row['TicketID'] ?? 0) === (int) $ticketId) {
+                        $row['__key'] = $row['TicketID'];
+
+                        return $row;
+                    }
+                }
+
+                return null;
+            });
     }
 
     public function mount()

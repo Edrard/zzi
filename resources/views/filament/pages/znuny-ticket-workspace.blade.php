@@ -499,7 +499,7 @@
                     </thead>
                     <tbody>
                         @foreach($tickets as $ticket)
-                            <tr class="zbx-problem-row" style="cursor: pointer;" wire:click="openTicketDetails({{ $ticket['TicketID'] }})">
+                            <tr class="zbx-problem-row" style="cursor: pointer;" wire:click="mountAction('viewTicket', { znuny_ticket_id: {{ $ticket['TicketID'] }} })">
                                 <td style="text-align: center;">
                                     @if($ticket['is_linked_to_zabbix_problem'])
                                         <div class="zbx-link-icon-wrap"
@@ -585,91 +585,5 @@
         </div>
     </div>
 
-    <x-filament::modal id="ticket-details-modal" width="2xl">
-        <x-slot name="heading">
-            Ticket Details
-        </x-slot>
-
-        <div>
-            @if($selectedTicket)
-                <div style="display: flex; flex-direction: column; gap: 16px;">
-                    <div>
-                        <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Ticket Number</strong>
-                        <div style="font-weight: 500;">{{ $selectedTicket['TicketNumber'] ?? '-' }}</div>
-                    </div>
-                    <div>
-                        <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Title</strong>
-                        <div>{{ $selectedTicket['Title'] ?? '-' }}</div>
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                        <div>
-                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Queue</strong>
-                            <div>{{ $selectedTicket['Queue'] ?? '-' }}</div>
-                        </div>
-                        <div>
-                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Owner</strong>
-                            <div>{{ $selectedTicket['Owner'] ?? '-' }}</div>
-                        </div>
-                        <div>
-                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Customer User</strong>
-                            <div>{{ $selectedTicket['CustomerUserID'] ?: '-' }}</div>
-                        </div>
-                        <div>
-                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">State / Type</strong>
-                            <div>
-                                <span>{{ $selectedTicket['State'] ?? '-' }}</span>
-                                @if(!empty($selectedTicket['StateType']))
-                                    <span style="color: #6b7280; font-size: 0.875rem;">({{ $selectedTicket['StateType'] }})</span>
-                                @endif
-                            </div>
-                        </div>
-                        <div>
-                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Priority</strong>
-                            <div>{{ $selectedTicket['Priority'] ?? '-' }}</div>
-                        </div>
-                        <div>
-                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Type</strong>
-                            <div>{{ $selectedTicket['Type'] ?: '-' }}</div>
-                        </div>
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; border-top: 1px solid var(--border-color, #e5e7eb); padding-top: 16px;">
-                        <div>
-                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Created</strong>
-                            <div>{{ $selectedTicket['Created'] ?? '-' }}</div>
-                        </div>
-                        <div>
-                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Changed</strong>
-                            <div>{{ $selectedTicket['Changed'] ?? '-' }}</div>
-                        </div>
-                        <div>
-                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Article Count</strong>
-                            <div>{{ $selectedTicket['ArticleCount'] ?? '-' }}</div>
-                        </div>
-                        <div>
-                            <strong style="display: block; font-size: 0.875rem; color: #6b7280;">Last Article</strong>
-                            <div>{{ $selectedTicket['LastArticleCreated'] ?: '-' }}</div>
-                        </div>
-                    </div>
-
-                    @if(!empty($selectedTicket['is_linked_to_zabbix_problem']))
-                        <div style="margin-top: 16px; padding: 12px; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px;">
-                            <strong style="display: block; font-size: 0.875rem; color: #0369a1; margin-bottom: 8px;">Linked Zabbix Problem</strong>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.875rem;">
-                                <div><span style="color: #6b7280;">Host:</span> <span>{{ $selectedTicket['linked_problem_host'] ?? 'Unknown' }}</span></div>
-                                <div>
-                                    <span style="color: #6b7280;">State:</span>
-                                    <span style="{{ !empty($selectedTicket['linked_problem_is_active']) ? 'color: #ea580c; font-weight: 500;' : 'color: #059669;' }}">
-                                        {{ !empty($selectedTicket['linked_problem_is_active']) ? 'Active' : 'Resolved' }}
-                                    </span>
-                                </div>
-                                <div style="grid-column: span 2;"><span style="color: #6b7280;">Problem:</span> <span>{{ $selectedTicket['linked_problem_summary'] ?? 'Unknown' }}</span></div>
-                                <div><span style="color: #6b7280;">Event ID:</span> <span>{{ $selectedTicket['linked_problem_event_id'] ?? '-' }}</span></div>
-                                <div><span style="color: #6b7280;">Age:</span> <span>{{ $selectedTicket['linked_problem_age_label'] ?? 'N/A' }}</span></div>
-                            </div>
-                        </div>
-                    @endif
-                </div>
-            @endif
-        </div>
-    </x-filament::modal>
+    <x-filament-actions::modals />
 </x-filament-panels::page>

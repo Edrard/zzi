@@ -930,7 +930,7 @@
                                                     </x-filament::button>
                                                 @endif
                                                 @if($linkedTicket && strtolower($linkedTicket->znuny_ticket_state_type ?? '') !== 'closed' && !str_contains(strtolower((string) $linkedTicket->znuny_state_name), 'closed') && $linkedTicket->manual_lifecycle_status !== 'reopen_candidate')
-                                                    <x-filament::button wire:click="mountAction('viewTicket', { ticket_id: {{ $linkedTicket->id }} })" class="zbx-ticket-details-button" size="sm" icon="heroicon-o-ticket">
+                                                    <x-filament::button wire:click="mountAction('viewTicket', { zabbix_ticket_id: {{ $linkedTicket->id }} })" class="zbx-ticket-details-button" size="sm" icon="heroicon-o-ticket">
                                                         Ticket details
                                                     </x-filament::button>
                                                 @endif
@@ -939,7 +939,7 @@
                                             <div class="zbx-ticket-actions" style="display: flex; gap: 0.5rem; align-items: center;">
                                                 @if($linkedTicket)
                                                     @if($linkedTicket->manual_lifecycle_status === 'reopen_candidate')
-                                                        <x-filament::button wire:click="mountAction('reopenTicket', { ticket_id: {{ $linkedTicket->id }} })" color="warning" size="sm" icon="heroicon-o-arrow-path">
+                                                        <x-filament::button wire:click="mountAction('reopenTicket', { zabbix_ticket_id: {{ $linkedTicket->id }} })" color="warning" size="sm" icon="heroicon-o-arrow-path">
                                                             Reopen
                                                         </x-filament::button>
 

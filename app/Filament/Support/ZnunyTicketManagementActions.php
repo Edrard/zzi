@@ -11,6 +11,7 @@ use App\Services\Znuny\ZnunyLinkedTicketReopenService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
+use Illuminate\Support\Facades\Artisan;
 
 class ZnunyTicketManagementActions
 {
@@ -21,113 +22,153 @@ class ZnunyTicketManagementActions
             ->icon('heroicon-o-check-circle')
             ->color('danger')
             ->requiresConfirmation()
-            ->modalHeading(fn (?ZabbixTicket $record) => $record && $record->manual_lifecycle_status === 'close_candidate' ? 'Close Znuny Ticket' : 'Close Znuny Ticket Anyway?')
-            ->modalDescription(fn (?ZabbixTicket $record) => $record && $record->manual_lifecycle_status === 'close_candidate'
+            ->modalHeading(fn ($record) => $record instanceof ZabbixTicket && $record->manual_lifecycle_status === 'close_candidate' ? 'Close Znuny Ticket' : 'Close Znuny Ticket Anyway?')
+            ->modalDescription(fn ($record) => $record instanceof ZabbixTicket && $record->manual_lifecycle_status === 'close_candidate'
                 ? 'Close this Znuny ticket? The linked Zabbix problem is resolved and the close delay has passed.'
-                : 'Close this Znuny ticket anyway? This ticket is not marked as Ready to close. Use this only if the operator has manually verified that closing is correct.')
+                : 'Close this Znuny ticket? Use this only if the operator has manually verified that closing is correct.')
             ->form([
                 Textarea::make('reason')
                     ->label('Reason / Comment')
-                    ->default(fn () => SettingsService::string('linked_ticket_manual_close_default_reason', 'Manual close from Linked Tickets UI.'))
+                    ->default(fn () => SettingsService::string('linked_ticket_manual_close_default_reason', 'Manual close from UI.'))
                     ->required(),
             ])
-            ->visible(function (?ZabbixTicket $record, array $arguments) {
-                if ($record) {
-                    return ! empty($record->znuny_ticket_id) && ! $record->isClosedInZnuny();
-                }
+            ->visible(function (array $arguments, $record = null) {
+                $payload = TicketDetailsPayload::fromRecord($record, $arguments);
 
-                $ticketId = $arguments['ticket_id'] ?? null;
-                if (! $ticketId) {
-                    return false;
-                }
-
-                $ticket = ZabbixTicket::find($ticketId);
-
-                return $ticket && ! empty($ticket->znuny_ticket_id) && ! $ticket->isClosedInZnuny();
+                return $payload->znuny_ticket_id && $payload->is_open;
             })
-            ->action(function (array $arguments, array $data, Action $action, ?ZabbixTicket $record = null) {
-                $ticketId = $record ? $record->id : ($arguments['ticket_id'] ?? null);
-                if (! $ticketId) {
+            ->action(function (array $arguments, array $data, Action $action, $record = null) {
+                $payload = TicketDetailsPayload::fromRecord($record, $arguments);
+                if (! $payload->znuny_ticket_id) {
                     Notification::make()->title('Ticket ID missing')->danger()->send();
                     $action->halt();
 
                     return;
                 }
 
-                $ticket = $record ?? ZabbixTicket::find($ticketId);
-                if (! $ticket) {
-                    Notification::make()->title('Ticket not found')->danger()->send();
-                    $action->halt();
+                if ($payload->is_zabbix_ticket) {
+                    $ticketId = $record instanceof ZabbixTicket ? $record->id : ($arguments['zabbix_ticket_id'] ?? null);
+                    $ticket = $record instanceof ZabbixTicket ? $record : ZabbixTicket::find($ticketId);
+                    if (! $ticket) {
+                        Notification::make()->title('Ticket not found')->danger()->send();
+                        $action->halt();
 
-                    return;
-                }
-
-                $ticket->refresh();
-                $closeService = app(ZnunyLinkedTicketCloseService::class);
-
-                $result = $closeService->closeTicket(
-                    $ticket,
-                    'Manual ticket close',
-                    'Closed manually from Linked Tickets UI.',
-                    $data['reason'] ?? SettingsService::string('linked_ticket_manual_close_default_reason', 'Manual close from Linked Tickets UI.')
-                );
-
-                if ($result['success']) {
-                    $logContext = [
-                        'message' => "Ticket {$ticket->znuny_ticket_number} manually closed via UI.",
-                        'znuny_ticket_id' => $ticket->znuny_ticket_id,
-                        'znuny_ticket_number' => $ticket->znuny_ticket_number,
-                        'host' => $ticket->zabbix_host_name,
-                        'problem' => $ticket->zabbix_problem_name,
-                        'previous_state' => $ticket->znuny_state_name,
-                        'source' => 'linked_tickets_ui',
-                    ];
-                    if (! empty($result['warning'])) {
-                        $logContext['warning'] = $result['warning'];
+                        return;
                     }
 
-                    AuditLogger::log(
-                        'znuny.auto_close.success',
-                        'zabbix_ticket',
-                        $ticket->id,
-                        $logContext
+                    $ticket->refresh();
+                    $closeService = app(ZnunyLinkedTicketCloseService::class);
+
+                    $result = $closeService->closeTicket(
+                        $ticket,
+                        'Manual ticket close',
+                        'Closed manually from UI.',
+                        $data['reason'] ?? SettingsService::string('linked_ticket_manual_close_default_reason', 'Manual close from UI.')
                     );
-                    if (! empty($result['warning'])) {
-                        Notification::make()
-                            ->title('Ticket Closed with Warning')
-                            ->body($result['warning'])
-                            ->warning()
-                            ->send();
-                    } else {
-                        Notification::make()
-                            ->title('Ticket Closed')
-                            ->body('Znuny ticket successfully closed.')
-                            ->success()
-                            ->send();
-                    }
-                } else {
-                    AuditLogger::log(
-                        'znuny.auto_close.failed',
-                        'zabbix_ticket',
-                        $ticket->id,
-                        [
-                            'message' => "Manual UI close failed for ticket {$ticket->znuny_ticket_number}: ".($result['reason'] ?? 'Unknown error'),
+
+                    if ($result['success']) {
+                        $logContext = [
+                            'message' => "Ticket {$ticket->znuny_ticket_number} manually closed via UI.",
                             'znuny_ticket_id' => $ticket->znuny_ticket_id,
                             'znuny_ticket_number' => $ticket->znuny_ticket_number,
                             'host' => $ticket->zabbix_host_name,
                             'problem' => $ticket->zabbix_problem_name,
                             'previous_state' => $ticket->znuny_state_name,
                             'source' => 'linked_tickets_ui',
-                            'error' => $result['reason'] ?? 'Unknown error',
-                        ]
-                    );
-                    Notification::make()
-                        ->title('Close Failed')
-                        ->body($result['reason'] ?? 'Failed to close ticket.')
-                        ->danger()
-                        ->send();
+                        ];
+                        if (! empty($result['warning'])) {
+                            $logContext['warning'] = $result['warning'];
+                        }
 
-                    $action->halt();
+                        AuditLogger::log(
+                            'znuny.auto_close.success',
+                            'zabbix_ticket',
+                            $ticket->id,
+                            $logContext
+                        );
+                        if (! empty($result['warning'])) {
+                            Notification::make()
+                                ->title('Ticket Closed with Warning')
+                                ->body($result['warning'])
+                                ->warning()
+                                ->send();
+                        } else {
+                            Notification::make()
+                                ->title('Ticket Closed')
+                                ->body('Znuny ticket successfully closed.')
+                                ->success()
+                                ->send();
+                        }
+                    } else {
+                        AuditLogger::log(
+                            'znuny.auto_close.failed',
+                            'zabbix_ticket',
+                            $ticket->id,
+                            [
+                                'message' => "Manual UI close failed for ticket {$ticket->znuny_ticket_number}: ".($result['reason'] ?? 'Unknown error'),
+                                'znuny_ticket_id' => $ticket->znuny_ticket_id,
+                                'znuny_ticket_number' => $ticket->znuny_ticket_number,
+                                'host' => $ticket->zabbix_host_name,
+                                'problem' => $ticket->zabbix_problem_name,
+                                'previous_state' => $ticket->znuny_state_name,
+                                'source' => 'linked_tickets_ui',
+                                'error' => $result['reason'] ?? 'Unknown error',
+                            ]
+                        );
+                        Notification::make()
+                            ->title('Close Failed')
+                            ->body($result['reason'] ?? 'Failed to close ticket.')
+                            ->danger()
+                            ->send();
+
+                        $action->halt();
+                    }
+                } else {
+                    $client = app(ZnunyClient::class);
+                    $closePayload = [
+                        'Kind' => 'internal_note',
+                        'Subject' => 'Manual ticket close',
+                        'Body' => 'Closed manually from Workspace UI.',
+                        'Reason' => $data['reason'] ?? 'Manual ticket close',
+                    ];
+
+                    try {
+                        $response = $client->closeTicket($payload->znuny_ticket_id, $closePayload);
+                        if (! $response['success']) {
+                            Notification::make()
+                                ->title('Close Failed')
+                                ->body(implode(', ', $response['errors'] ?? ['Unknown error']))
+                                ->danger()
+                                ->send();
+                            $action->halt();
+
+                            return;
+                        }
+
+                        // Attempt unlock
+                        try {
+                            $client->unlockTicket($payload->znuny_ticket_id);
+                        } catch (\Throwable $te) {
+                            // ignore unlock failures
+                        }
+
+                        // refresh workspace cache
+                        Artisan::call('znuny:warm-ticket-workspace-cache', ['--manual' => true]);
+
+                        Notification::make()
+                            ->title('Ticket Closed')
+                            ->body('Znuny ticket successfully closed.')
+                            ->success()
+                            ->send();
+
+                    } catch (\Throwable $e) {
+                        Notification::make()
+                            ->title('Close Failed')
+                            ->body($e->getMessage())
+                            ->danger()
+                            ->send();
+                        $action->halt();
+                    }
                 }
             });
     }
@@ -140,62 +181,95 @@ class ZnunyTicketManagementActions
             ->color('warning')
             ->requiresConfirmation()
             ->modalHeading('Reopen Znuny Ticket')
-            ->modalDescription('Reopen the linked Znuny ticket because the Zabbix problem is active again?')
+            ->modalDescription('Reopen this Znuny ticket?')
             ->form([
                 Textarea::make('reason')
                     ->label('Reopen Note / Article Body')
                     ->required()
-                    ->default(fn () => SettingsService::string('manual_ticket_reopen_note_template', 'Reopening this ticket because the linked Zabbix problem became active again within the configured reopen window.')),
+                    ->default(fn () => SettingsService::string('manual_ticket_reopen_note_template', 'Reopening this ticket.')),
             ])
-            ->visible(function (?ZabbixTicket $record, array $arguments) {
-                if ($record) {
-                    return $record->isReopenCandidate();
-                }
+            ->visible(function (array $arguments, $record = null) {
+                $payload = TicketDetailsPayload::fromRecord($record, $arguments);
 
-                $ticketId = $arguments['ticket_id'] ?? null;
-                if (! $ticketId) {
-                    return false;
-                }
-
-                $ticket = ZabbixTicket::find($ticketId);
-
-                return $ticket && $ticket->isReopenCandidate();
+                return $payload->znuny_ticket_id && $payload->is_closed;
             })
-            ->action(function (array $arguments, array $data, Action $action, ?ZabbixTicket $record = null) {
-                $ticketId = $record ? $record->id : ($arguments['ticket_id'] ?? null);
-                if (! $ticketId) {
+            ->action(function (array $arguments, array $data, Action $action, $record = null) {
+                $payload = TicketDetailsPayload::fromRecord($record, $arguments);
+                if (! $payload->znuny_ticket_id) {
                     Notification::make()->title('Ticket ID missing')->danger()->send();
                     $action->halt();
 
                     return;
                 }
 
-                $ticket = $record ?? ZabbixTicket::find($ticketId);
-                if (! $ticket) {
-                    Notification::make()->title('Ticket not found')->danger()->send();
-                    $action->halt();
+                if ($payload->is_zabbix_ticket) {
+                    $ticketId = $record instanceof ZabbixTicket ? $record->id : ($arguments['zabbix_ticket_id'] ?? null);
+                    $ticket = $record instanceof ZabbixTicket ? $record : ZabbixTicket::find($ticketId);
+                    if (! $ticket) {
+                        Notification::make()->title('Ticket not found')->danger()->send();
+                        $action->halt();
 
-                    return;
-                }
+                        return;
+                    }
 
-                $reason = $data['reason'] ?? 'Reopening ticket.';
-                $service = app(ZnunyLinkedTicketReopenService::class);
-                $result = $service->reopenTicket($ticket, $reason);
+                    $reason = $data['reason'] ?? 'Reopening ticket.';
+                    $service = app(ZnunyLinkedTicketReopenService::class);
+                    $result = $service->reopenTicket($ticket, $reason);
 
-                if ($result['success']) {
-                    Notification::make()
-                        ->title('Ticket Reopened')
-                        ->body('Znuny ticket successfully reopened.')
-                        ->success()
-                        ->send();
+                    if ($result['success']) {
+                        Notification::make()
+                            ->title('Ticket Reopened')
+                            ->body('Znuny ticket successfully reopened.')
+                            ->success()
+                            ->send();
+                    } else {
+                        Notification::make()
+                            ->title('Reopen Failed')
+                            ->body($result['reason'] ?? 'Failed to reopen ticket.')
+                            ->danger()
+                            ->send();
+
+                        $action->halt();
+                    }
                 } else {
-                    Notification::make()
-                        ->title('Reopen Failed')
-                        ->body($result['reason'] ?? 'Failed to reopen ticket.')
-                        ->danger()
-                        ->send();
+                    $client = app(ZnunyClient::class);
+                    $reopenPayload = [
+                        'Kind' => 'internal_note',
+                        'Subject' => 'Manual ticket reopen',
+                        'Body' => $data['reason'] ?? 'Reopening ticket.',
+                        'Reason' => 'Reopening ticket.',
+                    ];
 
-                    $action->halt();
+                    try {
+                        $response = $client->reopenTicket($payload->znuny_ticket_id, $reopenPayload);
+                        if (! $response['success']) {
+                            Notification::make()
+                                ->title('Reopen Failed')
+                                ->body(implode(', ', $response['errors'] ?? ['Unknown error']))
+                                ->danger()
+                                ->send();
+                            $action->halt();
+
+                            return;
+                        }
+
+                        // refresh workspace cache
+                        Artisan::call('znuny:warm-ticket-workspace-cache', ['--manual' => true]);
+
+                        Notification::make()
+                            ->title('Ticket Reopened')
+                            ->body('Znuny ticket successfully reopened.')
+                            ->success()
+                            ->send();
+
+                    } catch (\Throwable $e) {
+                        Notification::make()
+                            ->title('Reopen Failed')
+                            ->body($e->getMessage())
+                            ->danger()
+                            ->send();
+                        $action->halt();
+                    }
                 }
             });
     }
@@ -205,8 +279,16 @@ class ZnunyTicketManagementActions
         return Action::make($name)
             ->label('Open Ticket')
             ->icon('heroicon-o-arrow-top-right-on-square')
-            ->url(fn (?ZabbixTicket $record) => $record ? app(ZnunyClient::class)->ticketUrl($record->znuny_ticket_id) : null)
-            ->visible(fn (?ZabbixTicket $record) => $record && ! empty($record->znuny_ticket_id))
+            ->url(function (array $arguments, $record = null) {
+                $payload = TicketDetailsPayload::fromRecord($record, $arguments);
+
+                return $payload->znuny_ticket_id ? app(ZnunyClient::class)->ticketUrl($payload->znuny_ticket_id) : null;
+            })
+            ->visible(function (array $arguments, $record = null) {
+                $payload = TicketDetailsPayload::fromRecord($record, $arguments);
+
+                return (bool) $payload->znuny_ticket_id;
+            })
             ->openUrlInNewTab();
     }
 }
