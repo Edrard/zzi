@@ -87,6 +87,40 @@
         }
         :is(.dark) .zbx-toolbar-count { color: #d1d5db; }
 
+        /* Presets */
+        .zbx-preset-row {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+
+        .zbx-preset-btn {
+            background: var(--zbx-table-bg);
+            border: 1px solid var(--zbx-table-border);
+            color: var(--zbx-table-text);
+            padding: 4px 10px;
+            font-size: 0.8125rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease-in-out;
+            font-weight: 500;
+        }
+
+        .zbx-preset-btn:hover {
+            background: var(--zbx-table-hover);
+        }
+
+        .zbx-preset-btn.active {
+            background: var(--primary-600, #2563eb);
+            color: #ffffff;
+            border-color: var(--primary-600, #2563eb);
+        }
+
+        :is(.dark) .zbx-preset-btn.active {
+            background: var(--primary-500, #3b82f6);
+            border-color: var(--primary-500, #3b82f6);
+        }
+
         /* Workspace Variables Scope */
         .zbx-ticket-workspace {
             --zbx-table-bg: var(--color-white);
@@ -329,6 +363,29 @@
                 @endif
             </div>
         @endif
+
+        <div class="zbx-preset-row">
+            <button type="button"
+                    wire:click="applyStatePreset('open')"
+                    class="zbx-preset-btn {{ $this->activeStatePreset() === 'open' ? 'active' : '' }}">
+                Open
+            </button>
+            <button type="button"
+                    wire:click="applyStatePreset('closed')"
+                    class="zbx-preset-btn {{ $this->activeStatePreset() === 'closed' ? 'active' : '' }}">
+                Closed
+            </button>
+            <button type="button"
+                    wire:click="applyStatePreset('merged')"
+                    class="zbx-preset-btn {{ $this->activeStatePreset() === 'merged' ? 'active' : '' }}">
+                Merged
+            </button>
+            <button type="button"
+                    wire:click="applyStatePreset('all')"
+                    class="zbx-preset-btn {{ $this->activeStatePreset() === 'all' ? 'active' : '' }}">
+                All
+            </button>
+        </div>
 
         <div class="zbx-toolbar">
             <div class="zbx-toolbar-filters">

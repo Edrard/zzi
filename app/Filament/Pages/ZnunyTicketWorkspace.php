@@ -122,6 +122,46 @@ class ZnunyTicketWorkspace extends Page
         }
     }
 
+    public function applyStatePreset(string $preset): void
+    {
+        $presets = [
+            'open' => ['new', 'open', 'pending reminder', 'pending auto'],
+            'closed' => ['closed'],
+            'merged' => ['merged'],
+            'all' => ['new', 'open', 'pending reminder', 'pending auto', 'closed', 'merged'],
+        ];
+
+        if (! array_key_exists($preset, $presets)) {
+            return;
+        }
+
+        $this->stateTypeFilter = $presets[$preset];
+        $this->page = 1;
+    }
+
+    public function activeStatePreset(): ?string
+    {
+        $current = array_values(array_filter(array_map('trim', array_map('strtolower', $this->stateTypeFilter))));
+        sort($current);
+
+        $presets = [
+            'open' => ['new', 'open', 'pending reminder', 'pending auto'],
+            'closed' => ['closed'],
+            'merged' => ['merged'],
+            'all' => ['closed', 'merged', 'new', 'open', 'pending auto', 'pending reminder'],
+        ];
+
+        foreach ($presets as $name => $types) {
+            $sortedTypes = $types;
+            sort($sortedTypes);
+            if ($current === $sortedTypes) {
+                return $name;
+            }
+        }
+
+        return null;
+    }
+
     public static function canAccess(): bool
     {
         return in_array(auth()->user()->role ?? '', ['admin', 'operator', 'viewer'], true);
