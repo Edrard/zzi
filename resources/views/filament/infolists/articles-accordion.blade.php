@@ -8,19 +8,102 @@
     </div>
 @else
     <div 
-        x-data="{ activeArticle: null }" 
+        x-data="{
+            activeArticle: null,
+            findScrollableAncestor(el) {
+                while (el && el !== document.body && el !== document.documentElement) {
+                    const overflowY = window.getComputedStyle(el).overflowY;
+                    const isScrollable = (overflowY === 'auto' || overflowY === 'scroll');
+                    if (isScrollable && el.scrollHeight > el.clientHeight) {
+                        return el;
+                    }
+                    el = el.parentElement;
+                }
+                return document.querySelector('[role=\'dialog\']') || document.querySelector('.fi-modal-window') || document.querySelector('.fi-modal-content');
+            },
+            scrollOpenedArticleIntoFocus(index, behavior = 'smooth') {
+                const container = this.findScrollableAncestor(this.$refs.articlesAccordion);
+                const item = this.$refs.articlesAccordion.querySelector(`[data-article-index='${index}']`);
+
+                if (!container || !item) {
+                    return;
+                }
+
+                const header = item.querySelector('.zbx-ticket-article-header') || item;
+                const containerRect = container.getBoundingClientRect();
+                const itemRect = item.getBoundingClientRect();
+                const headerRect = header.getBoundingClientRect();
+
+                const modalWindow = container.closest('.fi-modal-window');
+                const footer = modalWindow ? modalWindow.querySelector('.fi-modal-footer') : null;
+                const footerHeight = footer ? footer.getBoundingClientRect().height : 0;
+
+                const topComfort = 16;
+                const bottomComfort = 16 + footerHeight;
+
+                const visibleTop = containerRect.top + topComfort;
+                const visibleBottom = containerRect.bottom - bottomComfort;
+                const availableHeight = Math.max(80, visibleBottom - visibleTop);
+
+                let targetScrollTop = null;
+
+                if (itemRect.height > availableHeight) {
+                    targetScrollTop = container.scrollTop + headerRect.top - visibleTop;
+                } else if (itemRect.bottom > visibleBottom) {
+                    targetScrollTop = container.scrollTop + itemRect.bottom - visibleBottom;
+                } else if (headerRect.top < visibleTop) {
+                    targetScrollTop = container.scrollTop + headerRect.top - visibleTop;
+                }
+
+                if (targetScrollTop === null) {
+                    return;
+                }
+
+                const maxScrollTop = container.scrollHeight - container.clientHeight;
+                targetScrollTop = Math.max(0, Math.min(targetScrollTop, maxScrollTop));
+
+                container.scrollTo({ top: targetScrollTop, behavior });
+            },
+            toggleArticle(index) {
+                if (this.activeArticle === index) {
+                    this.activeArticle = null;
+                } else {
+                    this.activeArticle = index;
+                    this.$nextTick(() => {
+                        this.scrollOpenedArticleIntoFocus(index, 'smooth');
+                        requestAnimationFrame(() => {
+                            this.scrollOpenedArticleIntoFocus(index, 'smooth');
+                            setTimeout(() => this.scrollOpenedArticleIntoFocus(index, 'smooth'), 120);
+                            setTimeout(() => this.scrollOpenedArticleIntoFocus(index, 'auto'), 280);
+                        });
+                    });
+                }
+            }
+        }"
+        x-ref="articlesAccordion"
         class="zbx-ticket-articles flex flex-col gap-2"
     >
         @foreach ($articles as $index => $article)
-            <div class="zbx-ticket-article-item overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">
+            <div data-article-index="{{ $index }}" class="zbx-ticket-article-item overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">
                 <button 
                     type="button" 
-                    @click="activeArticle = (activeArticle === {{ $index }} ? null : {{ $index }})"
+                    @click="toggleArticle({{ $index }})"
                     class="zbx-ticket-article-header flex w-full items-center justify-between px-3 py-2 text-left transition hover:bg-gray-50 dark:hover:bg-white/5 focus-visible:bg-gray-50 dark:focus-visible:bg-white/5"
                 >
-                    <span class="text-sm font-medium text-gray-950 dark:text-white truncate pr-4">
-                        {{ !empty($article['subject']) ? $article['subject'] : 'No subject' }}
-                    </span>
+                    <div class="flex items-center gap-2 truncate pr-4">
+                        @if (!empty($article['is_visible_for_customer']))
+                            <div title="Article" aria-label="Article" class="inline-flex items-center text-primary-600 dark:text-primary-400 shrink-0">
+                                <x-heroicon-m-chat-bubble-left-ellipsis class="h-4 w-4" />
+                            </div>
+                        @else
+                            <div title="Internal note" aria-label="Internal note" class="inline-flex items-center text-gray-500 dark:text-gray-400 shrink-0">
+                                <x-heroicon-m-lock-closed class="h-4 w-4" />
+                            </div>
+                        @endif
+                        <span class="text-sm font-medium text-gray-950 dark:text-white truncate">
+                            {{ !empty($article['subject']) ? $article['subject'] : 'No subject' }}
+                        </span>
+                    </div>
                     <span 
                         class="text-gray-400 transition-transform duration-200 dark:text-gray-500 shrink-0" 
                         :class="{ 'rotate-180': activeArticle === {{ $index }} }"
@@ -34,8 +117,8 @@
                     x-collapse
                     x-cloak
                 >
-                    <div class="zbx-ticket-article-body px-3 pb-3 pt-1 text-sm text-gray-700 dark:text-gray-300">
-                        <div class="mb-3 flex flex-wrap gap-x-6 gap-y-2">
+                    <div class="zbx-ticket-article-body px-3 pb-2 pt-1 text-sm text-gray-700 dark:text-gray-300">
+                        <div class="mb-2 flex flex-wrap gap-x-4 gap-y-1">
                             @if(!empty($article['created_at']))
                                 <div>
                                     <span class="text-xs text-gray-500 dark:text-gray-400 block mb-0.5">Created</span>
@@ -49,9 +132,11 @@
                                 </div>
                             @endif
                         </div>
-                        <div class="zbx-ticket-article-text whitespace-pre-wrap break-words rounded-md bg-gray-50 dark:bg-white/5 p-3 text-sm leading-relaxed ring-1 ring-gray-950/5 dark:ring-white/10 overflow-x-auto">
-                            {{ !empty($article['body']) ? $article['body'] : 'No body' }}
-                        </div>
+                        @php
+                            $bodyText = trim((string) ($article['body'] ?? ''));
+                            $bodyText = $bodyText !== '' ? $bodyText : 'No body';
+                        @endphp
+                        <div class="zbx-ticket-article-text whitespace-pre-wrap break-words rounded-md bg-gray-50 dark:bg-white/5 text-sm leading-snug ring-1 ring-gray-950/5 dark:ring-white/10 overflow-x-auto">{{ $bodyText }}</div>
                     </div>
                 </div>
             </div>
