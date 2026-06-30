@@ -884,14 +884,17 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->assertNotified('Ticket Closed')
             ->assertActionNotMounted('viewTicket') // Parent action should be closed/unmounted
             ->assertDontSee('TN101')
-            ->assertSee('TN102')
+            ->assertSee('TN102');
+
+        $component2 = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
             ->mountAction('viewTicket', ['znuny_ticket_id' => 101])
             ->assertSee('TN101')
             ->assertSee('First Ticket')
             ->assertSee('Article from close');
 
         // Assert footer actions for CLOSED ticket
-        $viewActionClosed = $component->instance()->getMountedAction();
+        $viewActionClosed = $component2->instance()->getMountedAction();
         $footerActionsClosed = $viewActionClosed->getExtraModalFooterActions();
         $this->assertTrue($footerActionsClosed['manual_close_ticket']->isHidden(), 'Close Ticket should be hidden for closed ticket');
         $this->assertFalse($footerActionsClosed['reopen_ticket']->isHidden(), 'Reopen Ticket should be visible for closed ticket');
@@ -972,14 +975,17 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->callMountedAction()
             ->assertNotified('Ticket Reopened')
             ->assertActionNotMounted('viewTicket') // Parent action should be closed/unmounted
-            ->assertDontSee('TN103')
+            ->assertDontSee('TN103');
+
+        $component2 = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
             ->mountAction('viewTicket', ['znuny_ticket_id' => 103])
             ->assertSee('TN103')
             ->assertSee('Closed Ticket')
             ->assertSee('Article from reopen');
 
         // Assert footer actions for REOPENED (now OPEN) ticket
-        $viewActionReopened = $component->instance()->getMountedAction();
+        $viewActionReopened = $component2->instance()->getMountedAction();
         $footerActionsReopened = $viewActionReopened->getExtraModalFooterActions();
         $this->assertTrue($footerActionsReopened['reopen_ticket']->isHidden(), 'Reopen Ticket should be hidden for reopened ticket');
         $this->assertFalse($footerActionsReopened['manual_close_ticket']->isHidden(), 'Close Ticket should be visible for reopened ticket');
@@ -1006,16 +1012,20 @@ class ZnunyTicketWorkspaceTest extends TestCase
         $mockClient->shouldReceive('getTicketArticles')->with(104)->andReturn([]);
         $this->app->instance(ZnunyClient::class, $mockClient);
 
-        Livewire::actingAs($user)
+        $component = Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
             ->set('stateTypeFilter', ['new'])
             ->assertSee('TN104')
-            ->mountAction('viewTicket', ['znuny_ticket_id' => 104])
-            ->mountAction('manual_close_ticket', ['znuny_ticket_id' => 104])
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 104]);
+
+        $component->mountAction('manual_close_ticket', ['znuny_ticket_id' => 104])
             ->setActionData(['reason' => 'Closing ticket'])
             ->callMountedAction()
             ->assertNotified('Ticket Closed')
-            ->assertDontSee('TN104') // Missing from list due to filter
+            ->assertDontSee('TN104'); // Missing from list due to filter
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
             ->mountAction('viewTicket', ['znuny_ticket_id' => 104]) // But modal should still open
             ->assertSee('TN104')
             ->assertSee('Test Move');
