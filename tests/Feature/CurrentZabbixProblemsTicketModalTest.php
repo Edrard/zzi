@@ -11,6 +11,7 @@ use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixProblemCache;
 use App\Services\Znuny\ZnunyAgentService;
 use App\Services\Znuny\ZnunyClient;
+use App\Services\Znuny\ZnunyTicketArticleWriteService;
 use App\Services\Znuny\ZnunyTicketCreationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -813,5 +814,117 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->call('$refresh');
 
         $this->assertDatabaseCount('audit_logs', $initialCount);
+    }
+
+    public function test_add_note_or_article_action_submits_note_and_invalidates_cache()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => '1001',
+            'zabbix_host_id' => '2001',
+            'zabbix_host_name' => 'TestCompany swiss test01',
+            'zabbix_severity' => 4,
+            'zabbix_trigger_id' => '2001',
+            'zabbix_problem_name' => 'TestCompany CPU Load',
+            'znuny_ticket_id' => 50001,
+            'znuny_ticket_number' => '1001',
+            'znuny_ticket_state_type' => 'open',
+            'manual_lifecycle_status' => 'active',
+        ]);
+
+        $serviceMock = $this->mock(ZnunyTicketArticleWriteService::class);
+        $serviceMock->shouldReceive('createTicketArticle')
+            ->once()
+            ->with('50001', 'Test Note Subject', 'Test Note Body', false)
+            ->andReturn([
+                'success' => true,
+                'article_id' => 123,
+                'ticket_id' => 50001,
+            ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->mountAction('viewTicket', ['zabbix_ticket_id' => $ticket->id])
+            ->mountAction('add_note_or_article', ['zabbix_ticket_id' => $ticket->id])
+            ->setActionData([
+                'subject' => 'Test Note Subject',
+                'body' => 'Test Note Body',
+            ])
+            ->callMountedAction(['visible_for_customer' => false])
+            ->assertHasNoActionErrors()
+            ->assertNotified();
+    }
+
+    public function test_add_note_or_article_action_submits_article()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => '1001',
+            'zabbix_host_id' => '2001',
+            'zabbix_host_name' => 'TestCompany swiss test01',
+            'zabbix_severity' => 4,
+            'zabbix_trigger_id' => '2001',
+            'zabbix_problem_name' => 'TestCompany CPU Load',
+            'znuny_ticket_id' => 50001,
+            'znuny_ticket_number' => '1001',
+            'znuny_ticket_state_type' => 'open',
+            'manual_lifecycle_status' => 'active',
+        ]);
+
+        $serviceMock = $this->mock(ZnunyTicketArticleWriteService::class);
+        $serviceMock->shouldReceive('createTicketArticle')
+            ->once()
+            ->with('50001', 'Test Article Subject', 'Test Article Body', true)
+            ->andReturn([
+                'success' => true,
+                'article_id' => 124,
+                'ticket_id' => 50001,
+            ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->mountAction('viewTicket', ['zabbix_ticket_id' => $ticket->id])
+            ->mountAction('add_note_or_article', ['zabbix_ticket_id' => $ticket->id])
+            ->setActionData([
+                'subject' => 'Test Article Subject',
+                'body' => 'Test Article Body',
+            ])
+            ->callMountedAction(['visible_for_customer' => true])
+            ->assertHasNoActionErrors()
+            ->assertNotified();
+    }
+
+    public function test_add_note_or_article_action_requires_subject_and_body()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $ticket = ZabbixTicket::create([
+            'zabbix_event_id' => '1001',
+            'zabbix_host_id' => '2001',
+            'zabbix_host_name' => 'TestCompany swiss test01',
+            'zabbix_severity' => 4,
+            'zabbix_trigger_id' => '2001',
+            'zabbix_problem_name' => 'TestCompany CPU Load',
+            'znuny_ticket_id' => 50001,
+            'znuny_ticket_number' => '1001',
+            'znuny_ticket_state_type' => 'open',
+            'manual_lifecycle_status' => 'active',
+        ]);
+
+        $serviceMock = $this->mock(ZnunyTicketArticleWriteService::class);
+        $serviceMock->shouldReceive('createTicketArticle')->never();
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->mountAction('viewTicket', ['zabbix_ticket_id' => $ticket->id])
+            ->mountAction('add_note_or_article', ['zabbix_ticket_id' => $ticket->id])
+            ->setActionData([
+                'subject' => '', // missing
+                'body' => '',    // missing
+            ])
+            ->callMountedAction(['visible_for_customer' => false])
+            ->assertHasActionErrors(['subject' => 'required', 'body' => 'required']);
     }
 }

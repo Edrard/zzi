@@ -8,8 +8,10 @@ use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyLinkedTicketCloseService;
 use App\Services\Znuny\ZnunyLinkedTicketReopenService;
+use App\Services\Znuny\ZnunyTicketArticleWriteService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Artisan;
 
@@ -272,6 +274,82 @@ class ZnunyTicketManagementActions
                     }
                 }
             });
+    }
+
+    public static function addNoteOrArticleAction(string $name = 'add_note_or_article'): Action
+    {
+        return Action::make($name)
+            ->label('Add Note / Article')
+            ->icon('heroicon-o-pencil-square')
+            ->color('gray')
+            ->modalHeading('Add Note / Article')
+            ->modalDescription('Write a message to append to this ticket.')
+            ->form([
+                TextInput::make('subject')
+                    ->label('Subject')
+                    ->required()
+                    ->maxLength(255)
+                    ->default(''),
+                Textarea::make('body')
+                    ->label('Body')
+                    ->required()
+                    ->maxLength(65535)
+                    ->rows(6),
+            ])
+            ->visible(function (array $arguments, $record = null) {
+                $payload = TicketDetailsPayload::fromRecord($record, $arguments);
+
+                return $payload->znuny_ticket_id && $payload->is_open;
+            })
+            ->extraModalFooterActions(fn (Action $action): array => [
+                $action->makeModalSubmitAction('create_note', arguments: ['visible_for_customer' => false])
+                    ->label('Create Note')
+                    ->color('gray'),
+                $action->makeModalSubmitAction('create_article', arguments: ['visible_for_customer' => true])
+                    ->label('Create Article')
+                    ->color('primary'),
+            ])
+            ->modalSubmitAction(false)
+            ->action(function (array $arguments, array $data, Action $action, $record = null) {
+                $visibleForCustomer = $arguments['visible_for_customer'] ?? false;
+                static::executeCreateTicketArticle($arguments, $data, $action, $record, $visibleForCustomer);
+            });
+    }
+
+    protected static function executeCreateTicketArticle(array $arguments, array $data, Action $action, $record, bool $visibleForCustomer): void
+    {
+        $payload = TicketDetailsPayload::fromRecord($record, $arguments);
+
+        if (! $payload->znuny_ticket_id) {
+            Notification::make()->title('Ticket ID missing')->danger()->send();
+            $action->halt();
+
+            return;
+        }
+
+        $service = app(ZnunyTicketArticleWriteService::class);
+        $result = $service->createTicketArticle(
+            $payload->znuny_ticket_id,
+            $data['subject'],
+            $data['body'],
+            $visibleForCustomer
+        );
+
+        if ($result['success']) {
+            Notification::make()
+                ->title($visibleForCustomer ? 'Article Created' : 'Note Created')
+                ->body('Your message has been successfully added to the ticket.')
+                ->success()
+                ->send();
+        } else {
+            Notification::make()
+                ->title('Action Failed')
+                ->body(implode(', ', $result['errors'] ?? ['Unknown error']))
+                ->danger()
+                ->send();
+
+            $action->halt();
+        }
     }
 
     public static function openInZnunyAction(string $name = 'open_ticket'): Action

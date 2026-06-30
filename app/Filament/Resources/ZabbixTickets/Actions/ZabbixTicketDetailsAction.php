@@ -21,6 +21,7 @@ class ZabbixTicketDetailsAction
             ->modalCancelAction(false)
             ->schema(fn (Schema $schema) => ZabbixTicketInfolist::configure($schema))
             ->extraModalFooterActions(fn (Action $action): array => [
+                ZnunyTicketManagementActions::addNoteOrArticleAction('add_note_or_article'),
                 ZnunyTicketManagementActions::closeTicketAction('manual_close_ticket')
                     ->after(fn () => $action->cancel()),
                 ZnunyTicketManagementActions::reopenTicketAction('reopen_ticket')

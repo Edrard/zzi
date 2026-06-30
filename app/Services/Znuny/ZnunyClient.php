@@ -1079,6 +1079,57 @@ class ZnunyClient
     }
 
     /**
+     * Call PATCH /Ticket/{TicketID} to create an article/note on an existing ticket.
+     */
+    public function createTicketArticle(int|string $ticketId, string $subject, string $body, bool $visibleForCustomer): array
+    {
+        return $this->withSessionRetry(function ($session) use ($ticketId, $subject, $body, $visibleForCustomer) {
+            $normalizedId = $this->normalizeTicketId($ticketId);
+
+            $payload = [
+                'SessionID' => $session,
+                'Ticket' => [
+                    'TicketID' => $normalizedId,
+                ],
+                'Article' => [
+                    'Subject' => $subject,
+                    'Body' => $body,
+                    'ContentType' => 'text/plain; charset=utf-8',
+                    'MimeType' => 'text/plain',
+                    'Charset' => 'utf-8',
+                    'IsVisibleForCustomer' => $visibleForCustomer ? 1 : 0,
+                ],
+            ];
+
+            $response = $this->request()->patch($this->apiUrl().'/Ticket/'.$normalizedId, $payload);
+
+            $data = $this->processResponse($response);
+
+            if (empty($data['ArticleID']) || empty($data['TicketID'])) {
+                return [
+                    'success' => false,
+                    'article_id' => null,
+                    'ticket_id' => null,
+                    'ticket_number' => null,
+                    'warnings' => $data['Warnings'] ?? [],
+                    'errors' => array_merge($data['Errors'] ?? [], ['Missing ArticleID or TicketID in response']),
+                    'raw' => $data,
+                ];
+            }
+
+            return [
+                'success' => true,
+                'article_id' => $data['ArticleID'],
+                'ticket_id' => $data['TicketID'],
+                'ticket_number' => $data['TicketNumber'] ?? null,
+                'warnings' => $data['Warnings'] ?? [],
+                'errors' => $data['Errors'] ?? [],
+                'raw' => $data,
+            ];
+        });
+    }
+
+    /**
      * Normalize controlled ticket write operations (like Close and Reopen)
      * expecting the unwrapped Data payload.
      */
