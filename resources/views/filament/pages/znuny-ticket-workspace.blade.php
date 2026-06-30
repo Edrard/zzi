@@ -524,7 +524,7 @@
                                     {{ $ticket['Queue'] }}
                                 </td>
                                 <td class="zbx-col-owner">
-                                    {{ $ticket['Owner'] }}
+                                    {{ $filterOptions['agent_name_map'][$ticket['OwnerID']] ?? $ticket['Owner'] }}
                                     @if(!empty($ticket['CustomerUserID']))
                                         <br><span class="zbx-muted-text" style="font-size: 0.7rem;">Cust: {{ $ticket['CustomerUserID'] }}</span>
                                     @endif

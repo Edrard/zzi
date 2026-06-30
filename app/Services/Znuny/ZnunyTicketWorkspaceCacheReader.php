@@ -229,15 +229,22 @@ class ZnunyTicketWorkspaceCacheReader
     protected function extractFilterOptions(array $tickets): array
     {
         $queues = [];
-        $owners = [];
+        $ownerIds = [];
 
         foreach ($tickets as $ticket) {
             if (! empty($ticket['QueueID'])) {
                 $queues[$ticket['QueueID']] = $ticket['Queue'] ?? ('Queue '.$ticket['QueueID']);
             }
             if (! empty($ticket['OwnerID'])) {
-                $owners[$ticket['OwnerID']] = $ticket['Owner'] ?? ('Owner '.$ticket['OwnerID']);
+                $ownerIds[(int) $ticket['OwnerID']] = $ticket['Owner'] ?? ('Owner '.$ticket['OwnerID']);
             }
+        }
+
+        // Resolve OwnerIDs to full agent names using the cached agent list
+        $agentNameMap = app(ZnunyAgentService::class)->getAgentNameMap();
+        $owners = [];
+        foreach ($ownerIds as $id => $fallbackLogin) {
+            $owners[$id] = $agentNameMap[$id] ?? $fallbackLogin;
         }
 
         asort($queues);
@@ -246,6 +253,7 @@ class ZnunyTicketWorkspaceCacheReader
         return [
             'queues' => $queues,
             'owners' => $owners,
+            'agent_name_map' => $agentNameMap,
             'link_status' => [
                 'all' => 'All tickets',
                 'linked' => 'Linked to Zabbix problem',

@@ -55,6 +55,27 @@ class ZnunyAgentService
     }
 
     /**
+     * Build a lookup map of OwnerID → display name from the cached agent list.
+     *
+     * @return array<int, string> keyed by agent UserID
+     */
+    public function getAgentNameMap(): array
+    {
+        $agents = $this->getAgents(failSilently: true);
+
+        $map = [];
+        foreach ($agents as $agent) {
+            $id = $agent['id'] ?? null;
+            if ($id === null) {
+                continue;
+            }
+            $map[(int) $id] = $agent['name'] ?? $agent['login'] ?? ('Agent '.$id);
+        }
+
+        return $map;
+    }
+
+    /**
      * Get active agents excluding technical/service logins.
      * Use this for future manual ticket creation modals and ticket owner selection.
      */
