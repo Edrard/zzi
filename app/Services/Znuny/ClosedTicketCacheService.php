@@ -79,6 +79,38 @@ class ClosedTicketCacheService
         Redis::expire($indexKey, $retentionSeconds);
     }
 
+    public function getTicket(int|string $ticketId): ?array
+    {
+        $ticketKey = "znuny:closed_ticket:ticket:{$ticketId}";
+        $data = Redis::get($ticketKey);
+
+        if (! $data) {
+            return null;
+        }
+
+        return json_decode($data, true);
+    }
+
+    public function forgetTicket(int|string $ticketId): void
+    {
+        $ticketKey = "znuny:closed_ticket:ticket:{$ticketId}";
+        $ticketData = Redis::get($ticketKey);
+
+        Redis::del($ticketKey);
+
+        if ($ticketData) {
+            $ticket = json_decode($ticketData, true);
+            if (! empty($ticket['Created'])) {
+                $timestamp = strtotime($ticket['Created']);
+                if ($timestamp !== false && $timestamp > 0) {
+                    $date = date('Y-m-d', $timestamp);
+                    $indexKey = "znuny:closed_ticket:index:{$date}";
+                    Redis::zrem($indexKey, $ticketId);
+                }
+            }
+        }
+    }
+
     public function validateMetadata(int $currentWindowDays): array
     {
         $metadata = $this->getMetadata();

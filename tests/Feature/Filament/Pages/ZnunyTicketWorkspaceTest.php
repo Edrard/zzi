@@ -8,6 +8,8 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Services\Znuny\ClosedTicketCacheService;
 use App\Services\Znuny\ClosedTicketSyncService;
+use App\Services\Znuny\ZnunyClient;
+use App\Services\Znuny\ZnunyLinkedTicketReopenService;
 use App\Services\Znuny\ZnunyTicketCacheService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -831,5 +833,191 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->test(ZnunyTicketWorkspace::class)
             ->assertSuccessful()
             ->assertSee('Sync is currently running.');
+    }
+
+    public function test_successful_close_action_removes_ticket_from_open_list()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $this->seedTicket(['TicketID' => 101, 'TicketNumber' => 'TN101', 'Title' => 'First Ticket', 'StateType' => 'new']);
+        $this->seedTicket(['TicketID' => 102, 'TicketNumber' => 'TN102', 'Title' => 'Second Ticket', 'StateType' => 'new']);
+
+        $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
+        $mockClient->shouldReceive('closeTicket')->with(101, \Mockery::any())->andReturn(['success' => true]);
+        $mockClient->shouldReceive('unlockTicket')->with(101)->andReturn(['success' => true]);
+        $mockClient->shouldReceive('getTicket')->with(101)->andReturn([
+            'TicketID' => 101,
+            'TicketNumber' => 'TN101',
+            'Title' => 'First Ticket',
+            'StateType' => 'closed',
+            'Created' => now()->subDay()->toIso8601String(),
+            'Changed' => now()->toIso8601String(),
+        ]);
+        $mockClient->shouldReceive('getTicketArticles')->with(101)->andReturn([
+            [
+                'article_id' => 1,
+                'ticket_id' => 101,
+                'subject' => 'Article from close',
+                'body' => 'Body content',
+                'from' => 'System',
+                'created_at' => now()->toIso8601String(),
+            ],
+        ]);
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        $component = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['new'])
+            ->assertSee('TN101')
+            ->assertSee('TN102')
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 101]);
+
+        // Assert footer actions for OPEN ticket
+        $viewAction = $component->instance()->getMountedAction();
+        $footerActions = $viewAction->getExtraModalFooterActions();
+        $this->assertFalse($footerActions['manual_close_ticket']->isHidden(), 'Close Ticket should be visible for open ticket');
+        $this->assertTrue($footerActions['reopen_ticket']->isHidden(), 'Reopen Ticket should be hidden for open ticket');
+        $this->assertFalse($footerActions['add_note_or_article']->isHidden(), 'Add Note/Article should be visible for open ticket');
+
+        $component->mountAction('manual_close_ticket', ['znuny_ticket_id' => 101])
+            ->callMountedAction()
+            ->assertNotified('Ticket Closed')
+            ->assertActionNotMounted('viewTicket') // Parent action should be closed/unmounted
+            ->assertDontSee('TN101')
+            ->assertSee('TN102')
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 101])
+            ->assertSee('TN101')
+            ->assertSee('First Ticket')
+            ->assertSee('Article from close');
+
+        // Assert footer actions for CLOSED ticket
+        $viewActionClosed = $component->instance()->getMountedAction();
+        $footerActionsClosed = $viewActionClosed->getExtraModalFooterActions();
+        $this->assertTrue($footerActionsClosed['manual_close_ticket']->isHidden(), 'Close Ticket should be hidden for closed ticket');
+        $this->assertFalse($footerActionsClosed['reopen_ticket']->isHidden(), 'Reopen Ticket should be visible for closed ticket');
+        $this->assertTrue($footerActionsClosed['add_note_or_article']->isHidden(), 'Add Note/Article should be hidden for closed ticket');
+    }
+
+    public function test_failed_close_action_does_not_remove_ticket_from_open_list()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $this->seedTicket(['TicketID' => 101, 'TicketNumber' => 'TN101', 'Title' => 'First Ticket', 'StateType' => 'new']);
+
+        $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
+        $mockClient->shouldReceive('closeTicket')->with(101, \Mockery::any())->andReturn(['success' => false, 'errors' => ['Znuny rejected close']]);
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['new'])
+            ->assertSee('TN101')
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 101])
+            ->mountAction('manual_close_ticket', ['znuny_ticket_id' => 101])
+            ->setActionData(['reason' => 'Testing close failure'])
+            ->callMountedAction()
+            ->assertNotified('Close Failed')
+            ->assertSee('TN101');
+    }
+
+    public function test_successful_reopen_action_moves_ticket_to_open_list()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        // Seed a closed ticket
+        $this->seedTicket(['TicketID' => 103, 'TicketNumber' => 'TN103', 'Title' => 'Closed Ticket', 'StateType' => 'closed']);
+
+        $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
+        $mockClient->shouldReceive('reopenTicket')->with(103, \Mockery::any())->andReturn(['success' => true]);
+        $mockClient->shouldReceive('getTicket')->with(103)->andReturn([
+            'TicketID' => 103,
+            'TicketNumber' => 'TN103',
+            'Title' => 'Closed Ticket',
+            'StateType' => 'open',
+            'Created' => now()->subDay()->toIso8601String(),
+            'Changed' => now()->toIso8601String(),
+        ]);
+        $mockClient->shouldReceive('getTicketArticles')->with(103)->andReturn([
+            [
+                'article_id' => 2,
+                'ticket_id' => 103,
+                'subject' => 'Article from reopen',
+                'body' => 'Body content',
+                'from' => 'System',
+                'created_at' => now()->toIso8601String(),
+            ],
+        ]);
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        // For ZnunyLinkedTicketReopenService to use the mock
+        $reopenServiceMock = \Mockery::mock(ZnunyLinkedTicketReopenService::class)->makePartial();
+        $reopenServiceMock->shouldReceive('reopenTicket')->andReturn(['success' => true]);
+        $this->app->instance(ZnunyLinkedTicketReopenService::class, $reopenServiceMock);
+
+        $component = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['closed'])
+            ->assertSee('TN103')
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 103]);
+
+        // Assert footer actions for CLOSED ticket
+        $viewAction = $component->instance()->getMountedAction();
+        $footerActions = $viewAction->getExtraModalFooterActions();
+        $this->assertFalse($footerActions['reopen_ticket']->isHidden(), 'Reopen Ticket should be visible for closed ticket');
+        $this->assertTrue($footerActions['manual_close_ticket']->isHidden(), 'Close Ticket should be hidden for closed ticket');
+        $this->assertTrue($footerActions['add_note_or_article']->isHidden(), 'Add Note/Article should be hidden for closed ticket');
+
+        $component->mountAction('reopen_ticket', ['znuny_ticket_id' => 103])
+            ->setActionData(['reason' => 'Testing reopen from UI'])
+            ->callMountedAction()
+            ->assertNotified('Ticket Reopened')
+            ->assertActionNotMounted('viewTicket') // Parent action should be closed/unmounted
+            ->assertDontSee('TN103')
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 103])
+            ->assertSee('TN103')
+            ->assertSee('Closed Ticket')
+            ->assertSee('Article from reopen');
+
+        // Assert footer actions for REOPENED (now OPEN) ticket
+        $viewActionReopened = $component->instance()->getMountedAction();
+        $footerActionsReopened = $viewActionReopened->getExtraModalFooterActions();
+        $this->assertTrue($footerActionsReopened['reopen_ticket']->isHidden(), 'Reopen Ticket should be hidden for reopened ticket');
+        $this->assertFalse($footerActionsReopened['manual_close_ticket']->isHidden(), 'Close Ticket should be visible for reopened ticket');
+        $this->assertFalse($footerActionsReopened['add_note_or_article']->isHidden(), 'Add Note/Article should be visible for reopened ticket');
+    }
+
+    public function test_moved_ticket_is_resolvable_even_outside_current_filter()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $this->seedTicket(['TicketID' => 104, 'TicketNumber' => 'TN104', 'Title' => 'Test Move', 'StateType' => 'new']);
+
+        $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
+        $mockClient->shouldReceive('closeTicket')->with(104, \Mockery::any())->andReturn(['success' => true]);
+        $mockClient->shouldReceive('unlockTicket')->with(104)->andReturn(['success' => true]);
+        $mockClient->shouldReceive('getTicket')->with(104)->andReturn([
+            'TicketID' => 104,
+            'TicketNumber' => 'TN104',
+            'Title' => 'Test Move',
+            'StateType' => 'closed',
+            'Created' => now()->subDay()->toIso8601String(),
+            'Changed' => now()->toIso8601String(),
+        ]);
+        $mockClient->shouldReceive('getTicketArticles')->with(104)->andReturn([]);
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['new'])
+            ->assertSee('TN104')
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 104])
+            ->mountAction('manual_close_ticket', ['znuny_ticket_id' => 104])
+            ->setActionData(['reason' => 'Closing ticket'])
+            ->callMountedAction()
+            ->assertNotified('Ticket Closed')
+            ->assertDontSee('TN104') // Missing from list due to filter
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 104]) // But modal should still open
+            ->assertSee('TN104')
+            ->assertSee('Test Move');
     }
 }

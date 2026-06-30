@@ -23,9 +23,9 @@ class ZabbixTicketDetailsAction
             ->extraModalFooterActions(fn (Action $action): array => [
                 ZnunyTicketManagementActions::addNoteOrArticleAction('add_note_or_article'),
                 ZnunyTicketManagementActions::closeTicketAction('manual_close_ticket')
-                    ->after(fn () => $action->cancel()),
+                    ->cancelParentActions(),
                 ZnunyTicketManagementActions::reopenTicketAction('reopen_ticket')
-                    ->after(fn () => $action->cancel()),
+                    ->cancelParentActions(),
                 Action::make('cancel')
                     ->label('Close')
                     ->close()

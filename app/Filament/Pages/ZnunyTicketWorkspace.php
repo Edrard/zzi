@@ -4,7 +4,9 @@ namespace App\Filament\Pages;
 
 use App\Filament\Resources\ZabbixTickets\Actions\ZabbixTicketDetailsAction;
 use App\Services\SettingsService;
+use App\Services\Znuny\ClosedTicketCacheService;
 use App\Services\Znuny\ClosedTicketSyncService;
+use App\Services\Znuny\ZnunyTicketCacheService;
 use App\Services\Znuny\ZnunyTicketWorkspaceCacheReader;
 use App\Services\Znuny\ZnunyTicketWorkspaceStateTypeMapper;
 use App\Support\Pagination\PaginationSettings;
@@ -70,6 +72,24 @@ class ZnunyTicketWorkspace extends Page
                     }
                 }
 
+                // 3. Fallback direct cache lookup for tickets that might have just moved
+                $activeCache = app(ZnunyTicketCacheService::class);
+                $closedCache = app(ClosedTicketCacheService::class);
+                $reader = app(ZnunyTicketWorkspaceCacheReader::class);
+
+                $rawTicket = $activeCache->getTicket($ticketId);
+
+                if (! $rawTicket) {
+                    $rawTicket = $closedCache->getTicket($ticketId);
+                }
+
+                if ($rawTicket) {
+                    $row = $reader->normalizeSingleTicket($rawTicket);
+                    $row['__key'] = $row['TicketID'];
+
+                    return $row;
+                }
+
                 return null;
             });
     }
@@ -111,7 +131,7 @@ class ZnunyTicketWorkspace extends Page
     {
         $reader = app(ZnunyTicketWorkspaceCacheReader::class);
 
-        return $reader->getTicketsPaginated(
+        $data = $reader->getTicketsPaginated(
             [
                 'search' => $this->search,
                 'link_status' => $this->linkFilter,
@@ -124,6 +144,8 @@ class ZnunyTicketWorkspace extends Page
             $this->sortField,
             $this->sortDirection
         );
+
+        return $data;
     }
 
     public function setPage(int $page): void

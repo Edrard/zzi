@@ -329,6 +329,14 @@ class ZnunyTicketWorkspaceCacheReader
         return $filtered;
     }
 
+    public function normalizeSingleTicket(array $ticket): array
+    {
+        $normalized = $this->normalizeTicket($ticket);
+        $enriched = $this->enrichWithZabbixLinks([$normalized]);
+
+        return $enriched[0] ?? $normalized;
+    }
+
     protected function normalizeTicket(array $ticket): array
     {
         return [

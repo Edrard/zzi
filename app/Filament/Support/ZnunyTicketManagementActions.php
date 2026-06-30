@@ -9,11 +9,11 @@ use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyLinkedTicketCloseService;
 use App\Services\Znuny\ZnunyLinkedTicketReopenService;
 use App\Services\Znuny\ZnunyTicketArticleWriteService;
+use App\Services\Znuny\ZnunyTicketWorkspaceTicketRefreshService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
-use Illuminate\Support\Facades\Artisan;
 
 class ZnunyTicketManagementActions
 {
@@ -101,6 +101,9 @@ class ZnunyTicketManagementActions
                                 ->success()
                                 ->send();
                         }
+
+                        $refreshService = app(ZnunyTicketWorkspaceTicketRefreshService::class);
+                        $refreshService->refreshTicket($ticket->znuny_ticket_id);
                     } else {
                         AuditLogger::log(
                             'znuny.auto_close.failed',
@@ -154,8 +157,9 @@ class ZnunyTicketManagementActions
                             // ignore unlock failures
                         }
 
-                        // refresh workspace cache
-                        Artisan::call('znuny:warm-ticket-workspace-cache', ['--manual' => true]);
+                        // refresh workspace cache for this ticket via service
+                        $refreshService = app(ZnunyTicketWorkspaceTicketRefreshService::class);
+                        $refreshService->refreshTicket($payload->znuny_ticket_id);
 
                         Notification::make()
                             ->title('Ticket Closed')
@@ -219,6 +223,9 @@ class ZnunyTicketManagementActions
                     $result = $service->reopenTicket($ticket, $reason);
 
                     if ($result['success']) {
+                        $refreshService = app(ZnunyTicketWorkspaceTicketRefreshService::class);
+                        $refreshService->refreshTicket($ticket->znuny_ticket_id);
+
                         Notification::make()
                             ->title('Ticket Reopened')
                             ->body('Znuny ticket successfully reopened.')
@@ -255,8 +262,9 @@ class ZnunyTicketManagementActions
                             return;
                         }
 
-                        // refresh workspace cache
-                        Artisan::call('znuny:warm-ticket-workspace-cache', ['--manual' => true]);
+                        // refresh workspace cache for this ticket via service
+                        $refreshService = app(ZnunyTicketWorkspaceTicketRefreshService::class);
+                        $refreshService->refreshTicket($payload->znuny_ticket_id);
 
                         Notification::make()
                             ->title('Ticket Reopened')
