@@ -80,9 +80,16 @@ class ZabbixTicketInfolist
                                     TextEntry::make('customer_user')->label(self::formatLabel('Customer'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->customer_user)->inlineLabel()->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->customer_user !== null)->placeholder('-'),
                                     TextEntry::make('znuny_priority')->label(self::formatLabel('Priority'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_priority)->inlineLabel()->placeholder('-'),
                                     TextEntry::make('znuny_state_name')->label(self::formatLabel('State'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_state_name)->inlineLabel()->placeholder('-'),
-                                    TextEntry::make('state_type_str')->label(self::formatLabel('State Type'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->state_type_str)->inlineLabel()->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->state_type_str !== null)->placeholder('-'),
-                                    TextEntry::make('ticket_type')->label(self::formatLabel('Type'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->ticket_type)->inlineLabel()->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->ticket_type !== null)->placeholder('-'),
-                                    TextEntry::make('article_count')->label(self::formatLabel('Articles'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->article_count)->inlineLabel()->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->article_count !== null)->placeholder('-'),
+                                    TextEntry::make('lock_status')->label(self::formatLabel('Lock status'))->state(function ($record) {
+                                        $lock = TicketDetailsPayload::fromRecord($record)->lock;
+                                        if ($lock === 'lock') {
+                                            return 'Locked';
+                                        } elseif ($lock === 'unlock') {
+                                            return 'Unlocked';
+                                        }
+
+                                        return 'Unknown';
+                                    })->inlineLabel(),
                                     TextEntry::make('last_article')->label(self::formatLabel('Last Article'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->last_article)->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatDateTime($state))->inlineLabel()->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->last_article !== null)->placeholder('-'),
                                 ])->columns(1),
 
