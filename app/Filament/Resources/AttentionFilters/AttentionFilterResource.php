@@ -1,49 +1,47 @@
 <?php
 
-namespace App\Filament\Resources\ZabbixProblemFilters;
+namespace App\Filament\Resources\AttentionFilters;
 
-use App\Filament\Resources\ZabbixProblemFilters\Pages\ManageZabbixProblemFilters;
-use App\Models\ZabbixProblemFilter;
+use App\Filament\Resources\AttentionFilters\Pages\ManageAttentionFilters;
+use App\Models\AttentionFilter;
 use App\Services\Support\DateTimeDisplayService;
 use App\Support\Pagination\PaginationSettings;
 use BackedEnum;
 use Closure;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
-class ZabbixProblemFilterResource extends Resource
+class AttentionFilterResource extends Resource
 {
-    protected static ?string $model = ZabbixProblemFilter::class;
+    protected static ?string $model = AttentionFilter::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedFunnel;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedExclamationCircle;
 
     protected static string|\UnitEnum|null $navigationGroup = 'Zabbix';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 3;
 
-    protected static ?string $navigationLabel = 'Ignore Filters';
+    protected static ?string $navigationLabel = 'Attention Filters';
 
     protected static ?string $recordTitleAttribute = 'name';
 
     public static function getModelLabel(): string
     {
-        return 'Ignore Filter';
+        return 'Attention Filter';
     }
 
     public static function getPluralModelLabel(): string
     {
-        return 'Ignore Filters';
+        return 'Attention Filters';
     }
 
     public static function form(Schema $schema): Schema
@@ -55,35 +53,16 @@ class ZabbixProblemFilterResource extends Resource
                     ->maxLength(255),
                 Toggle::make('enabled')
                     ->default(true),
-                Select::make('field')
-                    ->options([
-                        'name' => 'Problem name',
-                        'host' => 'Host name',
-                    ])
-                    ->default('name')
-                    ->required(),
-                Select::make('match_type')
-                    ->options([
-                        'contains' => 'Contains',
-                        'regex' => 'Regex',
-                    ])
-                    ->default('regex')
-                    ->required()
-                    ->live(),
                 Textarea::make('pattern')
                     ->required()
-                    ->helperText(fn (Get $get) => $get('match_type') === 'regex' ? 'Example: /^Zabbix proxy.*$/ (must include delimiters)' : '')
-                    ->rule(function (Get $get) {
-                        return function (string $attribute, $value, Closure $fail) use ($get) {
-                            if ($get('match_type') === 'regex') {
-                                if (@preg_match($value, '') === false) {
-                                    $fail('Invalid regular expression. Ensure you include delimiters (e.g. /pattern/).');
-                                }
+                    ->helperText('Example: /^Zabbix proxy.*$/ (must include delimiters)')
+                    ->rule(function () {
+                        return function (string $attribute, $value, Closure $fail) {
+                            if (@preg_match($value, '') === false) {
+                                $fail('Invalid regular expression. Ensure you include delimiters (e.g. /pattern/).');
                             }
                         };
                     }),
-                Toggle::make('case_sensitive')
-                    ->default(false),
                 Textarea::make('description')
                     ->maxLength(65535)
                     ->columnSpanFull(),
@@ -101,10 +80,8 @@ class ZabbixProblemFilterResource extends Resource
                     ->boolean(),
                 TextColumn::make('name')
                     ->searchable(),
-                TextColumn::make('field'),
-                TextColumn::make('match_type'),
                 TextColumn::make('pattern')
-                    ->limit(30),
+                    ->limit(50),
                 TextColumn::make('updated_at')
                     ->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatDateTime($state))
                     ->sortable()
@@ -127,7 +104,7 @@ class ZabbixProblemFilterResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => ManageZabbixProblemFilters::route('/'),
+            'index' => ManageAttentionFilters::route('/'),
         ];
     }
 }
