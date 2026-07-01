@@ -624,10 +624,6 @@ class Settings extends Page implements HasForms
             $groups['Retention'] = [$retentionSection];
         }
 
-        if (! empty($groups['Automation'])) {
-            $groups['Automation'] = $this->buildAutomationTabGroups($groups['Automation']);
-        }
-
         $tabs = [];
         foreach ($groups as $groupName => $components) {
             if (! empty($components)) {
@@ -852,31 +848,6 @@ class Settings extends Page implements HasForms
 
         return [
             Tabs::make('ZnunyTicketDefaultsTabs')->tabs($tabs),
-        ];
-    }
-
-    private function buildAutomationTabGroups(array $a): array
-    {
-        return [
-            Tabs::make('AutomationTabs')
-                ->tabs([
-                    Tab::make('Manual')
-                        ->schema(array_filter([
-                            $a['manual_ticket_auto_close_schedule_mode'] ?? null,
-                            $a['default_close_delay_hours'] ?? null,
-                            $a['default_reopen_window_hours'] ?? null,
-                            $a['manual_ticket_flap_threshold'] ?? null,
-                            $a['manual_ticket_extra_flapping_delay_hours'] ?? null,
-                        ]))
-                        ->columns(1),
-                    Tab::make('Automatic')
-                        ->schema([
-                            Placeholder::make('auto_tickets_placeholder')
-                                ->label('Auto Ticket Automation')
-                                ->content('Automatic ticket creation and auto-ticket lifecycle rules will be configured here later. No auto-ticket automation is active in this stage.'),
-                        ])
-                        ->columns(1),
-                ]),
         ];
     }
 
