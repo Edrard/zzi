@@ -365,6 +365,8 @@ class ZnunyTicketWorkspaceCacheReader
             'Type' => $ticket['Type'] ?? null,
             'Created' => $ticket['Created'] ?? null,
             'Changed' => $ticket['Changed'] ?? null,
+            'LockID' => $ticket['LockID'] ?? null,
+            'Lock' => $ticket['Lock'] ?? null,
             'ArticleCount' => $ticket['ArticleCount'] ?? 0,
             'LastArticleCreated' => $ticket['LastArticleCreated'] ?? null,
             'SyncFingerprint' => $ticket['SyncFingerprint'] ?? null,

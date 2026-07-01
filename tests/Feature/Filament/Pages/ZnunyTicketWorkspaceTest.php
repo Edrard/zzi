@@ -1045,4 +1045,135 @@ class ZnunyTicketWorkspaceTest extends TestCase
         $this->assertEquals('TN104', $record['TicketNumber'] ?? null);
         $this->assertEquals('Test Move', $record['Title'] ?? null);
     }
+
+    public function test_unlocked_ticket_shows_take_action()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $this->seedTicket(['TicketID' => 201, 'TicketNumber' => 'TN201', 'Lock' => 'unlock', 'StateType' => 'open']);
+
+        $component = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 201])
+            ->assertActionMounted('viewTicket');
+
+        $viewAction = $component->instance()->getMountedAction();
+        $footerActions = $viewAction->getExtraModalFooterActions();
+
+        $this->assertArrayHasKey('take_or_release_ticket', $footerActions);
+        $this->assertFalse($footerActions['take_or_release_ticket']->isHidden());
+        $this->assertEquals('Take', $footerActions['take_or_release_ticket']->getLabel());
+    }
+
+    public function test_locked_ticket_shows_release_action()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $this->seedTicket(['TicketID' => 202, 'TicketNumber' => 'TN202', 'Lock' => 'lock', 'StateType' => 'open']);
+
+        $component = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 202])
+            ->assertActionMounted('viewTicket');
+
+        $viewAction = $component->instance()->getMountedAction();
+        $footerActions = $viewAction->getExtraModalFooterActions();
+
+        $this->assertArrayHasKey('take_or_release_ticket', $footerActions);
+        $this->assertFalse($footerActions['take_or_release_ticket']->isHidden());
+        $this->assertEquals('Release', $footerActions['take_or_release_ticket']->getLabel());
+    }
+
+    public function test_take_ticket_action_locks_and_refreshes_cache()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $this->seedTicket(['TicketID' => 203, 'TicketNumber' => 'TN203', 'Lock' => 'unlock', 'StateType' => 'open']);
+
+        $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
+        $mockClient->shouldReceive('lockTicket')->with(203)->andReturn(['success' => true]);
+        // Refresh ticket calls
+        $mockClient->shouldReceive('getTicket')->with(203)->andReturn([
+            'TicketID' => 203,
+            'TicketNumber' => 'TN203',
+            'Lock' => 'lock',
+            'StateType' => 'open',
+            'Created' => now()->subDay()->toIso8601String(),
+            'Changed' => now()->toIso8601String(),
+        ]);
+        $mockClient->shouldReceive('getTicketArticles')->with(203)->andReturn([]);
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        $component = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 203]);
+
+        $component->mountAction('take_or_release_ticket', ['znuny_ticket_id' => 203])
+            ->callMountedAction()
+            ->assertNotified('Ticket Taken');
+
+        $component2 = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 203]);
+
+        $viewAction = $component2->instance()->getMountedAction();
+        $footerActions = $viewAction->getExtraModalFooterActions();
+        $this->assertEquals('Release', $footerActions['take_or_release_ticket']->getLabel());
+    }
+
+    public function test_release_ticket_action_unlocks_and_refreshes_cache()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $this->seedTicket(['TicketID' => 204, 'TicketNumber' => 'TN204', 'Lock' => 'lock', 'StateType' => 'open']);
+
+        $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
+        $mockClient->shouldReceive('unlockTicket')->with(204)->andReturn(['success' => true]);
+        // Refresh ticket calls
+        $mockClient->shouldReceive('getTicket')->with(204)->andReturn([
+            'TicketID' => 204,
+            'TicketNumber' => 'TN204',
+            'Lock' => 'unlock',
+            'StateType' => 'open',
+            'Created' => now()->subDay()->toIso8601String(),
+            'Changed' => now()->toIso8601String(),
+        ]);
+        $mockClient->shouldReceive('getTicketArticles')->with(204)->andReturn([]);
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        $component = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 204]);
+
+        $component->mountAction('take_or_release_ticket', ['znuny_ticket_id' => 204])
+            ->callMountedAction()
+            ->assertNotified('Ticket Released');
+
+        $component2 = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 204]);
+
+        $viewAction = $component2->instance()->getMountedAction();
+        $footerActions = $viewAction->getExtraModalFooterActions();
+        $this->assertEquals('Take', $footerActions['take_or_release_ticket']->getLabel());
+    }
+
+    public function test_take_ticket_action_handles_api_failure()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $this->seedTicket(['TicketID' => 205, 'TicketNumber' => 'TN205', 'Lock' => 'unlock', 'StateType' => 'open']);
+
+        $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
+        $mockClient->shouldReceive('lockTicket')->with(205)->andReturn(['success' => false, 'errors' => ['Znuny is offline']]);
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        $component = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 205]);
+
+        $component->mountAction('take_or_release_ticket', ['znuny_ticket_id' => 205])
+            ->callMountedAction()
+            ->assertNotified('Take Failed');
+    }
 }

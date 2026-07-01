@@ -26,6 +26,7 @@ class ZabbixTicketDetailsAction
                     ->cancelParentActions(),
                 ZnunyTicketManagementActions::reopenTicketAction('reopen_ticket')
                     ->cancelParentActions(),
+                ZnunyTicketManagementActions::takeOrReleaseTicketAction('take_or_release_ticket'),
                 Action::make('cancel')
                     ->label('Close')
                     ->close()

@@ -377,4 +377,93 @@ class ZnunyTicketManagementActions
             })
             ->openUrlInNewTab();
     }
+
+    public static function takeOrReleaseTicketAction(string $name = 'take_or_release_ticket'): Action
+    {
+        return Action::make($name)
+            ->label(function (array $arguments, $record = null) {
+                $payload = TicketDetailsPayload::fromRecord($record, $arguments);
+
+                return $payload->lock === 'lock' ? 'Release' : 'Take';
+            })
+            ->icon(function (array $arguments, $record = null) {
+                $payload = TicketDetailsPayload::fromRecord($record, $arguments);
+
+                return $payload->lock === 'lock' ? 'heroicon-o-lock-open' : 'heroicon-o-lock-closed';
+            })
+            ->color(function (array $arguments, $record = null) {
+                $payload = TicketDetailsPayload::fromRecord($record, $arguments);
+
+                return $payload->lock === 'lock' ? 'gray' : 'primary';
+            })
+            ->tooltip(function (array $arguments, $record = null) {
+                $payload = TicketDetailsPayload::fromRecord($record, $arguments);
+
+                return $payload->lock === 'lock' ? 'Unlock this ticket' : 'Lock this ticket for work';
+            })
+            ->visible(function (array $arguments, $record = null) {
+                $payload = TicketDetailsPayload::fromRecord($record, $arguments);
+
+                return (bool) $payload->znuny_ticket_id
+                    && $payload->is_open
+                    && in_array($payload->lock, ['lock', 'unlock'], true);
+            })
+            ->action(function (array $arguments, Action $action, $record = null) {
+                $payload = TicketDetailsPayload::fromRecord($record, $arguments);
+                if (! $payload->znuny_ticket_id) {
+                    Notification::make()->title('Ticket ID missing')->danger()->send();
+                    $action->halt();
+
+                    return;
+                }
+
+                $client = app(ZnunyClient::class);
+                $isLocked = $payload->lock === 'lock';
+
+                try {
+                    $response = $isLocked
+                        ? $client->unlockTicket($payload->znuny_ticket_id)
+                        : $client->lockTicket($payload->znuny_ticket_id);
+
+                    if (! $response['success']) {
+                        $messages = $response['errors'] ?? [];
+
+                        if (empty($messages)) {
+                            $messages = $response['warnings'] ?? [];
+                        }
+
+                        if (empty($messages)) {
+                            $messages = ['Unknown error'];
+                        }
+
+                        Notification::make()
+                            ->title($isLocked ? 'Release Failed' : 'Take Failed')
+                            ->body(implode(', ', $messages))
+                            ->danger()
+                            ->send();
+                        $action->halt();
+
+                        return;
+                    }
+
+                    // Refresh workspace cache for this ticket via service
+                    $refreshService = app(ZnunyTicketWorkspaceTicketRefreshService::class);
+                    $refreshService->refreshTicket($payload->znuny_ticket_id);
+
+                    Notification::make()
+                        ->title($isLocked ? 'Ticket Released' : 'Ticket Taken')
+                        ->success()
+                        ->send();
+
+                    $action->cancelParentActions();
+                } catch (\Throwable $e) {
+                    Notification::make()
+                        ->title($isLocked ? 'Release Failed' : 'Take Failed')
+                        ->body($e->getMessage())
+                        ->danger()
+                        ->send();
+                    $action->halt();
+                }
+            });
+    }
 }

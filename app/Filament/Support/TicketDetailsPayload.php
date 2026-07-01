@@ -58,6 +58,10 @@ class TicketDetailsPayload
 
     public ?string $ticket_type = null;
 
+    public ?int $lock_id = null;
+
+    public ?string $lock = null;
+
     public ?int $article_count = null;
 
     public ?Carbon $last_article = null;
@@ -151,6 +155,8 @@ class TicketDetailsPayload
         $payload->znuny_state_name = $arr['State'] ?? null;
         $payload->state_type_str = $arr['StateType'] ?? null;
         $payload->ticket_type = $arr['Type'] ?? null;
+        $payload->lock_id = isset($arr['LockID']) ? (int) $arr['LockID'] : null;
+        $payload->lock = $arr['Lock'] ?? null;
         $payload->article_count = isset($arr['ArticleCount']) ? (int) $arr['ArticleCount'] : null;
         $payload->last_article = ! empty($arr['LastArticleCreated']) ? Carbon::parse($arr['LastArticleCreated']) : null;
         $payload->has_zabbix_link = $hasLink;

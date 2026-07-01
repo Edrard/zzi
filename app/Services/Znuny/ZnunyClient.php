@@ -1261,4 +1261,62 @@ class ZnunyClient
             ];
         });
     }
+
+    /**
+     * Call POST /TicketLock to safely lock a ticket.
+     */
+    public function lockTicket(int|string $ticketIdOrNumber): array
+    {
+        return $this->withSessionRetry(function ($session) use ($ticketIdOrNumber) {
+            $payload = ['SessionID' => $session];
+
+            if (is_numeric($ticketIdOrNumber)) {
+                $payload['TicketID'] = $this->normalizeTicketId($ticketIdOrNumber);
+            } else {
+                $payload['TicketNumber'] = $ticketIdOrNumber;
+            }
+
+            try {
+                $response = $this->request()->post($this->apiUrl().'/TicketLock', $payload);
+                $data = $this->processResponse($response);
+            } catch (Throwable $e) {
+                return [
+                    'success' => false,
+                    'warnings' => ['Lock failed or route not available: '.$this->sanitizeExceptionMessage($e->getMessage())],
+                    'errors' => [],
+                ];
+            }
+
+            $ticket = $data['Ticket'] ?? [];
+            $ticketId = $data['TicketID'] ?? $ticket['TicketID'] ?? null;
+            $ticketNumber = $data['TicketNumber'] ?? $ticket['TicketNumber'] ?? null;
+            $lockId = $data['LockID'] ?? $ticket['LockID'] ?? null;
+            $lock = $data['Lock'] ?? $ticket['Lock'] ?? null;
+            $state = $data['State'] ?? $ticket['State'] ?? null;
+            $stateType = $data['StateType'] ?? $ticket['StateType'] ?? null;
+
+            $errors = $data['Errors'] ?? [];
+            $warnings = $data['Warnings'] ?? [];
+
+            // ZnunyAgentList TicketLock returns Lock => 'lock'
+            $success = empty($errors) && $lock === 'lock';
+
+            if (! $success && empty($errors)) {
+                $errors[] = 'Missing lock confirmation in response.';
+            }
+
+            return [
+                'success' => $success,
+                'ticket_id' => $ticketId,
+                'ticket_number' => $ticketNumber,
+                'lock_id' => $lockId,
+                'lock' => $lock,
+                'state' => $state,
+                'state_type' => $stateType,
+                'warnings' => $warnings,
+                'errors' => $errors,
+                'raw' => $data,
+            ];
+        });
+    }
 }
