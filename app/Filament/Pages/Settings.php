@@ -314,7 +314,6 @@ class Settings extends Page implements HasForms
             'Zabbix' => [],
             'Znuny' => [],
             'Znuny Ticket Defaults' => [],
-            'Znuny Sync' => [],
             'Automation' => [],
             'Other' => [],
         ];
@@ -588,9 +587,9 @@ class Settings extends Page implements HasForms
             } elseif (in_array($setting->key, ['znuny_detailed_sync_audit_enabled', 'zabbix_problem_sync_audit_enabled', 'znuny_ticket_workspace_sync_audit_enabled', 'znuny_closed_ticket_sync_audit_auto_enabled'])) {
                 $groups['Audit Log'][] = $component;
             } elseif (in_array($setting->key, ['znuny_linked_ticket_sync_interval_minutes', 'znuny_linked_ticket_sync_batch_size'])) {
-                $groups['Znuny Sync']['Linked Tickets'][] = $component;
+                $groups['Znuny']['Linked Tickets'][] = $component;
             } elseif (in_array($setting->key, ['znuny_ticket_workspace_enabled', 'znuny_ticket_cache_refresh_interval_minutes', 'znuny_ticket_cache_max_pages_per_run', 'znuny_ticket_cache_ttl_minutes', 'znuny_ticket_cache_default_limit', 'znuny_ticket_workspace_active_state_type_ids', 'znuny_closed_ticket_window_days', 'znuny_closed_ticket_small_sync_interval_minutes'])) {
-                $groups['Znuny Sync']['Ticket Workspace'][$setting->key] = $component;
+                $groups['Znuny']['Ticket Workspace'][$setting->key] = $component;
             } elseif (str_starts_with($setting->key, 'znuny_')) {
                 $groups['Znuny'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['default_close_delay_hours', 'default_reopen_window_hours', 'manual_ticket_auto_close_schedule_mode', 'manual_ticket_flap_threshold', 'manual_ticket_extra_flapping_delay_hours'])) {
@@ -610,10 +609,6 @@ class Settings extends Page implements HasForms
 
         if (! empty($groups['Znuny Ticket Defaults'])) {
             $groups['Znuny Ticket Defaults'] = $this->buildZnunyTicketDefaultsTabGroups($groups['Znuny Ticket Defaults']);
-        }
-
-        if (! empty($groups['Znuny Sync'])) {
-            $groups['Znuny Sync'] = $this->buildZnunySyncTabGroups($groups['Znuny Sync']);
         }
 
         if (! empty($groups['Retention'])) {
@@ -811,6 +806,53 @@ class Settings extends Page implements HasForms
                 ]))->columns(1),
         ];
 
+        if (isset($z['Linked Tickets'])) {
+            $tabs[] = Tab::make('Linked Tickets')
+                ->schema($z['Linked Tickets'])
+                ->columns(1);
+        }
+
+        if (isset($z['Ticket Workspace'])) {
+            $workspaceSchema = [];
+            $ws = $z['Ticket Workspace'];
+
+            $coreFields = array_filter([
+                $ws['znuny_ticket_workspace_enabled'] ?? null,
+                $ws['znuny_ticket_workspace_active_state_type_ids'] ?? null,
+            ]);
+            if (! empty($coreFields)) {
+                $workspaceSchema[] = Section::make('Ticket Workspace')
+                    ->description('Core Ticket Workspace behavior.')
+                    ->schema($coreFields)->columns(1);
+            }
+
+            $activeFields = array_filter([
+                $ws['znuny_ticket_cache_refresh_interval_minutes'] ?? null,
+                $ws['znuny_ticket_cache_default_limit'] ?? null,
+                $ws['znuny_ticket_cache_max_pages_per_run'] ?? null,
+                $ws['znuny_ticket_cache_ttl_minutes'] ?? null,
+            ]);
+            if (! empty($activeFields)) {
+                $workspaceSchema[] = Section::make('Active Ticket Cache')
+                    ->description('Redis cache warmer settings for active Znuny tickets.')
+                    ->schema($activeFields)->columns(1);
+            }
+
+            $recentFields = array_filter([
+                $ws['znuny_closed_ticket_window_days'] ?? null,
+                $ws['znuny_closed_ticket_small_sync_interval_minutes'] ?? null,
+            ]);
+            if (! empty($recentFields)) {
+                $workspaceSchema[] = Section::make('Recent Closed Tickets')
+                    ->description('Redis-only recent closed-ticket window configuration.')
+                    ->schema($recentFields)->columns(1);
+            }
+
+            $tabs[] = Tab::make('Ticket Workspace')
+                ->schema($workspaceSchema)
+                ->columns(1);
+        }
+
         return [
             Tabs::make('ZnunyTabs')->tabs($tabs),
         ];
@@ -848,58 +890,6 @@ class Settings extends Page implements HasForms
 
         return [
             Tabs::make('ZnunyTicketDefaultsTabs')->tabs($tabs),
-        ];
-    }
-
-    private function buildZnunySyncTabGroups(array $zs): array
-    {
-        $workspaceSchema = [];
-        if (isset($zs['Ticket Workspace'])) {
-            $ws = $zs['Ticket Workspace'];
-
-            $coreFields = array_filter([
-                $ws['znuny_ticket_workspace_enabled'] ?? null,
-                $ws['znuny_ticket_workspace_active_state_type_ids'] ?? null,
-            ]);
-            if (! empty($coreFields)) {
-                $workspaceSchema[] = Section::make('Ticket Workspace')
-                    ->description('Core Ticket Workspace behavior.')
-                    ->schema($coreFields)->columns(1);
-            }
-
-            $activeFields = array_filter([
-                $ws['znuny_ticket_cache_refresh_interval_minutes'] ?? null,
-                $ws['znuny_ticket_cache_default_limit'] ?? null,
-                $ws['znuny_ticket_cache_max_pages_per_run'] ?? null,
-                $ws['znuny_ticket_cache_ttl_minutes'] ?? null,
-            ]);
-            if (! empty($activeFields)) {
-                $workspaceSchema[] = Section::make('Active Ticket Cache')
-                    ->description('Redis cache warmer settings for active Znuny tickets.')
-                    ->schema($activeFields)->columns(1);
-            }
-
-            $recentFields = array_filter([
-                $ws['znuny_closed_ticket_window_days'] ?? null,
-                $ws['znuny_closed_ticket_small_sync_interval_minutes'] ?? null,
-            ]);
-            if (! empty($recentFields)) {
-                $workspaceSchema[] = Section::make('Recent Closed Tickets')
-                    ->description('Redis-only recent closed-ticket window configuration.')
-                    ->schema($recentFields)->columns(1);
-            }
-        }
-
-        return [
-            Tabs::make('ZnunySyncTabs')
-                ->tabs([
-                    Tab::make('Linked Tickets')
-                        ->schema($zs['Linked Tickets'] ?? [])
-                        ->columns(1),
-                    Tab::make('Ticket Workspace')
-                        ->schema($workspaceSchema)
-                        ->columns(1),
-                ]),
         ];
     }
 }
