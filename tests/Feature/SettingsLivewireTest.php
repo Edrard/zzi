@@ -528,4 +528,169 @@ class SettingsLivewireTest extends TestCase
             ->assertDontSee('Recent Closed Ticket Cache Status')
             ->assertDontSee('closed_ticket_sync_status');
     }
+
+    public function test_zabbix_attention_highlighting_ui_is_rendered_in_zabbix_tab()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        // First, run the defaults command to seed everything
+        Artisan::call('app:ensure-settings-defaults');
+
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+
+        $form = $component->instance()->getForm('form');
+        $schema = $form->getComponents();
+
+        $zabbixTabFound = false;
+        $problemHighlightingFound = false;
+        $settingsFound = [];
+
+        $search = function ($components, $parentGroupName = null) use (&$search, &$zabbixTabFound, &$problemHighlightingFound, &$settingsFound) {
+            foreach ($components as $c) {
+                $type = class_basename($c);
+                $name = method_exists($c, 'getName') ? $c->getName() : null;
+                $label = method_exists($c, 'getLabel') ? $c->getLabel() : null;
+
+                if ($type === 'Tab') {
+                    if ($label === 'Zabbix') {
+                        $parentGroupName = 'Zabbix';
+                        $zabbixTabFound = true;
+                    } elseif ($label === 'Problem Highlighting') {
+                        $problemHighlightingFound = true;
+                    }
+                }
+
+                $keys = [
+                    'zabbix_attention_highlighting_enabled',
+                    'problem_highlighting_preview',
+                    'zabbix_attention_highlight_text_color',
+                    'zabbix_attention_highlight_text_custom_hex',
+                    'zabbix_attention_highlight_underline_style',
+                    'zabbix_attention_highlight_underline_thickness',
+                    'zabbix_attention_highlight_underline_color',
+                    'zabbix_attention_highlight_underline_custom_hex',
+                ];
+
+                if (in_array($name, $keys)) {
+                    $settingsFound[] = $name;
+                }
+
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents(), $parentGroupName);
+                }
+            }
+        };
+
+        $search($schema);
+
+        $this->assertTrue($zabbixTabFound, 'Zabbix tab should be rendered');
+        $this->assertTrue($problemHighlightingFound, 'Problem Highlighting tab should be rendered');
+
+        $expectedOrder = [
+            'zabbix_attention_highlighting_enabled',
+            'problem_highlighting_preview',
+            'zabbix_attention_highlight_text_color',
+            'zabbix_attention_highlight_text_custom_hex',
+            'zabbix_attention_highlight_underline_style',
+            'zabbix_attention_highlight_underline_thickness',
+            'zabbix_attention_highlight_underline_color',
+            'zabbix_attention_highlight_underline_custom_hex',
+        ];
+
+        // The exact array should match the expected order
+        $this->assertEquals($expectedOrder, $settingsFound, 'The Problem Highlighting fields are missing or incorrectly ordered.');
+
+        // Verify live preview renders correctly
+        $component->assertSee('Kreisel fastiv ipmi01[main]');
+    }
+
+    public function test_missing_settings_are_created_automatically_on_mount_without_overwriting_existing_ones()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        // Set one setting manually to ensure it's not overwritten
+        Setting::updateOrCreate(
+            ['key' => 'zabbix_attention_highlighting_enabled'],
+            ['type' => 'boolean', 'value' => 'false', 'description' => 'User configured false']
+        );
+
+        // Delete another setting so it's missing
+        Setting::where('key', 'zabbix_attention_highlight_text_color')->delete();
+
+        // Mount the page
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+        $component->assertSuccessful();
+
+        // Check the missing setting was created with default value
+        $this->assertEquals('aquamarine', Setting::where('key', 'zabbix_attention_highlight_text_color')->value('value'));
+
+        // Check the existing setting was NOT overwritten
+        $this->assertEquals('false', Setting::where('key', 'zabbix_attention_highlighting_enabled')->value('value'));
+    }
+
+    public function test_problem_highlighting_custom_hex_hydration_and_validation()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Artisan::call('app:ensure-settings-defaults');
+
+        Setting::updateOrCreate(
+            ['key' => 'zabbix_attention_highlight_text_custom_hex'],
+            ['type' => 'string', 'value' => '#123456']
+        );
+
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+
+        // 1. Existing stored values with `#` hydrate correctly (displayed without #)
+        $component->assertFormSet(['zabbix_attention_highlight_text_custom_hex' => '123456']);
+
+        // 2. Saving `7fffd4` stores `#7FFFD4`
+        $component->fillForm([
+            'zabbix_attention_highlight_text_color' => 'custom_hex',
+            'zabbix_attention_highlight_text_custom_hex' => '7fffd4',
+        ])->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertEquals('#7FFFD4', Setting::where('key', 'zabbix_attention_highlight_text_custom_hex')->value('value'));
+
+        // 3. Saving `7FFFD4` stores `#7FFFD4`
+        $component->fillForm([
+            'zabbix_attention_highlight_text_color' => 'custom_hex',
+            'zabbix_attention_highlight_text_custom_hex' => '7FFFD4',
+        ])->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertEquals('#7FFFD4', Setting::where('key', 'zabbix_attention_highlight_text_custom_hex')->value('value'));
+
+        // 4. Invalid values are rejected
+        $component->fillForm([
+            'zabbix_attention_highlight_text_color' => 'custom_hex',
+            'zabbix_attention_highlight_text_custom_hex' => '', // empty
+        ])->call('save')->assertHasFormErrors(['zabbix_attention_highlight_text_custom_hex' => 'required']);
+
+        $component->fillForm([
+            'zabbix_attention_highlight_text_color' => 'custom_hex',
+            'zabbix_attention_highlight_text_custom_hex' => 'GGGGGG',
+        ])->call('save')->assertHasFormErrors(['zabbix_attention_highlight_text_custom_hex' => 'regex']);
+
+        $component->fillForm([
+            'zabbix_attention_highlight_text_color' => 'custom_hex',
+            'zabbix_attention_highlight_text_custom_hex' => '12345',
+        ])->call('save')->assertHasFormErrors(['zabbix_attention_highlight_text_custom_hex' => 'regex']);
+
+        $component->fillForm([
+            'zabbix_attention_highlight_text_color' => 'custom_hex',
+            'zabbix_attention_highlight_text_custom_hex' => '1234567',
+        ])->call('save')->assertHasFormErrors(['zabbix_attention_highlight_text_custom_hex' => 'regex']);
+
+        $component->fillForm([
+            'zabbix_attention_highlight_text_color' => 'custom_hex',
+            'zabbix_attention_highlight_text_custom_hex' => '#12345',
+        ])->call('save')->assertHasFormErrors(['zabbix_attention_highlight_text_custom_hex' => 'regex']);
+
+        $component->fillForm([
+            'zabbix_attention_highlight_text_color' => 'custom_hex',
+            'zabbix_attention_highlight_text_custom_hex' => '#1234567',
+        ])->call('save')->assertHasFormErrors(['zabbix_attention_highlight_text_custom_hex' => 'regex']);
+    }
 }

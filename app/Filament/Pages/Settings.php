@@ -27,6 +27,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
@@ -276,6 +277,8 @@ class Settings extends Page implements HasForms
 
     public function mount(): void
     {
+        Artisan::call('app:ensure-settings-defaults');
+
         $settings = Setting::query()->orderBy('key')->get();
         $initialData = [];
 
@@ -504,6 +507,10 @@ class Settings extends Page implements HasForms
                     ->label($label)
                     ->helperText($description)
                     ->required();
+
+                if ($setting->key === 'zabbix_attention_highlighting_enabled') {
+                    $component->live();
+                }
             } elseif ($setting->type === 'integer') {
                 $min = 0;
                 if ($setting->key === 'cleanup_batch_size' || $setting->key === 'znuny_linked_ticket_sync_interval_minutes' || $setting->key === 'znuny_closed_ticket_window_days' || $setting->key === 'znuny_closed_ticket_small_sync_interval_minutes') {
@@ -535,6 +542,79 @@ class Settings extends Page implements HasForms
                         'merged' => 'Merged',
                     ])
                     ->required();
+            } elseif (in_array($setting->key, ['zabbix_attention_highlight_text_color', 'zabbix_attention_highlight_underline_color'])) {
+                $component = Select::make($setting->key)
+                    ->label($label)
+                    ->helperText($description)
+                    ->options([
+                        'custom_hex' => 'Custom HEX',
+                        'aquamarine' => 'Aquamarine',
+                        'white' => 'White',
+                        'gray' => 'Gray',
+                        'red' => 'Red',
+                        'orange' => 'Orange',
+                        'amber' => 'Amber',
+                        'yellow' => 'Yellow',
+                        'lime' => 'Lime',
+                        'green' => 'Green',
+                        'emerald' => 'Emerald',
+                        'cyan' => 'Cyan',
+                        'sky' => 'Sky',
+                        'blue' => 'Blue',
+                        'violet' => 'Violet',
+                        'pink' => 'Pink',
+                    ])
+                    ->disabled(fn (callable $get) => $setting->key === 'zabbix_attention_highlight_underline_color' && $get('zabbix_attention_highlight_underline_style') === 'disabled')
+                    ->required()
+                    ->live();
+            } elseif ($setting->key === 'zabbix_attention_highlight_text_custom_hex') {
+                $component = TextInput::make($setting->key)
+                    ->label($label)
+                    ->helperText($description)
+                    ->prefix('#')
+                    ->regex('/^[0-9A-Fa-f]{6}$/')
+                    ->formatStateUsing(fn (?string $state) => ltrim(strtoupper((string) $state), '#'))
+                    ->dehydrateStateUsing(fn (?string $state) => '#'.strtoupper((string) $state))
+                    ->disabled(fn (callable $get) => $get('zabbix_attention_highlight_text_color') !== 'custom_hex')
+                    ->required()
+                    ->live();
+            } elseif ($setting->key === 'zabbix_attention_highlight_underline_custom_hex') {
+                $component = TextInput::make($setting->key)
+                    ->label($label)
+                    ->helperText($description)
+                    ->prefix('#')
+                    ->regex('/^[0-9A-Fa-f]{6}$/')
+                    ->formatStateUsing(fn (?string $state) => ltrim(strtoupper((string) $state), '#'))
+                    ->dehydrateStateUsing(fn (?string $state) => '#'.strtoupper((string) $state))
+                    ->disabled(fn (callable $get) => $get('zabbix_attention_highlight_underline_style') === 'disabled' || $get('zabbix_attention_highlight_underline_color') !== 'custom_hex')
+                    ->required()
+                    ->live();
+            } elseif ($setting->key === 'zabbix_attention_highlight_underline_style') {
+                $component = Select::make($setting->key)
+                    ->label($label)
+                    ->helperText($description)
+                    ->options([
+                        'disabled' => 'Disabled',
+                        'solid' => 'Solid',
+                        'dashed' => 'Dashed',
+                        'dotted' => 'Dotted',
+                        'double' => 'Double',
+                        'wavy' => 'Wavy',
+                    ])
+                    ->required()
+                    ->live();
+            } elseif ($setting->key === 'zabbix_attention_highlight_underline_thickness') {
+                $component = Select::make($setting->key)
+                    ->label($label)
+                    ->helperText($description)
+                    ->options([
+                        '1px' => '1px',
+                        '2px' => '2px',
+                        '3px' => '3px',
+                    ])
+                    ->disabled(fn (callable $get) => $get('zabbix_attention_highlight_underline_style') === 'disabled')
+                    ->required()
+                    ->live();
             } elseif ($setting->type === 'json') {
                 $component = Textarea::make($setting->key)
                     ->label($label)
@@ -579,7 +659,9 @@ class Settings extends Page implements HasForms
             } elseif (in_array($setting->key, ['retention_action_logs_days', 'retention_closed_tickets_days', 'retention_failed_jobs_days', 'retention_resolved_days', 'retention_statistics_days'])) {
                 $groups['Retention'][] = $component;
             } elseif (in_array($setting->key, ['zabbix_api_url', 'zabbix_api_token', 'zabbix_api_timeout', 'zabbix_api_verify_ssl', 'zabbix_poll_interval_minutes', 'zabbix_problem_cache_ttl_minutes', 'zabbix_problem_limit', 'zabbix_exclude_suppressed_problems', 'zabbix_problem_url_template'])) {
-                $groups['Zabbix'][$setting->key] = $component;
+                $groups['Zabbix']['Connection & Polling'][$setting->key] = $component;
+            } elseif (in_array($setting->key, ['zabbix_attention_highlighting_enabled', 'zabbix_attention_highlight_text_color', 'zabbix_attention_highlight_text_custom_hex', 'zabbix_attention_highlight_underline_style', 'zabbix_attention_highlight_underline_color', 'zabbix_attention_highlight_underline_custom_hex', 'zabbix_attention_highlight_underline_thickness'])) {
+                $groups['Zabbix']['Problem Highlighting'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['znuny_queue_from_host_regex', 'znuny_customer_user_from_queue_template', 'znuny_queue_host_mappings', 'znuny_manual_ticket_footer', 'znuny_default_agent_id', 'linked_ticket_manual_close_default_reason', 'manual_ticket_reopen_note_template'])) {
                 $groups['Znuny Ticket Defaults'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['znuny_queue_cache_ttl_minutes', 'znuny_agent_cache_ttl_minutes', 'znuny_ticket_snapshot_cache_ttl_minutes'])) {
@@ -726,38 +808,122 @@ class Settings extends Page implements HasForms
 
     private function buildZabbixTabGroups(array $z): array
     {
+        $connectionFields = $z['Connection & Polling'] ?? [];
+
+        $tabs = [
+            Tab::make('Connection')
+                ->schema(array_filter([
+                    $connectionFields['zabbix_api_url'] ?? null,
+                    $connectionFields['zabbix_api_token'] ?? null,
+                    $connectionFields['zabbix_api_timeout'] ?? null,
+                    $connectionFields['zabbix_api_verify_ssl'] ?? null,
+                    Actions::make([
+                        Action::make('testZabbixConnection')
+                            ->label('Test Zabbix API connection')
+                            ->icon('heroicon-o-signal')
+                            ->color('info')
+                            ->action('testZabbixConnectionAction'),
+                    ]),
+                    Placeholder::make('zabbix_tester_help')
+                        ->hiddenLabel()
+                        ->content('Tests current Zabbix form values without saving settings.'),
+                ]))
+                ->columns(1),
+            Tab::make('Problem Handling & UI')
+                ->schema(array_filter([
+                    $connectionFields['zabbix_poll_interval_minutes'] ?? null,
+                    $connectionFields['zabbix_problem_cache_ttl_minutes'] ?? null,
+                    $connectionFields['zabbix_problem_limit'] ?? null,
+                    $connectionFields['zabbix_exclude_suppressed_problems'] ?? null,
+                    $connectionFields['zabbix_problem_url_template'] ?? null,
+                ]))
+                ->columns(1),
+        ];
+
+        if (isset($z['Problem Highlighting'])) {
+            $ph = $z['Problem Highlighting'];
+
+            $previewBlock = Placeholder::make('problem_highlighting_preview')
+                ->label('Live Preview')
+                ->content(fn (callable $get) => new HtmlString($this->generateHighlightPreview($get)));
+
+            $tabs[] = Tab::make('Problem Highlighting')
+                ->schema(array_filter([
+                    $ph['zabbix_attention_highlighting_enabled'] ?? null,
+                    $previewBlock,
+                    $ph['zabbix_attention_highlight_text_color'] ?? null,
+                    $ph['zabbix_attention_highlight_text_custom_hex'] ?? null,
+                    $ph['zabbix_attention_highlight_underline_style'] ?? null,
+                    $ph['zabbix_attention_highlight_underline_thickness'] ?? null,
+                    $ph['zabbix_attention_highlight_underline_color'] ?? null,
+                    $ph['zabbix_attention_highlight_underline_custom_hex'] ?? null,
+                ]))
+                ->columns(1);
+        }
+
         return [
             Tabs::make('ZabbixTabs')
-                ->tabs([
-                    Tab::make('Connection')
-                        ->schema(array_filter([
-                            $z['zabbix_api_url'] ?? null,
-                            $z['zabbix_api_token'] ?? null,
-                            $z['zabbix_api_timeout'] ?? null,
-                            $z['zabbix_api_verify_ssl'] ?? null,
-                            Actions::make([
-                                Action::make('testZabbixConnection')
-                                    ->label('Test Zabbix API connection')
-                                    ->icon('heroicon-o-signal')
-                                    ->color('info')
-                                    ->action('testZabbixConnectionAction'),
-                            ]),
-                            Placeholder::make('zabbix_tester_help')
-                                ->hiddenLabel()
-                                ->content('Tests current Zabbix form values without saving settings.'),
-                        ]))
-                        ->columns(1),
-                    Tab::make('Problem Handling & UI')
-                        ->schema(array_filter([
-                            $z['zabbix_poll_interval_minutes'] ?? null,
-                            $z['zabbix_problem_cache_ttl_minutes'] ?? null,
-                            $z['zabbix_problem_limit'] ?? null,
-                            $z['zabbix_exclude_suppressed_problems'] ?? null,
-                            $z['zabbix_problem_url_template'] ?? null,
-                        ]))
-                        ->columns(1),
-                ]),
+                ->tabs($tabs),
         ];
+    }
+
+    private function getHighlightColorHex(string $color, ?string $customHex): string
+    {
+        if ($color === 'custom_hex') {
+            $hex = '#'.ltrim(strtoupper(trim((string) $customHex)), '#');
+
+            return preg_match('/^#[0-9A-Fa-f]{6}$/', $hex) ? $hex : '#7FFFD4';
+        }
+
+        $presets = [
+            'aquamarine' => '#7FFFD4',
+            'white' => '#FFFFFF',
+            'gray' => '#9CA3AF',
+            'red' => '#EF4444',
+            'orange' => '#F97316',
+            'amber' => '#F59E0B',
+            'yellow' => '#EAB308',
+            'lime' => '#84CC16',
+            'green' => '#22C55E',
+            'emerald' => '#10B981',
+            'cyan' => '#06B6D4',
+            'sky' => '#0EA5E9',
+            'blue' => '#3B82F6',
+            'violet' => '#8B5CF6',
+            'pink' => '#EC4899',
+        ];
+
+        return $presets[$color] ?? '#7FFFD4';
+    }
+
+    private function generateHighlightPreview(callable $get): string
+    {
+        $text = 'Kreisel fastiv ipmi01[main]';
+
+        if (! $get('zabbix_attention_highlighting_enabled')) {
+            return $text;
+        }
+
+        $textColor = $this->getHighlightColorHex(
+            (string) $get('zabbix_attention_highlight_text_color'),
+            (string) $get('zabbix_attention_highlight_text_custom_hex')
+        );
+
+        $style = "color: {$textColor};";
+
+        $underlineStyle = (string) $get('zabbix_attention_highlight_underline_style');
+
+        if ($underlineStyle !== 'disabled') {
+            $underlineColor = $this->getHighlightColorHex(
+                (string) $get('zabbix_attention_highlight_underline_color'),
+                (string) $get('zabbix_attention_highlight_underline_custom_hex')
+            );
+            $thickness = (string) $get('zabbix_attention_highlight_underline_thickness');
+
+            $style .= " text-decoration-line: underline; text-decoration-style: {$underlineStyle}; text-decoration-color: {$underlineColor}; text-decoration-thickness: {$thickness}; text-underline-offset: 4px;";
+        }
+
+        return "<span style=\"{$style}\">{$text}</span>";
     }
 
     private function getZnunyConnectionTestAction(string $name): Actions
