@@ -34,6 +34,7 @@ class ZnunyLookupService
         ];
 
         $primaryQueueFound = false;
+        $primaryQueueWarnings = [];
 
         if ($local['queue']) {
             try {
@@ -47,14 +48,15 @@ class ZnunyLookupService
                     ];
                     $primaryQueueFound = true;
                 } else {
-                    $result['warnings'] = array_merge($result['warnings'], $qResponse['warnings'] ?? []);
+                    $primaryQueueWarnings = $qResponse['warnings'] ?? [];
                 }
             } catch (\Throwable $e) {
-                $result['warnings'][] = "Failed to validate Queue: {$e->getMessage()}";
+                $primaryQueueWarnings = ["Failed to validate Queue: {$e->getMessage()}"];
             }
         }
 
         if (! $primaryQueueFound && $local['queue']) {
+            $mapped = false;
             $mappings = json_decode(SettingsService::string('znuny_queue_host_mappings'), true) ?? [];
             foreach ($mappings as $mapping) {
                 if (($mapping['host_prefix'] ?? '') === '') {
@@ -65,6 +67,7 @@ class ZnunyLookupService
                 $qName = $mapping['queue_name'] ?? '';
 
                 if (strtolower($prefix) === strtolower($local['queue'])) {
+                    $mapped = true;
                     $result['warnings'][] = "Queue mapping matched prefix: {$prefix} -> {$qName}";
                     try {
                         $qResponse = $this->queueService->findQueueByName($qName);
@@ -84,6 +87,12 @@ class ZnunyLookupService
                     break;
                 }
             }
+
+            if (! $mapped && ! empty($primaryQueueWarnings)) {
+                $result['warnings'] = array_merge($result['warnings'], $primaryQueueWarnings);
+            }
+        } elseif (! $primaryQueueFound && ! empty($primaryQueueWarnings)) {
+            $result['warnings'] = array_merge($result['warnings'], $primaryQueueWarnings);
         }
 
         if ($local['customer_user']) {

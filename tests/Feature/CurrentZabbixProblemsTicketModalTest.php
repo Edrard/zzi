@@ -304,6 +304,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
 
         // Mock the HTTP client instead of the service to test full local DB insertion
         $clientMock = $this->mock(ZnunyClient::class);
+        $clientMock->shouldReceive('getCustomerUser')->andReturn(['found' => true, 'customer_id' => 'CUST_TEST']);
         $clientMock->shouldReceive('validateTicketCreate')->andReturn([
             'valid' => true,
             'errors' => [],

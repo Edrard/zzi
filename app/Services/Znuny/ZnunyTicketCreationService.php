@@ -60,12 +60,14 @@ class ZnunyTicketCreationService
     public function buildValidationPayload(
         int|string $ownerId,
         string $queue,
-        string $customerUser
+        string $customerUser,
+        string $customerId
     ): array {
         return [
             'OwnerID' => (int) $ownerId,
             'Queue' => $queue,
             'CustomerUser' => $customerUser,
+            'CustomerID' => $customerId,
             'State' => 'new',
             'Lock' => 'lock',
             'Priority' => self::DEFAULT_PRIORITY,
@@ -76,6 +78,7 @@ class ZnunyTicketCreationService
         int|string $ownerId,
         string $queue,
         string $customerUser,
+        string $customerId,
         string $title,
         string $articleSubject,
         string $articleBody
@@ -85,6 +88,7 @@ class ZnunyTicketCreationService
                 'Title' => $title,
                 'Queue' => $queue,
                 'CustomerUser' => $customerUser,
+                'CustomerID' => $customerId,
                 'State' => 'new',
                 'Lock' => 'lock',
                 'OwnerID' => (int) $ownerId,
@@ -94,6 +98,7 @@ class ZnunyTicketCreationService
                 'Subject' => $articleSubject,
                 'Body' => $articleBody,
                 'ContentType' => 'text/plain; charset=utf8',
+                'IsVisibleForCustomer' => 1,
             ],
         ];
     }
@@ -109,14 +114,15 @@ class ZnunyTicketCreationService
         int|string $ownerId,
         string $queue,
         string $customerUser,
+        string $customerId,
         string $title,
         string $articleSubject,
         string $articleBody
     ): array {
-        if (empty(trim((string) $ownerId)) || empty(trim($queue)) || empty(trim($customerUser))) {
+        if (empty(trim((string) $ownerId)) || empty(trim($queue)) || empty(trim($customerUser)) || empty(trim($customerId))) {
             return [
                 'valid' => false,
-                'errors' => ['Missing required Owner, Queue, or CustomerUser.'],
+                'errors' => ['Missing required Owner, Queue, CustomerUser, or CustomerID.'],
                 'warnings' => [],
             ];
         }
@@ -145,7 +151,7 @@ class ZnunyTicketCreationService
             ];
         }
 
-        $payload = $this->buildValidationPayload($ownerId, $queue, $customerUser);
+        $payload = $this->buildValidationPayload($ownerId, $queue, $customerUser, $customerId);
 
         try {
             $response = $this->client->validateTicketCreate($payload);
@@ -254,7 +260,23 @@ class ZnunyTicketCreationService
                 return $result;
             }
 
-            $validation = $this->validateTicketPayload($ownerId, $queue, $customerUser, $title, $articleSubject, $articleBody);
+            $customerData = $this->client->getCustomerUser($customerUser);
+            if (! $customerData['found']) {
+                $result['errors'][] = 'Failed to resolve CustomerUser: '.$customerUser;
+                $this->auditLog('znuny.manual_ticket_create.failed', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, null, null, $result['errors'], [], false, false, false);
+
+                return $result;
+            }
+
+            $customerId = $customerData['customer_id'] ?? '';
+            if (empty(trim($customerId))) {
+                $result['errors'][] = "CustomerUser '{$customerUser}' has no CustomerID/UserCustomerID assigned.";
+                $this->auditLog('znuny.manual_ticket_create.failed', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, null, null, $result['errors'], [], false, false, false);
+
+                return $result;
+            }
+
+            $validation = $this->validateTicketPayload($ownerId, $queue, $customerUser, $customerId, $title, $articleSubject, $articleBody);
 
             if (! $validation['valid']) {
                 $result['errors'] = $validation['errors'];
@@ -265,7 +287,7 @@ class ZnunyTicketCreationService
                 return $result;
             }
 
-            $payload = $this->buildCreatePayload($ownerId, $queue, $customerUser, $title, $articleSubject, $articleBody);
+            $payload = $this->buildCreatePayload($ownerId, $queue, $customerUser, $customerId, $title, $articleSubject, $articleBody);
 
             try {
                 $createResponse = $this->client->createTicket($payload);

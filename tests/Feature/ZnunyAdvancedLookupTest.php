@@ -394,6 +394,8 @@ class ZnunyAdvancedLookupTest extends TestCase
         $this->assertTrue($response['queue']['found']);
         $this->assertEquals('MappedQueue', $response['queue']['name']);
         $this->assertFalse($response['customer_user']['found']);
+        $this->assertNotContains('Queue not found.', $response['warnings']);
+        $this->assertContains('Queue mapping matched prefix: TestCompany -> MappedQueue', $response['warnings']);
     }
 
     public function test_lookup_service_mapping_ignored_if_queue_empty()
@@ -467,6 +469,7 @@ class ZnunyAdvancedLookupTest extends TestCase
 
         $this->assertFalse($response['queue']['found']);
         $this->assertContains('Mapped queue not found in Znuny: NonExistentQueue', $response['warnings']);
+        $this->assertNotContains('Queue not found.', $response['warnings']);
     }
 
     public function test_lookup_service_mapping_ignored_if_primary_found()
