@@ -11,11 +11,13 @@ use App\Services\Znuny\ZnunyLinkedTicketReopenService;
 use App\Services\Znuny\ZnunyTicketArticleWriteService;
 use App\Services\Znuny\ZnunyTicketWorkspaceTicketRefreshService;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\HtmlString;
 
 class ZnunyTicketManagementActions
 {
@@ -480,10 +482,21 @@ class ZnunyTicketManagementActions
                 $payload = TicketDetailsPayload::fromRecord($record, $arguments);
 
                 return [
-                    TextInput::make('current_queue')
-                        ->label('Current Queue')
-                        ->default($payload->znuny_queue_name)
-                        ->disabled(),
+                    Placeholder::make('current_assignment_summary')
+                        ->hiddenLabel()
+                        ->content(new HtmlString('
+                            <div class="hidden lg:flex items-center gap-1.5 text-sm">
+                                <span class="text-gray-500 dark:text-gray-500">Current:</span>
+                                <span class="text-gray-500 dark:text-gray-400">Queue:</span>
+                                <span class="font-semibold text-gray-700 dark:text-gray-300">'.htmlspecialchars((string) $payload->znuny_queue_name).'</span>
+                                <span class="text-gray-300 dark:text-gray-600">&middot;</span>
+                                <span class="text-gray-500 dark:text-gray-400">Owner:</span>
+                                <span class="font-semibold text-gray-700 dark:text-gray-300">'.htmlspecialchars((string) $payload->znuny_owner_name).'</span>
+                                <span class="text-gray-300 dark:text-gray-600">&middot;</span>
+                                <span class="text-gray-500 dark:text-gray-400">Customer:</span>
+                                <span class="font-semibold text-gray-700 dark:text-gray-300">'.htmlspecialchars((string) $payload->customer_user).'</span>
+                            </div>
+                        ')),
                     Select::make('target_queue')
                         ->label('Target Queue')
                         ->default($payload->znuny_queue_name)
@@ -517,10 +530,7 @@ class ZnunyTicketManagementActions
                                 }
                             }
                         }),
-                    TextInput::make('current_owner')
-                        ->label('Current Owner')
-                        ->default($payload->znuny_owner_name)
-                        ->disabled(),
+
                     Select::make('target_owner')
                         ->label('Target Owner')
                         ->default($payload->znuny_owner_name)
@@ -554,10 +564,7 @@ class ZnunyTicketManagementActions
                                 }
                             }
                         }),
-                    TextInput::make('current_customer')
-                        ->label('Current Customer')
-                        ->default($payload->customer_user)
-                        ->disabled(),
+
                     Select::make('target_customer')
                         ->label('Target Customer')
                         ->default($payload->customer_user)
