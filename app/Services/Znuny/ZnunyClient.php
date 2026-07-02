@@ -833,6 +833,34 @@ class ZnunyClient
     }
 
     /**
+     * Call /TicketMoveAssign/Validate
+     */
+    public function validateTicketMoveAssign(array $payload): array
+    {
+        return $this->withSessionRetry(function ($session) use ($payload) {
+            $payload['SessionID'] = $session;
+
+            $response = $this->request()->post($this->apiUrl().'/TicketMoveAssign/Validate', $payload);
+
+            return $this->processResponse($response);
+        });
+    }
+
+    /**
+     * Call /TicketMoveAssign
+     */
+    public function moveAssignTicket(array $payload): array
+    {
+        return $this->withSessionRetry(function ($session) use ($payload) {
+            $payload['SessionID'] = $session;
+
+            $response = $this->request()->post($this->apiUrl().'/TicketMoveAssign', $payload);
+
+            return $this->processResponse($response);
+        });
+    }
+
+    /**
      * Call /QueueByName/{Name}
      */
     public function getQueueByName(string $name): array
@@ -880,6 +908,75 @@ class ZnunyClient
             'label' => $name,
             'warnings' => $data['Warnings'] ?? [],
         ];
+    }
+
+    /**
+     * Call /Queue/:QueueID/AssignableAgents
+     */
+    public function getQueueAssignableAgents(int|string $queueId): array
+    {
+        return $this->withSessionRetry(function ($session) use ($queueId) {
+            $response = $this->request()->get($this->apiUrl().'/Queue/'.rawurlencode((string) $queueId).'/AssignableAgents', [
+                'SessionID' => $session,
+            ]);
+
+            $data = $this->processResponse($response);
+            $normalized = [];
+
+            if (! empty($data['Agents']) && is_array($data['Agents'])) {
+                foreach ($data['Agents'] as $agent) {
+                    $id = trim((string) ($agent['UserID'] ?? ''));
+                    if ($id === '') {
+                        continue;
+                    }
+                    $normalized[] = [
+                        'id' => (int) $id,
+                        'login' => trim((string) ($agent['UserLogin'] ?? '')),
+                        'first_name' => trim((string) ($agent['UserFirstname'] ?? '')),
+                        'last_name' => trim((string) ($agent['UserLastname'] ?? '')),
+                        'label' => trim((string) ($agent['UserFullname'] ?? '')),
+                    ];
+                }
+            }
+
+            usort($normalized, fn ($a, $b) => strcasecmp($a['label'], $b['label']));
+
+            return $normalized;
+        });
+    }
+
+    /**
+     * Call /Agent/:UserID/AssignableQueues
+     */
+    public function getAgentAssignableQueues(int|string $userId): array
+    {
+        return $this->withSessionRetry(function ($session) use ($userId) {
+            $response = $this->request()->get($this->apiUrl().'/Agent/'.rawurlencode((string) $userId).'/AssignableQueues', [
+                'SessionID' => $session,
+            ]);
+
+            $data = $this->processResponse($response);
+            $normalized = [];
+
+            if (! empty($data['Queues']) && is_array($data['Queues'])) {
+                foreach ($data['Queues'] as $q) {
+                    $id = trim((string) ($q['QueueID'] ?? ''));
+                    if ($id === '') {
+                        continue;
+                    }
+                    $normalized[] = [
+                        'id' => (int) $id,
+                        'name' => trim((string) ($q['Name'] ?? '')),
+                        'group_id' => trim((string) ($q['GroupID'] ?? '')),
+                        'label' => trim((string) ($q['Name'] ?? '')),
+                    ];
+                }
+            }
+
+            usort($normalized, fn ($a, $b) => strcasecmp($a['name'], $b['name']));
+
+            return $normalized;
+        });
     }
 
     /**

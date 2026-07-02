@@ -21,16 +21,13 @@ class ZabbixTicketDetailsAction
             ->modalCancelAction(false)
             ->schema(fn (Schema $schema) => ZabbixTicketInfolist::configure($schema))
             ->extraModalFooterActions(fn (Action $action): array => [
-                ZnunyTicketManagementActions::addNoteOrArticleAction('add_note_or_article'),
                 ZnunyTicketManagementActions::closeTicketAction('manual_close_ticket')
                     ->cancelParentActions(),
                 ZnunyTicketManagementActions::reopenTicketAction('reopen_ticket')
                     ->cancelParentActions(),
+                ZnunyTicketManagementActions::changeAssignmentAction('change_assignment'),
+                ZnunyTicketManagementActions::addNoteOrArticleAction('add_note_or_article'),
                 ZnunyTicketManagementActions::takeOrReleaseTicketAction('take_or_release_ticket'),
-                Action::make('cancel')
-                    ->label('Close')
-                    ->close()
-                    ->color('gray'),
                 ZnunyTicketManagementActions::openInZnunyAction('open_ticket')
                     ->extraAttributes(['class' => 'zbx-open-ticket-footer-action']),
             ]);

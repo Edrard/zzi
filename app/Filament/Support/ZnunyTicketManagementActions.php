@@ -11,9 +11,11 @@ use App\Services\Znuny\ZnunyLinkedTicketReopenService;
 use App\Services\Znuny\ZnunyTicketArticleWriteService;
 use App\Services\Znuny\ZnunyTicketWorkspaceTicketRefreshService;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Illuminate\Support\Facades\Log;
 
 class ZnunyTicketManagementActions
 {
@@ -463,6 +465,258 @@ class ZnunyTicketManagementActions
                         ->danger()
                         ->send();
                     $action->halt();
+                }
+            });
+    }
+
+    public static function changeAssignmentAction(string $name = 'change_assignment'): Action
+    {
+        return Action::make($name)
+            ->label('Change')
+            ->icon('heroicon-o-users')
+            ->color('gray')
+            ->modalHeading('Change Assignment')
+            ->form(function (array $arguments, $record = null) {
+                $payload = TicketDetailsPayload::fromRecord($record, $arguments);
+
+                return [
+                    TextInput::make('current_queue')
+                        ->label('Current Queue')
+                        ->default($payload->znuny_queue_name)
+                        ->disabled(),
+                    Select::make('target_queue')
+                        ->label('Target Queue')
+                        ->default($payload->znuny_queue_name)
+                        ->required()
+                        ->options(function ($get) {
+                            $client = app(ZnunyClient::class);
+                            $owner = $get('target_owner');
+                            if ($owner) {
+                                $agents = $client->getAgents();
+                                $agentId = collect($agents)->firstWhere('login', $owner)['id'] ?? null;
+                                if ($agentId) {
+                                    return collect($client->getAgentAssignableQueues($agentId))->pluck('label', 'name')->toArray();
+                                }
+                            }
+
+                            return collect($client->getQueues())->pluck('label', 'name')->toArray();
+                        })
+                        ->searchable()
+                        ->live()
+                        ->afterStateUpdated(function ($set, $get, ?string $state) {
+                            $owner = $get('target_owner');
+                            if ($owner && $state) {
+                                $client = app(ZnunyClient::class);
+                                $queue = $client->getQueueByName($state);
+                                if (! empty($queue['id'])) {
+                                    $agents = $client->getQueueAssignableAgents($queue['id']);
+                                    $logins = collect($agents)->pluck('login')->toArray();
+                                    if (! in_array($owner, $logins)) {
+                                        $set('target_owner', null);
+                                    }
+                                }
+                            }
+                        }),
+                    TextInput::make('current_owner')
+                        ->label('Current Owner')
+                        ->default($payload->znuny_owner_name)
+                        ->disabled(),
+                    Select::make('target_owner')
+                        ->label('Target Owner')
+                        ->default($payload->znuny_owner_name)
+                        ->required()
+                        ->options(function ($get) {
+                            $client = app(ZnunyClient::class);
+                            $queueName = $get('target_queue');
+                            if ($queueName) {
+                                $queue = $client->getQueueByName($queueName);
+                                if (! empty($queue['id'])) {
+                                    return collect($client->getQueueAssignableAgents($queue['id']))->pluck('label', 'login')->toArray();
+                                }
+                            }
+
+                            return collect($client->getAgents())->pluck('label', 'login')->toArray();
+                        })
+                        ->searchable()
+                        ->live()
+                        ->afterStateUpdated(function ($set, $get, ?string $state) {
+                            $queueName = $get('target_queue');
+                            if ($queueName && $state) {
+                                $client = app(ZnunyClient::class);
+                                $agents = $client->getAgents();
+                                $agentId = collect($agents)->firstWhere('login', $state)['id'] ?? null;
+                                if ($agentId) {
+                                    $queues = $client->getAgentAssignableQueues($agentId);
+                                    $names = collect($queues)->pluck('name')->toArray();
+                                    if (! in_array($queueName, $names)) {
+                                        $set('target_queue', null);
+                                    }
+                                }
+                            }
+                        }),
+                    TextInput::make('current_customer')
+                        ->label('Current Customer')
+                        ->default($payload->customer_user)
+                        ->disabled(),
+                    Select::make('target_customer')
+                        ->label('Target Customer')
+                        ->default($payload->customer_user)
+                        ->searchable()
+                        ->getSearchResultsUsing(function (string $search) {
+                            $client = app(ZnunyClient::class);
+
+                            return collect($client->searchCustomerUsers($search, 20))->pluck('label', 'login')->toArray();
+                        })
+                        ->getOptionLabelUsing(function ($value) {
+                            $client = app(ZnunyClient::class);
+                            $user = $client->getCustomerUser($value);
+                            if (! empty($user['found']) && ! empty($user['label'])) {
+                                return $user['label'];
+                            }
+
+                            return $value;
+                        }),
+                    Textarea::make('note')
+                        ->label('Note')
+                        ->helperText('Optional. If filled, this text will be added as an internal note after the assignment change.'),
+                ];
+            })
+            ->visible(function (array $arguments, $record = null) {
+                $payload = TicketDetailsPayload::fromRecord($record, $arguments);
+
+                return $payload->znuny_ticket_id && $payload->is_open;
+            })
+            ->action(function (array $arguments, array $data, Action $action, $record = null) {
+                $payloadInfo = TicketDetailsPayload::fromRecord($record, $arguments);
+                if (! $payloadInfo->znuny_ticket_id) {
+                    Notification::make()->title('Ticket ID missing')->danger()->send();
+                    $action->halt();
+
+                    return;
+                }
+
+                $client = app(ZnunyClient::class);
+
+                $requestPayload = [
+                    'TicketID' => $payloadInfo->znuny_ticket_id,
+                ];
+
+                $hasChange = false;
+                if (! empty($data['target_queue']) && $data['target_queue'] !== $payloadInfo->znuny_queue_name) {
+                    $requestPayload['QueueName'] = $data['target_queue'];
+                    $hasChange = true;
+                }
+
+                if (! empty($data['target_owner']) && $data['target_owner'] !== $payloadInfo->znuny_owner_name) {
+                    $requestPayload['OwnerLogin'] = $data['target_owner'];
+                    $hasChange = true;
+                }
+
+                if (! empty($data['target_customer']) && $data['target_customer'] !== $payloadInfo->customer_user) {
+                    $requestPayload['CustomerUserID'] = $data['target_customer'];
+                    $hasChange = true;
+                }
+
+                if (! $hasChange) {
+                    Notification::make()->title('No changes made')->warning()->send();
+                    $action->halt();
+
+                    return;
+                }
+
+                $operatorNote = trim($data['note'] ?? '');
+
+                if (isset($requestPayload['OwnerLogin'])) {
+                    $requestPayload['Note'] = empty($operatorNote) ? 'Assignment changed from integration UI.' : $operatorNote;
+                }
+
+                $validation = $client->validateTicketMoveAssign($requestPayload);
+
+                if (empty($validation['Valid']) || (int) $validation['Valid'] !== 1) {
+                    $messages = $validation['Errors'] ?? [];
+                    if (empty($messages)) {
+                        $messages = $validation['Warnings'] ?? [];
+                    }
+                    if (empty($messages) && ! empty($validation['RequiredNote'])) {
+                        $messages[] = 'Note is required for this assignment change.';
+                    }
+                    if (empty($messages)) {
+                        $messages = ['Validation failed'];
+                    }
+
+                    Notification::make()
+                        ->title('Validation Failed')
+                        ->body(implode(', ', $messages))
+                        ->danger()
+                        ->send();
+                    $action->halt();
+
+                    return;
+                }
+
+                $result = $client->moveAssignTicket($requestPayload);
+
+                if (empty($result['Success']) || (int) $result['Success'] !== 1) {
+                    $messages = $result['Errors'] ?? [];
+                    if (empty($messages)) {
+                        $messages = $result['Warnings'] ?? [];
+                    }
+                    if (empty($messages)) {
+                        $messages = ['Execution failed'];
+                    }
+
+                    Notification::make()
+                        ->title('Update Failed')
+                        ->body(implode(', ', $messages))
+                        ->danger()
+                        ->send();
+                    $action->halt();
+
+                    return;
+                }
+
+                $operatorNote = trim($data['note'] ?? '');
+                if (! empty($operatorNote)) {
+                    try {
+                        $articleService = app(ZnunyTicketArticleWriteService::class);
+                        $articleResult = $articleService->createTicketArticle(
+                            (string) $payloadInfo->znuny_ticket_id,
+                            'Assignment changed',
+                            $operatorNote,
+                            false
+                        );
+
+                        if (empty($articleResult['success'])) {
+                            throw new \Exception('API returned failure for article creation.');
+                        }
+                    } catch (\Exception $e) {
+                        Log::error('Assignment changed, but note could not be added: '.$e->getMessage(), ['ticket_id' => $payloadInfo->znuny_ticket_id, 'exception' => $e]);
+
+                        Notification::make()
+                            ->title('Assignment changed, but note could not be added.')
+                            ->warning()
+                            ->send();
+                    }
+                }
+
+                try {
+                    $refreshService = app(ZnunyTicketWorkspaceTicketRefreshService::class);
+                    $refreshService->refreshTicket($payloadInfo->znuny_ticket_id);
+
+                    Notification::make()
+                        ->title('Assignment Changed')
+                        ->success()
+                        ->send();
+
+                    $action->cancelParentActions();
+                } catch (\Exception $e) {
+                    Log::error('Ticket workspace refresh failed after assignment change: '.$e->getMessage(), ['ticket_id' => $payloadInfo->znuny_ticket_id, 'exception' => $e]);
+
+                    Notification::make()
+                        ->title('Assignment changed in Znuny, but local cache refresh failed.')
+                        ->body($e->getMessage())
+                        ->warning()
+                        ->send();
                 }
             });
     }

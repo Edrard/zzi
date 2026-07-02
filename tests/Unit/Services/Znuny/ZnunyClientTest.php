@@ -578,4 +578,107 @@ class ZnunyClientTest extends TestCase
         $this->assertFalse($response['success']);
         $this->assertContains('Ticket could not be unlocked.', $response['errors']);
     }
+
+    public function test_get_queue_assignable_agents_normalization()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/Queue/1/AssignableAgents*' => Http::response([
+                'Agents' => [
+                    [
+                        'UserID' => 12,
+                        'UserLogin' => 'john.doe',
+                        'UserFirstname' => 'John',
+                        'UserLastname' => 'Doe',
+                        'UserFullname' => 'John Doe',
+                    ],
+                    [
+                        'UserID' => 15,
+                        'UserLogin' => 'jane.smith',
+                        'UserFullname' => 'Jane Smith',
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $agents = $client->getQueueAssignableAgents(1);
+
+        $this->assertCount(2, $agents);
+        $this->assertEquals(15, $agents[0]['id']);
+        $this->assertEquals('jane.smith', $agents[0]['login']);
+        $this->assertEquals('Jane Smith', $agents[0]['label']);
+
+        $this->assertEquals(12, $agents[1]['id']);
+        $this->assertEquals('john.doe', $agents[1]['login']);
+        $this->assertEquals('John Doe', $agents[1]['label']);
+    }
+
+    public function test_get_agent_assignable_queues_normalization()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/Agent/12/AssignableQueues*' => Http::response([
+                'Queues' => [
+                    [
+                        'QueueID' => 2,
+                        'Name' => 'Network',
+                        'GroupID' => 5,
+                    ],
+                    [
+                        'QueueID' => 1,
+                        'Name' => 'Hardware',
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $queues = $client->getAgentAssignableQueues(12);
+
+        $this->assertCount(2, $queues);
+        $this->assertEquals(1, $queues[0]['id']);
+        $this->assertEquals('Hardware', $queues[0]['name']);
+
+        $this->assertEquals(2, $queues[1]['id']);
+        $this->assertEquals('Network', $queues[1]['name']);
+    }
+
+    public function test_validate_ticket_move_assign_passes_payload()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/TicketMoveAssign/Validate*' => function (Request $request) {
+                if ($request['TicketID'] === 123 && $request['QueueName'] === 'Raw') {
+                    return Http::response(['Valid' => 1], 200);
+                }
+
+                return Http::response(['Valid' => 0], 200);
+            },
+        ]);
+
+        $client = new ZnunyClient;
+        $response = $client->validateTicketMoveAssign(['TicketID' => 123, 'QueueName' => 'Raw']);
+
+        $this->assertEquals(1, $response['Valid']);
+    }
+
+    public function test_move_assign_ticket_passes_payload()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/TicketMoveAssign*' => function (Request $request) {
+                if ($request['TicketID'] === 123 && $request['OwnerLogin'] === 'john.doe') {
+                    return Http::response(['Success' => 1], 200);
+                }
+
+                return Http::response(['Success' => 0], 200);
+            },
+        ]);
+
+        $client = new ZnunyClient;
+        $response = $client->moveAssignTicket(['TicketID' => 123, 'OwnerLogin' => 'john.doe']);
+
+        $this->assertEquals(1, $response['Success']);
+    }
 }

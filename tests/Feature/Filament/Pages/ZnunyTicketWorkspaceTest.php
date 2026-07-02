@@ -6,10 +6,12 @@ use App\Filament\Pages\ZnunyTicketWorkspace;
 use App\Models\AuditLog;
 use App\Models\Setting;
 use App\Models\User;
+use App\Services\SettingsService;
 use App\Services\Znuny\ClosedTicketCacheService;
 use App\Services\Znuny\ClosedTicketSyncService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyLinkedTicketReopenService;
+use App\Services\Znuny\ZnunyTicketArticleWriteService;
 use App\Services\Znuny\ZnunyTicketCacheService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -1175,5 +1177,383 @@ class ZnunyTicketWorkspaceTest extends TestCase
         $component->mountAction('take_or_release_ticket', ['znuny_ticket_id' => 205])
             ->callMountedAction()
             ->assertNotified('Take Failed');
+    }
+
+    public function test_change_assignment_action_validates_and_executes_then_refreshes()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        Http::fake([
+            'https://example.invalid/api/*' => Http::response(['SessionID' => 'fake'], 200),
+        ]);
+
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
+        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
+
+        $this->seedTicket(['TicketID' => 305, 'TicketNumber' => 'TN305', 'StateType' => 'open']);
+
+        $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
+        $mockClient->shouldReceive('getTicket')->with(305)->andReturn([
+            'TicketID' => 305,
+            'ArticleCount' => 1,
+            'LastArticleID' => 1,
+        ]);
+        $mockClient->shouldReceive('getAgents')->andReturn([['id' => 1, 'login' => 'new.owner', 'label' => 'New Owner']]);
+        $mockClient->shouldReceive('getQueues')->andReturn([['id' => 1, 'name' => 'Different Queue', 'label' => 'Different Queue']]);
+        $mockClient->shouldReceive('getAgentAssignableQueues')->andReturn([['id' => 1, 'name' => 'Different Queue', 'label' => 'Different Queue']]);
+        $mockClient->shouldReceive('getQueueAssignableAgents')->andReturn([['id' => 1, 'login' => 'new.owner', 'label' => 'New Owner']]);
+        $mockClient->shouldReceive('getCustomerUser')->andReturn(['found' => true, 'label' => 'customer.1']);
+        $mockClient->shouldReceive('validateTicketMoveAssign')->once()->andReturn(['Valid' => 1]);
+        $mockClient->shouldReceive('moveAssignTicket')->once()->andReturn(['Success' => 1]);
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        $component = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 305]);
+
+        $component->mountAction('change_assignment', ['znuny_ticket_id' => 305])
+            ->setActionData([
+                'target_queue' => 'Different Queue',
+                'target_owner' => 'new.owner',
+                'target_customer' => 'customer.1',
+                'note' => 'Changing assignment',
+            ])
+            ->callMountedAction()
+            ->assertNotified('Assignment Changed');
+    }
+
+    public function test_change_assignment_action_button_label_and_footer_order()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        Http::fake([
+            'https://example.invalid/api/*' => Http::response(['SessionID' => 'fake'], 200),
+        ]);
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
+        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
+
+        $this->seedTicket(['TicketID' => 306, 'TicketNumber' => 'TN306', 'StateType' => 'open']);
+
+        $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
+        $mockClient->shouldReceive('getAgents')->andReturn([['id' => 1, 'login' => 'old.owner', 'label' => 'old.owner']]);
+        $mockClient->shouldReceive('getQueues')->andReturn([['id' => 1, 'name' => 'old.queue', 'label' => 'old.queue']]);
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        $component = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 306]);
+
+        $viewAction = $component->instance()->getMountedAction();
+        $footerActions = array_values($viewAction->getExtraModalFooterActions());
+
+        $this->assertEquals('manual_close_ticket', $footerActions[0]->getName());
+        $this->assertEquals('change_assignment', $footerActions[2]->getName());
+        $this->assertEquals('add_note_or_article', $footerActions[3]->getName());
+        $this->assertEquals('take_or_release_ticket', $footerActions[4]->getName());
+        $this->assertEquals('open_ticket', $footerActions[5]->getName());
+
+        $this->assertEquals('Change', $footerActions[2]->getLabel());
+        $this->assertEquals('Change Assignment', $footerActions[2]->getModalHeading());
+    }
+
+    public function test_change_assignment_owner_change_with_empty_note_sends_fallback_and_no_article()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        Http::fake([
+            'https://example.invalid/api/*' => Http::response(['SessionID' => 'fake'], 200),
+        ]);
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
+        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
+
+        $this->seedTicket(['TicketID' => 307, 'TicketNumber' => 'TN307', 'StateType' => 'open', 'Owner' => 'old.owner']);
+
+        $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
+        $mockClient->shouldReceive('getTicket')->with(307)->andReturn([
+            'TicketID' => 307,
+            'ArticleCount' => 1,
+            'LastArticleID' => 1,
+        ]);
+        $mockClient->shouldReceive('getAgents')->andReturn([['id' => 1, 'login' => 'old.owner', 'label' => 'old.owner'], ['id' => 2, 'login' => 'new.owner', 'label' => 'new.owner']]);
+        $mockClient->shouldReceive('getQueues')->andReturn([['id' => 1, 'name' => 'old.queue', 'label' => 'old.queue']]);
+        $mockClient->shouldReceive('getAgentAssignableQueues')->andReturn([['id' => 1, 'name' => 'old.queue', 'label' => 'old.queue']]);
+        $mockClient->shouldReceive('getQueueAssignableAgents')->andReturn([['id' => 1, 'login' => 'old.owner', 'label' => 'old.owner'], ['id' => 2, 'login' => 'new.owner', 'label' => 'new.owner']]);
+        $mockClient->shouldReceive('getCustomerUser')->andReturn(['found' => true, 'label' => 'customer.1']);
+        $mockClient->shouldReceive('validateTicketMoveAssign')->with(\Mockery::on(function ($payload) {
+            return $payload['Note'] === 'Assignment changed from integration UI.';
+        }))->once()->andReturn(['Valid' => 1]);
+        $mockClient->shouldReceive('moveAssignTicket')->once()->andReturn(['Success' => 1]);
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        $articleServiceMock = \Mockery::mock(ZnunyTicketArticleWriteService::class);
+        $articleServiceMock->shouldReceive('createTicketArticle')->never();
+        $this->app->instance(ZnunyTicketArticleWriteService::class, $articleServiceMock);
+
+        $component = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 307]);
+
+        $component->mountAction('change_assignment', ['znuny_ticket_id' => 307])
+            ->setActionData([
+                'target_queue' => 'old.queue',
+                'target_owner' => 'new.owner',
+                'target_customer' => 'customer.1',
+                'note' => null,
+            ])
+            ->callMountedAction()
+            ->assertNotified('Assignment Changed');
+    }
+
+    public function test_change_assignment_owner_change_with_note_sends_note_and_creates_article()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        Http::fake([
+            'https://example.invalid/api/*' => Http::response(['SessionID' => 'fake'], 200),
+        ]);
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
+        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
+
+        $this->seedTicket(['TicketID' => 307, 'TicketNumber' => 'TN307', 'StateType' => 'open', 'Owner' => 'old.owner']);
+
+        $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
+        $mockClient->shouldReceive('getTicket')->with(307)->andReturn([
+            'TicketID' => 307,
+            'ArticleCount' => 1,
+            'LastArticleID' => 1,
+        ]);
+        $mockClient->shouldReceive('getAgents')->andReturn([['id' => 1, 'login' => 'old.owner', 'label' => 'old.owner'], ['id' => 2, 'login' => 'new.owner', 'label' => 'new.owner']]);
+        $mockClient->shouldReceive('getQueues')->andReturn([['id' => 1, 'name' => 'old.queue', 'label' => 'old.queue']]);
+        $mockClient->shouldReceive('getAgentAssignableQueues')->andReturn([['id' => 1, 'name' => 'old.queue', 'label' => 'old.queue']]);
+        $mockClient->shouldReceive('getQueueAssignableAgents')->andReturn([['id' => 1, 'login' => 'old.owner', 'label' => 'old.owner'], ['id' => 2, 'login' => 'new.owner', 'label' => 'new.owner']]);
+        $mockClient->shouldReceive('getCustomerUser')->andReturn(['found' => true, 'label' => 'customer.1']);
+        $mockClient->shouldReceive('validateTicketMoveAssign')->with(\Mockery::on(function ($payload) {
+            return $payload['Note'] === 'My new note';
+        }))->once()->andReturn(['Valid' => 1]);
+        $mockClient->shouldReceive('moveAssignTicket')->once()->andReturn(['Success' => 1]);
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        $articleServiceMock = \Mockery::mock(ZnunyTicketArticleWriteService::class);
+        $articleServiceMock->shouldReceive('createTicketArticle')->once()->with('307', 'Assignment changed', 'My new note', false)->andReturn(['success' => true]);
+        $this->app->instance(ZnunyTicketArticleWriteService::class, $articleServiceMock);
+
+        $component = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 307]);
+
+        $component->mountAction('change_assignment', ['znuny_ticket_id' => 307])
+            ->setActionData([
+                'target_queue' => 'old.queue',
+                'target_owner' => 'new.owner',
+                'target_customer' => 'customer.1',
+                'note' => 'My new note',
+            ])
+            ->callMountedAction()
+            ->assertNotified('Assignment Changed');
+    }
+
+    public function test_change_assignment_queue_change_with_note_creates_article()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        Http::fake([
+            'https://example.invalid/api/*' => Http::response(['SessionID' => 'fake'], 200),
+        ]);
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
+        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
+
+        $this->seedTicket(['TicketID' => 307, 'TicketNumber' => 'TN307', 'StateType' => 'open', 'Owner' => 'old.owner', 'Queue' => 'old.queue']);
+
+        $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
+        $mockClient->shouldReceive('getTicket')->with(307)->andReturn([
+            'TicketID' => 307,
+            'ArticleCount' => 1,
+            'LastArticleID' => 1,
+        ]);
+        $mockClient->shouldReceive('getAgents')->andReturn([['id' => 1, 'login' => 'old.owner', 'label' => 'old.owner']]);
+        $mockClient->shouldReceive('getQueues')->andReturn([['id' => 1, 'name' => 'old.queue', 'label' => 'old.queue'], ['id' => 2, 'name' => 'new.queue', 'label' => 'new.queue']]);
+        $mockClient->shouldReceive('getAgentAssignableQueues')->andReturn([['id' => 2, 'name' => 'new.queue', 'label' => 'new.queue']]);
+        $mockClient->shouldReceive('getQueueAssignableAgents')->andReturn([['id' => 1, 'login' => 'old.owner', 'label' => 'old.owner']]);
+        $mockClient->shouldReceive('getCustomerUser')->andReturn(['found' => true, 'label' => 'customer.1']);
+        $mockClient->shouldReceive('validateTicketMoveAssign')->with(\Mockery::on(function ($payload) {
+            return ! isset($payload['Note']);
+        }))->once()->andReturn(['Valid' => 1]);
+        $mockClient->shouldReceive('moveAssignTicket')->once()->andReturn(['Success' => 1]);
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        $articleServiceMock = \Mockery::mock(ZnunyTicketArticleWriteService::class);
+        $articleServiceMock->shouldReceive('createTicketArticle')->once()->with('307', 'Assignment changed', 'Queue changed note', false)->andReturn(['success' => true]);
+        $this->app->instance(ZnunyTicketArticleWriteService::class, $articleServiceMock);
+
+        $component = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 307]);
+
+        $component->mountAction('change_assignment', ['znuny_ticket_id' => 307])
+            ->setActionData([
+                'target_queue' => 'new.queue',
+                'target_owner' => 'old.owner',
+                'note' => 'Queue changed note',
+            ])
+            ->callMountedAction()
+            ->assertNotified('Assignment Changed');
+    }
+
+    public function test_change_assignment_validation_failure_no_article()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        Http::fake([
+            'https://example.invalid/api/*' => Http::response(['SessionID' => 'fake'], 200),
+        ]);
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
+        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
+
+        $this->seedTicket(['TicketID' => 308, 'TicketNumber' => 'TN308', 'StateType' => 'open', 'Queue' => 'old.queue', 'Owner' => 'old.owner']);
+
+        $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
+        $mockClient->shouldReceive('getAgents')->andReturn([['id' => 1, 'login' => 'old.owner', 'label' => 'old.owner']]);
+        $mockClient->shouldReceive('getQueues')->andReturn([['id' => 1, 'name' => 'old.queue', 'label' => 'old.queue'], ['id' => 2, 'name' => 'new.queue', 'label' => 'new.queue']]);
+        $mockClient->shouldReceive('getAgentAssignableQueues')->andReturn([['id' => 1, 'name' => 'new.queue', 'label' => 'new.queue']]);
+        $mockClient->shouldReceive('getQueueAssignableAgents')->andReturn([['id' => 1, 'login' => 'old.owner', 'label' => 'old.owner']]);
+        $mockClient->shouldReceive('validateTicketMoveAssign')->once()->andReturn(['Valid' => 0, 'Errors' => ['Invalid Queue']]);
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        $articleServiceMock = \Mockery::mock(ZnunyTicketArticleWriteService::class);
+        $articleServiceMock->shouldReceive('createTicketArticle')->never();
+        $this->app->instance(ZnunyTicketArticleWriteService::class, $articleServiceMock);
+
+        $component = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 308]);
+
+        $component->mountAction('change_assignment', ['znuny_ticket_id' => 308])
+            ->setActionData([
+                'target_queue' => 'new.queue',
+                'target_owner' => 'old.owner',
+                'note' => 'Should not create article',
+            ])
+            ->callMountedAction()
+            ->assertNotified('Validation Failed');
+    }
+
+    public function test_change_assignment_execution_failure_no_article()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        Http::fake([
+            'https://example.invalid/api/*' => Http::response(['SessionID' => 'fake'], 200),
+        ]);
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
+        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
+
+        $this->seedTicket(['TicketID' => 308, 'TicketNumber' => 'TN308', 'StateType' => 'open', 'Queue' => 'old.queue', 'Owner' => 'old.owner']);
+
+        $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
+        $mockClient->shouldReceive('getAgents')->andReturn([['id' => 1, 'login' => 'old.owner', 'label' => 'old.owner']]);
+        $mockClient->shouldReceive('getQueues')->andReturn([['id' => 1, 'name' => 'old.queue', 'label' => 'old.queue'], ['id' => 2, 'name' => 'new.queue', 'label' => 'new.queue']]);
+        $mockClient->shouldReceive('getAgentAssignableQueues')->andReturn([['id' => 1, 'name' => 'new.queue', 'label' => 'new.queue']]);
+        $mockClient->shouldReceive('getQueueAssignableAgents')->andReturn([['id' => 1, 'login' => 'old.owner', 'label' => 'old.owner']]);
+        $mockClient->shouldReceive('validateTicketMoveAssign')->once()->andReturn(['Valid' => 1]);
+        $mockClient->shouldReceive('moveAssignTicket')->once()->andReturn(['Success' => 0, 'Errors' => ['System error']]);
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        $articleServiceMock = \Mockery::mock(ZnunyTicketArticleWriteService::class);
+        $articleServiceMock->shouldReceive('createTicketArticle')->never();
+        $this->app->instance(ZnunyTicketArticleWriteService::class, $articleServiceMock);
+
+        $component = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 308]);
+
+        $component->mountAction('change_assignment', ['znuny_ticket_id' => 308])
+            ->setActionData([
+                'target_queue' => 'new.queue',
+                'target_owner' => 'old.owner',
+                'note' => 'Should not create article',
+            ])
+            ->callMountedAction()
+            ->assertNotified('Update Failed');
+    }
+
+    public function test_change_assignment_action_blocks_empty_queue_or_owner()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        Http::fake([
+            'https://example.invalid/api/*' => Http::response(['SessionID' => 'fake'], 200),
+        ]);
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
+        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
+
+        $this->seedTicket(['TicketID' => 308, 'TicketNumber' => 'TN308', 'StateType' => 'open', 'Queue' => 'old.queue', 'Owner' => 'old.owner']);
+
+        $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
+        $mockClient->shouldReceive('getAgents')->andReturn([['id' => 1, 'login' => 'old.owner', 'label' => 'old.owner']]);
+        $mockClient->shouldReceive('getQueues')->andReturn([['id' => 1, 'name' => 'old.queue', 'label' => 'old.queue'], ['id' => 2, 'name' => 'new.queue', 'label' => 'new.queue']]);
+        $mockClient->shouldReceive('getAgentAssignableQueues')->andReturn([['id' => 1, 'name' => 'new.queue', 'label' => 'new.queue']]);
+        $mockClient->shouldReceive('getQueueAssignableAgents')->andReturn([['id' => 1, 'login' => 'old.owner', 'label' => 'old.owner']]);
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        $component = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 308]);
+
+        $component->mountAction('change_assignment', ['znuny_ticket_id' => 308])
+            ->setActionData([
+                'target_queue' => 'new.queue',
+                'target_owner' => '', // This is empty
+            ])
+            ->callMountedAction()
+            ->assertHasActionErrors(['target_owner' => 'required']);
+    }
+
+    public function test_change_assignment_action_shows_warning_when_refresh_fails()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        Http::fake([
+            'https://example.invalid/api/*' => Http::response(['SessionID' => 'fake'], 200),
+        ]);
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
+        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
+
+        $this->seedTicket(['TicketID' => 309, 'TicketNumber' => 'TN309', 'StateType' => 'open', 'Owner' => 'old.owner']);
+
+        $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
+        $mockClient->shouldReceive('getAgents')->andReturn([['id' => 1, 'login' => 'old.owner', 'label' => 'old.owner'], ['id' => 2, 'login' => 'new.owner', 'label' => 'new.owner']]);
+        $mockClient->shouldReceive('getQueues')->andReturn([['id' => 1, 'name' => 'Different Queue', 'label' => 'Different Queue']]);
+        $mockClient->shouldReceive('getAgentAssignableQueues')->andReturn([['id' => 1, 'name' => 'Different Queue', 'label' => 'Different Queue']]);
+        $mockClient->shouldReceive('getQueueAssignableAgents')->andReturn([['id' => 2, 'login' => 'new.owner', 'label' => 'new.owner']]);
+        $mockClient->shouldReceive('validateTicketMoveAssign')->once()->andReturn(['Valid' => 1]);
+        $mockClient->shouldReceive('moveAssignTicket')->once()->andReturn(['Success' => 1]);
+        $mockClient->shouldReceive('getTicket')->andThrow(new \Exception('API offline'));
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        $articleServiceMock = \Mockery::mock(ZnunyTicketArticleWriteService::class);
+        $articleServiceMock->shouldReceive('createTicketArticle')->once()->with('309', 'Assignment changed', 'refresh fail test', false)->andReturn(['success' => true]);
+        $this->app->instance(ZnunyTicketArticleWriteService::class, $articleServiceMock);
+
+        $component = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 309]);
+
+        $component->mountAction('change_assignment', ['znuny_ticket_id' => 309])
+            ->setActionData([
+                'target_queue' => 'Different Queue',
+                'target_owner' => 'new.owner',
+                'note' => 'refresh fail test',
+            ])
+            ->callMountedAction()
+            ->assertNotified('Assignment changed in Znuny, but local cache refresh failed.');
     }
 }
