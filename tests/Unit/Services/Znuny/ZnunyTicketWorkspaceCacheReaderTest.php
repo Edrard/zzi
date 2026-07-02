@@ -3,6 +3,7 @@
 namespace Tests\Unit\Services\Znuny;
 
 use App\Models\ZabbixTicket;
+use App\Services\Zabbix\ZabbixProblemCache;
 use App\Services\Znuny\ZnunyTicketCacheService;
 use App\Services\Znuny\ZnunyTicketWorkspaceCacheReader;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -146,7 +147,7 @@ class ZnunyTicketWorkspaceCacheReaderTest extends TestCase
 
     public function test_linked_problem_warning_logic()
     {
-        $this->mock(\App\Services\Zabbix\ZabbixProblemCache::class, function ($mock) {
+        $this->mock(ZabbixProblemCache::class, function ($mock) {
             $mock->shouldReceive('find')->with('evt-1')->andReturn(['name' => 'Active Problem 1', 'severity' => 2]);
             $mock->shouldReceive('find')->with('evt-2')->andReturn(['name' => 'Active Problem 2', 'severity' => 2]);
             $mock->shouldReceive('find')->with('evt-3')->andReturn(['name' => 'Active Problem 3', 'severity' => 2]);
@@ -187,7 +188,7 @@ class ZnunyTicketWorkspaceCacheReaderTest extends TestCase
             'znuny_ticket_number' => 'TN104',
         ]);
 
-        $reader = app(\App\Services\Znuny\ZnunyTicketWorkspaceCacheReader::class);
+        $reader = app(ZnunyTicketWorkspaceCacheReader::class);
         $res = $reader->getTicketsPaginated(['state_types' => ['new', 'open', 'closed']], 1, 50);
         $tickets = collect($res['rows'])->keyBy('TicketID');
 

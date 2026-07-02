@@ -805,6 +805,11 @@
                         </tr>
                     </thead>
 
+                    @php
+                        $hasAttentionHighlights = \App\Services\SettingsService::bool('zabbix_attention_highlighting_enabled', false);
+                        $attentionStyle = $hasAttentionHighlights ? app(\App\Services\Zabbix\ZabbixAttentionHighlightStyleService::class)->getHighlightStyle() : '';
+                    @endphp
+
                     @foreach($problems as $problem)
                         @php
                             $severityValue = (int) ($problem['severity'] ?? 0);
@@ -846,10 +851,22 @@
                                     @endif
                                 </td>
                                 <td class="zbx-host-col">
+                                    @if(($problem['attention_matched'] ?? false) && $hasAttentionHighlights)
+                                        <span style="{{ $attentionStyle }}">
+                                    @endif
                                     {{ $problem['host_name'] ?? 'Unknown host' }}
+                                    @if(($problem['attention_matched'] ?? false) && $hasAttentionHighlights)
+                                        </span>
+                                    @endif
                                 </td>
                                 <td>
+                                    @if(($problem['attention_matched'] ?? false) && $hasAttentionHighlights)
+                                        <span style="{{ $attentionStyle }}">
+                                    @endif
                                     {{ $problem['name'] ?? '' }}
+                                    @if(($problem['attention_matched'] ?? false) && $hasAttentionHighlights)
+                                        </span>
+                                    @endif
                                 </td>
                                 <td style="text-align: right;">
                                     {{ $this->formatAge($ageSeconds) }}

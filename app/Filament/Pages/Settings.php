@@ -6,6 +6,7 @@ use App\Models\Setting;
 use App\Services\AuditLogger;
 use App\Services\SettingsAuditLogService;
 use App\Services\SettingsService;
+use App\Services\Zabbix\ZabbixAttentionHighlightStyleService;
 use App\Services\Zabbix\ZabbixClient;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyDefaultAgentSchemaBuilder;
@@ -867,35 +868,6 @@ class Settings extends Page implements HasForms
         ];
     }
 
-    private function getHighlightColorHex(string $color, ?string $customHex): string
-    {
-        if ($color === 'custom_hex') {
-            $hex = '#'.ltrim(strtoupper(trim((string) $customHex)), '#');
-
-            return preg_match('/^#[0-9A-Fa-f]{6}$/', $hex) ? $hex : '#7FFFD4';
-        }
-
-        $presets = [
-            'aquamarine' => '#7FFFD4',
-            'white' => '#FFFFFF',
-            'gray' => '#9CA3AF',
-            'red' => '#EF4444',
-            'orange' => '#F97316',
-            'amber' => '#F59E0B',
-            'yellow' => '#EAB308',
-            'lime' => '#84CC16',
-            'green' => '#22C55E',
-            'emerald' => '#10B981',
-            'cyan' => '#06B6D4',
-            'sky' => '#0EA5E9',
-            'blue' => '#3B82F6',
-            'violet' => '#8B5CF6',
-            'pink' => '#EC4899',
-        ];
-
-        return $presets[$color] ?? '#7FFFD4';
-    }
-
     private function generateHighlightPreview(callable $get): string
     {
         $text = 'Kreisel fastiv ipmi01[main]';
@@ -904,7 +876,9 @@ class Settings extends Page implements HasForms
             return $text;
         }
 
-        $textColor = $this->getHighlightColorHex(
+        $service = app(ZabbixAttentionHighlightStyleService::class);
+
+        $textColor = $service->getHighlightColorHex(
             (string) $get('zabbix_attention_highlight_text_color'),
             (string) $get('zabbix_attention_highlight_text_custom_hex')
         );
@@ -914,7 +888,7 @@ class Settings extends Page implements HasForms
         $underlineStyle = (string) $get('zabbix_attention_highlight_underline_style');
 
         if ($underlineStyle !== 'disabled') {
-            $underlineColor = $this->getHighlightColorHex(
+            $underlineColor = $service->getHighlightColorHex(
                 (string) $get('zabbix_attention_highlight_underline_color'),
                 (string) $get('zabbix_attention_highlight_underline_custom_hex')
             );

@@ -491,7 +491,7 @@ class SettingsLivewireTest extends TestCase
                     $name = $c->getName();
                     if ($name && ! in_array($name, ['SettingsTabs', 'data', 'saveBottom', 'save'])) {
                         // Skip actions or placeholders that are not actual setting keys
-                        if (! str_contains($name, 'testZnunyConnection') && ! str_starts_with($name, 'tester_help_') && $name !== 'testZabbixConnection' && $name !== 'zabbix_tester_help' && $name !== 'host_prefix' && $name !== 'queue_name' && $name !== 'note' && $name !== 'auto_tickets_placeholder') {
+                        if (! str_contains($name, 'testZnunyConnection') && ! str_starts_with($name, 'tester_help_') && $name !== 'testZabbixConnection' && $name !== 'zabbix_tester_help' && $name !== 'host_prefix' && $name !== 'queue_name' && $name !== 'note' && $name !== 'auto_tickets_placeholder' && $name !== 'problem_highlighting_preview') {
                             $formKeys[] = $name;
                         }
                     }
@@ -638,6 +638,21 @@ class SettingsLivewireTest extends TestCase
             ['key' => 'zabbix_attention_highlight_text_custom_hex'],
             ['type' => 'string', 'value' => '#123456']
         );
+
+        $validRequiredFields = [
+            'zabbix_api_url' => 'http://localhost/zabbix',
+            'znuny_api_url' => 'http://localhost/znuny',
+            'znuny_web_url' => 'http://localhost/znuny',
+            'znuny_username' => 'testuser',
+            'znuny_password' => 'testpass',
+        ];
+
+        foreach ($validRequiredFields as $key => $val) {
+            Setting::updateOrCreate(
+                ['key' => $key],
+                ['type' => 'string', 'value' => $val]
+            );
+        }
 
         $component = Livewire::actingAs($admin)->test(Settings::class);
 

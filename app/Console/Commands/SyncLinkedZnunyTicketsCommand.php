@@ -43,7 +43,7 @@ class SyncLinkedZnunyTicketsCommand extends Command
         try {
             $stats = $syncService->sync($batchSize, $ticketId);
         } catch (\Throwable $e) {
-            $this->error('Sync failed: ' . $e->getMessage());
+            $this->error('Sync failed: '.$e->getMessage());
 
             if ($shouldAudit) {
                 AuditLogger::log(

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Services\AuditLogger;
 use App\Services\SettingsService;
+use App\Services\Zabbix\ZabbixAttentionFilterMatcher;
 use App\Services\Zabbix\ZabbixClient;
 use App\Services\Zabbix\ZabbixProblemCache;
 use App\Services\Zabbix\ZabbixProblemFilterMatcher;
@@ -106,6 +107,7 @@ class PollZabbixProblems extends Command
             }
 
             $matcher = ZabbixProblemFilterMatcher::load();
+            $attentionMatcher = ZabbixAttentionFilterMatcher::load();
             $excludeSuppressed = SettingsService::bool('zabbix_exclude_suppressed_problems', true);
 
             $cachedCount = 0;
@@ -273,6 +275,11 @@ class PollZabbixProblems extends Command
 
                     continue;
                 }
+
+                $attentionMetadata = $attentionMatcher->match($normalized);
+                $normalized['attention_matched'] = $attentionMetadata['attention_matched'];
+                $normalized['attention_filter_ids'] = $attentionMetadata['attention_filter_ids'];
+                $normalized['attention_filter_names'] = $attentionMetadata['attention_filter_names'];
 
                 $normalizedProblems[] = $normalized;
                 $cachedCount++;
