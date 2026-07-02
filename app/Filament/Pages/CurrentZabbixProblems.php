@@ -12,6 +12,7 @@ use App\Services\Zabbix\ZabbixProblemQueryService;
 use App\Services\Zabbix\ZabbixTicketStatusPresenter;
 use App\Services\Znuny\ZabbixTicketLinkService;
 use App\Services\Znuny\ZnunyAgentService;
+use App\Services\Znuny\ZnunyAssignmentDependencyService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyManualTicketLifecycleService;
 use App\Services\Znuny\ZnunyTicketCreationService;
@@ -384,13 +385,28 @@ class CurrentZabbixProblems extends Page
         $stateBuilder = app(ZnunyTicketModalStateBuilder::class);
         $state = $stateBuilder->buildState($problem['host_name'] ?? '');
 
-        $this->ticketOwnerOptions = $state['agent_options'];
-        $this->ticketQueueOptions = $state['queue_options'];
-        $this->ticketOwnerId = $state['default_owner_id'];
+        $this->ticketOwnerId = ! empty($state['default_owner_id']) ? (string) $state['default_owner_id'] : null;
         $this->ticketQueue = $state['default_queue'];
         $this->ticketCustomerUser = $state['default_customer_user'];
         $this->ticketCustomerUserOptions = $state['customer_user_options'];
         $this->ticketDefaultWarnings = $state['warnings'];
+
+        $dependencyService = app(ZnunyAssignmentDependencyService::class);
+
+        $this->ticketOwnerOptions = $dependencyService->getOwnerOptionsForQueue($this->ticketQueue);
+        $this->ticketQueueOptions = $dependencyService->getQueueOptionsForOwnerId($this->ticketOwnerId);
+
+        if ($this->ticketQueue && $this->ticketOwnerId) {
+            if (! $dependencyService->isOwnerValidForQueue($this->ticketOwnerId, $this->ticketQueue)) {
+                $this->ticketOwnerId = null;
+                $this->ticketDefaultWarnings[] = 'Default owner cleared because it is not assignable to the default queue.';
+                $this->ticketOwnerOptions = $dependencyService->getOwnerOptionsForQueue($this->ticketQueue);
+            }
+        } elseif ($this->ticketQueue) {
+            $this->ticketOwnerOptions = $dependencyService->getOwnerOptionsForQueue($this->ticketQueue);
+        } elseif ($this->ticketOwnerId) {
+            $this->ticketQueueOptions = $dependencyService->getQueueOptionsForOwnerId($this->ticketOwnerId);
+        }
 
         $textBuilder = app(ZnunyTicketTextBuilder::class);
         $text = $textBuilder->build($problem);
@@ -404,6 +420,36 @@ class CurrentZabbixProblems extends Page
 
         $this->isTicketModalOpen = true;
         $this->dispatch('open-modal', id: 'create-ticket-modal');
+    }
+
+    public function updatedTicketQueue(?string $queueName): void
+    {
+        $dependencyService = app(ZnunyAssignmentDependencyService::class);
+        $this->ticketOwnerOptions = $dependencyService->getOwnerOptionsForQueue($queueName);
+
+        if ($this->ticketOwnerId && ! array_key_exists((string) $this->ticketOwnerId, $this->ticketOwnerOptions)) {
+            $this->ticketOwnerId = null;
+            Notification::make()
+                ->title('Owner Cleared')
+                ->body('The previously selected owner is not assignable to the newly selected queue.')
+                ->warning()
+                ->send();
+        }
+    }
+
+    public function updatedTicketOwnerId(?string $ownerId): void
+    {
+        $dependencyService = app(ZnunyAssignmentDependencyService::class);
+        $this->ticketQueueOptions = $dependencyService->getQueueOptionsForOwnerId($ownerId);
+
+        if ($this->ticketQueue && ! array_key_exists($this->ticketQueue, $this->ticketQueueOptions)) {
+            $this->ticketQueue = null;
+            Notification::make()
+                ->title('Queue Cleared')
+                ->body('The previously selected queue is not assignable to the newly selected owner.')
+                ->warning()
+                ->send();
+        }
     }
 
     public function closeCreateTicketModal(): void
@@ -449,7 +495,7 @@ class CurrentZabbixProblems extends Page
             $results = $client->searchCustomerUsers($search, 20);
             $options = [];
             foreach ($results as $res) {
-                $options[$res['login']] = $res['label'];
+                $options[$res['login']] = $res['label'] ?? $res['login'];
             }
             $this->ticketCustomerUserOptions = $options;
         } catch (\Throwable $e) {
@@ -495,6 +541,22 @@ class CurrentZabbixProblems extends Page
         try {
             $this->ticketValidationErrors = [];
             $this->ticketValidationWarnings = [];
+
+            if (empty($this->ticketOwnerId) || empty($this->ticketQueue) || empty($this->ticketCustomerUser)) {
+                $this->ticketValidationErrors[] = 'Owner, Queue, and CustomerUser are required.';
+                $this->ticketValidationStatus = 'error';
+
+                return;
+            }
+
+            $dependencyService = app(ZnunyAssignmentDependencyService::class);
+            if (! $dependencyService->isOwnerValidForQueue($this->ticketOwnerId, $this->ticketQueue)) {
+                $this->ticketValidationErrors[] = 'The selected owner is not assignable to the selected queue.';
+                $this->ticketValidationStatus = 'error';
+
+                return;
+            }
+
             $this->ticketValidationStatus = 'validating';
 
             $hostId = (string) ($this->ticketModalProblem['hosts'][0]['hostid'] ?? '');

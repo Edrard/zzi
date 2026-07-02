@@ -929,12 +929,16 @@ class ZnunyClient
                     if ($id === '') {
                         continue;
                     }
+                    $fullname = trim((string) ($agent['UserFullname'] ?? ''));
+                    $login = trim((string) ($agent['UserLogin'] ?? ''));
+                    $label = ($fullname !== '') ? "{$fullname} <{$login}>" : $login;
+
                     $normalized[] = [
                         'id' => (int) $id,
-                        'login' => trim((string) ($agent['UserLogin'] ?? '')),
+                        'login' => $login,
                         'first_name' => trim((string) ($agent['UserFirstname'] ?? '')),
                         'last_name' => trim((string) ($agent['UserLastname'] ?? '')),
-                        'label' => trim((string) ($agent['UserFullname'] ?? '')),
+                        'label' => $label,
                     ];
                 }
             }

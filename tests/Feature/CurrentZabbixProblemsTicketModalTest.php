@@ -10,6 +10,7 @@ use App\Models\ZabbixTicket;
 use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixProblemCache;
 use App\Services\Znuny\ZnunyAgentService;
+use App\Services\Znuny\ZnunyAssignmentDependencyService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketArticleWriteService;
 use App\Services\Znuny\ZnunyTicketCreationService;
@@ -133,6 +134,11 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             '*example.invalid/api/Queue?*' => Http::response([
                 'Queues' => [
                     ['QueueID' => 1, 'Name' => 'TestCompany', 'ValidID' => 1],
+                ],
+            ], 200),
+            '*example.invalid/api/Queue/1/AssignableAgents*' => Http::response([
+                'Agents' => [
+                    ['UserID' => 10, 'UserLogin' => 'agent1', 'UserFullname' => 'Agent One'],
                 ],
             ], 200),
             '*example.invalid/api/CustomerUser*' => Http::response([
@@ -274,6 +280,11 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
                 'warnings' => ['Minor warning'],
             ]);
 
+        $dependencyMock = $this->mock(ZnunyAssignmentDependencyService::class);
+        $dependencyMock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
+        $dependencyMock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One']);
+        $dependencyMock->shouldReceive('getQueueOptionsForOwnerId')->andReturn(['TestCompany' => 'TestCompany']);
+
         Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
             // Initializing necessary state that would be populated by opening the modal
@@ -317,6 +328,11 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             'warnings' => [],
         ]);
 
+        $dependencyMock = $this->mock(ZnunyAssignmentDependencyService::class);
+        $dependencyMock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
+        $dependencyMock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One']);
+        $dependencyMock->shouldReceive('getQueueOptionsForOwnerId')->andReturn(['TestCompany' => 'TestCompany']);
+
         Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
             ->set('ticketModalEventId', '1005')
@@ -356,6 +372,11 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
                 'errors' => ['CustomerUser not found.'],
                 'warnings' => [],
             ]);
+
+        $dependencyMock = $this->mock(ZnunyAssignmentDependencyService::class);
+        $dependencyMock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
+        $dependencyMock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One']);
+        $dependencyMock->shouldReceive('getQueueOptionsForOwnerId')->andReturn(['TestCompany' => 'TestCompany']);
 
         Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
@@ -406,6 +427,11 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
                 'errors' => ['A ticket is already linked to this Zabbix event.'],
             ]);
 
+        $dependencyMock = $this->mock(ZnunyAssignmentDependencyService::class);
+        $dependencyMock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
+        $dependencyMock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One']);
+        $dependencyMock->shouldReceive('getQueueOptionsForOwnerId')->andReturn(['TestCompany' => 'TestCompany']);
+
         Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
             ->set('ticketModalEventId', '1001')
@@ -438,6 +464,11 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
                 'errors' => ['Znuny ticket was created but linking to Zabbix problem failed locally.'],
             ]);
 
+        $dependencyMock = $this->mock(ZnunyAssignmentDependencyService::class);
+        $dependencyMock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
+        $dependencyMock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One']);
+        $dependencyMock->shouldReceive('getQueueOptionsForOwnerId')->andReturn(['TestCompany' => 'TestCompany']);
+
         Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
             ->set('ticketModalEventId', '1001')
@@ -465,6 +496,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             '*example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
             '*example.invalid/api/QueueByName*' => Http::response(['Queue' => ['QueueID' => 1, 'Name' => 'TestCompany', 'FullName' => 'TestCompany']], 200),
             '*example.invalid/api/Queue?*' => Http::response(['Queues' => [['QueueID' => 1, 'Name' => 'TestCompany', 'ValidID' => 1]]], 200),
+            '*example.invalid/api/Queue/1/AssignableAgents*' => Http::response(['Agents' => [['UserID' => 10, 'UserLogin' => 'agent1', 'UserFullname' => 'Agent One']]], 200),
             '*example.invalid/api/CustomerUser*' => Http::response(['CustomerUser' => ['UserLogin' => 'TestCompanyClients', 'UserCustomerID' => 'testcompany']], 200),
         ]);
 
@@ -492,6 +524,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             '*example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
             '*example.invalid/api/QueueByName*' => Http::response(['Queue' => ['QueueID' => 1, 'Name' => 'TestCompany', 'FullName' => 'TestCompany']], 200),
             '*example.invalid/api/Queue?*' => Http::response(['Queues' => [['QueueID' => 1, 'Name' => 'TestCompany', 'ValidID' => 1]]], 200),
+            '*example.invalid/api/Queue/1/AssignableAgents*' => Http::response(['Agents' => [['UserID' => 10, 'UserLogin' => 'agent1', 'UserFullname' => 'Agent One']]], 200),
             '*example.invalid/api/CustomerUser*' => Http::response(['CustomerUser' => ['UserLogin' => 'TestCompanyClients', 'UserCustomerID' => 'testcompany']], 200),
         ]);
 
@@ -927,5 +960,110 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ])
             ->callMountedAction(['visible_for_customer' => false])
             ->assertHasActionErrors(['subject' => 'required', 'body' => 'required']);
+    }
+
+    public function test_current_problems_modal_queue_changes_owner_options_restricted()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
+        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
+
+        Http::fake([
+            '*example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            '*example.invalid/api/QueueByName*' => Http::response([
+                'Queue' => ['QueueID' => 1, 'Name' => 'TestQueue', 'ValidID' => 1],
+            ], 200),
+            '*example.invalid/api/Queue/1/AssignableAgents*' => Http::response([
+                'Agents' => [
+                    ['UserID' => 10, 'UserLogin' => 'agent1', 'UserFullname' => 'Agent One'],
+                ],
+            ], 200),
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->set('ticketQueue', 'TestQueue')
+            ->assertSet('ticketOwnerOptions.10', 'Agent One <agent1>');
+    }
+
+    public function test_current_problems_modal_queue_changes_clears_invalid_owner()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
+        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
+
+        Http::fake([
+            '*example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            '*example.invalid/api/QueueByName*' => Http::response([
+                'Queue' => ['QueueID' => 1, 'Name' => 'TestQueue', 'ValidID' => 1],
+            ], 200),
+            '*example.invalid/api/Queue/1/AssignableAgents*' => Http::response([
+                'Agents' => [
+                    ['UserID' => 20, 'UserLogin' => 'agent2', 'UserFullname' => 'Agent Two'],
+                ],
+            ], 200),
+            '*example.invalid/api/Agent/10/AssignableQueues*' => Http::response([
+                'Queues' => [
+                    ['QueueID' => 5, 'Name' => 'ValidQueue', 'FullName' => 'ValidQueue'],
+                ],
+            ], 200),
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->set('ticketOwnerId', '10') // Invalid for TestQueue
+            ->set('ticketQueue', 'TestQueue')
+            ->assertSet('ticketOwnerId', null)
+            ->assertNotified('Owner Cleared');
+    }
+
+    public function test_current_problems_modal_owner_changes_queue_options_restricted()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
+        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
+
+        Http::fake([
+            '*example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            '*example.invalid/api/Agent/10/AssignableQueues*' => Http::response([
+                'Queues' => [
+                    ['QueueID' => 5, 'Name' => 'ValidQueue', 'FullName' => 'ValidQueue'],
+                ],
+            ], 200),
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->set('ticketOwnerId', '10')
+            ->assertSet('ticketQueueOptions.ValidQueue', 'ValidQueue');
+    }
+
+    public function test_current_problems_modal_owner_changes_clears_invalid_queue()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
+        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
+
+        Http::fake([
+            '*example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            '*example.invalid/api/Agent/10/AssignableQueues*' => Http::response([
+                'Queues' => [
+                    ['QueueID' => 5, 'Name' => 'ValidQueue', 'FullName' => 'ValidQueue'],
+                ],
+            ], 200),
+            '*example.invalid/api/QueueByName/InvalidQueue*' => Http::response([], 200),
+            '*example.invalid/api/QueueByName*' => Http::response([], 200),
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->set('ticketQueue', 'InvalidQueue') // Invalid for agent 10
+            ->set('ticketOwnerId', '10')
+            ->assertSet('ticketQueue', null)
+            ->assertNotified('Queue Cleared');
     }
 }

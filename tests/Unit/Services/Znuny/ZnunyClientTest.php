@@ -607,11 +607,11 @@ class ZnunyClientTest extends TestCase
         $this->assertCount(2, $agents);
         $this->assertEquals(15, $agents[0]['id']);
         $this->assertEquals('jane.smith', $agents[0]['login']);
-        $this->assertEquals('Jane Smith', $agents[0]['label']);
+        $this->assertEquals('Jane Smith <jane.smith>', $agents[0]['label']);
 
         $this->assertEquals(12, $agents[1]['id']);
         $this->assertEquals('john.doe', $agents[1]['login']);
-        $this->assertEquals('John Doe', $agents[1]['label']);
+        $this->assertEquals('John Doe <john.doe>', $agents[1]['label']);
     }
 
     public function test_get_agent_assignable_queues_normalization()
