@@ -689,7 +689,7 @@ class ZnunyTicketWorkspaceTest extends TestCase
             'TicketNumber' => 'TN101',
             'Title' => 'Changed Test',
             'StateType' => 'new',
-            'Changed' => now()->subHours(2)->toDateTimeString(),
+            'Changed' => now()->timezone('Europe/Kyiv')->subHours(2)->toDateTimeString(),
         ]);
 
         Livewire::actingAs($user)

@@ -601,12 +601,16 @@
                                 <td style="text-align: right; white-space: nowrap;" class="zbx-col-changed">
                                     @if(!empty($ticket['Changed']))
                                         @php
-                                            $changedAge = \Carbon\Carbon::parse($ticket['Changed'])->diffInSeconds(now());
-                                            $changedStr = app(\App\Services\Zabbix\ZabbixProblemFormatter::class)->formatAge($changedAge);
+                                            $parsedChanged = \App\Filament\Support\TicketDetailsPayload::parseZnunyTimestamp($ticket['Changed']);
+                                            $changedStr = '-';
+                                            if ($parsedChanged) {
+                                                $changedAge = $parsedChanged->diffInSeconds(now());
+                                                $changedStr = app(\App\Services\Zabbix\ZabbixProblemFormatter::class)->formatAge($changedAge);
+                                            }
                                         @endphp
                                         {{ $changedStr }}
                                     @else
-                                        N/A
+                                        -
                                     @endif
                                 </td>
                             </tr>
