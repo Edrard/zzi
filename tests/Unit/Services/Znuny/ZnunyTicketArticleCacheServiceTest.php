@@ -82,4 +82,25 @@ class ZnunyTicketArticleCacheServiceTest extends TestCase
         // This will trigger the second call to client
         $service->refresh(123);
     }
+
+    public function test_forget_all_invalidates_all_tickets_by_incrementing_generation()
+    {
+        Cache::flush();
+
+        $clientMock = Mockery::mock(ZnunyClient::class);
+        $clientMock->shouldReceive('getTicketArticles')->times(2)->with(123)->andReturn([['article_id' => 1]]);
+        $clientMock->shouldReceive('getTicketArticles')->times(2)->with(456)->andReturn([['article_id' => 2]]);
+
+        $service = new ZnunyTicketArticleCacheService($clientMock);
+
+        $service->get(123);
+        $service->get(456);
+
+        // Invalidate globally
+        $service->forgetAll();
+
+        // These should trigger new calls to the client
+        $service->get(123);
+        $service->get(456);
+    }
 }

@@ -13,9 +13,22 @@ class ZnunyTicketArticleCacheService
         private readonly ZnunyClient $client
     ) {}
 
+    public function getGeneration(): int
+    {
+        return (int) Cache::get('znuny:ticket:articles:generation', 1);
+    }
+
     private function getCacheKey(int|string $ticketId): string
     {
-        return "znuny:ticket:{$ticketId}:articles";
+        $gen = $this->getGeneration();
+
+        return "znuny:ticket:articles:v{$gen}:{$ticketId}";
+    }
+
+    public function forgetAll(): void
+    {
+        $gen = $this->getGeneration();
+        Cache::forever('znuny:ticket:articles:generation', $gen + 1);
     }
 
     public function get(int|string $ticketId): array

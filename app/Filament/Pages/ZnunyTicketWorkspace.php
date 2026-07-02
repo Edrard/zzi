@@ -6,6 +6,7 @@ use App\Filament\Resources\ZabbixTickets\Actions\ZabbixTicketDetailsAction;
 use App\Services\SettingsService;
 use App\Services\Znuny\ClosedTicketCacheService;
 use App\Services\Znuny\ClosedTicketSyncService;
+use App\Services\Znuny\ZnunyTicketArticleCacheService;
 use App\Services\Znuny\ZnunyTicketCacheService;
 use App\Services\Znuny\ZnunyTicketWorkspaceCacheReader;
 use App\Services\Znuny\ZnunyTicketWorkspaceStateTypeMapper;
@@ -261,7 +262,9 @@ class ZnunyTicketWorkspace extends Page
                 $isWarning = true;
             }
 
-            $message = 'Active refresh completed.';
+            app(ZnunyTicketArticleCacheService::class)->forgetAll();
+
+            $message = 'Active refresh completed. Article cache was cleared.';
             if ($output !== '') {
                 $message .= "\n".$output;
             }
