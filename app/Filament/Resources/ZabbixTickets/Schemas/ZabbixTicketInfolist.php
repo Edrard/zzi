@@ -11,6 +11,7 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\HtmlString;
 
 class ZabbixTicketInfolist
@@ -133,7 +134,31 @@ class ZabbixTicketInfolist
                                     return [];
                                 }
 
-                                return app(ZnunyTicketArticleCacheService::class)->get($payload->znuny_ticket_id);
+                                $articles = app(ZnunyTicketArticleCacheService::class)->get($payload->znuny_ticket_id);
+
+                                foreach ($articles as &$article) {
+                                    if (! empty($article['created_at'])) {
+                                        $article['created_at'] = TicketDetailsPayload::parseZnunyTimestamp($article['created_at']);
+                                    }
+                                }
+                                unset($article);
+
+                                usort($articles, function ($a, $b) {
+                                    if (! empty($a['article_id']) && ! empty($b['article_id'])) {
+                                        return $b['article_id'] <=> $a['article_id'];
+                                    }
+
+                                    $aDate = $a['created_at'] ?? null;
+                                    $bDate = $b['created_at'] ?? null;
+
+                                    if ($aDate instanceof Carbon && $bDate instanceof Carbon) {
+                                        return $bDate <=> $aDate;
+                                    }
+
+                                    return 0;
+                                });
+
+                                return $articles;
                             })
                             ->view('filament.infolists.articles-accordion'),
                     ]),

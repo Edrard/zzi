@@ -80,6 +80,32 @@ class TicketDetailsPayload
 
     public bool $is_closed = false;
 
+    public static function parseZnunyTimestamp(mixed $value): ?Carbon
+    {
+        if (empty($value)) {
+            return null;
+        }
+
+        if ($value instanceof Carbon) {
+            return $value;
+        }
+
+        if (! is_string($value)) {
+            return null;
+        }
+
+        try {
+            $value = trim($value);
+            if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $value)) {
+                return Carbon::createFromFormat('Y-m-d H:i:s', $value, 'Europe/Kyiv');
+            }
+
+            return Carbon::parse($value);
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
     public static function fromRecord(mixed $record, array $arguments = []): self
     {
         $payload = new self;
@@ -135,8 +161,8 @@ class TicketDetailsPayload
         // It stays as Carbon to be formatted safely in the layout.
         // In the workspace, we receive string timestamps (like "2026-06-29 10:00:00").
         // ZabbixTicket models return Carbon objects, so we match that type.
-        $payload->created_at = ! empty($arr['Created']) ? Carbon::parse($arr['Created']) : null;
-        $payload->changed_at = ! empty($arr['Changed']) ? Carbon::parse($arr['Changed']) : null;
+        $payload->created_at = self::parseZnunyTimestamp($arr['Created'] ?? null);
+        $payload->changed_at = self::parseZnunyTimestamp($arr['Changed'] ?? null);
 
         $payload->resolution_context = [
             'label' => $hasLink ? ($isActive ? 'Active Problem' : 'Resolved Problem') : 'Not Linked',
@@ -158,7 +184,7 @@ class TicketDetailsPayload
         $payload->lock_id = isset($arr['LockID']) ? (int) $arr['LockID'] : null;
         $payload->lock = $arr['Lock'] ?? null;
         $payload->article_count = isset($arr['ArticleCount']) ? (int) $arr['ArticleCount'] : null;
-        $payload->last_article = ! empty($arr['LastArticleCreated']) ? Carbon::parse($arr['LastArticleCreated']) : null;
+        $payload->last_article = self::parseZnunyTimestamp($arr['LastArticleCreated'] ?? null);
         $payload->has_zabbix_link = $hasLink;
 
         // Also capture the actual ticket ID if we have it in the array or arguments
