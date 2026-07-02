@@ -31,6 +31,13 @@ class DefaultSettings
             ['key' => 'zabbix_exclude_suppressed_problems', 'value' => 'true', 'type' => 'boolean', 'description' => 'Exclude suppressed Zabbix problems from polling results'],
             ['key' => 'zabbix_problem_url_template', 'value' => '', 'type' => 'string', 'description' => 'Zabbix Problem URL Template'],
             ['key' => 'zabbix_problem_sync_audit_enabled', 'value' => 'false', 'type' => 'boolean', 'description' => 'Write summary audit records for scheduled Zabbix problem polling.'],
+            ['key' => 'zabbix_attention_highlighting_enabled', 'value' => 'true', 'type' => 'boolean', 'description' => 'Enable highlighting of Zabbix problems matching Attention Filters.'],
+            ['key' => 'zabbix_attention_highlight_text_color', 'value' => 'aquamarine', 'type' => 'string', 'description' => 'Text color for highlighted problems.'],
+            ['key' => 'zabbix_attention_highlight_text_custom_hex', 'value' => '#7FFFD4', 'type' => 'string', 'description' => 'Custom HEX text color.'],
+            ['key' => 'zabbix_attention_highlight_underline_style', 'value' => 'solid', 'type' => 'string', 'description' => 'Underline style for highlighted problems.'],
+            ['key' => 'zabbix_attention_highlight_underline_color', 'value' => 'aquamarine', 'type' => 'string', 'description' => 'Underline color for highlighted problems.'],
+            ['key' => 'zabbix_attention_highlight_underline_custom_hex', 'value' => '#7FFFD4', 'type' => 'string', 'description' => 'Custom HEX underline color.'],
+            ['key' => 'zabbix_attention_highlight_underline_thickness', 'value' => '1px', 'type' => 'string', 'description' => 'Underline thickness for highlighted problems.'],
 
             // Znuny Endpoints & Connection
             ['key' => 'znuny_api_url', 'value' => '', 'type' => 'string', 'description' => 'Znuny GenericTicketConnectorREST base URL'],
