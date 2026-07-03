@@ -1066,4 +1066,17 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->assertSet('ticketQueue', null)
             ->assertNotified('Queue Cleared');
     }
+
+    public function test_current_problems_modal_view_uses_live_bindings()
+    {
+        $viewPath = resource_path('views/filament/pages/current-zabbix-problems.blade.php');
+        $this->assertFileExists($viewPath);
+
+        $content = file_get_contents($viewPath);
+
+        $this->assertStringContainsString('wire:model.live="ticketOwnerId"', $content, 'Ticket owner select must use live binding to trigger dependency checks.');
+        $this->assertStringContainsString('wire:model.live="ticketQueue"', $content, 'Ticket queue select must use live binding to trigger dependency checks.');
+        $this->assertStringNotContainsString('wire:model="ticketOwnerId"', $content, 'Ticket owner select must not use deferred binding.');
+        $this->assertStringNotContainsString('wire:model="ticketQueue"', $content, 'Ticket queue select must not use deferred binding.');
+    }
 }

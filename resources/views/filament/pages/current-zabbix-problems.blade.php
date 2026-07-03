@@ -1079,7 +1079,7 @@
                         <div class="zbx-ticket-field">
                             <label class="zbx-ticket-label">Owner <span class="text-danger-600">*</span></label>
                             <x-filament::input.wrapper>
-                                <x-filament::input.select wire:model="ticketOwnerId">
+                                <x-filament::input.select wire:model.live="ticketOwnerId">
                                     <option value="">Select an owner</option>
                                     @foreach($ticketOwnerOptions as $id => $label)
                                         <option value="{{ $id }}">{{ $label }}</option>
@@ -1091,7 +1091,7 @@
                         <div class="zbx-ticket-field">
                             <label class="zbx-ticket-label">Queue <span class="text-danger-600">*</span></label>
                             <x-filament::input.wrapper>
-                                <x-filament::input.select wire:model="ticketQueue">
+                                <x-filament::input.select wire:model.live="ticketQueue">
                                     <option value="">Select a queue</option>
                                     @foreach($ticketQueueOptions as $name => $label)
                                         <option value="{{ $name }}">{{ $label }}</option>
