@@ -512,7 +512,7 @@ class SettingsLivewireTest extends TestCase
         }
 
         // Also ensure explicitly ignored keys in the UI are in the defaults registry
-        $ignoredKeys = ['znuny_default_agent_login', 'znuny_default_agent_name', 'manual_ticket_auto_close_enabled'];
+        $ignoredKeys = ['manual_ticket_auto_close_enabled'];
         foreach ($ignoredKeys as $key) {
             $this->assertContains($key, $defaultSettings, "Ignored setting key '{$key}' is missing from DefaultSettings registry.");
         }

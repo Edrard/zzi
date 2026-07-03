@@ -29,7 +29,6 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
     {
         parent::setUp();
 
-        Setting::updateOrCreate(['key' => 'znuny_default_agent_id'], ['value' => '10']);
         Setting::updateOrCreate(['key' => 'znuny_queue_from_host_regex'], ['value' => '^(?<queue>[^\s]+)', 'type' => 'string']);
         Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>Clients', 'type' => 'string']);
         Cache::flush();

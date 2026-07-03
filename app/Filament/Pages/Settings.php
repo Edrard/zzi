@@ -9,8 +9,6 @@ use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixAttentionHighlightStyleService;
 use App\Services\Zabbix\ZabbixClient;
 use App\Services\Znuny\ZnunyClient;
-use App\Services\Znuny\ZnunyDefaultAgentSchemaBuilder;
-use App\Services\Znuny\ZnunyDefaultAgentSettingsService;
 use App\Services\Znuny\ZnunyQueueHostMappingSchemaBuilder;
 use App\Services\Znuny\ZnunyQueueHostMappingService;
 use Filament\Actions\Action;
@@ -326,7 +324,7 @@ class Settings extends Page implements HasForms
         $initialData = $this->data ?? [];
 
         foreach ($settings as $setting) {
-            if (in_array($setting->key, ['znuny_default_agent_login', 'znuny_default_agent_name', 'manual_ticket_auto_close_enabled'])) {
+            if (in_array($setting->key, ['manual_ticket_auto_close_enabled'])) {
                 continue;
             }
 
@@ -444,9 +442,7 @@ class Settings extends Page implements HasForms
 
             $component = null;
 
-            if ($setting->key === 'znuny_default_agent_id') {
-                $component = app(ZnunyDefaultAgentSchemaBuilder::class)->build($setting);
-            } elseif ($setting->key === 'znuny_agent_exclude_logins') {
+            if ($setting->key === 'znuny_agent_exclude_logins') {
                 $component = Textarea::make($setting->key)
                     ->label($label)
                     ->helperText('Znuny agent logins that must not be selectable as ticket owners in the manual ticket creation modal. Put one login per line.')
@@ -657,13 +653,13 @@ class Settings extends Page implements HasForms
 
             if (in_array($setting->key, ['cleanup_enabled', 'cleanup_batch_size', 'app_display_timezone', 'pagination_per_page_base'])) {
                 $groups['General'][] = $component;
-            } elseif (in_array($setting->key, ['retention_action_logs_days', 'retention_closed_tickets_days', 'retention_failed_jobs_days', 'retention_resolved_days', 'retention_statistics_days'])) {
+            } elseif (in_array($setting->key, ['retention_action_logs_days', 'retention_closed_tickets_days', 'retention_failed_jobs_days', 'retention_resolved_days'])) {
                 $groups['Retention'][] = $component;
             } elseif (in_array($setting->key, ['zabbix_api_url', 'zabbix_api_token', 'zabbix_api_timeout', 'zabbix_api_verify_ssl', 'zabbix_poll_interval_minutes', 'zabbix_problem_cache_ttl_minutes', 'zabbix_problem_limit', 'zabbix_exclude_suppressed_problems', 'zabbix_problem_url_template'])) {
                 $groups['Zabbix']['Connection & Polling'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['zabbix_attention_highlighting_enabled', 'zabbix_attention_highlight_text_color', 'zabbix_attention_highlight_text_custom_hex', 'zabbix_attention_highlight_underline_style', 'zabbix_attention_highlight_underline_color', 'zabbix_attention_highlight_underline_custom_hex', 'zabbix_attention_highlight_underline_thickness'])) {
                 $groups['Zabbix']['Problem Highlighting'][$setting->key] = $component;
-            } elseif (in_array($setting->key, ['znuny_queue_from_host_regex', 'znuny_customer_user_from_queue_template', 'znuny_queue_host_mappings', 'znuny_manual_ticket_footer', 'znuny_default_agent_id', 'linked_ticket_manual_close_default_reason', 'manual_ticket_reopen_note_template'])) {
+            } elseif (in_array($setting->key, ['znuny_queue_from_host_regex', 'znuny_customer_user_from_queue_template', 'znuny_queue_host_mappings', 'znuny_manual_ticket_footer', 'linked_ticket_manual_close_default_reason', 'manual_ticket_reopen_note_template'])) {
                 $groups['Znuny Ticket Defaults'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['znuny_queue_cache_ttl_minutes', 'znuny_agent_cache_ttl_minutes', 'znuny_ticket_snapshot_cache_ttl_minutes'])) {
                 $groups['Cache'][] = $component;
@@ -696,7 +692,7 @@ class Settings extends Page implements HasForms
 
         if (! empty($groups['Retention'])) {
             $retentionSection = Section::make('Retention Settings')
-                ->description('Controls how long this Laravel integration app keeps local logs, statistics, cached/resolved history, closed ticket links, and failed job records. These settings do not delete data from Zabbix or Znuny.')
+                ->description('Controls how long this Laravel integration app keeps local logs, cached/resolved history, closed ticket links, and failed job records. These settings do not delete data from Zabbix or Znuny.')
                 ->schema($groups['Retention'])
                 ->columns(1);
             $groups['Retention'] = [$retentionSection];
@@ -1022,7 +1018,7 @@ class Settings extends Page implements HasForms
             ->schema(array_filter([
                 $zd['znuny_queue_from_host_regex'] ?? null,
                 $zd['znuny_customer_user_from_queue_template'] ?? null,
-                $zd['znuny_default_agent_id'] ?? null,
+
                 $zd['znuny_manual_ticket_footer'] ?? null,
                 $zd['linked_ticket_manual_close_default_reason'] ?? null,
                 $zd['manual_ticket_reopen_note_template'] ?? null,

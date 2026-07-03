@@ -111,7 +111,7 @@ class SettingsEncryptionTest extends TestCase
                 'retention_closed_tickets_days' => 30,
                 'retention_failed_jobs_days' => 30,
                 'retention_resolved_days' => 30,
-                'retention_statistics_days' => 30,
+
                 'zabbix_api_url' => 'http://new.com', // changed non-secret
                 'zabbix_api_token' => '',
                 'zabbix_api_timeout' => 10,
@@ -146,7 +146,7 @@ class SettingsEncryptionTest extends TestCase
                 'retention_closed_tickets_days' => 30,
                 'retention_failed_jobs_days' => 30,
                 'retention_resolved_days' => 30,
-                'retention_statistics_days' => 30,
+
                 'zabbix_api_url' => 'http://new.com',
                 'zabbix_api_token' => '',
                 'zabbix_api_timeout' => 10,

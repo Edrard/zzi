@@ -18,7 +18,6 @@ class DefaultSettings
             ['key' => 'retention_closed_tickets_days', 'value' => '180', 'type' => 'integer', 'description' => 'Days to keep closed tickets'],
             ['key' => 'retention_action_logs_days', 'value' => '365', 'type' => 'integer', 'description' => 'Days to keep action logs'],
             ['key' => 'retention_failed_jobs_days', 'value' => '30', 'type' => 'integer', 'description' => 'Days to keep failed jobs'],
-            ['key' => 'retention_statistics_days', 'value' => '730', 'type' => 'integer', 'description' => 'Days to keep daily statistics'],
 
             // Zabbix
             ['key' => 'zabbix_api_url', 'value' => '', 'type' => 'string', 'description' => 'Zabbix API endpoint URL'],
@@ -53,9 +52,7 @@ class DefaultSettings
             ['key' => 'znuny_customer_user_from_queue_template', 'value' => '<queue>Clients', 'type' => 'string', 'description' => 'Generates the default Znuny CustomerUser login from the detected Queue.'],
             ['key' => 'znuny_queue_host_mappings', 'value' => '[]', 'type' => 'json', 'description' => 'Manual queue host mappings.'],
             ['key' => 'znuny_manual_ticket_footer', 'value' => 'Created manually by Zabbix Znuny Integration.', 'type' => 'string', 'description' => 'Optional text appended to manually created Znuny tickets. Leave empty to disable.'],
-            ['key' => 'znuny_default_agent_id', 'value' => '', 'type' => 'string', 'description' => 'Znuny default agent ID'],
-            ['key' => 'znuny_default_agent_login', 'value' => '', 'type' => 'string', 'description' => 'Znuny default agent login'],
-            ['key' => 'znuny_default_agent_name', 'value' => '', 'type' => 'string', 'description' => 'Znuny default agent name'],
+
             ['key' => 'znuny_agent_exclude_logins', 'value' => '', 'type' => 'string', 'description' => 'Znuny agent logins to exclude'],
             ['key' => 'linked_ticket_manual_close_default_reason', 'value' => 'Manual close from Linked Tickets UI.', 'type' => 'string', 'description' => 'Default reason for closing linked tickets manually.'],
             ['key' => 'manual_ticket_reopen_note_template', 'value' => 'Reopening this ticket because the linked Zabbix problem became active again within the configured reopen window.', 'type' => 'string', 'description' => 'Template for manual ticket reopen notes.'],

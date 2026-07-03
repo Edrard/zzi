@@ -179,11 +179,6 @@ class SettingsService
         return static::int('retention_failed_jobs_days', 30) ?? 30;
     }
 
-    public static function retentionStatisticsDays(): int
-    {
-        return static::int('retention_statistics_days', 730) ?? 730;
-    }
-
     public static function defaultCloseDelayHours(): int
     {
         return static::int('default_close_delay_hours', 4) ?? 4;

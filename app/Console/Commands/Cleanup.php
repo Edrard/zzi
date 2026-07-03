@@ -33,10 +33,9 @@ class Cleanup extends Command
         $batchSize = SettingsService::cleanupBatchSize();
         $auditRetentionDays = SettingsService::retentionActionLogsDays();
         $failedJobsRetentionDays = SettingsService::retentionFailedJobsDays();
-        $statsRetentionDays = SettingsService::retentionStatisticsDays();
 
         $auditDeletedCount = 0;
-        $statsDeletedCount = 0;
+
         $failedJobsDeletedCount = 0;
 
         try {
@@ -48,16 +47,6 @@ class Cleanup extends Command
                     ->limit($batchSize)
                     ->delete();
                 $auditDeletedCount += $deleted;
-            } while ($deleted === $batchSize);
-
-            // Cleanup Daily Statistics
-            $statsDateLimit = now()->subDays($statsRetentionDays)->toDateString();
-            do {
-                $deleted = DB::table('daily_statistics')
-                    ->where('date', '<', $statsDateLimit)
-                    ->limit($batchSize)
-                    ->delete();
-                $statsDeletedCount += $deleted;
             } while ($deleted === $batchSize);
 
             // Cleanup Failed Jobs
@@ -87,17 +76,17 @@ class Cleanup extends Command
                 entityId: null,
                 context: [
                     'audit_logs_deleted' => $auditDeletedCount,
-                    'daily_statistics_deleted' => $statsDeletedCount,
+
                     'failed_jobs_deleted' => $failedJobsDeletedCount,
                     'cleanup_batch_size' => $batchSize,
                     'retention_action_logs_days' => $auditRetentionDays,
                     'retention_failed_jobs_days' => $failedJobsRetentionDays,
-                    'retention_statistics_days' => $statsRetentionDays,
+
                 ]
             );
 
             $this->info("Deleted {$auditDeletedCount} audit_logs.");
-            $this->info("Deleted {$statsDeletedCount} daily_statistics.");
+
             $this->info("Deleted {$failedJobsDeletedCount} failed_jobs.");
             $this->info('Cleanup finished.');
 
