@@ -4,10 +4,20 @@ namespace App\Filament\Support;
 
 use App\Models\ZabbixTicket;
 use App\Services\Zabbix\ZabbixTicketStatusPresenter;
+use App\Services\Znuny\ClosedTicketCacheService;
+use App\Services\Znuny\ZnunyClient;
+use App\Services\Znuny\ZnunyTicketCacheService;
 use Illuminate\Support\Carbon;
 
 class TicketDetailsPayload
 {
+    protected static array $apiFallbackCache = [];
+
+    public static function clearCache(): void
+    {
+        self::$apiFallbackCache = [];
+    }
+
     public bool $is_zabbix_ticket = false;
 
     public bool $is_workspace = false;
@@ -108,11 +118,11 @@ class TicketDetailsPayload
 
     public static function fromRecord(mixed $record, array $arguments = []): self
     {
-        $payload = new self;
-
         if (empty($record) && ! empty($arguments['zabbix_ticket_id'])) {
             $record = ZabbixTicket::find($arguments['zabbix_ticket_id']);
         }
+
+        $payload = new self;
 
         if ($record instanceof ZabbixTicket) {
             $payload->is_zabbix_ticket = true;
@@ -142,7 +152,9 @@ class TicketDetailsPayload
             $payload->has_zabbix_link = true;
             $payload->has_sync_section = true;
 
-            $payload->is_closed = strtolower($record->znuny_ticket_state_type ?? '') === 'closed';
+            self::hydrateFromZnunySnapshot($payload);
+
+            $payload->is_closed = strtolower($payload->state_type_str ?? '') === 'closed';
             $payload->is_open = ! $payload->is_closed;
 
             return $payload;
@@ -194,5 +206,46 @@ class TicketDetailsPayload
         $payload->is_open = ! $payload->is_closed;
 
         return $payload;
+    }
+
+    private static function hydrateFromZnunySnapshot(self $payload): void
+    {
+        if (! $payload->znuny_ticket_id) {
+            return;
+        }
+
+        $rawTicket = app(ZnunyTicketCacheService::class)->getTicket($payload->znuny_ticket_id);
+
+        if (! $rawTicket) {
+            $rawTicket = app(ClosedTicketCacheService::class)->getTicket($payload->znuny_ticket_id);
+        }
+
+        if (! $rawTicket) {
+            if (array_key_exists($payload->znuny_ticket_id, self::$apiFallbackCache)) {
+                $rawTicket = self::$apiFallbackCache[$payload->znuny_ticket_id];
+            } else {
+                try {
+                    $rawTicket = app(ZnunyClient::class)->getTicket($payload->znuny_ticket_id);
+                } catch (\Throwable $e) {
+                    $rawTicket = null;
+                }
+                self::$apiFallbackCache[$payload->znuny_ticket_id] = $rawTicket;
+            }
+        }
+
+        if ($rawTicket) {
+            $payload->lock = $rawTicket['Lock'] ?? null;
+            $payload->lock_id = isset($rawTicket['LockID']) ? (int) $rawTicket['LockID'] : null;
+
+            if (isset($rawTicket['ArticleCount'])) {
+                $payload->article_count = (int) $rawTicket['ArticleCount'];
+            }
+            if (isset($rawTicket['StateType'])) {
+                $payload->state_type_str = $rawTicket['StateType'];
+            }
+            if (isset($rawTicket['State'])) {
+                $payload->znuny_state_name = $rawTicket['State'];
+            }
+        }
     }
 }
