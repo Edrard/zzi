@@ -75,6 +75,41 @@ class ZnunyAgentService
         return $map;
     }
 
+    public function excludedLogins(): array
+    {
+        $excludedSetting = SettingsService::string('znuny_agent_exclude_logins', '');
+        $lines = explode("\n", $excludedSetting);
+
+        return collect($lines)
+            ->map(fn ($line) => trim($line))
+            ->filter(fn ($line) => $line !== '')
+            ->map(fn ($line) => strtolower($line))
+            ->all();
+    }
+
+    public function isLoginExcluded(?string $login): bool
+    {
+        if (empty($login)) {
+            return false;
+        }
+
+        return in_array(strtolower($login), $this->excludedLogins(), true);
+    }
+
+    public function filterSelectableAgents(array $agents): array
+    {
+        $excludedLogins = $this->excludedLogins();
+
+        return array_values(array_filter($agents, function ($agent) use ($excludedLogins) {
+            $login = $agent['login'] ?? null;
+            if ($login === null) {
+                return true;
+            }
+
+            return ! in_array(strtolower($login), $excludedLogins, true);
+        }));
+    }
+
     /**
      * Get active agents excluding technical/service logins.
      * Use this for future manual ticket creation modals and ticket owner selection.
@@ -83,21 +118,28 @@ class ZnunyAgentService
     {
         $agents = $this->getAgents($failSilently, $forceRefresh);
 
-        if (empty($agents)) {
+        $validAgents = array_filter($agents, fn ($agent) => ($agent['valid_id'] ?? 1) === 1);
+
+        return $this->filterSelectableAgents($validAgents);
+    }
+
+    public function getSelectableAssignableAgentsForQueue(int|string $queueId, bool $failSilently = true): array
+    {
+        $this->lastError = null;
+
+        try {
+            $agents = $this->client->getQueueAssignableAgents($queueId);
+
+            return $this->filterSelectableAgents($agents);
+        } catch (Throwable $e) {
+            $this->lastError = $e->getMessage();
+            Log::error('Failed to fetch Znuny assignable agents for queue: '.$e->getMessage());
+
+            if (! $failSilently) {
+                throw $e;
+            }
+
             return [];
         }
-
-        $excludedSetting = SettingsService::string('znuny_agent_exclude_logins', '');
-        $lines = explode("\n", $excludedSetting);
-
-        $excludedLogins = collect($lines)
-            ->map(fn ($line) => trim($line))
-            ->filter(fn ($line) => $line !== '')
-            ->map(fn ($line) => strtolower($line))
-            ->all();
-
-        return array_values(array_filter($agents, function ($agent) use ($excludedLogins) {
-            return ! in_array(strtolower($agent['login']), $excludedLogins, true);
-        }));
     }
 }

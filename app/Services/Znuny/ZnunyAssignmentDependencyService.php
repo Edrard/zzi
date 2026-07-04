@@ -5,7 +5,8 @@ namespace App\Services\Znuny;
 class ZnunyAssignmentDependencyService
 {
     public function __construct(
-        protected ZnunyClient $client
+        protected ZnunyClient $client,
+        protected ZnunyAgentService $agentService
     ) {}
 
     /**
@@ -14,20 +15,19 @@ class ZnunyAssignmentDependencyService
     public function getOwnerOptionsForQueue(?string $queueName): array
     {
         if (empty($queueName)) {
-            $agents = collect($this->client->getAgents())
-                ->filter(fn ($agent) => $agent['valid_id'] === 1)
-                ->values()
-                ->toArray();
+            $agents = $this->agentService->getSelectableAgents();
 
             return collect($agents)->pluck('label', 'id')->toArray();
         }
 
         $queue = $this->client->getQueueByName($queueName);
         if (empty($queue['id'])) {
-            return [];
+            $agents = $this->agentService->getSelectableAgents();
+
+            return collect($agents)->pluck('label', 'id')->toArray();
         }
 
-        $agents = $this->client->getQueueAssignableAgents($queue['id']);
+        $agents = $this->agentService->getSelectableAssignableAgentsForQueue($queue['id']);
 
         return collect($agents)->pluck('label', 'id')->toArray();
     }
@@ -39,7 +39,7 @@ class ZnunyAssignmentDependencyService
     {
         if (empty($ownerId)) {
             $queues = collect($this->client->getQueues())
-                ->filter(fn ($queue) => $queue['valid_id'] === 1)
+                ->filter(fn ($queue) => ($queue['valid_id'] ?? 1) === 1)
                 ->values()
                 ->toArray();
 
@@ -68,20 +68,19 @@ class ZnunyAssignmentDependencyService
     public function getOwnerLoginOptionsForQueue(?string $queueName): array
     {
         if (empty($queueName)) {
-            $agents = collect($this->client->getAgents())
-                ->filter(fn ($agent) => $agent['valid_id'] === 1)
-                ->values()
-                ->toArray();
+            $agents = $this->agentService->getSelectableAgents();
 
             return collect($agents)->pluck('label', 'login')->toArray();
         }
 
         $queue = $this->client->getQueueByName($queueName);
         if (empty($queue['id'])) {
-            return [];
+            $agents = $this->agentService->getSelectableAgents();
+
+            return collect($agents)->pluck('label', 'login')->toArray();
         }
 
-        $agents = $this->client->getQueueAssignableAgents($queue['id']);
+        $agents = $this->agentService->getSelectableAssignableAgentsForQueue($queue['id']);
 
         return collect($agents)->pluck('label', 'login')->toArray();
     }
@@ -93,17 +92,26 @@ class ZnunyAssignmentDependencyService
     {
         if (empty($ownerLogin)) {
             $queues = collect($this->client->getQueues())
-                ->filter(fn ($queue) => $queue['valid_id'] === 1)
+                ->filter(fn ($queue) => ($queue['valid_id'] ?? 1) === 1)
                 ->values()
                 ->toArray();
 
             return collect($queues)->pluck('label', 'name')->toArray();
         }
 
+        if ($this->agentService->isLoginExcluded($ownerLogin)) {
+            return [];
+        }
+
         $agents = $this->client->getAgents();
         $agentId = collect($agents)->firstWhere('login', $ownerLogin)['id'] ?? null;
         if (! $agentId) {
-            return [];
+            $queues = collect($this->client->getQueues())
+                ->filter(fn ($queue) => ($queue['valid_id'] ?? 1) === 1)
+                ->values()
+                ->toArray();
+
+            return collect($queues)->pluck('label', 'name')->toArray();
         }
 
         $queues = $this->client->getAgentAssignableQueues($agentId);

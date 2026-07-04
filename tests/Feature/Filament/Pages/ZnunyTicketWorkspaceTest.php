@@ -1556,4 +1556,42 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->callMountedAction()
             ->assertNotified('Assignment changed in Znuny, but local cache refresh failed.');
     }
+
+    public function test_change_assignment_filters_excluded_agents()
+    {
+        $user = User::factory()->create(['role' => 'admin']);
+        $this->seedTicket(['TicketID' => 310, 'TicketNumber' => 'TN310', 'StateType' => 'open', 'Owner' => 'old.owner']);
+
+        Setting::updateOrCreate(['key' => 'znuny_agent_exclude_logins'], ['type' => 'string', 'value' => 'excluded.owner']);
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
+        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
+
+        Http::fake([
+            'https://example.invalid/api/*' => Http::response(['SessionID' => 'fake'], 200),
+        ]);
+
+        $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
+        $mockClient->shouldReceive('getAgents')->andReturn([
+            ['id' => 1, 'login' => 'old.owner', 'label' => 'old.owner', 'valid_id' => 1],
+            ['id' => 2, 'login' => 'excluded.owner', 'label' => 'excluded.owner', 'valid_id' => 1],
+        ]);
+        $mockClient->shouldReceive('getQueueByName')->andReturn(['id' => 1, 'name' => 'Q1']);
+        $mockClient->shouldReceive('getQueueAssignableAgents')->andReturn([
+            ['id' => 1, 'login' => 'old.owner', 'label' => 'old.owner'],
+            ['id' => 2, 'login' => 'excluded.owner', 'label' => 'excluded.owner'],
+        ]);
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        $component = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 310]);
+
+        $component->mountAction('change_assignment', ['znuny_ticket_id' => 310])
+            ->setActionData([
+                'target_owner' => 'excluded.owner',
+            ])
+            ->callMountedAction()
+            ->assertHasActionErrors(['target_owner']);
+    }
 }

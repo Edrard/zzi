@@ -162,6 +162,57 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
 
     }
 
+    public function test_admin_modal_filters_excluded_agents()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Setting::updateOrCreate(['key' => 'znuny_agent_exclude_logins'], ['value' => 'agent2', 'type' => 'string']);
+
+        // Mock Agent
+        Http::fake([
+            '*example.invalid/api/Agent*' => Http::response([
+                'Agents' => [
+                    ['UserID' => 10, 'UserLogin' => 'agent1', 'UserFullname' => 'Agent One', 'ValidID' => 1],
+                    ['UserID' => 11, 'UserLogin' => 'agent2', 'UserFullname' => 'Agent Two', 'ValidID' => 1],
+                ],
+            ], 200),
+            '*example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            '*example.invalid/api/QueueByName*' => Http::response([
+                'Queue' => ['QueueID' => 1, 'Name' => 'TestCompany', 'FullName' => 'TestCompany'],
+            ], 200),
+            '*example.invalid/api/Queue?*' => Http::response([
+                'Queues' => [
+                    ['QueueID' => 1, 'Name' => 'TestCompany', 'ValidID' => 1],
+                ],
+            ], 200),
+            '*example.invalid/api/Queue/1/AssignableAgents*' => Http::response([
+                'Agents' => [
+                    ['UserID' => 10, 'UserLogin' => 'agent1', 'UserFullname' => 'Agent One'],
+                    ['UserID' => 11, 'UserLogin' => 'agent2', 'UserFullname' => 'Agent Two'],
+                ],
+            ], 200),
+            '*example.invalid/api/CustomerUser*' => Http::response([
+                'CustomerUser' => ['UserLogin' => 'TestCompanyClients', 'UserCustomerID' => 'testcompany'],
+            ], 200),
+        ]);
+
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
+        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001');
+
+        $component->assertDispatched('open-modal')
+            ->assertSet('ticketModalEventId', '1001');
+
+        $options = $component->get('ticketOwnerOptions');
+
+        $this->assertArrayHasKey(10, $options);
+        $this->assertArrayNotHasKey(11, $options);
+    }
+
     public function test_linked_ticket_owner_display_uses_name_if_present()
     {
         $admin = User::factory()->create(['role' => 'admin']);

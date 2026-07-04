@@ -5,6 +5,8 @@ namespace App\Filament\Support;
 use App\Models\ZabbixTicket;
 use App\Services\AuditLogger;
 use App\Services\SettingsService;
+use App\Services\Znuny\ZnunyAgentService;
+use App\Services\Znuny\ZnunyAssignmentDependencyService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyLinkedTicketCloseService;
 use App\Services\Znuny\ZnunyLinkedTicketReopenService;
@@ -502,31 +504,19 @@ class ZnunyTicketManagementActions
                         ->default($payload->znuny_queue_name)
                         ->required()
                         ->options(function ($get) {
-                            $client = app(ZnunyClient::class);
-                            $owner = $get('target_owner');
-                            if ($owner) {
-                                $agents = $client->getAgents();
-                                $agentId = collect($agents)->firstWhere('login', $owner)['id'] ?? null;
-                                if ($agentId) {
-                                    return collect($client->getAgentAssignableQueues($agentId))->pluck('label', 'name')->toArray();
-                                }
-                            }
+                            $service = app(ZnunyAssignmentDependencyService::class);
 
-                            return collect($client->getQueues())->pluck('label', 'name')->toArray();
+                            return $service->getQueueOptionsForOwnerLogin($get('target_owner'));
                         })
                         ->searchable()
                         ->live()
                         ->afterStateUpdated(function ($set, $get, ?string $state) {
                             $owner = $get('target_owner');
                             if ($owner && $state) {
-                                $client = app(ZnunyClient::class);
-                                $queue = $client->getQueueByName($state);
-                                if (! empty($queue['id'])) {
-                                    $agents = $client->getQueueAssignableAgents($queue['id']);
-                                    $logins = collect($agents)->pluck('login')->toArray();
-                                    if (! in_array($owner, $logins)) {
-                                        $set('target_owner', null);
-                                    }
+                                $service = app(ZnunyAssignmentDependencyService::class);
+                                $validOptions = $service->getOwnerLoginOptionsForQueue($state);
+                                if (! array_key_exists($owner, $validOptions)) {
+                                    $set('target_owner', null);
                                 }
                             }
                         }),
@@ -536,31 +526,19 @@ class ZnunyTicketManagementActions
                         ->default($payload->znuny_owner_name)
                         ->required()
                         ->options(function ($get) {
-                            $client = app(ZnunyClient::class);
-                            $queueName = $get('target_queue');
-                            if ($queueName) {
-                                $queue = $client->getQueueByName($queueName);
-                                if (! empty($queue['id'])) {
-                                    return collect($client->getQueueAssignableAgents($queue['id']))->pluck('label', 'login')->toArray();
-                                }
-                            }
+                            $service = app(ZnunyAssignmentDependencyService::class);
 
-                            return collect($client->getAgents())->pluck('label', 'login')->toArray();
+                            return $service->getOwnerLoginOptionsForQueue($get('target_queue'));
                         })
                         ->searchable()
                         ->live()
                         ->afterStateUpdated(function ($set, $get, ?string $state) {
                             $queueName = $get('target_queue');
                             if ($queueName && $state) {
-                                $client = app(ZnunyClient::class);
-                                $agents = $client->getAgents();
-                                $agentId = collect($agents)->firstWhere('login', $state)['id'] ?? null;
-                                if ($agentId) {
-                                    $queues = $client->getAgentAssignableQueues($agentId);
-                                    $names = collect($queues)->pluck('name')->toArray();
-                                    if (! in_array($queueName, $names)) {
-                                        $set('target_queue', null);
-                                    }
+                                $service = app(ZnunyAssignmentDependencyService::class);
+                                $validOptions = $service->getQueueOptionsForOwnerLogin($state);
+                                if (! array_key_exists($queueName, $validOptions)) {
+                                    $set('target_queue', null);
                                 }
                             }
                         }),
@@ -615,6 +593,14 @@ class ZnunyTicketManagementActions
                 }
 
                 if (! empty($data['target_owner']) && $data['target_owner'] !== $payloadInfo->znuny_owner_name) {
+                    $agentService = app(ZnunyAgentService::class);
+                    if ($agentService->isLoginExcluded($data['target_owner'])) {
+                        Notification::make()->title('Invalid owner')->danger()->send();
+                        $action->halt();
+
+                        return;
+                    }
+
                     $requestPayload['OwnerLogin'] = $data['target_owner'];
                     $hasChange = true;
                 }
