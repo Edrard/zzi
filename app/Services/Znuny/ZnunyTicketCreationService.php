@@ -3,6 +3,7 @@
 namespace App\Services\Znuny;
 
 use App\Services\AuditLogger;
+use App\Services\OwnerSuggestion\OwnerSuggestionObservationRecorder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -12,7 +13,8 @@ class ZnunyTicketCreationService
 
     public function __construct(
         protected ZnunyClient $client,
-        protected ZabbixTicketLinkService $linkService
+        protected ZabbixTicketLinkService $linkService,
+        protected OwnerSuggestionObservationRecorder $observationRecorder
     ) {}
 
     private function auditLog(
@@ -357,6 +359,25 @@ class ZnunyTicketCreationService
             $result['warnings'] = $createResponse['warnings'] ?? [];
 
             $this->auditLog('znuny.manual_ticket_create.created', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, $ticketId, $ticketNumber, [], $result['warnings'], false, false, false);
+
+            try {
+                $this->observationRecorder->recordManualTicketCreated([
+                    'problem_name' => $problemName,
+                    'queue_name' => $queue,
+                    'owner_id' => $ownerId,
+                    'zabbix_event_id' => $eventId,
+                    'zabbix_host_name' => $hostName,
+                    'customer_user_login' => $customerUser,
+                    'znuny_ticket_id' => $ticketId,
+                    'created_by_user_id' => auth()->id() ?? null,
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning('Failed to record manual ticket creation observation from ZnunyTicketCreationService', [
+                    'error' => $e->getMessage(),
+                    'zabbix_event_id' => $eventId,
+                    'znuny_ticket_id' => $ticketId,
+                ]);
+            }
 
             return $result;
 

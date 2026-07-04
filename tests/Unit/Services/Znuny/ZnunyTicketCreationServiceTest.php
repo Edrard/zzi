@@ -3,6 +3,7 @@
 namespace Tests\Unit\Services\Znuny;
 
 use App\Models\ZabbixTicket;
+use App\Services\OwnerSuggestion\OwnerSuggestionObservationRecorder;
 use App\Services\Znuny\ZabbixTicketLinkService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketCreationService;
@@ -34,7 +35,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
             ]);
 
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
-        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock);
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
 
         $result = $service->validateTicketPayload(10, 'TestQueue', 'testuser', 'CUST123', 'Test Title', 'Test Subject', 'Test Body');
 
@@ -65,7 +66,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
             ]);
 
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
-        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock);
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
 
         $result = $service->validateTicketPayload(2, 'Rental', 'RentalClients', 'CUST_RENTAL', 'Title', 'Subject', 'Body');
 
@@ -86,7 +87,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
             ]);
 
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
-        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock);
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
 
         $result = $service->validateTicketPayload('10', 'TestQueue', 'testuser', 'CUST123', 'Title', 'Subj', 'Body');
 
@@ -104,7 +105,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
             ->andThrow(new \Exception('API timeout'));
 
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
-        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock);
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
 
         $result = $service->validateTicketPayload(10, 'TestQueue', 'testuser', 'CUST123', 'Title', 'Subj', 'Body');
 
@@ -119,7 +120,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
         $clientMock->shouldNotReceive('validateTicketCreate');
 
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
-        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock);
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
 
         $result = $service->validateTicketPayload(10, 'TestQueue', 'testuser', 'CUST123', '', 'Subj', 'Body');
 
@@ -133,7 +134,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
         $clientMock->shouldNotReceive('validateTicketCreate');
 
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
-        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock);
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
 
         $result = $service->validateTicketPayload(10, 'TestQueue', 'testuser', 'CUST123', 'Title', 'Subj', '');
 
@@ -145,7 +146,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
     {
         $clientMock = $this->mock(ZnunyClient::class);
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
-        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock);
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
 
         $result = $service->createTicketForProblem('', '', '', 10, 'Q', 'CU', 'T', 'S', 'B');
         $this->assertFalse($result['success']);
@@ -166,7 +167,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
         Log::shouldReceive('info')->zeroOrMoreTimes();
         Log::shouldReceive('error')->zeroOrMoreTimes();
 
-        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock);
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
 
         $result = $service->createTicketForProblem('123', 'Host', 'Prob', 10, 'Q', 'CU', 'T', 'S', 'B');
         $this->assertFalse($result['success']);
@@ -186,7 +187,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
         Log::shouldReceive('info')->zeroOrMoreTimes();
         Log::shouldReceive('error')->zeroOrMoreTimes();
 
-        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock);
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
 
         $result = $service->createTicketForProblem('123', 'Host', 'Prob', 10, 'Q', 'CU', 'T', 'S', 'B');
         $this->assertFalse($result['success']);
@@ -197,7 +198,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
     {
         $clientMock = $this->mock(ZnunyClient::class);
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
-        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock);
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
 
         $lock = Cache::lock('zbx_ticket_create:123', 10);
         $lock->get(); // Acquire lock so the service cannot
@@ -214,7 +215,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
         $clientMock = $this->mock(ZnunyClient::class);
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
 
-        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock);
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
 
         $linkServiceMock->shouldReceive('existsForEventId')->once()->with('123')->andReturn(true);
         $linkServiceMock->shouldReceive('findByEventId')->once()->with('123')->andReturn(
@@ -240,7 +241,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
             'valid' => 0, 'errors' => ['ValErr'],
         ]);
 
-        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock);
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
 
         $result = $service->createTicketForProblem('123', 'Host', 'Prob', 10, 'Q', 'CU', 'T', 'S', 'B');
 
@@ -260,7 +261,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
             'success' => false, 'errors' => ['ApiErr'],
         ]);
 
-        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock);
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
 
         $result = $service->createTicketForProblem('123', 'Host', 'Prob', 10, 'Q', 'CU', 'T', 'S', 'B');
 
@@ -294,13 +295,69 @@ class ZnunyTicketCreationServiceTest extends TestCase
             return $arg['zabbix_event_id'] === '123' && $arg['znuny_ticket_id'] === 55;
         }));
 
-        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock);
+        $observationRecorderMock = $this->mock(OwnerSuggestionObservationRecorder::class);
+        $observationRecorderMock->shouldReceive('recordManualTicketCreated')
+            ->once()
+            ->with(\Mockery::on(function ($data) {
+                return $data['problem_name'] === 'Prob'
+                    && $data['queue_name'] === 'Q'
+                    && $data['owner_id'] === 10
+                    && $data['zabbix_event_id'] === '123'
+                    && $data['zabbix_host_name'] === 'Host'
+                    && $data['customer_user_login'] === 'CU'
+                    && $data['znuny_ticket_id'] === 55;
+            }));
+
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $observationRecorderMock);
 
         $result = $service->createTicketForProblem('123', 'Host', 'Prob', 10, 'Q', 'CU', 'T', 'S', 'B');
 
         $this->assertTrue($result['success']);
         $this->assertEquals(55, $result['ticket_id']);
         $this->assertEquals('TN55', $result['ticket_number']);
+    }
+
+    public function test_create_ticket_success_even_if_observation_recorder_throws()
+    {
+        $clientMock = $this->mock(ZnunyClient::class);
+        $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
+
+        $clientMock->shouldReceive('getCustomerUser')->once()->with('CU')->andReturn(['found' => true, 'customer_id' => 'CUST_123']);
+        $linkServiceMock->shouldReceive('existsForEventId')->once()->with('123')->andReturn(false);
+        $clientMock->shouldReceive('validateTicketCreate')->once()->andReturn(['valid' => 1]);
+
+        $clientMock->shouldReceive('createTicket')->once()->andReturn([
+            'success' => true, 'ticket_id' => 55, 'ticket_number' => 'TN55',
+        ]);
+
+        $linkServiceMock->shouldReceive('create')->once();
+
+        $observationRecorderMock = $this->mock(OwnerSuggestionObservationRecorder::class);
+        $observationRecorderMock->shouldReceive('recordManualTicketCreated')
+            ->once()
+            ->andThrow(new \Exception('Recorder DB went away'));
+
+        Log::shouldReceive('warning')
+            ->once()
+            ->withArgs(function ($message, $context) {
+                return $message === 'Failed to record manual ticket creation observation from ZnunyTicketCreationService'
+                    && isset($context['error'])
+                    && $context['error'] === 'Recorder DB went away'
+                    && $context['zabbix_event_id'] === '123'
+                    && $context['znuny_ticket_id'] === 55;
+            });
+
+        Log::shouldReceive('info')->zeroOrMoreTimes();
+        Log::shouldReceive('error')->zeroOrMoreTimes();
+
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $observationRecorderMock);
+
+        $result = $service->createTicketForProblem('123', 'Host', 'Prob', 10, 'Q', 'CU', 'T', 'S', 'B');
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals(55, $result['ticket_id']);
+        $this->assertEquals('TN55', $result['ticket_number']);
+        $this->assertEmpty($result['errors']);
     }
 
     public function test_create_ticket_missing_ticket_number()
@@ -315,7 +372,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
             'success' => true, 'ticket_id' => 55, 'ticket_number' => null,
         ]);
 
-        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock);
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
 
         $result = $service->createTicketForProblem('123', 'Host', 'Prob', 10, 'Q', 'CU', 'T', 'S', 'B');
 
@@ -339,7 +396,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
         Log::shouldReceive('critical')->once();
         Log::shouldReceive('error')->zeroOrMoreTimes();
 
-        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock);
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
 
         $result = $service->createTicketForProblem('123', 'Host', 'Prob', 10, 'Q', 'CU', 'T', 'S', 'B');
 
