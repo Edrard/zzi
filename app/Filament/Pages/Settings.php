@@ -510,10 +510,21 @@ class Settings extends Page implements HasForms
                 }
             } elseif ($setting->type === 'integer') {
                 $min = 0;
+                $max = null;
+
                 if ($setting->key === 'cleanup_batch_size' || $setting->key === 'znuny_linked_ticket_sync_interval_minutes' || $setting->key === 'znuny_closed_ticket_window_days' || $setting->key === 'znuny_closed_ticket_small_sync_interval_minutes') {
                     $min = 1;
                 } elseif ($setting->key === 'pagination_per_page_base') {
                     $min = 11;
+                } elseif (in_array($setting->key, ['owner_suggestion_similarity_threshold', 'owner_suggestion_statistics_retention_days', 'owner_suggestion_observation_cleanup_days'])) {
+                    $min = 1;
+                } elseif ($setting->key === 'owner_suggestion_rebuild_interval_minutes') {
+                    $min = 10;
+                    $max = 1440;
+                }
+
+                if ($setting->key === 'owner_suggestion_similarity_threshold') {
+                    $max = 100;
                 }
 
                 $component = TextInput::make($setting->key)
@@ -521,8 +532,17 @@ class Settings extends Page implements HasForms
                     ->helperText($description)
                     ->numeric()
                     ->integer()
-                    ->minValue($min)
-                    ->required();
+                    ->minValue($min);
+
+                if ($max !== null) {
+                    $component->maxValue($max);
+                }
+
+                if ($setting->key === 'owner_suggestion_similarity_threshold') {
+                    $component->suffix('%');
+                }
+
+                $component->required();
             } elseif ($setting->key === 'znuny_queue_host_mappings') {
                 $component = app(ZnunyQueueHostMappingSchemaBuilder::class)->buildRepeater($setting, $initialData);
             } elseif ($setting->key === 'znuny_ticket_workspace_active_state_type_ids') {
@@ -635,6 +655,13 @@ class Settings extends Page implements HasForms
                     ->options(array_combine(\DateTimeZone::listIdentifiers(), \DateTimeZone::listIdentifiers()))
                     ->searchable()
                     ->required();
+            } elseif ($setting->key === 'owner_suggestion_old_weight_coefficient') {
+                $component = TextInput::make($setting->key)
+                    ->label($label)
+                    ->helperText($description)
+                    ->numeric()
+                    ->minValue(0)
+                    ->required();
             } else {
                 $input = TextInput::make($setting->key)
                     ->label($label)
@@ -655,6 +682,8 @@ class Settings extends Page implements HasForms
                 $groups['General'][] = $component;
             } elseif (in_array($setting->key, ['retention_action_logs_days', 'retention_closed_tickets_days', 'retention_failed_jobs_days', 'retention_resolved_days'])) {
                 $groups['Retention'][] = $component;
+            } elseif (str_starts_with($setting->key, 'owner_suggestion_')) {
+                $groups['Statistics'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['zabbix_api_url', 'zabbix_api_token', 'zabbix_api_timeout', 'zabbix_api_verify_ssl', 'zabbix_poll_interval_minutes', 'zabbix_problem_cache_ttl_minutes', 'zabbix_problem_limit', 'zabbix_exclude_suppressed_problems', 'zabbix_problem_url_template'])) {
                 $groups['Zabbix']['Connection & Polling'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['zabbix_attention_highlighting_enabled', 'zabbix_attention_highlight_text_color', 'zabbix_attention_highlight_text_custom_hex', 'zabbix_attention_highlight_underline_style', 'zabbix_attention_highlight_underline_color', 'zabbix_attention_highlight_underline_custom_hex', 'zabbix_attention_highlight_underline_thickness'])) {
@@ -688,6 +717,29 @@ class Settings extends Page implements HasForms
 
         if (! empty($groups['Znuny Ticket Defaults'])) {
             $groups['Znuny Ticket Defaults'] = $this->buildZnunyTicketDefaultsTabGroups($groups['Znuny Ticket Defaults']);
+        }
+
+        if (! empty($groups['Statistics'])) {
+            $orderedStatisticsKeys = [
+                'owner_suggestion_similarity_threshold',
+                'owner_suggestion_statistics_retention_days',
+                'owner_suggestion_old_weight_coefficient',
+                'owner_suggestion_observation_cleanup_days',
+                'owner_suggestion_rebuild_interval_minutes',
+            ];
+
+            $orderedStatistics = [];
+            foreach ($orderedStatisticsKeys as $key) {
+                if (isset($groups['Statistics'][$key])) {
+                    $orderedStatistics[] = $groups['Statistics'][$key];
+                }
+            }
+
+            $statisticsSection = Section::make('Statistics')
+                ->description('Configure how owner statistics are collected and retained.')
+                ->schema($orderedStatistics)
+                ->columns(1);
+            $groups['Statistics'] = [$statisticsSection];
         }
 
         if (! empty($groups['Retention'])) {
@@ -759,12 +811,6 @@ class Settings extends Page implements HasForms
                 $currentPlaintext = SettingsService::string($setting->key);
 
                 if ($currentPlaintext !== $newValue) {
-                    if ($setting->key === 'znuny_default_agent_id') {
-                        app(ZnunyDefaultAgentSettingsService::class)->saveDefaultAgent($setting, $newValue, $currentPlaintext, $changedSettings, $settings);
-
-                        continue; // Skip the default save logic for this key
-                    }
-
                     $oldValueToLog = $setting->value;
                     $newValueToLog = $newValue;
                     $valueToStore = $newValue;

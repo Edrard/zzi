@@ -87,6 +87,13 @@ class DefaultSettings
             ['key' => 'znuny_closed_ticket_window_days', 'value' => '30', 'type' => 'integer', 'description' => 'Number of recent days to retain in the closed ticket cache.'],
             ['key' => 'znuny_closed_ticket_small_sync_interval_minutes', 'value' => '5', 'type' => 'integer', 'description' => 'Interval for small closed ticket sync in minutes.'],
             ['key' => 'znuny_closed_ticket_sync_audit_auto_enabled', 'value' => 'false', 'type' => 'boolean', 'description' => 'Write summary audit records for automatic closed ticket syncs.'],
+
+            // Statistics (Owner Suggestion)
+            ['key' => 'owner_suggestion_similarity_threshold', 'value' => '80', 'type' => 'integer', 'description' => 'Minimum similarity percentage used later when grouping similar problem names for owner suggestions'],
+            ['key' => 'owner_suggestion_statistics_retention_days', 'value' => '70', 'type' => 'integer', 'description' => 'Observations older than this remain stored but will later receive the old-statistics weight coefficient during aggregation'],
+            ['key' => 'owner_suggestion_old_weight_coefficient', 'value' => '0.5', 'type' => 'string', 'description' => 'Coefficient applied later to observations older than the retention window'],
+            ['key' => 'owner_suggestion_observation_cleanup_days', 'value' => '360', 'type' => 'integer', 'description' => 'Raw owner suggestion observations older than this will be physically deleted by future cleanup logic'],
+            ['key' => 'owner_suggestion_rebuild_interval_minutes', 'value' => '180', 'type' => 'integer', 'description' => 'Minimum interval between future owner suggestion aggregate rebuilds'],
         ];
     }
 }
