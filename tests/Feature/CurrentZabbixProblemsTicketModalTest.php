@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\Setting;
 use App\Models\User;
 use App\Models\ZabbixTicket;
+use App\Services\OwnerSuggestion\OwnerSuggestionSelector;
 use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixProblemCache;
 use App\Services\Znuny\ZnunyAgentService;
@@ -18,6 +19,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -1128,5 +1130,349 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $this->assertStringContainsString('wire:model.live="ticketQueue"', $content, 'Ticket queue select must use live binding to trigger dependency checks.');
         $this->assertStringNotContainsString('wire:model="ticketOwnerId"', $content, 'Ticket owner select must not use deferred binding.');
         $this->assertStringNotContainsString('wire:model="ticketQueue"', $content, 'Ticket queue select must not use deferred binding.');
+    }
+
+    protected function setupMocksForSuggestionTests()
+    {
+        Http::fake([
+            '*example.invalid/api/Agent*' => Http::response([
+                'Agents' => [
+                    ['UserID' => 10, 'UserLogin' => 'agent1', 'UserFullname' => 'Agent One', 'ValidID' => 1],
+                    ['UserID' => 20, 'UserLogin' => 'agent2', 'UserFullname' => 'Agent Two', 'ValidID' => 1],
+                    ['UserID' => 30, 'UserLogin' => 'agent3', 'UserFullname' => 'Agent Three', 'ValidID' => 1],
+                ],
+            ], 200),
+            '*example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            '*example.invalid/api/QueueByName*Queue%20B*' => Http::response([
+                'Queue' => ['QueueID' => 2, 'Name' => 'Queue B', 'FullName' => 'Queue B'],
+            ], 200),
+            '*example.invalid/api/QueueByName*Queue+B*' => Http::response([
+                'Queue' => ['QueueID' => 2, 'Name' => 'Queue B', 'FullName' => 'Queue B'],
+            ], 200),
+            '*example.invalid/api/QueueByName*' => Http::response([
+                'Queue' => ['QueueID' => 1, 'Name' => 'TestCompany', 'FullName' => 'TestCompany'],
+            ], 200),
+            '*example.invalid/api/Queue/1/AssignableAgents*' => Http::response([
+                'Agents' => [
+                    ['UserID' => 10, 'UserLogin' => 'agent1', 'UserFullname' => 'Agent One'],
+                    ['UserID' => 20, 'UserLogin' => 'agent2', 'UserFullname' => 'Agent Two'],
+                ],
+            ], 200),
+            '*example.invalid/api/Queue/2/AssignableAgents*' => Http::response([
+                'Agents' => [
+                    ['UserID' => 10, 'UserLogin' => 'agent1', 'UserFullname' => 'Agent One'],
+                    ['UserID' => 30, 'UserLogin' => 'agent3', 'UserFullname' => 'Agent Three'],
+                ],
+            ], 200),
+            '*example.invalid/api/Queue?*' => Http::response([
+                'Queues' => [
+                    ['QueueID' => 1, 'Name' => 'TestCompany', 'ValidID' => 1],
+                    ['QueueID' => 2, 'Name' => 'Queue B', 'ValidID' => 1],
+                ],
+            ], 200),
+            '*example.invalid/api/CustomerUser*' => Http::response([
+                'CustomerUser' => ['UserLogin' => 'TestCompanyClients', 'UserCustomerID' => 'testcompany'],
+            ], 200),
+            '*' => Http::response([], 200),
+        ]);
+
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
+        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
+    }
+
+    public function test_suggested_owner_is_preselected_on_modal_open()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->setupMocksForSuggestionTests();
+
+        $selectorMock = $this->mock(OwnerSuggestionSelector::class);
+        $selectorMock->shouldReceive('suggest')
+            ->once()
+            ->andReturn([
+                'owner_id' => '20',
+                'owner_login' => 'agent2',
+                'queue_name' => 'TestCompany',
+                'normalized_problem_key' => 'cpu load',
+                'matched_normalized_problem_key' => 'cpu load',
+                'similarity' => 1.0,
+                'score' => 100,
+                'sample_count' => 5,
+                'recent_count' => 5,
+                'old_count' => 0,
+                'last_seen_at' => null,
+            ]);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001');
+
+        $component->assertSet('ticketOwnerId', '20')
+            ->assertSet('suggestedOwnerId', '20')
+            ->assertSet('ownerSuggestionApplied', true);
+
+        $options = $component->get('ticketOwnerOptions');
+        $this->assertEquals(20, array_keys($options)[0]);
+    }
+
+    public function test_suggested_owner_appears_first_in_dropdown()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->setupMocksForSuggestionTests();
+
+        $selectorMock = $this->mock(OwnerSuggestionSelector::class);
+        $selectorMock->shouldReceive('suggest')
+            ->andReturn([
+                'owner_id' => '20',
+                'owner_login' => 'agent2',
+                'queue_name' => 'TestCompany',
+                'normalized_problem_key' => 'cpu load',
+                'matched_normalized_problem_key' => 'cpu load',
+                'similarity' => 1.0,
+                'score' => 100,
+                'sample_count' => 5,
+                'recent_count' => 5,
+                'old_count' => 0,
+                'last_seen_at' => null,
+            ]);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001');
+
+        $options = $component->get('ticketOwnerOptions');
+        $this->assertEquals(20, array_keys($options)[0]);
+        $this->assertArrayHasKey(10, $options);
+    }
+
+    public function test_suggestion_is_ignored_if_owner_is_not_assignable()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->setupMocksForSuggestionTests();
+
+        $selectorMock = $this->mock(OwnerSuggestionSelector::class);
+        $selectorMock->shouldReceive('suggest')
+            ->andReturn([
+                'owner_id' => '99',
+                'owner_login' => 'unknown',
+                'queue_name' => 'TestCompany',
+                'normalized_problem_key' => 'cpu load',
+                'matched_normalized_problem_key' => 'cpu load',
+                'similarity' => 1.0,
+                'score' => 100,
+                'sample_count' => 5,
+                'recent_count' => 5,
+                'old_count' => 0,
+                'last_seen_at' => null,
+            ]);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001');
+
+        $component->assertSet('ticketOwnerId', null)
+            ->assertSet('suggestedOwnerId', null)
+            ->assertSet('ownerSuggestionApplied', false);
+    }
+
+    public function test_manual_owner_selection_is_not_overridden()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->setupMocksForSuggestionTests();
+
+        $selectorMock = $this->mock(OwnerSuggestionSelector::class);
+        $selectorMock->shouldReceive('suggest')
+            ->andReturn([
+                'owner_id' => '20',
+                'owner_login' => 'agent2',
+                'queue_name' => 'TestCompany',
+                'normalized_problem_key' => 'cpu load',
+                'matched_normalized_problem_key' => 'cpu load',
+                'similarity' => 1.0,
+                'score' => 100,
+                'sample_count' => 5,
+                'recent_count' => 5,
+                'old_count' => 0,
+                'last_seen_at' => null,
+            ]);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001')
+            ->assertSet('ticketOwnerId', '20');
+
+        $component->set('ticketOwnerId', '10');
+        $component->assertSet('ownerManuallyChanged', true);
+
+        $component->set('ticketQueue', 'TestCompany');
+
+        $component->assertSet('ticketOwnerId', '10')
+            ->assertSet('ownerManuallyChanged', true);
+    }
+
+    public function test_queue_change_can_update_suggestion_when_previous_owner_was_auto_selected()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->setupMocksForSuggestionTests();
+
+        $selectorMock = $this->mock(OwnerSuggestionSelector::class);
+        $selectorMock->shouldReceive('suggest')
+            ->withArgs(function ($name, $queue, $ids, $logins) {
+                return $queue === 'TestCompany';
+            })
+            ->andReturn([
+                'owner_id' => '20',
+                'owner_login' => 'agent2',
+                'queue_name' => 'TestCompany',
+                'normalized_problem_key' => 'cpu load',
+                'matched_normalized_problem_key' => 'cpu load',
+                'similarity' => 1.0,
+                'score' => 100,
+                'sample_count' => 5,
+                'recent_count' => 5,
+                'old_count' => 0,
+                'last_seen_at' => null,
+            ]);
+
+        $selectorMock->shouldReceive('suggest')
+            ->withArgs(function ($name, $queue, $ids, $logins) {
+                return $queue === 'Queue B';
+            })
+            ->andReturn([
+                'owner_id' => '30',
+                'owner_login' => 'agent3',
+                'queue_name' => 'Queue B',
+                'normalized_problem_key' => 'cpu load',
+                'matched_normalized_problem_key' => 'cpu load',
+                'similarity' => 1.0,
+                'score' => 100,
+                'sample_count' => 5,
+                'recent_count' => 5,
+                'old_count' => 0,
+                'last_seen_at' => null,
+            ]);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001')
+            ->assertSet('ticketOwnerId', '20');
+
+        $component->set('ticketQueue', 'Queue B');
+
+        $component->assertSet('ticketOwnerId', '30')
+            ->assertSet('ownerManuallyChanged', false);
+    }
+
+    public function test_selector_failure_does_not_break_modal()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->setupMocksForSuggestionTests();
+
+        Log::shouldReceive('warning')
+            ->once()
+            ->withArgs(function ($message) {
+                return str_contains($message, 'Failed to apply owner suggestion: Database failure');
+            });
+
+        Log::shouldReceive('error')->zeroOrMoreTimes();
+        Log::shouldReceive('info')->zeroOrMoreTimes();
+
+        $selectorMock = $this->mock(OwnerSuggestionSelector::class);
+        $selectorMock->shouldReceive('suggest')
+            ->andThrow(new \Exception('Database failure'));
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001');
+
+        $component->assertSet('ticketModalEventId', '1001')
+            ->assertSet('ticketOwnerId', null)
+            ->assertSet('ticketValidationErrors', [])
+            ->assertSet('ticketValidationWarnings', []);
+    }
+
+    public function test_selector_receives_both_owner_ids_and_logins()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->setupMocksForSuggestionTests();
+
+        $selectorMock = $this->mock(OwnerSuggestionSelector::class);
+        $selectorMock->shouldReceive('suggest')
+            ->once()
+            ->withArgs(function ($name, $queue, $ids, $logins) {
+                // For 'TestCompany' queue, assignable agents are 10 (agent1) and 20 (agent2)
+                return in_array(10, $ids) && in_array(20, $ids) &&
+                       in_array('agent1', $logins) && in_array('agent2', $logins);
+            })
+            ->andReturn(null);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001');
+    }
+
+    public function test_suggestion_can_match_by_owner_login_when_needed()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->setupMocksForSuggestionTests();
+
+        $selectorMock = $this->mock(OwnerSuggestionSelector::class);
+        $selectorMock->shouldReceive('suggest')
+            ->once()
+            ->andReturn([
+                'owner_id' => null, // Intentionally missing
+                'owner_login' => 'agent2',
+                'queue_name' => 'TestCompany',
+                'normalized_problem_key' => 'cpu load',
+                'matched_normalized_problem_key' => 'cpu load',
+                'similarity' => 1.0,
+                'score' => 100,
+                'sample_count' => 5,
+                'recent_count' => 5,
+                'old_count' => 0,
+                'last_seen_at' => null,
+            ]);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001');
+
+        $component->assertSet('ticketOwnerId', '20')
+            ->assertSet('suggestedOwnerId', '20')
+            ->assertSet('ownerSuggestionApplied', true);
+    }
+
+    public function test_suggestion_uses_login_fallback_if_owner_id_is_stale()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->setupMocksForSuggestionTests();
+
+        $selectorMock = $this->mock(OwnerSuggestionSelector::class);
+        $selectorMock->shouldReceive('suggest')
+            ->once()
+            ->andReturn([
+                'owner_id' => 'stale_owner_id', // Intentionally stale
+                'owner_login' => 'agent2',
+                'queue_name' => 'TestCompany',
+                'normalized_problem_key' => 'cpu load',
+                'matched_normalized_problem_key' => 'cpu load',
+                'similarity' => 1.0,
+                'score' => 100,
+                'sample_count' => 5,
+                'recent_count' => 5,
+                'old_count' => 0,
+                'last_seen_at' => null,
+            ]);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001');
+
+        $component->assertSet('ticketOwnerId', '20')
+            ->assertSet('suggestedOwnerId', '20')
+            ->assertSet('ownerSuggestionApplied', true);
+
+        $options = $component->get('ticketOwnerOptions');
+        $this->assertArrayNotHasKey('stale_owner_id', $options);
     }
 }

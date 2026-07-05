@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Filament\Resources\ZabbixTickets\Actions\ZabbixTicketDetailsAction;
 use App\Filament\Support\ZnunyTicketManagementActions;
 use App\Models\ZabbixTicket;
+use App\Services\OwnerSuggestion\OwnerSuggestionSelector;
 use App\Services\Support\DateTimeDisplayService;
 use App\Services\Zabbix\ZabbixProblemCache;
 use App\Services\Zabbix\ZabbixProblemFormatter;
@@ -25,6 +26,7 @@ use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Log;
 
 class CurrentZabbixProblems extends Page
 {
@@ -90,6 +92,14 @@ class CurrentZabbixProblems extends Page
     public ?string $generatedTicketTextArticleBody = null;
 
     public bool $isTicketTextModalOpen = false;
+
+    public ?string $suggestedOwnerId = null;
+
+    public ?string $suggestedOwnerLogin = null;
+
+    public bool $ownerSuggestionApplied = false;
+
+    public bool $ownerManuallyChanged = false;
 
     public static function canAccess(): bool
     {
@@ -382,6 +392,11 @@ class CurrentZabbixProblems extends Page
         $this->ticketCustomerUserSearch = '';
         $this->ticketCustomerUserOptions = [];
 
+        $this->suggestedOwnerId = null;
+        $this->suggestedOwnerLogin = null;
+        $this->ownerSuggestionApplied = false;
+        $this->ownerManuallyChanged = false;
+
         $stateBuilder = app(ZnunyTicketModalStateBuilder::class);
         $state = $stateBuilder->buildState($problem['host_name'] ?? '');
 
@@ -418,6 +433,8 @@ class CurrentZabbixProblems extends Page
         $this->ticketTextArticleSubject = $text['article_subject'];
         $this->ticketTextArticleBody = $text['article_body'];
 
+        $this->applyOwnerSuggestion();
+
         $this->isTicketModalOpen = true;
         $this->dispatch('open-modal', id: 'create-ticket-modal');
     }
@@ -429,16 +446,21 @@ class CurrentZabbixProblems extends Page
 
         if ($this->ticketOwnerId && ! array_key_exists((string) $this->ticketOwnerId, $this->ticketOwnerOptions)) {
             $this->ticketOwnerId = null;
+            $this->ownerManuallyChanged = false;
             Notification::make()
                 ->title('Owner Cleared')
                 ->body('The previously selected owner is not assignable to the newly selected queue.')
                 ->warning()
                 ->send();
         }
+
+        $this->applyOwnerSuggestion();
     }
 
     public function updatedTicketOwnerId(?string $ownerId): void
     {
+        $this->ownerManuallyChanged = true;
+
         $dependencyService = app(ZnunyAssignmentDependencyService::class);
         $this->ticketQueueOptions = $dependencyService->getQueueOptionsForOwnerId($ownerId);
 
@@ -449,6 +471,59 @@ class CurrentZabbixProblems extends Page
                 ->body('The previously selected queue is not assignable to the newly selected owner.')
                 ->warning()
                 ->send();
+        }
+    }
+
+    protected function applyOwnerSuggestion(): void
+    {
+        try {
+            $selector = app(OwnerSuggestionSelector::class);
+            $dependencyService = app(ZnunyAssignmentDependencyService::class);
+
+            $problemName = $this->ticketModalProblem['name'] ?? '';
+            $queueName = $this->ticketQueue;
+            $allowedOwnerIds = array_keys($this->ticketOwnerOptions);
+
+            $agents = $dependencyService->getAssignableAgentsForQueue($queueName);
+            $allowedOwnerLogins = [];
+            $loginToIdMap = [];
+            foreach ($agents as $agent) {
+                if (! empty($agent['login']) && ! empty($agent['id'])) {
+                    $login = (string) $agent['login'];
+                    $allowedOwnerLogins[] = $login;
+                    $loginToIdMap[$login] = (string) $agent['id'];
+                }
+            }
+
+            $suggestion = $selector->suggest($problemName, $queueName, $allowedOwnerIds, $allowedOwnerLogins);
+
+            if ($suggestion) {
+                $resolvedSuggestedOwnerId = null;
+
+                if (! empty($suggestion['owner_id']) && array_key_exists((string) $suggestion['owner_id'], $this->ticketOwnerOptions)) {
+                    $resolvedSuggestedOwnerId = (string) $suggestion['owner_id'];
+                } elseif (! empty($suggestion['owner_login']) && isset($loginToIdMap[(string) $suggestion['owner_login']])) {
+                    $resolvedSuggestedOwnerId = $loginToIdMap[(string) $suggestion['owner_login']];
+                }
+
+                if ($resolvedSuggestedOwnerId) {
+                    $this->suggestedOwnerId = $resolvedSuggestedOwnerId;
+                    $this->suggestedOwnerLogin = $suggestion['owner_login'] ?? null;
+
+                    if (! $this->ownerManuallyChanged) {
+                        $this->ticketOwnerId = $this->suggestedOwnerId;
+                        $this->ownerSuggestionApplied = true;
+
+                        $this->ticketQueueOptions = $dependencyService->getQueueOptionsForOwnerId($this->ticketOwnerId);
+                    }
+
+                    $suggestedLabel = $this->ticketOwnerOptions[$this->suggestedOwnerId];
+                    unset($this->ticketOwnerOptions[$this->suggestedOwnerId]);
+                    $this->ticketOwnerOptions = [$this->suggestedOwnerId => $suggestedLabel] + $this->ticketOwnerOptions;
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Failed to apply owner suggestion: '.$e->getMessage());
         }
     }
 

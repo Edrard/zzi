@@ -9,6 +9,20 @@ class ZnunyAssignmentDependencyService
         protected ZnunyAgentService $agentService
     ) {}
 
+    public function getAssignableAgentsForQueue(?string $queueName): array
+    {
+        if (empty($queueName)) {
+            return $this->agentService->getSelectableAgents();
+        }
+
+        $queue = $this->client->getQueueByName($queueName);
+        if (empty($queue['id'])) {
+            return $this->agentService->getSelectableAgents();
+        }
+
+        return $this->agentService->getSelectableAssignableAgentsForQueue($queue['id']);
+    }
+
     /**
      * @return array<string|int, string> Key is agent ID, value is label
      */
