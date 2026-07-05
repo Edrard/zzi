@@ -1187,9 +1187,9 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $this->setupMocksForSuggestionTests();
 
         $selectorMock = $this->mock(OwnerSuggestionSelector::class);
-        $selectorMock->shouldReceive('suggest')
+        $selectorMock->shouldReceive('rank')
             ->once()
-            ->andReturn([
+            ->andReturn([[
                 'owner_id' => '20',
                 'owner_login' => 'agent2',
                 'queue_name' => 'TestCompany',
@@ -1201,7 +1201,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
                 'recent_count' => 5,
                 'old_count' => 0,
                 'last_seen_at' => null,
-            ]);
+            ]]);
 
         $component = Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
@@ -1221,8 +1221,8 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $this->setupMocksForSuggestionTests();
 
         $selectorMock = $this->mock(OwnerSuggestionSelector::class);
-        $selectorMock->shouldReceive('suggest')
-            ->andReturn([
+        $selectorMock->shouldReceive('rank')
+            ->andReturn([[
                 'owner_id' => '20',
                 'owner_login' => 'agent2',
                 'queue_name' => 'TestCompany',
@@ -1234,7 +1234,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
                 'recent_count' => 5,
                 'old_count' => 0,
                 'last_seen_at' => null,
-            ]);
+            ]]);
 
         $component = Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
@@ -1251,8 +1251,8 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $this->setupMocksForSuggestionTests();
 
         $selectorMock = $this->mock(OwnerSuggestionSelector::class);
-        $selectorMock->shouldReceive('suggest')
-            ->andReturn([
+        $selectorMock->shouldReceive('rank')
+            ->andReturn([[
                 'owner_id' => '99',
                 'owner_login' => 'unknown',
                 'queue_name' => 'TestCompany',
@@ -1264,7 +1264,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
                 'recent_count' => 5,
                 'old_count' => 0,
                 'last_seen_at' => null,
-            ]);
+            ]]);
 
         $component = Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
@@ -1281,8 +1281,8 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $this->setupMocksForSuggestionTests();
 
         $selectorMock = $this->mock(OwnerSuggestionSelector::class);
-        $selectorMock->shouldReceive('suggest')
-            ->andReturn([
+        $selectorMock->shouldReceive('rank')
+            ->andReturn([[
                 'owner_id' => '20',
                 'owner_login' => 'agent2',
                 'queue_name' => 'TestCompany',
@@ -1294,7 +1294,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
                 'recent_count' => 5,
                 'old_count' => 0,
                 'last_seen_at' => null,
-            ]);
+            ]]);
 
         $component = Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
@@ -1316,11 +1316,11 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $this->setupMocksForSuggestionTests();
 
         $selectorMock = $this->mock(OwnerSuggestionSelector::class);
-        $selectorMock->shouldReceive('suggest')
+        $selectorMock->shouldReceive('rank')
             ->withArgs(function ($name, $queue, $ids, $logins) {
                 return $queue === 'TestCompany';
             })
-            ->andReturn([
+            ->andReturn([[
                 'owner_id' => '20',
                 'owner_login' => 'agent2',
                 'queue_name' => 'TestCompany',
@@ -1332,13 +1332,13 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
                 'recent_count' => 5,
                 'old_count' => 0,
                 'last_seen_at' => null,
-            ]);
+            ]]);
 
-        $selectorMock->shouldReceive('suggest')
+        $selectorMock->shouldReceive('rank')
             ->withArgs(function ($name, $queue, $ids, $logins) {
                 return $queue === 'Queue B';
             })
-            ->andReturn([
+            ->andReturn([[
                 'owner_id' => '30',
                 'owner_login' => 'agent3',
                 'queue_name' => 'Queue B',
@@ -1350,7 +1350,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
                 'recent_count' => 5,
                 'old_count' => 0,
                 'last_seen_at' => null,
-            ]);
+            ]]);
 
         $component = Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
@@ -1378,7 +1378,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         Log::shouldReceive('info')->zeroOrMoreTimes();
 
         $selectorMock = $this->mock(OwnerSuggestionSelector::class);
-        $selectorMock->shouldReceive('suggest')
+        $selectorMock->shouldReceive('rank')
             ->andThrow(new \Exception('Database failure'));
 
         $component = Livewire::actingAs($admin)
@@ -1397,14 +1397,14 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $this->setupMocksForSuggestionTests();
 
         $selectorMock = $this->mock(OwnerSuggestionSelector::class);
-        $selectorMock->shouldReceive('suggest')
+        $selectorMock->shouldReceive('rank')
             ->once()
             ->withArgs(function ($name, $queue, $ids, $logins) {
                 // For 'TestCompany' queue, assignable agents are 10 (agent1) and 20 (agent2)
                 return in_array(10, $ids) && in_array(20, $ids) &&
                        in_array('agent1', $logins) && in_array('agent2', $logins);
             })
-            ->andReturn(null);
+            ->andReturn([]);
 
         Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
@@ -1417,9 +1417,9 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $this->setupMocksForSuggestionTests();
 
         $selectorMock = $this->mock(OwnerSuggestionSelector::class);
-        $selectorMock->shouldReceive('suggest')
+        $selectorMock->shouldReceive('rank')
             ->once()
-            ->andReturn([
+            ->andReturn([[
                 'owner_id' => null, // Intentionally missing
                 'owner_login' => 'agent2',
                 'queue_name' => 'TestCompany',
@@ -1431,7 +1431,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
                 'recent_count' => 5,
                 'old_count' => 0,
                 'last_seen_at' => null,
-            ]);
+            ]]);
 
         $component = Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
@@ -1448,9 +1448,9 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $this->setupMocksForSuggestionTests();
 
         $selectorMock = $this->mock(OwnerSuggestionSelector::class);
-        $selectorMock->shouldReceive('suggest')
+        $selectorMock->shouldReceive('rank')
             ->once()
-            ->andReturn([
+            ->andReturn([[
                 'owner_id' => 'stale_owner_id', // Intentionally stale
                 'owner_login' => 'agent2',
                 'queue_name' => 'TestCompany',
@@ -1462,7 +1462,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
                 'recent_count' => 5,
                 'old_count' => 0,
                 'last_seen_at' => null,
-            ]);
+            ]]);
 
         $component = Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
@@ -1546,12 +1546,6 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->test(CurrentZabbixProblems::class)
             ->call('openCreateTicketModal', '1001');
 
-        $notes = $component->get('ticketDefaultNotes');
-        if (empty($notes)) {
-            echo 'NOTES ARE EMPTY\n';
-        } else {
-            echo 'NOTES: '.$notes[0].'\n';
-        }
         $component->assertSee('Queue resolved');
     }
 
@@ -1587,5 +1581,253 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
 
         $component->assertSee('Mapped queue not found in Znuny: Missing Queue');
         $component->assertDontSee('Queue resolved by prefix');
+    }
+
+    public function test_ranked_suggestions_sort_multiple_owners_in_dropdown()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->setupMocksForSuggestionTests();
+
+        $selectorMock = $this->mock(OwnerSuggestionSelector::class);
+        $selectorMock->shouldReceive('rank')
+            ->once()
+            ->andReturn([
+                [
+                    'owner_id' => '20',
+                    'owner_login' => 'agent2',
+                    'queue_name' => 'TestCompany',
+                    'normalized_problem_key' => 'cpu load',
+                    'matched_normalized_problem_key' => 'cpu load',
+                    'similarity' => 1.0,
+                    'score' => 100,
+                    'sample_count' => 5,
+                    'recent_count' => 5,
+                    'old_count' => 0,
+                    'last_seen_at' => null,
+                ],
+                [
+                    'owner_id' => '10',
+                    'owner_login' => 'agent1',
+                    'queue_name' => 'TestCompany',
+                    'normalized_problem_key' => 'cpu load',
+                    'matched_normalized_problem_key' => 'cpu load',
+                    'similarity' => 1.0,
+                    'score' => 50,
+                    'sample_count' => 5,
+                    'recent_count' => 5,
+                    'old_count' => 0,
+                    'last_seen_at' => null,
+                ],
+            ]);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001');
+
+        $component->assertSet('ticketOwnerId', '20')
+            ->assertSet('suggestedOwnerId', '20')
+            ->assertSet('ownerSuggestionApplied', true);
+
+        $options = $component->get('ticketOwnerOptions');
+        $keys = array_keys($options);
+
+        // First item should be 20, second 10.
+        $this->assertEquals('20', $keys[0]);
+        $this->assertEquals('10', $keys[1]);
+    }
+
+    public function test_ranked_owner_from_different_stats_queue_is_used_when_assignable_to_current_queue()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->setupMocksForSuggestionTests();
+
+        $selectorMock = $this->mock(OwnerSuggestionSelector::class);
+        $selectorMock->shouldReceive('rank')
+            ->once()
+            ->andReturn([
+                [
+                    'owner_id' => '10', // 'agent1' is assignable to 'TestCompany'
+                    'owner_login' => 'agent1',
+                    'queue_name' => 'DifferentQueue', // Different queue!
+                    'normalized_problem_key' => 'cpu load',
+                    'matched_normalized_problem_key' => 'cpu load',
+                    'similarity' => 1.0,
+                    'score' => 100,
+                    'sample_count' => 5,
+                    'recent_count' => 5,
+                    'old_count' => 0,
+                    'last_seen_at' => null,
+                ],
+            ]);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001');
+
+        $component->assertSet('ticketOwnerId', '10')
+            ->assertSet('suggestedOwnerId', '10')
+            ->assertSet('ownerSuggestionApplied', true);
+
+        $options = $component->get('ticketOwnerOptions');
+        $keys = array_keys($options);
+
+        // It should be injected at the top
+        $this->assertEquals('10', $keys[0]);
+    }
+
+    public function test_ranked_owner_from_different_stats_queue_is_ignored_when_not_assignable_to_current_queue()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->setupMocksForSuggestionTests();
+
+        $selectorMock = $this->mock(OwnerSuggestionSelector::class);
+        $selectorMock->shouldReceive('rank')
+            ->once()
+            ->andReturn([
+                [
+                    'owner_id' => '99', // 'unknown' is NOT assignable to 'TestCompany'
+                    'owner_login' => 'unknown',
+                    'queue_name' => 'DifferentQueue', // Different queue!
+                    'normalized_problem_key' => 'cpu load',
+                    'matched_normalized_problem_key' => 'cpu load',
+                    'similarity' => 1.0,
+                    'score' => 100,
+                    'sample_count' => 5,
+                    'recent_count' => 5,
+                    'old_count' => 0,
+                    'last_seen_at' => null,
+                ],
+            ]);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001');
+
+        // Should fallback to default behavior (e.g. owner stays as first assignable or default)
+        // Here, setupMocksForSuggestionTests mock means ticketOwnerId defaults to '' if not suggested.
+        // Let's assert it is not 99.
+        $this->assertNotEquals('99', $component->get('ticketOwnerId'));
+        $this->assertNull($component->get('suggestedOwnerId'));
+        $this->assertFalse($component->get('ownerSuggestionApplied'));
+
+        $options = $component->get('ticketOwnerOptions');
+        $this->assertArrayNotHasKey('99', $options);
+    }
+
+    public function test_blocked_top_1_ranked_owner_is_skipped_and_top_2_assignable_owner_is_selected()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->setupMocksForSuggestionTests();
+
+        $selectorMock = $this->mock(OwnerSuggestionSelector::class);
+        $selectorMock->shouldReceive('rank')
+            ->once()
+            ->andReturn([
+                [
+                    'owner_id' => '99', // Blocked / not assignable
+                    'owner_login' => 'blocked@example.invalid',
+                    'queue_name' => 'TestCompany',
+                    'normalized_problem_key' => 'cpu load',
+                    'matched_normalized_problem_key' => 'cpu load',
+                    'similarity' => 1.0,
+                    'score' => 100,
+                    'sample_count' => 10,
+                    'recent_count' => 10,
+                    'old_count' => 0,
+                    'last_seen_at' => null,
+                ],
+                [
+                    'owner_id' => '10', // 'agent1' is assignable
+                    'owner_login' => 'agent1',
+                    'queue_name' => 'TestCompany',
+                    'normalized_problem_key' => 'cpu load',
+                    'matched_normalized_problem_key' => 'cpu load',
+                    'similarity' => 1.0,
+                    'score' => 50,
+                    'sample_count' => 5,
+                    'recent_count' => 5,
+                    'old_count' => 0,
+                    'last_seen_at' => null,
+                ],
+            ]);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001');
+
+        $component->assertSet('ticketOwnerId', '10')
+            ->assertSet('suggestedOwnerId', '10')
+            ->assertSet('ownerSuggestionApplied', true);
+
+        $options = $component->get('ticketOwnerOptions');
+        $this->assertArrayNotHasKey('99', $options);
+
+        $keys = array_keys($options);
+        $this->assertEquals('10', $keys[0]);
+    }
+
+    public function test_duplicate_blocked_combinations_still_resolve_cleanly()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->setupMocksForSuggestionTests();
+
+        $selectorMock = $this->mock(OwnerSuggestionSelector::class);
+        $selectorMock->shouldReceive('rank')
+            ->once()
+            ->andReturn([
+                [
+                    'owner_id' => '99', // blocked 1
+                    'owner_login' => 'blocked1',
+                    'queue_name' => 'TestCompany',
+                    'normalized_problem_key' => 'cpu load',
+                    'matched_normalized_problem_key' => 'cpu load',
+                    'similarity' => 1.0,
+                    'score' => 100,
+                    'sample_count' => 10,
+                    'recent_count' => 10,
+                    'old_count' => 0,
+                    'last_seen_at' => null,
+                ],
+                [
+                    'owner_id' => null,
+                    'owner_login' => 'blocked1', // duplicate invalid login fallback
+                    'queue_name' => 'TestCompany',
+                    'normalized_problem_key' => 'cpu load',
+                    'matched_normalized_problem_key' => 'cpu load',
+                    'similarity' => 1.0,
+                    'score' => 80,
+                    'sample_count' => 8,
+                    'recent_count' => 8,
+                    'old_count' => 0,
+                    'last_seen_at' => null,
+                ],
+                [
+                    'owner_id' => '20', // valid next assignable owner ('agent2')
+                    'owner_login' => 'agent2',
+                    'queue_name' => 'TestCompany',
+                    'normalized_problem_key' => 'cpu load',
+                    'matched_normalized_problem_key' => 'cpu load',
+                    'similarity' => 1.0,
+                    'score' => 50,
+                    'sample_count' => 5,
+                    'recent_count' => 5,
+                    'old_count' => 0,
+                    'last_seen_at' => null,
+                ],
+            ]);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001');
+
+        $component->assertSet('ticketOwnerId', '20')
+            ->assertSet('suggestedOwnerId', '20')
+            ->assertSet('ownerSuggestionApplied', true);
+
+        $options = $component->get('ticketOwnerOptions');
+        $this->assertArrayNotHasKey('99', $options);
+
+        $keys = array_keys($options);
+        $this->assertEquals('20', $keys[0]);
     }
 }

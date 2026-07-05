@@ -11,19 +11,19 @@ class OwnerSuggestionSelector
         private ProblemSimilarityService $similarityService
     ) {}
 
-    public function suggest(
+    public function rank(
         string $problemName,
         ?string $queueName = null,
         array $allowedOwnerIds = [],
         array $allowedOwnerLogins = []
-    ): ?array {
+    ): array {
         if (trim($problemName) === '') {
-            return null;
+            return [];
         }
 
         $normalizedKey = $this->normalizer->normalize($problemName);
         if (trim($normalizedKey) === '') {
-            return null;
+            return [];
         }
 
         $query = ZnunyOwnerSuggestionStat::query()
@@ -64,7 +64,7 @@ class OwnerSuggestionSelector
         }
 
         if (empty($candidates)) {
-            return null;
+            return [];
         }
 
         usort($candidates, function (array $a, array $b) {
@@ -108,20 +108,34 @@ class OwnerSuggestionSelector
             return 0;
         });
 
-        $best = $candidates[0];
+        $results = [];
+        foreach ($candidates as $best) {
+            $results[] = [
+                'owner_id' => $best['stat']->owner_id,
+                'owner_login' => $best['stat']->owner_login,
+                'queue_name' => $best['stat']->queue_name,
+                'normalized_problem_key' => $normalizedKey,
+                'matched_normalized_problem_key' => $best['stat']->normalized_problem_key,
+                'similarity' => $best['similarity'],
+                'score' => (float) $best['stat']->score,
+                'sample_count' => (int) $best['stat']->sample_count,
+                'recent_count' => (int) $best['stat']->recent_count,
+                'old_count' => (int) $best['stat']->old_count,
+                'last_seen_at' => $best['stat']->last_seen_at,
+            ];
+        }
 
-        return [
-            'owner_id' => $best['stat']->owner_id,
-            'owner_login' => $best['stat']->owner_login,
-            'queue_name' => $best['stat']->queue_name,
-            'normalized_problem_key' => $normalizedKey,
-            'matched_normalized_problem_key' => $best['stat']->normalized_problem_key,
-            'similarity' => $best['similarity'],
-            'score' => (float) $best['stat']->score,
-            'sample_count' => (int) $best['stat']->sample_count,
-            'recent_count' => (int) $best['stat']->recent_count,
-            'old_count' => (int) $best['stat']->old_count,
-            'last_seen_at' => $best['stat']->last_seen_at,
-        ];
+        return $results;
+    }
+
+    public function suggest(
+        string $problemName,
+        ?string $queueName = null,
+        array $allowedOwnerIds = [],
+        array $allowedOwnerLogins = []
+    ): ?array {
+        $ranked = $this->rank($problemName, $queueName, $allowedOwnerIds, $allowedOwnerLogins);
+
+        return $ranked[0] ?? null;
     }
 }

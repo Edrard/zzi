@@ -499,20 +499,30 @@ class CurrentZabbixProblems extends Page
                 }
             }
 
-            $suggestion = $selector->suggest($problemName, $queueName, $allowedOwnerIds, $allowedOwnerLogins);
+            $rankedCandidates = $selector->rank($problemName, $queueName, $allowedOwnerIds, $allowedOwnerLogins);
 
-            if ($suggestion) {
-                $resolvedSuggestedOwnerId = null;
+            if (! empty($rankedCandidates)) {
+                $resolvedRankedOwnerIds = [];
+                $resolvedLogins = [];
 
-                if (! empty($suggestion['owner_id']) && array_key_exists((string) $suggestion['owner_id'], $this->ticketOwnerOptions)) {
-                    $resolvedSuggestedOwnerId = (string) $suggestion['owner_id'];
-                } elseif (! empty($suggestion['owner_login']) && isset($loginToIdMap[(string) $suggestion['owner_login']])) {
-                    $resolvedSuggestedOwnerId = $loginToIdMap[(string) $suggestion['owner_login']];
+                foreach ($rankedCandidates as $suggestion) {
+                    $resolvedSuggestedOwnerId = null;
+
+                    if (! empty($suggestion['owner_id']) && array_key_exists((string) $suggestion['owner_id'], $this->ticketOwnerOptions)) {
+                        $resolvedSuggestedOwnerId = (string) $suggestion['owner_id'];
+                    } elseif (! empty($suggestion['owner_login']) && isset($loginToIdMap[(string) $suggestion['owner_login']])) {
+                        $resolvedSuggestedOwnerId = $loginToIdMap[(string) $suggestion['owner_login']];
+                    }
+
+                    if ($resolvedSuggestedOwnerId && ! in_array($resolvedSuggestedOwnerId, $resolvedRankedOwnerIds, true)) {
+                        $resolvedRankedOwnerIds[] = $resolvedSuggestedOwnerId;
+                        $resolvedLogins[] = $suggestion['owner_login'] ?? null;
+                    }
                 }
 
-                if ($resolvedSuggestedOwnerId) {
-                    $this->suggestedOwnerId = $resolvedSuggestedOwnerId;
-                    $this->suggestedOwnerLogin = $suggestion['owner_login'] ?? null;
+                if (! empty($resolvedRankedOwnerIds)) {
+                    $this->suggestedOwnerId = $resolvedRankedOwnerIds[0];
+                    $this->suggestedOwnerLogin = $resolvedLogins[0];
 
                     if (! $this->ownerManuallyChanged) {
                         $this->ticketOwnerId = $this->suggestedOwnerId;
@@ -521,9 +531,16 @@ class CurrentZabbixProblems extends Page
                         $this->ticketQueueOptions = $dependencyService->getQueueOptionsForOwnerId($this->ticketOwnerId);
                     }
 
-                    $suggestedLabel = $this->ticketOwnerOptions[$this->suggestedOwnerId];
-                    unset($this->ticketOwnerOptions[$this->suggestedOwnerId]);
-                    $this->ticketOwnerOptions = [$this->suggestedOwnerId => $suggestedLabel] + $this->ticketOwnerOptions;
+                    $newOptions = [];
+                    foreach ($resolvedRankedOwnerIds as $id) {
+                        $newOptions[$id] = $this->ticketOwnerOptions[$id];
+                    }
+                    foreach ($this->ticketOwnerOptions as $id => $label) {
+                        if (! in_array($id, $resolvedRankedOwnerIds, true)) {
+                            $newOptions[$id] = $label;
+                        }
+                    }
+                    $this->ticketOwnerOptions = $newOptions;
                 }
             }
         } catch (\Throwable $e) {

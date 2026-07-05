@@ -46,6 +46,49 @@ class OwnerSuggestionSelectorTest extends TestCase
         $this->assertEquals(1.0, $result['similarity']);
     }
 
+    public function test_rank_returns_multiple_candidates_in_correct_order()
+    {
+        ZnunyOwnerSuggestionStat::create([
+            'normalized_problem_key' => 'exact problem',
+            'queue_name' => 'Q1',
+            'owner_id' => 1,
+            'owner_login' => 'user_1',
+            'sample_count' => 5,
+            'recent_count' => 5,
+            'old_count' => 0,
+            'score' => 5.0,
+        ]);
+
+        ZnunyOwnerSuggestionStat::create([
+            'normalized_problem_key' => 'exact problem',
+            'queue_name' => 'Q1',
+            'owner_id' => 2,
+            'owner_login' => 'user_2',
+            'sample_count' => 10,
+            'recent_count' => 10,
+            'old_count' => 0,
+            'score' => 10.0,
+        ]);
+
+        ZnunyOwnerSuggestionStat::create([
+            'normalized_problem_key' => 'exact problem',
+            'queue_name' => 'Q2',
+            'owner_id' => 3,
+            'owner_login' => 'user_3',
+            'sample_count' => 20,
+            'recent_count' => 20,
+            'old_count' => 0,
+            'score' => 20.0,
+        ]);
+
+        $results = $this->selector->rank('exact problem', 'Q1');
+
+        $this->assertCount(3, $results);
+        $this->assertEquals(2, $results[0]['owner_id']); // Q1, score 10
+        $this->assertEquals(1, $results[1]['owner_id']); // Q1, score 5
+        $this->assertEquals(3, $results[2]['owner_id']); // Q2, score 20 (Q2 sorted after Q1)
+    }
+
     public function test_uses_similarity_for_structural_disk_space_problems()
     {
         ZnunyOwnerSuggestionStat::create([
@@ -115,6 +158,67 @@ class OwnerSuggestionSelectorTest extends TestCase
         $this->assertNotNull($result);
         $this->assertEquals(2, $result['owner_id']);
         $this->assertEquals('Q1', $result['queue_name']);
+    }
+
+    public function test_same_queue_candidates_rank_before_different_queue_candidates()
+    {
+        ZnunyOwnerSuggestionStat::create([
+            'normalized_problem_key' => 'same error',
+            'queue_name' => 'Queue A',
+            'owner_id' => 1,
+            'owner_login' => 'u1',
+            'score' => 5.0,
+        ]);
+
+        ZnunyOwnerSuggestionStat::create([
+            'normalized_problem_key' => 'same error',
+            'queue_name' => 'Queue B',
+            'owner_id' => 2,
+            'owner_login' => 'u2',
+            'score' => 100.0,
+        ]);
+
+        $results = $this->selector->rank('Same error', 'Queue A');
+
+        $this->assertCount(2, $results);
+        $this->assertEquals(1, $results[0]['owner_id']);
+        $this->assertEquals('Queue A', $results[0]['queue_name']);
+        $this->assertEquals(2, $results[1]['owner_id']);
+        $this->assertEquals('Queue B', $results[1]['queue_name']);
+    }
+
+    public function test_rank_falls_back_to_different_queue_candidates_when_current_queue_has_no_matching_stats()
+    {
+        ZnunyOwnerSuggestionStat::create([
+            'normalized_problem_key' => 'fallback error',
+            'queue_name' => 'Queue A',
+            'owner_id' => 99,
+            'owner_login' => 'fallback_user',
+            'score' => 50.0,
+        ]);
+
+        $results = $this->selector->rank('fallback error', 'Queue B');
+
+        $this->assertCount(1, $results);
+        $this->assertEquals(99, $results[0]['owner_id']);
+        $this->assertEquals('Queue A', $results[0]['queue_name']);
+    }
+
+    public function test_suggest_returns_first_ranked_fallback_candidate_when_current_queue_has_no_stats()
+    {
+        ZnunyOwnerSuggestionStat::create([
+            'normalized_problem_key' => 'fallback error',
+            'queue_name' => 'Queue A',
+            'owner_id' => 88,
+            'owner_login' => 'fallback_user_2',
+            'score' => 50.0,
+        ]);
+
+        $result = $this->selector->suggest('fallback error', 'Queue B');
+
+        $this->assertNotNull($result);
+        $this->assertEquals(88, $result['owner_id']);
+        $this->assertEquals('Queue A', $result['queue_name']);
     }
 
     public function test_uses_score_when_queue_and_similarity_are_equal()
@@ -276,5 +380,53 @@ class OwnerSuggestionSelectorTest extends TestCase
         $result2 = $this->selector->suggest('Same error', 'Q1', [999], ['allowed_login']);
         $this->assertNotNull($result2);
         $this->assertEquals('allowed_login', $result2['owner_login']);
+    }
+
+    public function test_rank_respects_allowed_owners_when_top_1_is_not_allowed()
+    {
+        ZnunyOwnerSuggestionStat::create([
+            'normalized_problem_key' => 'filter error',
+            'queue_name' => 'Q1',
+            'owner_id' => 1,
+            'owner_login' => 'blocked@example.invalid',
+            'score' => 100.0,
+        ]);
+
+        ZnunyOwnerSuggestionStat::create([
+            'normalized_problem_key' => 'filter error',
+            'queue_name' => 'Q1',
+            'owner_id' => 2,
+            'owner_login' => 'allowed@example.invalid',
+            'score' => 50.0,
+        ]);
+
+        $results = $this->selector->rank('filter error', 'Q1', [], ['allowed@example.invalid']);
+
+        $this->assertCount(1, $results);
+        $this->assertEquals('allowed@example.invalid', $results[0]['owner_login']);
+    }
+
+    public function test_suggest_returns_next_allowed_owner_when_top_1_is_filtered_out()
+    {
+        ZnunyOwnerSuggestionStat::create([
+            'normalized_problem_key' => 'filter error',
+            'queue_name' => 'Q1',
+            'owner_id' => 1,
+            'owner_login' => 'blocked@example.invalid',
+            'score' => 100.0,
+        ]);
+
+        ZnunyOwnerSuggestionStat::create([
+            'normalized_problem_key' => 'filter error',
+            'queue_name' => 'Q1',
+            'owner_id' => 2,
+            'owner_login' => 'allowed@example.invalid',
+            'score' => 50.0,
+        ]);
+
+        $result = $this->selector->suggest('filter error', 'Q1', [], ['allowed@example.invalid']);
+
+        $this->assertNotNull($result);
+        $this->assertEquals('allowed@example.invalid', $result['owner_login']);
     }
 }
