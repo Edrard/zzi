@@ -73,6 +73,8 @@ class CurrentZabbixProblems extends Page
 
     public array $ticketCustomerUserOptions = [];
 
+    public array $ticketDefaultNotes = [];
+
     public array $ticketDefaultWarnings = [];
 
     public array $ticketValidationErrors = [];
@@ -386,6 +388,7 @@ class CurrentZabbixProblems extends Page
 
         $this->ticketModalEventId = $eventId;
         $this->ticketModalProblem = $problem;
+        $this->ticketDefaultNotes = [];
         $this->ticketValidationErrors = [];
         $this->ticketValidationWarnings = [];
         $this->ticketValidationStatus = null;
@@ -404,6 +407,7 @@ class CurrentZabbixProblems extends Page
         $this->ticketQueue = $state['default_queue'];
         $this->ticketCustomerUser = $state['default_customer_user'];
         $this->ticketCustomerUserOptions = $state['customer_user_options'];
+        $this->ticketDefaultNotes = $state['notes'] ?? [];
         $this->ticketDefaultWarnings = $state['warnings'];
 
         $dependencyService = app(ZnunyAssignmentDependencyService::class);

@@ -30,6 +30,7 @@ class ZnunyLookupService
             'customer_user' => [
                 'found' => false,
             ],
+            'notes' => [],
             'warnings' => $local['warnings'] ?? [],
         ];
 
@@ -68,10 +69,10 @@ class ZnunyLookupService
 
                 if (strtolower($prefix) === strtolower($local['queue'])) {
                     $mapped = true;
-                    $result['warnings'][] = "Queue mapping matched prefix: {$prefix} -> {$qName}";
                     try {
                         $qResponse = $this->queueService->findQueueByName($qName);
                         if ($qResponse['found']) {
+                            $result['notes'][] = "Queue resolved by prefix: {$prefix} → {$qName}";
                             $result['queue'] = [
                                 'found' => true,
                                 'id' => $qResponse['id'],

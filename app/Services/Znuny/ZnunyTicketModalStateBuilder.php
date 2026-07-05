@@ -18,6 +18,7 @@ class ZnunyTicketModalStateBuilder
      *   default_queue: ?string,
      *   default_customer_user: ?string,
      *   customer_user_options: array<string, string>,
+     *   notes: array<int, string>,
      *   warnings: array<int, string>
      * }
      */
@@ -34,6 +35,7 @@ class ZnunyTicketModalStateBuilder
         $defaultQueue = null;
         $defaultCustomerUser = null;
         $customerUserOptions = [];
+        $notes = [];
         $warnings = [];
 
         try {
@@ -45,6 +47,7 @@ class ZnunyTicketModalStateBuilder
                 $defaultCustomerUser = $candidates['customer_user']['login'];
                 $customerUserOptions[$defaultCustomerUser] = $candidates['customer_user']['login'];
             }
+            $notes = $candidates['notes'] ?? [];
             $warnings = $candidates['warnings'] ?? [];
         } catch (\Throwable $e) {
             $warnings[] = 'Lookup failed: '.$e->getMessage();
@@ -57,6 +60,7 @@ class ZnunyTicketModalStateBuilder
             'default_queue' => $defaultQueue,
             'default_customer_user' => $defaultCustomerUser,
             'customer_user_options' => $customerUserOptions,
+            'notes' => $notes,
             'warnings' => $warnings,
         ];
     }

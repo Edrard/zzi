@@ -1475,4 +1475,117 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $options = $component->get('ticketOwnerOptions');
         $this->assertArrayNotHasKey('stale_owner_id', $options);
     }
+
+    public function test_successful_queue_mapping_goes_to_notes()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->setupMocksForSuggestionTests();
+
+        $cache = app(ZabbixProblemCache::class);
+        $problems = $cache->all();
+        $problems[0]['host_name'] = 'SocialProduct server';
+        $cache->putMany($problems, 3600);
+
+        Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], ['value' => json_encode([
+            ['host_prefix' => 'SocialProduct', 'queue_name' => 'TestCompany'],
+        ]), 'type' => 'json']);
+
+        Http::fake([
+            '*example.invalid/api/Queue?*' => Http::response([
+                'Queues' => [
+                    ['QueueID' => 99, 'Name' => 'Mapped Queue', 'ValidID' => 1],
+                ],
+            ], 200),
+            '*example.invalid/api/Queue/99/AssignableAgents*' => Http::response([
+                'Agents' => [
+                    ['UserID' => 10, 'UserLogin' => 'agent1', 'UserFullname' => 'Agent One'],
+                ],
+            ], 200),
+        ]);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001');
+
+        $notes = $component->get('ticketDefaultNotes');
+        $warnings = $component->get('ticketDefaultWarnings');
+
+        $this->assertContains('Queue resolved by prefix: SocialProduct → TestCompany', $notes);
+        $this->assertNotContains('Queue mapping matched prefix: SocialProduct → TestCompany', $warnings);
+        $this->assertNotContains('Queue resolved by prefix: SocialProduct → TestCompany', $warnings);
+    }
+
+    public function test_successful_queue_mapping_note_is_rendered_as_neutral_text()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->setupMocksForSuggestionTests();
+
+        $cache = app(ZabbixProblemCache::class);
+        $problems = $cache->all();
+        $problems[0]['host_name'] = 'SocialProduct server';
+        $cache->putMany($problems, 3600);
+
+        Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], ['value' => json_encode([
+            ['host_prefix' => 'SocialProduct', 'queue_name' => 'TestCompany'],
+        ]), 'type' => 'json']);
+
+        Http::fake([
+            '*example.invalid/api/Queue?*' => Http::response([
+                'Queues' => [
+                    ['QueueID' => 99, 'Name' => 'Mapped Queue', 'ValidID' => 1],
+                ],
+            ], 200),
+            '*example.invalid/api/Queue/99/AssignableAgents*' => Http::response([
+                'Agents' => [
+                    ['UserID' => 10, 'UserLogin' => 'agent1', 'UserFullname' => 'Agent One'],
+                ],
+            ], 200),
+        ]);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001');
+
+        $notes = $component->get('ticketDefaultNotes');
+        if (empty($notes)) {
+            echo 'NOTES ARE EMPTY\n';
+        } else {
+            echo 'NOTES: '.$notes[0].'\n';
+        }
+        $component->assertSee('Queue resolved');
+    }
+
+    public function test_failed_queue_mapping_remains_as_warning()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->setupMocksForSuggestionTests();
+
+        $cache = app(ZabbixProblemCache::class);
+        $problems = $cache->all();
+        $problems[0]['host_name'] = 'SocialProduct server';
+        $cache->putMany($problems, 3600);
+
+        Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], ['value' => json_encode([
+            ['host_prefix' => 'SocialProduct', 'queue_name' => 'Missing Queue'],
+        ]), 'type' => 'json']);
+
+        Http::fake([
+            '*example.invalid/api/Queue?*' => Http::response([
+                'Queues' => [],
+            ], 200),
+        ]);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001');
+
+        $warnings = $component->get('ticketDefaultWarnings');
+        $notes = $component->get('ticketDefaultNotes');
+
+        $this->assertContains('Mapped queue not found in Znuny: Missing Queue', $warnings);
+        $this->assertEmpty($notes);
+
+        $component->assertSee('Mapped queue not found in Znuny: Missing Queue');
+        $component->assertDontSee('Queue resolved by prefix');
+    }
 }

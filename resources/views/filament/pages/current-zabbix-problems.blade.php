@@ -1058,6 +1058,17 @@
                     </div>
                 </div>
 
+                @if(!empty($ticketDefaultNotes))
+                    <div class="zbx-ticket-modal-section !mb-4">
+                        @foreach($ticketDefaultNotes as $note)
+                            <div class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mt-2">
+                                <x-filament::icon icon="heroicon-m-information-circle" class="w-4 h-4 flex-shrink-0" />
+                                <span>{{ $note }}</span>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+
                 {{-- Default resolution --}}
                 @if(!empty($ticketDefaultWarnings))
                     <div class="zbx-ticket-modal-section">
