@@ -417,6 +417,66 @@ class ZnunyClient
     }
 
     /**
+     * Get list of ticket priorities.
+     */
+    public function getTicketPriorities(bool $isRetry = false): array
+    {
+        try {
+            $session = $this->sessionId();
+            $response = $this->request()->get($this->apiUrl().'/TicketPriority', [
+                'SessionID' => $session,
+            ]);
+
+            $data = $this->processResponse($response);
+
+            if (! isset($data['TicketPriorities']) || ! is_array($data['TicketPriorities'])) {
+                throw new Exception('Invalid TicketPriorities list returned from Znuny API.');
+            }
+
+            return $data['TicketPriorities'];
+
+        } catch (Throwable $e) {
+            if (! $isRetry && $this->isInvalidSessionError($e)) {
+                $this->cachedSessionId = null;
+
+                return $this->getTicketPriorities(true);
+            }
+
+            throw new Exception($this->sanitizeExceptionMessage($e->getMessage()));
+        }
+    }
+
+    /**
+     * Get list of ticket types.
+     */
+    public function getTicketTypes(bool $isRetry = false): array
+    {
+        try {
+            $session = $this->sessionId();
+            $response = $this->request()->get($this->apiUrl().'/TicketType', [
+                'SessionID' => $session,
+            ]);
+
+            $data = $this->processResponse($response);
+
+            if (! isset($data['TicketTypes']) || ! is_array($data['TicketTypes'])) {
+                throw new Exception('Invalid TicketTypes list returned from Znuny API.');
+            }
+
+            return $data['TicketTypes'];
+
+        } catch (Throwable $e) {
+            if (! $isRetry && $this->isInvalidSessionError($e)) {
+                $this->cachedSessionId = null;
+
+                return $this->getTicketTypes(true);
+            }
+
+            throw new Exception($this->sanitizeExceptionMessage($e->getMessage()));
+        }
+    }
+
+    /**
      * Search tickets through TicketSearch operation
      */
     public function searchTickets(array $filters = [], bool $isRetry = false): array

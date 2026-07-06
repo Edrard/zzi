@@ -6,9 +6,11 @@ use App\Models\ZabbixTicket;
 use App\Services\OwnerSuggestion\OwnerSuggestionObservationRecorder;
 use App\Services\Znuny\ZabbixTicketLinkService;
 use App\Services\Znuny\ZnunyClient;
+use App\Services\Znuny\ZnunyTicketAdvancedDefaultsService;
 use App\Services\Znuny\ZnunyTicketCreationService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Mockery\MockInterface;
 use Tests\TestCase;
 
 class ZnunyTicketCreationServiceTest extends TestCase
@@ -17,6 +19,14 @@ class ZnunyTicketCreationServiceTest extends TestCase
     {
         $clientMock = $this->mock(ZnunyClient::class);
 
+        $this->mock(ZnunyTicketAdvancedDefaultsService::class, function ($mock) {
+            $mock->shouldReceive('getDefaults')->andReturn([
+                'priority' => '4 high',
+                'state' => 'open',
+                'lock' => 'unlock',
+            ]);
+        });
+
         $clientMock->shouldReceive('validateTicketCreate')
             ->once()
             ->with([
@@ -24,9 +34,9 @@ class ZnunyTicketCreationServiceTest extends TestCase
                 'Queue' => 'TestQueue',
                 'CustomerUser' => 'testuser',
                 'CustomerID' => 'CUST123',
-                'State' => 'new',
-                'Lock' => 'lock',
-                'Priority' => '3 normal',
+                'State' => 'open',
+                'Lock' => 'unlock',
+                'Priority' => '4 high',
             ])
             ->andReturn([
                 'valid' => 1,
@@ -48,6 +58,14 @@ class ZnunyTicketCreationServiceTest extends TestCase
     {
         $clientMock = $this->mock(ZnunyClient::class);
 
+        $this->mock(ZnunyTicketAdvancedDefaultsService::class, function ($mock) {
+            $mock->shouldReceive('getDefaults')->andReturn([
+                'priority' => '4 high',
+                'state' => 'open',
+                'lock' => 'unlock',
+            ]);
+        });
+
         $clientMock->shouldReceive('validateTicketCreate')
             ->once()
             ->with([
@@ -55,9 +73,9 @@ class ZnunyTicketCreationServiceTest extends TestCase
                 'Queue' => 'Rental',
                 'CustomerUser' => 'RentalClients',
                 'CustomerID' => 'CUST_RENTAL',
-                'State' => 'new',
-                'Lock' => 'lock',
-                'Priority' => '3 normal',
+                'State' => 'open',
+                'Lock' => 'unlock',
+                'Priority' => '4 high',
             ])
             ->andReturn([
                 'valid' => 1,
@@ -77,6 +95,14 @@ class ZnunyTicketCreationServiceTest extends TestCase
     public function test_validate_ticket_payload_failure()
     {
         $clientMock = $this->mock(ZnunyClient::class);
+
+        $this->mock(ZnunyTicketAdvancedDefaultsService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getDefaults')->andReturn([
+                'priority' => '3 normal',
+                'state' => 'new',
+                'lock' => 'lock',
+            ]);
+        });
 
         $clientMock->shouldReceive('validateTicketCreate')
             ->once()
@@ -99,6 +125,14 @@ class ZnunyTicketCreationServiceTest extends TestCase
     public function test_validate_ticket_payload_exception()
     {
         $clientMock = $this->mock(ZnunyClient::class);
+
+        $this->mock(ZnunyTicketAdvancedDefaultsService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getDefaults')->andReturn([
+                'priority' => '3 normal',
+                'state' => 'new',
+                'lock' => 'lock',
+            ]);
+        });
 
         $clientMock->shouldReceive('validateTicketCreate')
             ->once()
@@ -235,6 +269,14 @@ class ZnunyTicketCreationServiceTest extends TestCase
         $clientMock = $this->mock(ZnunyClient::class);
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
 
+        $this->mock(ZnunyTicketAdvancedDefaultsService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getDefaults')->andReturn([
+                'priority' => '3 normal',
+                'state' => 'new',
+                'lock' => 'lock',
+            ]);
+        });
+
         $clientMock->shouldReceive('getCustomerUser')->once()->with('CU')->andReturn(['found' => true, 'customer_id' => 'CUST_123']);
         $linkServiceMock->shouldReceive('existsForEventId')->once()->with('123')->andReturn(false);
         $clientMock->shouldReceive('validateTicketCreate')->once()->andReturn([
@@ -253,6 +295,14 @@ class ZnunyTicketCreationServiceTest extends TestCase
     {
         $clientMock = $this->mock(ZnunyClient::class);
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
+
+        $this->mock(ZnunyTicketAdvancedDefaultsService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getDefaults')->andReturn([
+                'priority' => '3 normal',
+                'state' => 'new',
+                'lock' => 'lock',
+            ]);
+        });
 
         $clientMock->shouldReceive('getCustomerUser')->once()->with('CU')->andReturn(['found' => true, 'customer_id' => 'CUST_123']);
         $linkServiceMock->shouldReceive('existsForEventId')->once()->with('123')->andReturn(false);
@@ -273,6 +323,14 @@ class ZnunyTicketCreationServiceTest extends TestCase
     {
         $clientMock = $this->mock(ZnunyClient::class);
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
+
+        $this->mock(ZnunyTicketAdvancedDefaultsService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getDefaults')->andReturn([
+                'priority' => '3 normal',
+                'state' => 'new',
+                'lock' => 'lock',
+            ]);
+        });
 
         $clientMock->shouldReceive('getCustomerUser')->once()->with('CU')->andReturn(['found' => true, 'customer_id' => 'CUST_123']);
         $linkServiceMock->shouldReceive('existsForEventId')->once()->with('123')->andReturn(false);
@@ -322,6 +380,14 @@ class ZnunyTicketCreationServiceTest extends TestCase
         $clientMock = $this->mock(ZnunyClient::class);
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
 
+        $this->mock(ZnunyTicketAdvancedDefaultsService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getDefaults')->andReturn([
+                'priority' => '3 normal',
+                'state' => 'new',
+                'lock' => 'lock',
+            ]);
+        });
+
         $clientMock->shouldReceive('getCustomerUser')->once()->with('CU')->andReturn(['found' => true, 'customer_id' => 'CUST_123']);
         $linkServiceMock->shouldReceive('existsForEventId')->once()->with('123')->andReturn(false);
         $clientMock->shouldReceive('validateTicketCreate')->once()->andReturn(['valid' => 1]);
@@ -365,6 +431,14 @@ class ZnunyTicketCreationServiceTest extends TestCase
         $clientMock = $this->mock(ZnunyClient::class);
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
 
+        $this->mock(ZnunyTicketAdvancedDefaultsService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getDefaults')->andReturn([
+                'priority' => '3 normal',
+                'state' => 'new',
+                'lock' => 'lock',
+            ]);
+        });
+
         $clientMock->shouldReceive('getCustomerUser')->once()->with('CU')->andReturn(['found' => true, 'customer_id' => 'CUST_123']);
         $linkServiceMock->shouldReceive('existsForEventId')->once()->with('123')->andReturn(false);
         $clientMock->shouldReceive('validateTicketCreate')->once()->andReturn(['valid' => 1]);
@@ -384,6 +458,14 @@ class ZnunyTicketCreationServiceTest extends TestCase
     {
         $clientMock = $this->mock(ZnunyClient::class);
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
+
+        $this->mock(ZnunyTicketAdvancedDefaultsService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getDefaults')->andReturn([
+                'priority' => '3 normal',
+                'state' => 'new',
+                'lock' => 'lock',
+            ]);
+        });
 
         $clientMock->shouldReceive('getCustomerUser')->once()->with('CU')->andReturn(['found' => true, 'customer_id' => 'CUST_123']);
         $linkServiceMock->shouldReceive('existsForEventId')->once()->with('123')->andReturn(false);

@@ -8,6 +8,7 @@ use App\Services\SettingsAuditLogService;
 use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixAttentionHighlightStyleService;
 use App\Services\Zabbix\ZabbixClient;
+use App\Services\Znuny\ZnunyCachedLookupService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyQueueHostMappingSchemaBuilder;
 use App\Services\Znuny\ZnunyQueueHostMappingService;
@@ -22,6 +23,7 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Actions;
+use Filament\Schemas\Components\Repeater;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -289,7 +291,21 @@ class Settings extends Page implements HasForms
             }
 
             if ($setting->type === 'json') {
-                $initialData[$setting->key] = json_decode($setting->value, true) ?? [];
+                $decoded = json_decode($setting->value, true) ?? [];
+
+                if ($setting->key === 'znuny_global_queue_exclusion_regexes') {
+                    $normalized = [];
+                    foreach ($decoded as $item) {
+                        if (is_string($item) && trim($item) !== '') {
+                            $normalized[] = ['regex' => trim($item)];
+                        } elseif (is_array($item) && isset($item['regex']) && trim($item['regex']) !== '') {
+                            $normalized[] = ['regex' => trim($item['regex'])];
+                        }
+                    }
+                    $initialData[$setting->key] = $normalized;
+                } else {
+                    $initialData[$setting->key] = $decoded;
+                }
 
                 continue;
             }
@@ -545,6 +561,17 @@ class Settings extends Page implements HasForms
                 $component->required();
             } elseif ($setting->key === 'znuny_queue_host_mappings') {
                 $component = app(ZnunyQueueHostMappingSchemaBuilder::class)->buildRepeater($setting, $initialData);
+            } elseif ($setting->key === 'znuny_global_queue_exclusion_regexes') {
+                $component = \Filament\Forms\Components\Repeater::make($setting->key)
+                    ->label($label)
+                    ->helperText('Enter regex patterns without delimiters or modifiers. Matching is case-insensitive and UTF-8 aware by default, and is checked against queue Name and FullName. Blank rows are ignored. Invalid regex patterns are ignored and logged.')
+                    ->schema([
+                        TextInput::make('regex')
+                            ->label('Regex pattern')
+                            ->placeholder('^Postmaster::')
+                            ->helperText("Examples:\n^Postmaster:: hides queues starting with Postmaster::\n^Test hides queues starting with Test\nArchive hides queues containing Archive\n^(Postmaster|Junk):: hides queues starting with Postmaster:: or Junk::"),
+                    ])
+                    ->addActionLabel('Add regex pattern');
             } elseif ($setting->key === 'znuny_ticket_workspace_active_state_type_ids') {
                 $component = Select::make($setting->key)
                     ->label($label)
@@ -662,6 +689,43 @@ class Settings extends Page implements HasForms
                     ->numeric()
                     ->minValue(0)
                     ->required();
+            } elseif ($setting->key === 'znuny_ticket_default_priority') {
+                $component = Select::make($setting->key)
+                    ->label($label)
+                    ->helperText($description)
+                    ->options(function () {
+                        try {
+                            $options = app(ZnunyCachedLookupService::class)->getTicketPriorities();
+
+                            return empty($options) ? ['3 normal' => '3 normal'] : $options;
+                        } catch (\Throwable $e) {
+                            return ['3 normal' => '3 normal'];
+                        }
+                    })
+                    ->required();
+            } elseif ($setting->key === 'znuny_ticket_default_state') {
+                $component = Select::make($setting->key)
+                    ->label($label)
+                    ->helperText($description)
+                    ->options(function () {
+                        try {
+                            $options = app(ZnunyCachedLookupService::class)->getTicketStates();
+
+                            return empty($options) ? ['new' => 'new'] : $options;
+                        } catch (\Throwable $e) {
+                            return ['new' => 'new'];
+                        }
+                    })
+                    ->required();
+            } elseif ($setting->key === 'znuny_ticket_default_lock') {
+                $component = Select::make($setting->key)
+                    ->label($label)
+                    ->helperText($description)
+                    ->options([
+                        'lock' => 'Lock',
+                        'unlock' => 'Unlock',
+                    ])
+                    ->required();
             } else {
                 $input = TextInput::make($setting->key)
                     ->label($label)
@@ -688,7 +752,7 @@ class Settings extends Page implements HasForms
                 $groups['Zabbix']['Connection & Polling'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['zabbix_attention_highlighting_enabled', 'zabbix_attention_highlight_text_color', 'zabbix_attention_highlight_text_custom_hex', 'zabbix_attention_highlight_underline_style', 'zabbix_attention_highlight_underline_color', 'zabbix_attention_highlight_underline_custom_hex', 'zabbix_attention_highlight_underline_thickness'])) {
                 $groups['Zabbix']['Problem Highlighting'][$setting->key] = $component;
-            } elseif (in_array($setting->key, ['znuny_queue_from_host_regex', 'znuny_customer_user_from_queue_template', 'znuny_queue_host_mappings', 'znuny_manual_ticket_footer', 'linked_ticket_manual_close_default_reason', 'manual_ticket_reopen_note_template'])) {
+            } elseif (in_array($setting->key, ['znuny_queue_from_host_regex', 'znuny_customer_user_from_queue_template', 'znuny_queue_host_mappings', 'znuny_manual_ticket_footer', 'linked_ticket_manual_close_default_reason', 'manual_ticket_reopen_note_template', 'znuny_ticket_default_priority', 'znuny_ticket_default_state', 'znuny_ticket_default_lock'])) {
                 $groups['Znuny Ticket Defaults'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['znuny_queue_cache_ttl_minutes', 'znuny_agent_cache_ttl_minutes', 'znuny_ticket_snapshot_cache_ttl_minutes'])) {
                 $groups['Cache'][] = $component;
@@ -792,6 +856,26 @@ class Settings extends Page implements HasForms
                     if ($setting->key === 'znuny_queue_host_mappings') {
                         $mappingService = app(ZnunyQueueHostMappingService::class);
                         $newValue = json_encode($mappingService->normalizeMappings($newValue));
+                    } elseif ($setting->key === 'znuny_global_queue_exclusion_regexes') {
+                        $normalized = [];
+                        if (is_array($newValue)) {
+                            foreach ($newValue as $item) {
+                                if (is_array($item) && isset($item['regex']) && trim($item['regex']) !== '') {
+                                    $val = trim($item['regex']);
+                                    $found = false;
+                                    foreach ($normalized as $existing) {
+                                        if ($existing['regex'] === $val) {
+                                            $found = true;
+                                            break;
+                                        }
+                                    }
+                                    if (! $found) {
+                                        $normalized[] = ['regex' => $val];
+                                    }
+                                }
+                            }
+                        }
+                        $newValue = json_encode($normalized);
                     } else {
                         $newValue = is_array($newValue) ? json_encode($newValue) : $newValue;
                     }
@@ -982,9 +1066,10 @@ class Settings extends Page implements HasForms
                     $this->getZnunyConnectionTestHelperPlaceholder('tester_help_Endpoints'),
                 ]))->columns(1),
 
-            Tab::make('Agents')
+            Tab::make('Excludes')
                 ->schema(array_filter([
                     $z['znuny_agent_exclude_logins'] ?? null,
+                    $z['znuny_global_queue_exclusion_regexes'] ?? null,
                 ]))->columns(1),
         ];
 
@@ -1068,6 +1153,13 @@ class Settings extends Page implements HasForms
                 $zd['znuny_manual_ticket_footer'] ?? null,
                 $zd['linked_ticket_manual_close_default_reason'] ?? null,
                 $zd['manual_ticket_reopen_note_template'] ?? null,
+            ]))->columns(1);
+
+        $tabs[] = Tab::make('Advanced Ticket Preset')
+            ->schema(array_filter([
+                $zd['znuny_ticket_default_priority'] ?? null,
+                $zd['znuny_ticket_default_state'] ?? null,
+                $zd['znuny_ticket_default_lock'] ?? null,
             ]))->columns(1);
 
         return [

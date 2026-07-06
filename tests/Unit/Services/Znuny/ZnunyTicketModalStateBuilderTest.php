@@ -5,7 +5,9 @@ namespace Tests\Unit\Services\Znuny;
 use App\Services\Znuny\ZnunyAgentService;
 use App\Services\Znuny\ZnunyLookupService;
 use App\Services\Znuny\ZnunyQueueService;
+use App\Services\Znuny\ZnunyTicketAdvancedDefaultsService;
 use App\Services\Znuny\ZnunyTicketModalStateBuilder;
+use App\Services\Znuny\ZnunyUiFilterService;
 use Tests\TestCase;
 
 class ZnunyTicketModalStateBuilderTest extends TestCase
@@ -31,7 +33,17 @@ class ZnunyTicketModalStateBuilderTest extends TestCase
             'warnings' => ['A warning'],
         ]);
 
-        $builder = new ZnunyTicketModalStateBuilder($agentService, $queueService, $lookupService);
+        $advancedDefaultsService = $this->mock(ZnunyTicketAdvancedDefaultsService::class);
+        $advancedDefaultsService->shouldReceive('getDefaults')->andReturn([
+            'priority' => '3 normal',
+            'state' => 'new',
+            'lock' => 'lock',
+        ]);
+
+        $uiFilterService = $this->mock(ZnunyUiFilterService::class);
+        $uiFilterService->shouldReceive('isQueueExcluded')->andReturn(false);
+
+        $builder = new ZnunyTicketModalStateBuilder($agentService, $queueService, $lookupService, $advancedDefaultsService);
 
         $state = $builder->buildState('test-host');
 
@@ -58,7 +70,14 @@ class ZnunyTicketModalStateBuilderTest extends TestCase
         $lookupService = $this->mock(ZnunyLookupService::class);
         $lookupService->shouldReceive('resolveTicketDefaultCandidates')->with('test-host')->andThrow(new \Exception('Test Error'));
 
-        $builder = new ZnunyTicketModalStateBuilder($agentService, $queueService, $lookupService);
+        $advancedDefaultsService = $this->mock(ZnunyTicketAdvancedDefaultsService::class);
+        $advancedDefaultsService->shouldReceive('getDefaults')->andReturn([
+            'priority' => '3 normal',
+            'state' => 'new',
+            'lock' => 'lock',
+        ]);
+
+        $builder = new ZnunyTicketModalStateBuilder($agentService, $queueService, $lookupService, $advancedDefaultsService);
 
         $state = $builder->buildState('test-host');
 

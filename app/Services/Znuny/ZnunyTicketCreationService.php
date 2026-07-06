@@ -65,14 +65,16 @@ class ZnunyTicketCreationService
         string $customerUser,
         string $customerId
     ): array {
+        $defaults = app(ZnunyTicketAdvancedDefaultsService::class)->getDefaults();
+
         return [
             'OwnerID' => (int) $ownerId,
             'Queue' => $queue,
             'CustomerUser' => $customerUser,
             'CustomerID' => $customerId,
-            'State' => 'new',
-            'Lock' => 'lock',
-            'Priority' => self::DEFAULT_PRIORITY,
+            'State' => $defaults['state'],
+            'Lock' => $defaults['lock'],
+            'Priority' => $defaults['priority'],
         ];
     }
 
@@ -85,16 +87,18 @@ class ZnunyTicketCreationService
         string $articleSubject,
         string $articleBody
     ): array {
+        $defaults = app(ZnunyTicketAdvancedDefaultsService::class)->getDefaults();
+
         return [
             'Ticket' => [
                 'Title' => $title,
                 'Queue' => $queue,
                 'CustomerUser' => $customerUser,
                 'CustomerID' => $customerId,
-                'State' => 'new',
-                'Lock' => 'lock',
+                'State' => $defaults['state'],
+                'Lock' => $defaults['lock'],
                 'OwnerID' => (int) $ownerId,
-                'Priority' => self::DEFAULT_PRIORITY,
+                'Priority' => $defaults['priority'],
             ],
             'Article' => [
                 'Subject' => $articleSubject,

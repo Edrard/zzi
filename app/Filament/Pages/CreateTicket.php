@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Schemas\ZnunyTicketCreationSchema;
+use App\Services\Znuny\ZnunyStandaloneTicketCreationService;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
@@ -39,13 +40,38 @@ class CreateTicket extends Page implements HasForms
             ->statePath('data');
     }
 
-    public function create(): void
+    public function create(ZnunyStandaloneTicketCreationService $creationService): void
     {
-        // Placeholder for future ticket creation logic
+        $data = $this->form->getState();
+
+        $result = $creationService->createTicket(
+            ownerId: $data['owner'] ?? '',
+            queue: $data['queue'] ?? '',
+            customerUser: $data['customer_user'] ?? '',
+            title: $data['title'] ?? '',
+            articleBody: $data['body'] ?? '',
+            state: $data['state'] ?? null,
+            priority: $data['priority'] ?? null,
+            lock: $data['lock'] ?? null
+        );
+
+        if (! $result['success']) {
+            Notification::make()
+                ->title('Ticket Creation Failed')
+                ->body(implode('<br>', $result['errors']))
+                ->danger()
+                ->persistent()
+                ->send();
+
+            return;
+        }
+
         Notification::make()
-            ->title('Not Implemented')
-            ->body('Ticket creation backend is not yet implemented.')
-            ->warning()
+            ->title('Ticket Created')
+            ->body("Znuny ticket {$result['ticket_number']} has been created successfully.")
+            ->success()
             ->send();
+
+        $this->form->fill();
     }
 }

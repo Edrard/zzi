@@ -7,7 +7,8 @@ class ZnunyTicketModalStateBuilder
     public function __construct(
         protected ZnunyAgentService $agentService,
         protected ZnunyQueueService $queueService,
-        protected ZnunyLookupService $lookupService
+        protected ZnunyLookupService $lookupService,
+        protected ZnunyTicketAdvancedDefaultsService $defaultsService
     ) {}
 
     /**
@@ -19,7 +20,10 @@ class ZnunyTicketModalStateBuilder
      *   default_customer_user: ?string,
      *   customer_user_options: array<string, string>,
      *   notes: array<int, string>,
-     *   warnings: array<int, string>
+     *   warnings: array<int, string>,
+     *   priority: string,
+     *   state: string,
+     *   lock: string
      * }
      */
     public function buildState(string $hostName): array
@@ -30,6 +34,8 @@ class ZnunyTicketModalStateBuilder
 
         $queueResult = $this->queueService->getSelectableQueuesResult();
         $queueOptions = $queueResult['options'];
+
+        $advancedDefaults = $this->defaultsService->getDefaults();
 
         $defaultOwnerId = null;
         $defaultQueue = null;
@@ -42,13 +48,18 @@ class ZnunyTicketModalStateBuilder
             $candidates = $this->lookupService->resolveTicketDefaultCandidates($hostName);
             if ($candidates['queue']['found']) {
                 $defaultQueue = $candidates['queue']['name'];
+
+                if (app(ZnunyUiFilterService::class)->isQueueExcluded($defaultQueue, $candidates['queue']['full_name'] ?? null)) {
+                    $warnings[] = "Default queue '{$defaultQueue}' is excluded by your queue filters. Please select a different queue.";
+                    $defaultQueue = null;
+                }
             }
             if ($candidates['customer_user']['found']) {
                 $defaultCustomerUser = $candidates['customer_user']['login'];
                 $customerUserOptions[$defaultCustomerUser] = $candidates['customer_user']['login'];
             }
             $notes = $candidates['notes'] ?? [];
-            $warnings = $candidates['warnings'] ?? [];
+            $warnings = array_merge($warnings, $candidates['warnings'] ?? []);
         } catch (\Throwable $e) {
             $warnings[] = 'Lookup failed: '.$e->getMessage();
         }
@@ -62,6 +73,9 @@ class ZnunyTicketModalStateBuilder
             'customer_user_options' => $customerUserOptions,
             'notes' => $notes,
             'warnings' => $warnings,
+            'priority' => $advancedDefaults['priority'],
+            'state' => $advancedDefaults['state'],
+            'lock' => $advancedDefaults['lock'],
         ];
     }
 }

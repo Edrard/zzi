@@ -2,7 +2,6 @@
 
 namespace App\Services\Znuny;
 
-use App\Services\SettingsService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -77,37 +76,17 @@ class ZnunyAgentService
 
     public function excludedLogins(): array
     {
-        $excludedSetting = SettingsService::string('znuny_agent_exclude_logins', '');
-        $lines = explode("\n", $excludedSetting);
-
-        return collect($lines)
-            ->map(fn ($line) => trim($line))
-            ->filter(fn ($line) => $line !== '')
-            ->map(fn ($line) => strtolower($line))
-            ->all();
+        return app(ZnunyUiFilterService::class)->getExcludedAgentLogins();
     }
 
     public function isLoginExcluded(?string $login): bool
     {
-        if (empty($login)) {
-            return false;
-        }
-
-        return in_array(strtolower($login), $this->excludedLogins(), true);
+        return app(ZnunyUiFilterService::class)->isAgentLoginExcluded($login);
     }
 
     public function filterSelectableAgents(array $agents): array
     {
-        $excludedLogins = $this->excludedLogins();
-
-        return array_values(array_filter($agents, function ($agent) use ($excludedLogins) {
-            $login = $agent['login'] ?? null;
-            if ($login === null) {
-                return true;
-            }
-
-            return ! in_array(strtolower($login), $excludedLogins, true);
-        }));
+        return array_values(app(ZnunyUiFilterService::class)->filterAgentsForUi($agents));
     }
 
     /**

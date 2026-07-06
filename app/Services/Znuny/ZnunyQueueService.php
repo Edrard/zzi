@@ -30,12 +30,15 @@ class ZnunyQueueService
         try {
             $queues = $this->getQueues();
 
+            // Transform first, then filter by UI rules
             $options = collect($queues)->mapWithKeys(function ($queue) {
                 $name = $queue['name'] ?? '';
                 $label = $queue['label'] ?? $queue['full_name'] ?? $name;
 
                 return [$name => $label];
             })->filter(fn ($value, $key) => $key !== '')->toArray();
+
+            $options = app(ZnunyUiFilterService::class)->filterQueuesForUi($options);
 
             return [
                 'options' => $options,

@@ -160,8 +160,60 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->assertSet('ticketOwnerId', null)
             ->assertSet('ticketOwnerOptions.10', 'Agent One <agent1>')
             ->assertSet('ticketQueue', 'TestCompany')
-            ->assertSet('ticketCustomerUser', 'TestCompanyClients');
+            ->assertSet('ticketCustomerUser', 'TestCompanyClients')
+            ->assertSet('ticketDefaultPriority', '3 normal')
+            ->assertSet('ticketDefaultState', 'new')
+            ->assertSet('ticketDefaultLock', 'lock');
 
+    }
+
+    public function test_admin_modal_shows_custom_preset_values()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        // Mock Agent
+        Http::fake([
+            '*example.invalid/api/Agent*' => Http::response([
+                'Agents' => [
+                    ['UserID' => 10, 'UserLogin' => 'agent1', 'UserFullname' => 'Agent One', 'ValidID' => 1],
+                ],
+            ], 200),
+            '*example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            '*example.invalid/api/QueueByName*' => Http::response([
+                'Queue' => ['QueueID' => 1, 'Name' => 'TestCompany', 'FullName' => 'TestCompany'],
+            ], 200),
+            '*example.invalid/api/Queue?*' => Http::response([
+                'Queues' => [
+                    ['QueueID' => 1, 'Name' => 'TestCompany', 'ValidID' => 1],
+                ],
+            ], 200),
+            '*example.invalid/api/Queue/1/AssignableAgents*' => Http::response([
+                'Agents' => [
+                    ['UserID' => 10, 'UserLogin' => 'agent1', 'UserFullname' => 'Agent One'],
+                ],
+            ], 200),
+            '*example.invalid/api/CustomerUser*' => Http::response([
+                'CustomerUser' => ['UserLogin' => 'TestCompanyClients', 'UserCustomerID' => 'testcompany'],
+            ], 200),
+        ]);
+
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
+        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
+
+        // Set custom preset values
+        Setting::updateOrCreate(['key' => 'znuny_ticket_default_priority'], ['value' => '5 very high', 'type' => 'string']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_default_state'], ['value' => 'closed unsuccessful', 'type' => 'string']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_default_lock'], ['value' => 'lock', 'type' => 'string']);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001');
+
+        $component->assertDispatched('open-modal')
+            ->assertSet('ticketDefaultPriority', '5 very high')
+            ->assertSet('ticketDefaultState', 'closed unsuccessful')
+            ->assertSet('ticketDefaultLock', 'lock');
     }
 
     public function test_admin_modal_filters_excluded_agents()
@@ -306,25 +358,48 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
-        // Since we are mocking the service directly, we don't need the client/fakes unless the modal boot requires it.
-        // Modal boot requires QueueByName, CustomerUser, etc. But this test acts after boot when we already have state.
-        $serviceMock = $this->mock(ZnunyTicketCreationService::class);
-        $serviceMock->shouldReceive('createTicketForProblem')
+        // Since we are mocking the HTTP client, we test the full payload building logic
+        // including the Advanced Ticket Presets usage. We set the Advanced Defaults to custom values.
+        Setting::updateOrCreate(['key' => 'znuny_ticket_default_priority'], ['value' => '4 high', 'type' => 'string']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_default_state'], ['value' => 'open', 'type' => 'string']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_default_lock'], ['value' => 'unlock', 'type' => 'string']);
+
+        $clientMock = $this->mock(ZnunyClient::class);
+
+        $clientMock->shouldReceive('getCustomerUser')
             ->once()
-            ->with(
-                '1001',
-                'TestCompany swiss test01',
-                'TestCompany CPU Load',
-                '10',
-                'TestCompany',
-                'TestCompanyClients',
-                'Test Title',
-                'Test Subject',
-                'Test Body',
-                '2001',
-                '3001',
-                null
-            )
+            ->with('TestCompanyClients')
+            ->andReturn(['found' => true, 'customer_id' => 'CUST_123']);
+
+        $clientMock->shouldReceive('validateTicketCreate')
+            ->once()
+            ->with(\Mockery::on(function ($payload) {
+                // Assert that the Advanced Ticket Preset values are correctly applied as a FLAT structure
+                return isset($payload['Priority']) && $payload['Priority'] === '4 high'
+                    && isset($payload['State']) && $payload['State'] === 'open'
+                    && isset($payload['Lock']) && $payload['Lock'] === 'unlock'
+                    && $payload['OwnerID'] === 10
+                    && $payload['Queue'] === 'TestCompany'
+                    && $payload['CustomerUser'] === 'TestCompanyClients';
+            }))
+            ->andReturn([
+                'valid' => true,
+                'errors' => [],
+                'warnings' => [],
+            ]);
+
+        $clientMock->shouldReceive('createTicket')
+            ->once()
+            ->with(\Mockery::on(function ($payload) {
+                // Assert that the Advanced Ticket Preset values are correctly applied as a NESTED structure
+                return isset($payload['Ticket']['Priority']) && $payload['Ticket']['Priority'] === '4 high'
+                    && isset($payload['Ticket']['State']) && $payload['Ticket']['State'] === 'open'
+                    && isset($payload['Ticket']['Lock']) && $payload['Ticket']['Lock'] === 'unlock'
+                    && $payload['Ticket']['OwnerID'] === 10
+                    && $payload['Ticket']['Queue'] === 'TestCompany'
+                    && $payload['Ticket']['CustomerUser'] === 'TestCompanyClients'
+                    && $payload['Ticket']['Title'] === 'Test Title';
+            }))
             ->andReturn([
                 'success' => true,
                 'ticket_id' => 12345,

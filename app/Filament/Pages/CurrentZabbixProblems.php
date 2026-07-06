@@ -59,6 +59,12 @@ class CurrentZabbixProblems extends Page
 
     public ?array $ticketModalProblem = null;
 
+    public string $ticketDefaultPriority = '3 normal';
+
+    public string $ticketDefaultState = 'new';
+
+    public string $ticketDefaultLock = 'lock';
+
     public ?string $ticketOwnerId = null;
 
     public ?string $ticketQueue = null;
@@ -170,6 +176,15 @@ class CurrentZabbixProblems extends Page
             ->record(function (array $arguments) {
                 return ZabbixTicket::find($arguments['zabbix_ticket_id'] ?? null);
             });
+    }
+
+    public function getAction(string|array $actions, bool $isMounting = true): ?Action
+    {
+        if (empty($actions) || (is_string($actions) && trim($actions) === '')) {
+            return null;
+        }
+
+        return parent::getAction($actions, $isMounting);
     }
 
     public function sortBy(string $field): void
@@ -409,6 +424,10 @@ class CurrentZabbixProblems extends Page
         $this->ticketCustomerUserOptions = $state['customer_user_options'];
         $this->ticketDefaultNotes = $state['notes'] ?? [];
         $this->ticketDefaultWarnings = $state['warnings'];
+
+        $this->ticketDefaultPriority = $state['priority'] ?? '3 normal';
+        $this->ticketDefaultState = $state['state'] ?? 'new';
+        $this->ticketDefaultLock = $state['lock'] ?? 'lock';
 
         $dependencyService = app(ZnunyAssignmentDependencyService::class);
 

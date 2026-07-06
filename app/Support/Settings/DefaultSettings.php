@@ -48,6 +48,7 @@ class DefaultSettings
             ['key' => 'znuny_api_verify_ssl', 'value' => 'true', 'type' => 'boolean', 'description' => 'Verify Znuny API SSL certificate'],
 
             // Znuny Defaults & Automation
+            ['key' => 'znuny_global_queue_exclusion_regexes', 'value' => '[]', 'type' => 'json', 'description' => 'JSON array of regex patterns. Queues matching any pattern will be excluded from selection dropdowns globally.'],
             ['key' => 'znuny_queue_from_host_regex', 'value' => '^(?<queue>[A-Za-z0-9]+)', 'type' => 'string', 'description' => 'Extracts the primary queue/customer prefix from the Zabbix host name.'],
             ['key' => 'znuny_customer_user_from_queue_template', 'value' => '<queue>Clients', 'type' => 'string', 'description' => 'Generates the default Znuny CustomerUser login from the detected Queue.'],
             ['key' => 'znuny_queue_host_mappings', 'value' => '[]', 'type' => 'json', 'description' => 'Manual queue host mappings.'],
@@ -56,6 +57,11 @@ class DefaultSettings
             ['key' => 'znuny_agent_exclude_logins', 'value' => '', 'type' => 'string', 'description' => 'Znuny agent logins to exclude'],
             ['key' => 'linked_ticket_manual_close_default_reason', 'value' => 'Manual close from Linked Tickets UI.', 'type' => 'string', 'description' => 'Default reason for closing linked tickets manually.'],
             ['key' => 'manual_ticket_reopen_note_template', 'value' => 'Reopening this ticket because the linked Zabbix problem became active again within the configured reopen window.', 'type' => 'string', 'description' => 'Template for manual ticket reopen notes.'],
+
+            // Advanced Ticket Preset
+            ['key' => 'znuny_ticket_default_priority', 'value' => '3 normal', 'type' => 'string', 'description' => 'Default Znuny ticket priority used by Create Ticket and Current Problems ticket creation.'],
+            ['key' => 'znuny_ticket_default_state', 'value' => 'new', 'type' => 'string', 'description' => 'Default Znuny ticket state used by Create Ticket and Current Problems ticket creation.'],
+            ['key' => 'znuny_ticket_default_lock', 'value' => 'lock', 'type' => 'string', 'description' => 'Default Znuny ticket lock mode used by Create Ticket and Current Problems ticket creation.'],
 
             // Automation / Workflow
             ['key' => 'default_close_delay_hours', 'value' => '4', 'type' => 'integer', 'description' => 'Hours before auto-closing tickets'],

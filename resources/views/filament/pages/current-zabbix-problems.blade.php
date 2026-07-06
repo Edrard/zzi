@@ -1140,15 +1140,15 @@
                             <span class="text-sm font-medium text-gray-500">Fixed ticket values:</span>
                             <div class="zbx-ticket-chip">
                                 <span class="zbx-ticket-chip-label">State</span>
-                                <span class="zbx-ticket-chip-value">new</span>
+                                <span class="zbx-ticket-chip-value">{{ $ticketDefaultState }}</span>
                             </div>
                             <div class="zbx-ticket-chip">
                                 <span class="zbx-ticket-chip-label">Lock</span>
-                                <span class="zbx-ticket-chip-value">lock</span>
+                                <span class="zbx-ticket-chip-value">{{ $ticketDefaultLock }}</span>
                             </div>
                             <div class="zbx-ticket-chip">
                                 <span class="zbx-ticket-chip-label">Priority</span>
-                                <span class="zbx-ticket-chip-value">3 normal</span>
+                                <span class="zbx-ticket-chip-value">{{ $ticketDefaultPriority }}</span>
                             </div>
                         </div>
                     </div>

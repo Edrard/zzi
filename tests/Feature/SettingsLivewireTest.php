@@ -491,7 +491,7 @@ class SettingsLivewireTest extends TestCase
                     $name = $c->getName();
                     if ($name && ! in_array($name, ['SettingsTabs', 'data', 'saveBottom', 'save'])) {
                         // Skip actions or placeholders that are not actual setting keys
-                        if (! str_contains($name, 'testZnunyConnection') && ! str_starts_with($name, 'tester_help_') && $name !== 'testZabbixConnection' && $name !== 'zabbix_tester_help' && $name !== 'host_prefix' && $name !== 'queue_name' && $name !== 'note' && $name !== 'auto_tickets_placeholder' && $name !== 'problem_highlighting_preview') {
+                        if (! str_contains($name, 'testZnunyConnection') && ! str_starts_with($name, 'tester_help_') && $name !== 'testZabbixConnection' && $name !== 'zabbix_tester_help' && $name !== 'host_prefix' && $name !== 'queue_name' && $name !== 'note' && $name !== 'auto_tickets_placeholder' && $name !== 'problem_highlighting_preview' && $name !== 'regex') {
                             $formKeys[] = $name;
                         }
                     }
@@ -707,5 +707,137 @@ class SettingsLivewireTest extends TestCase
             'zabbix_attention_highlight_text_color' => 'custom_hex',
             'zabbix_attention_highlight_text_custom_hex' => '#1234567',
         ])->call('save')->assertHasFormErrors(['zabbix_attention_highlight_text_custom_hex' => 'regex']);
+    }
+
+    public function test_excludes_tab_contains_agent_and_queue_excludes()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Artisan::call('app:ensure-settings-defaults');
+
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+        $form = $component->instance()->getForm('form');
+        $schema = $form->getComponents();
+
+        $excludesTabFound = false;
+        $agentExcludeFound = false;
+        $queueExcludeFound = false;
+
+        $agentExcludeInExcludes = false;
+        $queueExcludeInExcludes = false;
+
+        $search = function ($components, $parentGroupName = null) use (&$search, &$excludesTabFound, &$agentExcludeFound, &$queueExcludeFound, &$agentExcludeInExcludes, &$queueExcludeInExcludes) {
+            foreach ($components as $c) {
+                $type = class_basename($c);
+                $name = method_exists($c, 'getName') ? $c->getName() : null;
+                $label = method_exists($c, 'getLabel') ? $c->getLabel() : null;
+
+                if ($type === 'Tab' && $label === 'Excludes') {
+                    $excludesTabFound = true;
+                    $parentGroupName = 'Excludes';
+                }
+
+                if ($name === 'znuny_agent_exclude_logins') {
+                    $agentExcludeFound = true;
+                    if ($parentGroupName === 'Excludes') {
+                        $agentExcludeInExcludes = true;
+                    }
+                }
+
+                if ($name === 'znuny_global_queue_exclusion_regexes') {
+                    $queueExcludeFound = true;
+                    if ($parentGroupName === 'Excludes') {
+                        $queueExcludeInExcludes = true;
+                    }
+                }
+
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents(), $parentGroupName);
+                }
+            }
+        };
+
+        $search($schema);
+
+        $this->assertTrue($excludesTabFound, 'Excludes tab should be rendered');
+        $this->assertTrue($agentExcludeFound, 'znuny_agent_exclude_logins should be rendered');
+        $this->assertTrue($queueExcludeFound, 'znuny_global_queue_exclusion_regexes should be rendered');
+
+        $this->assertTrue($agentExcludeInExcludes, 'znuny_agent_exclude_logins should be in Excludes tab');
+        $this->assertTrue($queueExcludeInExcludes, 'znuny_global_queue_exclusion_regexes should be in Excludes tab');
+    }
+
+    public function test_settings_ui_hydrates_queue_regex_object_rows_and_does_not_render_object_object()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Artisan::call('app:ensure-settings-defaults');
+
+        Setting::updateOrCreate(
+            ['key' => 'znuny_global_queue_exclusion_regexes'],
+            ['type' => 'json', 'value' => json_encode([['regex' => '^Postmaster::']])]
+        );
+
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+
+        $state = $component->instance()->form->getRawState();
+        $regexes = $state['znuny_global_queue_exclusion_regexes'] ?? [];
+
+        $this->assertCount(1, $regexes);
+        $firstKey = array_key_first($regexes);
+        $this->assertEquals('^Postmaster::', $regexes[$firstKey]['regex']);
+
+        $component->assertSee('^Postmaster::');
+        $component->assertDontSee('[object Object]');
+    }
+
+    public function test_settings_ui_hydrates_queue_regex_string_list_rows()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Artisan::call('app:ensure-settings-defaults');
+
+        Setting::updateOrCreate(
+            ['key' => 'znuny_global_queue_exclusion_regexes'],
+            ['type' => 'json', 'value' => json_encode(['^Postmaster::', '^Test'])]
+        );
+
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+
+        $state = $component->instance()->form->getRawState();
+        $regexes = $state['znuny_global_queue_exclusion_regexes'] ?? [];
+
+        $this->assertCount(2, $regexes);
+        $keys = array_keys($regexes);
+        $this->assertEquals('^Postmaster::', $regexes[$keys[0]]['regex']);
+        $this->assertEquals('^Test', $regexes[$keys[1]]['regex']);
+    }
+
+    public function test_settings_ui_dehydrates_queue_regex_to_object_list_and_ignores_blank_rows()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        // Set minimum required to pass form validation
+        Setting::updateOrCreate(['key' => 'zabbix_api_url'], ['type' => 'string', 'value' => 'http://example.com']);
+        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['type' => 'string', 'value' => 'http://example.com']);
+        Setting::updateOrCreate(['key' => 'znuny_web_url'], ['type' => 'string', 'value' => 'http://example.com']);
+        Setting::updateOrCreate(['key' => 'znuny_username'], ['type' => 'string', 'value' => 'user']);
+        Setting::updateOrCreate(['key' => 'pagination_per_page_base'], ['type' => 'integer', 'value' => '100']);
+        Setting::updateOrCreate(['key' => 'znuny_global_queue_exclusion_regexes'], ['type' => 'json', 'value' => '[]']);
+
+        Livewire::actingAs($admin)
+            ->test(Settings::class)
+            ->fillForm([
+                'zabbix_api_url' => 'http://example.com',
+                'znuny_username' => 'user',
+                'znuny_global_queue_exclusion_regexes' => [
+                    'row1' => ['regex' => '^Postmaster::'],
+                    'row2' => ['regex' => '  '], // blank row should be ignored
+                    'row3' => ['regex' => '^Test'],
+                    'row4' => ['regex' => '^Postmaster::'], // duplicate should be removed
+                ],
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $setting = Setting::where('key', 'znuny_global_queue_exclusion_regexes')->first();
+        $this->assertEquals('[{"regex":"^Postmaster::"},{"regex":"^Test"}]', $setting->value);
     }
 }

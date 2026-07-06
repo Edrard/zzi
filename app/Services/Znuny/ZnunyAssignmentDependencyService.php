@@ -31,19 +31,46 @@ class ZnunyAssignmentDependencyService
         if (empty($queueName)) {
             $agents = $this->agentService->getSelectableAgents();
 
-            return collect($agents)->pluck('label', 'id')->toArray();
+            $options = collect($agents)->pluck('label', 'id')->toArray();
+
+            return app(ZnunyUiFilterService::class)->filterOwnerOptionsForUi($options, $agents);
         }
 
         $queue = $this->client->getQueueByName($queueName);
         if (empty($queue['id'])) {
             $agents = $this->agentService->getSelectableAgents();
 
-            return collect($agents)->pluck('label', 'id')->toArray();
+            $options = collect($agents)->pluck('label', 'id')->toArray();
+
+            return app(ZnunyUiFilterService::class)->filterOwnerOptionsForUi($options, $agents);
         }
 
         $agents = $this->agentService->getSelectableAssignableAgentsForQueue($queue['id']);
 
-        return collect($agents)->pluck('label', 'id')->toArray();
+        $options = collect($agents)->pluck('label', 'id')->toArray();
+
+        return app(ZnunyUiFilterService::class)->filterOwnerOptionsForUi($options, $agents);
+    }
+
+    /**
+     * @return array<string|int, string> Key is agent ID, value is label
+     */
+    public function getStrictOwnerOptionsForQueue(?string $queueName): array
+    {
+        if (empty($queueName)) {
+            return [];
+        }
+
+        $queue = $this->client->getQueueByName($queueName);
+        if (empty($queue['id'])) {
+            return [];
+        }
+
+        $agents = $this->agentService->getSelectableAssignableAgentsForQueue($queue['id']);
+
+        $options = collect($agents)->pluck('label', 'id')->toArray();
+
+        return app(ZnunyUiFilterService::class)->filterOwnerOptionsForUi($options, $agents);
     }
 
     /**
@@ -57,12 +84,16 @@ class ZnunyAssignmentDependencyService
                 ->values()
                 ->toArray();
 
-            return collect($queues)->pluck('label', 'name')->toArray();
+            $options = collect($queues)->pluck('label', 'name')->toArray();
+
+            return app(ZnunyUiFilterService::class)->filterQueuesForUi($options);
         }
 
         $queues = $this->client->getAgentAssignableQueues((int) $ownerId);
 
-        return collect($queues)->pluck('label', 'name')->toArray();
+        $options = collect($queues)->pluck('label', 'name')->toArray();
+
+        return app(ZnunyUiFilterService::class)->filterQueuesForUi($options);
     }
 
     public function isOwnerValidForQueue(?string $ownerId, ?string $queueName): bool
@@ -76,6 +107,17 @@ class ZnunyAssignmentDependencyService
         return array_key_exists((string) $ownerId, $options);
     }
 
+    public function isOwnerStrictlyValidForQueue(?string $ownerId, ?string $queueName): bool
+    {
+        if (empty($ownerId) || empty($queueName)) {
+            return false;
+        }
+
+        $options = $this->getStrictOwnerOptionsForQueue($queueName);
+
+        return array_key_exists((string) $ownerId, $options);
+    }
+
     /**
      * @return array<string, string> Key is agent login, value is label
      */
@@ -84,19 +126,25 @@ class ZnunyAssignmentDependencyService
         if (empty($queueName)) {
             $agents = $this->agentService->getSelectableAgents();
 
-            return collect($agents)->pluck('label', 'login')->toArray();
+            $options = collect($agents)->pluck('label', 'login')->toArray();
+
+            return app(ZnunyUiFilterService::class)->filterOwnerOptionsForUi($options, $agents);
         }
 
         $queue = $this->client->getQueueByName($queueName);
         if (empty($queue['id'])) {
             $agents = $this->agentService->getSelectableAgents();
 
-            return collect($agents)->pluck('label', 'login')->toArray();
+            $options = collect($agents)->pluck('label', 'login')->toArray();
+
+            return app(ZnunyUiFilterService::class)->filterOwnerOptionsForUi($options, $agents);
         }
 
         $agents = $this->agentService->getSelectableAssignableAgentsForQueue($queue['id']);
 
-        return collect($agents)->pluck('label', 'login')->toArray();
+        $options = collect($agents)->pluck('label', 'login')->toArray();
+
+        return app(ZnunyUiFilterService::class)->filterOwnerOptionsForUi($options, $agents);
     }
 
     /**
@@ -110,10 +158,12 @@ class ZnunyAssignmentDependencyService
                 ->values()
                 ->toArray();
 
-            return collect($queues)->pluck('label', 'name')->toArray();
+            $options = collect($queues)->pluck('label', 'name')->toArray();
+
+            return app(ZnunyUiFilterService::class)->filterQueuesForUi($options);
         }
 
-        if ($this->agentService->isLoginExcluded($ownerLogin)) {
+        if (app(ZnunyUiFilterService::class)->isAgentLoginExcluded($ownerLogin)) {
             return [];
         }
 
@@ -125,11 +175,15 @@ class ZnunyAssignmentDependencyService
                 ->values()
                 ->toArray();
 
-            return collect($queues)->pluck('label', 'name')->toArray();
+            $options = collect($queues)->pluck('label', 'name')->toArray();
+
+            return app(ZnunyUiFilterService::class)->filterQueuesForUi($options);
         }
 
         $queues = $this->client->getAgentAssignableQueues($agentId);
 
-        return collect($queues)->pluck('label', 'name')->toArray();
+        $options = collect($queues)->pluck('label', 'name')->toArray();
+
+        return app(ZnunyUiFilterService::class)->filterQueuesForUi($options);
     }
 }
