@@ -1905,4 +1905,99 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $keys = array_keys($options);
         $this->assertEquals('20', $keys[0]);
     }
+
+    public function test_resolve_linked_tickets_checks_related_eventids()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $component = app(CurrentZabbixProblems::class);
+
+        ZabbixTicket::create([
+            'zabbix_event_id' => '2000',
+            'zabbix_host_id' => '500',
+            'zabbix_host_name' => 'Host',
+            'zabbix_trigger_id' => '600',
+            'zabbix_problem_name' => 'Problem',
+            'znuny_ticket_id' => 99,
+            'znuny_ticket_number' => '123456',
+            'manual_lifecycle_status' => 'active',
+        ]);
+
+        $problems = [
+            [
+                'eventid' => '2001',
+                'objectid' => '600',
+                'hostid' => '500',
+                'hosts' => [['hostid' => '500']],
+                'related_eventids' => ['2000', '2001'],
+            ],
+        ];
+
+        $resolved = $component->resolveLinkedTickets($problems);
+
+        $this->assertArrayHasKey('2001', $resolved);
+        $this->assertEquals(99, $resolved['2001']->znuny_ticket_id);
+    }
+
+    public function test_resolve_linked_tickets_ignores_closed_related_tickets()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $component = app(CurrentZabbixProblems::class);
+
+        ZabbixTicket::create([
+            'zabbix_event_id' => '2000',
+            'zabbix_host_id' => '500',
+            'zabbix_host_name' => 'Host',
+            'zabbix_trigger_id' => '600',
+            'zabbix_problem_name' => 'Problem',
+            'znuny_ticket_id' => 99,
+            'znuny_ticket_number' => '123456',
+            'manual_lifecycle_status' => 'closed',
+        ]);
+
+        $problems = [
+            [
+                'eventid' => '2001',
+                'objectid' => '600',
+                'hostid' => '500',
+                'hosts' => [['hostid' => '500']],
+                'related_eventids' => ['2000', '2001'],
+            ],
+        ];
+
+        $resolved = $component->resolveLinkedTickets($problems);
+
+        $this->assertArrayNotHasKey('2001', $resolved);
+    }
+
+    public function test_resolve_linked_tickets_falls_back_to_host_trigger_if_no_eventid_ticket_found()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $component = app(CurrentZabbixProblems::class);
+
+        ZabbixTicket::create([
+            'zabbix_event_id' => '8000', // Unrelated event id
+            'zabbix_host_id' => '500',
+            'zabbix_host_name' => 'Host',
+            'zabbix_trigger_id' => '600',
+            'zabbix_problem_name' => 'Problem',
+            'znuny_ticket_id' => 99,
+            'znuny_ticket_number' => '123456',
+            'manual_lifecycle_status' => 'active',
+        ]);
+
+        $problems = [
+            [
+                'eventid' => '2001',
+                'objectid' => '600',
+                'hostid' => '500',
+                'hosts' => [['hostid' => '500']],
+                'related_eventids' => ['2001'],
+            ],
+        ];
+
+        $resolved = $component->resolveLinkedTickets($problems);
+
+        $this->assertArrayHasKey('2001', $resolved);
+        $this->assertEquals(99, $resolved['2001']->znuny_ticket_id);
+    }
 }

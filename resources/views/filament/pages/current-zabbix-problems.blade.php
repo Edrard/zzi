@@ -864,6 +864,11 @@
                                         <span style="{{ $attentionStyle }}">
                                     @endif
                                     {{ $problem['name'] ?? '' }}
+                                    @if(($problem['grouped_event_count'] ?? 1) > 1)
+                                        <span class="zbx-tag" style="margin-left: 8px;">
+                                            <span class="zbx-tag-value">{{ $problem['grouped_event_count'] }} events</span>
+                                        </span>
+                                    @endif
                                     @if(($problem['attention_matched'] ?? false) && $hasAttentionHighlights)
                                         </span>
                                     @endif

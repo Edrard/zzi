@@ -29,6 +29,54 @@ class ZabbixProblemQueryService
             });
         }
 
+        $grouped = [];
+        foreach ($problems as $problem) {
+            $hostId = $problem['hosts'][0]['hostid'] ?? ($problem['hostid'] ?? null);
+            $objectId = $problem['objectid'] ?? ($problem['triggerid'] ?? null);
+
+            $hostName = $problem['host_name'] ?? '';
+            $probName = $problem['name'] ?? '';
+
+            if ($hostId && $objectId) {
+                $logicalKey = "trigger:{$hostId}:{$objectId}";
+            } else {
+                $logicalKey = "name:{$hostName}:{$probName}";
+            }
+
+            if (! isset($grouped[$logicalKey])) {
+                $grouped[$logicalKey] = $problem;
+                $grouped[$logicalKey]['grouped_event_count'] = 1;
+                $grouped[$logicalKey]['related_eventids'] = [$problem['eventid']];
+            } else {
+                if (in_array($problem['eventid'], $grouped[$logicalKey]['related_eventids'])) {
+                    continue; // Skip exact duplicate eventid (cache edge case)
+                }
+
+                $grouped[$logicalKey]['grouped_event_count']++;
+                $grouped[$logicalKey]['related_eventids'][] = $problem['eventid'];
+
+                $currentSev = (int) ($grouped[$logicalKey]['severity'] ?? 0);
+                $newSev = (int) ($problem['severity'] ?? 0);
+
+                $currentAge = $this->formatter->getProblemAgeSeconds($grouped[$logicalKey]);
+                $newAge = $this->formatter->getProblemAgeSeconds($problem);
+
+                if ($newSev > $currentSev) {
+                    $merged = $problem;
+                    $merged['grouped_event_count'] = $grouped[$logicalKey]['grouped_event_count'];
+                    $merged['related_eventids'] = $grouped[$logicalKey]['related_eventids'];
+                    $grouped[$logicalKey] = $merged;
+                } elseif ($newSev === $currentSev && $newAge > $currentAge) {
+                    // Same severity, but this one is older, make it primary
+                    $merged = $problem;
+                    $merged['grouped_event_count'] = $grouped[$logicalKey]['grouped_event_count'];
+                    $merged['related_eventids'] = $grouped[$logicalKey]['related_eventids'];
+                    $grouped[$logicalKey] = $merged;
+                }
+            }
+        }
+        $problems = array_values($grouped);
+
         $direction = $sortDirection === 'asc' ? 1 : -1;
 
         usort($problems, function ($a, $b) use ($direction, $sortField) {

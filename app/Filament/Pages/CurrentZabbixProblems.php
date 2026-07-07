@@ -219,8 +219,20 @@ class CurrentZabbixProblems extends Page
 
     public function resolveLinkedTickets(array $problems): array
     {
-        $eventIds = collect($problems)->pluck('eventid')->filter()->toArray();
-        $ticketsByEventId = ZabbixTicket::whereIn('zabbix_event_id', $eventIds)->get()->keyBy('zabbix_event_id');
+        $allEventIds = [];
+        foreach ($problems as $problem) {
+            if (! empty($problem['eventid'])) {
+                $allEventIds[] = $problem['eventid'];
+            }
+            if (! empty($problem['related_eventids']) && is_array($problem['related_eventids'])) {
+                foreach ($problem['related_eventids'] as $rId) {
+                    $allEventIds[] = $rId;
+                }
+            }
+        }
+        $allEventIds = array_unique(array_filter($allEventIds));
+
+        $ticketsByEventId = ZabbixTicket::whereIn('zabbix_event_id', $allEventIds)->get()->keyBy('zabbix_event_id');
 
         $hostIds = collect($problems)->map(fn ($p) => $p['hosts'][0]['hostid'] ?? ($p['hostid'] ?? null))->filter()->unique()->toArray();
         $triggerIds = collect($problems)->map(fn ($p) => $p['objectid'] ?? ($p['triggerid'] ?? null))->filter()->unique()->toArray();
@@ -241,8 +253,8 @@ class CurrentZabbixProblems extends Page
 
         $resolved = [];
         foreach ($problems as $problem) {
-            $eventId = (string) ($problem['eventid'] ?? $problem['objectid'] ?? $problem['triggerid'] ?? '');
-            if (! $eventId) {
+            $primaryEventId = (string) ($problem['eventid'] ?? $problem['objectid'] ?? $problem['triggerid'] ?? '');
+            if (! $primaryEventId) {
                 continue;
             }
 
@@ -250,16 +262,31 @@ class CurrentZabbixProblems extends Page
             $triggerId = $problem['objectid'] ?? ($problem['triggerid'] ?? null);
             $hostTriggerKey = $hostId && $triggerId ? $hostId.'_'.$triggerId : null;
 
-            $linkedTicket = $ticketsByEventId[$eventId] ?? null;
+            $candidateEventIds = ! empty($problem['related_eventids']) && is_array($problem['related_eventids'])
+                ? $problem['related_eventids']
+                : [$primaryEventId];
 
+            $linkedTicket = null;
+            $ignoredStatuses = [
+                ZnunyManualTicketLifecycleService::STATUS_CLOSED,
+                ZnunyManualTicketLifecycleService::STATUS_NOT_APPLICABLE,
+                ZnunyManualTicketLifecycleService::STATUS_CACHE_STALE,
+                ZnunyManualTicketLifecycleService::STATUS_IDENTITY_MISSING,
+            ];
+
+            // 1. Try finding by event ID (checking all related IDs)
+            foreach ($candidateEventIds as $cId) {
+                $candidate = $ticketsByEventId[$cId] ?? null;
+                if ($candidate && ! in_array($candidate->manual_lifecycle_status, $ignoredStatuses)) {
+                    $linkedTicket = $candidate;
+                    break;
+                }
+            }
+
+            // 2. Try finding by host+trigger fallback if no valid event ID ticket was found
             if (! $linkedTicket && $hostTriggerKey && isset($ticketsByHostTrigger[$hostTriggerKey])) {
-                $candidates = $ticketsByHostTrigger[$hostTriggerKey]->reject(function ($t) {
-                    return in_array($t->manual_lifecycle_status, [
-                        ZnunyManualTicketLifecycleService::STATUS_CLOSED,
-                        ZnunyManualTicketLifecycleService::STATUS_NOT_APPLICABLE,
-                        ZnunyManualTicketLifecycleService::STATUS_CACHE_STALE,
-                        ZnunyManualTicketLifecycleService::STATUS_IDENTITY_MISSING,
-                    ]);
+                $candidates = $ticketsByHostTrigger[$hostTriggerKey]->reject(function ($t) use ($ignoredStatuses) {
+                    return in_array($t->manual_lifecycle_status, $ignoredStatuses);
                 });
 
                 if ($candidates->isNotEmpty()) {
@@ -280,17 +307,8 @@ class CurrentZabbixProblems extends Page
                 }
             }
 
-            if ($linkedTicket && in_array($linkedTicket->manual_lifecycle_status, [
-                ZnunyManualTicketLifecycleService::STATUS_CLOSED,
-                ZnunyManualTicketLifecycleService::STATUS_NOT_APPLICABLE,
-                ZnunyManualTicketLifecycleService::STATUS_CACHE_STALE,
-                ZnunyManualTicketLifecycleService::STATUS_IDENTITY_MISSING,
-            ])) {
-                $linkedTicket = null;
-            }
-
             if ($linkedTicket) {
-                $resolved[$eventId] = $linkedTicket;
+                $resolved[$primaryEventId] = $linkedTicket;
             }
         }
 

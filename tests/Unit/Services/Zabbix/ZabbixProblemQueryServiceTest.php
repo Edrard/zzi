@@ -183,4 +183,113 @@ class ZabbixProblemQueryServiceTest extends TestCase
         $this->assertCount(0, $result['problems']);
         $this->assertEquals(0, $result['total_cached_count']);
     }
+
+    public function test_exact_duplicate_eventid_is_skipped()
+    {
+        $problems = [
+            [
+                'eventid' => '1',
+                'name' => 'Test',
+                'host_name' => 'Host',
+                'hostid' => '100',
+                'objectid' => '200',
+            ],
+            [
+                'eventid' => '1',
+                'name' => 'Test',
+                'host_name' => 'Host',
+                'hostid' => '100',
+                'objectid' => '200',
+            ],
+        ];
+
+        $this->cacheMock->shouldReceive('all')->once()->andReturn($problems);
+        $result = $this->service->query('', 'eventid', 'asc');
+
+        $this->assertCount(1, $result['problems']);
+        $this->assertEquals(1, $result['problems'][0]['grouped_event_count']);
+        $this->assertEquals(['1'], $result['problems'][0]['related_eventids']);
+    }
+
+    public function test_same_host_same_trigger_different_eventids_are_grouped()
+    {
+        $problems = [
+            [
+                'eventid' => '1',
+                'name' => 'Test',
+                'host_name' => 'Host',
+                'hosts' => [['hostid' => '100']],
+                'objectid' => '200',
+                'severity' => 2,
+                'age_seconds' => 100,
+            ],
+            [
+                'eventid' => '2',
+                'name' => 'Test',
+                'host_name' => 'Host',
+                'hosts' => [['hostid' => '100']],
+                'objectid' => '200',
+                'severity' => 4,
+                'age_seconds' => 50,
+            ],
+        ];
+
+        $this->cacheMock->shouldReceive('all')->once()->andReturn($problems);
+        $result = $this->service->query('', 'eventid', 'asc');
+
+        $this->assertCount(1, $result['problems']);
+        $this->assertEquals(2, $result['problems'][0]['grouped_event_count']);
+        $this->assertEquals(['1', '2'], $result['problems'][0]['related_eventids']);
+        $this->assertEquals('2', $result['problems'][0]['eventid']); // Severity 4 won
+    }
+
+    public function test_same_problem_name_different_hosts_are_not_grouped()
+    {
+        $problems = [
+            [
+                'eventid' => '1',
+                'name' => 'Test',
+                'host_name' => 'Host A',
+                'hosts' => [['hostid' => '100']],
+                'objectid' => '200',
+            ],
+            [
+                'eventid' => '2',
+                'name' => 'Test',
+                'host_name' => 'Host B',
+                'hosts' => [['hostid' => '101']],
+                'objectid' => '201',
+            ],
+        ];
+
+        $this->cacheMock->shouldReceive('all')->once()->andReturn($problems);
+        $result = $this->service->query('', 'eventid', 'asc');
+
+        $this->assertCount(2, $result['problems']);
+    }
+
+    public function test_same_host_different_problems_are_not_grouped()
+    {
+        $problems = [
+            [
+                'eventid' => '1',
+                'name' => 'Test A',
+                'host_name' => 'Host',
+                'hosts' => [['hostid' => '100']],
+                'objectid' => '200',
+            ],
+            [
+                'eventid' => '2',
+                'name' => 'Test B',
+                'host_name' => 'Host',
+                'hosts' => [['hostid' => '100']],
+                'objectid' => '201',
+            ],
+        ];
+
+        $this->cacheMock->shouldReceive('all')->once()->andReturn($problems);
+        $result = $this->service->query('', 'eventid', 'asc');
+
+        $this->assertCount(2, $result['problems']);
+    }
 }
