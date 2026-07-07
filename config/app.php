@@ -134,4 +134,17 @@ return [
     */
     'ui_poll_interval_seconds' => env('APP_UI_POLL_INTERVAL_SECONDS', 60),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Landing Pages
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for dynamic user landing pages upon login or visiting the
+    | admin root. Available landing pages is a comma-separated list of
+    | allowed Filament page/resource slugs.
+    |
+    */
+    'default_landing_page' => env('APP_DEFAULT_LANDING_PAGE', 'current-zabbix-problems'),
+    'available_landing_pages' => env('APP_AVAILABLE_LANDING_PAGES', 'current-zabbix-problems,znuny-ticket-workspace,zabbix-tickets,create-ticket'),
+
 ];
