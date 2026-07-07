@@ -95,6 +95,18 @@ class ZnunyStandaloneTicketCreationService
                 return $result;
             }
 
+            $defaults = app(ZnunyTicketAdvancedDefaultsService::class)->getDefaults();
+
+            if (empty(trim($state))) {
+                $state = $defaults['state'];
+            }
+            if (empty(trim($priority))) {
+                $priority = $defaults['priority'];
+            }
+            if (empty($lock) || ! in_array($lock, ['lock', 'unlock'])) {
+                $lock = $defaults['lock'];
+            }
+
             if (empty(trim($state)) || empty(trim($priority))) {
                 $result['errors'][] = 'State and Priority are required by Znuny API.';
                 $this->auditLog('znuny.standalone_ticket.failed', $queue, $ownerId, $customerUser, null, null, $result['errors']);
@@ -102,8 +114,24 @@ class ZnunyStandaloneTicketCreationService
                 return $result;
             }
 
-            if (empty($lock) || ! in_array($lock, ['lock', 'unlock'])) {
-                $lock = app(ZnunyTicketAdvancedDefaultsService::class)->getDefaults()['lock'];
+            $validationPayload = [
+                'OwnerID' => (int) $ownerId,
+                'Queue' => $queue,
+                'CustomerUser' => $customerUser,
+                'CustomerID' => $customerId,
+                'State' => $state,
+                'Lock' => $lock,
+                'Priority' => $priority,
+            ];
+
+            // Revalidate via preflight
+            $validation = $this->client->validateTicketCreate($validationPayload);
+            if (! $validation['valid']) {
+                $result['errors'] = $validation['errors'];
+                $result['warnings'] = $validation['warnings'] ?? [];
+                $this->auditLog('znuny.standalone_ticket.failed_validation', $queue, $ownerId, $customerUser, null, null, $result['errors'], $result['warnings']);
+
+                return $result;
             }
 
             $ticket = [
@@ -126,16 +154,6 @@ class ZnunyStandaloneTicketCreationService
                     'IsVisibleForCustomer' => 1,
                 ],
             ];
-
-            // Revalidate via preflight
-            $validation = $this->client->validateTicketCreate($payload);
-            if (! $validation['valid']) {
-                $result['errors'] = $validation['errors'];
-                $result['warnings'] = $validation['warnings'] ?? [];
-                $this->auditLog('znuny.standalone_ticket.failed_validation', $queue, $ownerId, $customerUser, null, null, $result['errors'], $result['warnings']);
-
-                return $result;
-            }
 
             $apiResult = $this->client->createTicket($payload);
 

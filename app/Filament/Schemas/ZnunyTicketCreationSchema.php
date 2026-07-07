@@ -47,6 +47,7 @@ class ZnunyTicketCreationSchema
                         }),
                     Select::make('owner')
                         ->label('Owner')
+                        ->required()
                         ->searchable()
                         ->preload()
                         ->options(function ($get, ZnunyCachedLookupService $lookupService) {
