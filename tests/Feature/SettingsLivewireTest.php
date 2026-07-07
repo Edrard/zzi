@@ -491,7 +491,7 @@ class SettingsLivewireTest extends TestCase
                     $name = $c->getName();
                     if ($name && ! in_array($name, ['SettingsTabs', 'data', 'saveBottom', 'save'])) {
                         // Skip actions or placeholders that are not actual setting keys
-                        if (! str_contains($name, 'testZnunyConnection') && ! str_starts_with($name, 'tester_help_') && $name !== 'testZabbixConnection' && $name !== 'zabbix_tester_help' && $name !== 'host_prefix' && $name !== 'queue_name' && $name !== 'note' && $name !== 'auto_tickets_placeholder' && $name !== 'problem_highlighting_preview' && $name !== 'regex') {
+                        if (! str_contains($name, 'testZnunyConnection') && $name !== 'testMailConnection' && ! str_starts_with($name, 'tester_help_') && $name !== 'testZabbixConnection' && $name !== 'zabbix_tester_help' && $name !== 'host_prefix' && $name !== 'queue_name' && $name !== 'note' && $name !== 'auto_tickets_placeholder' && $name !== 'problem_highlighting_preview' && $name !== 'regex') {
                             $formKeys[] = $name;
                         }
                     }

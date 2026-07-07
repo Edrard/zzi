@@ -21,7 +21,7 @@ return new class extends Migration
             $table->timestamp('started_at')->nullable();
             $table->timestamp('finished_at')->nullable();
             $table->integer('duration_ms')->nullable();
-            $table->string('status'); // pending, running, success, failed, skipped, duplicate
+            $table->string('status'); // pending, running, success, failed, skipped, duplicate, uncertain
 
             $table->unsignedBigInteger('ticket_id')->nullable();
             $table->string('ticket_number')->nullable();

@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Models\Setting;
 use App\Services\AuditLogger;
+use App\Services\MailNotificationService;
 use App\Services\SettingsAuditLogService;
 use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixAttentionHighlightStyleService;
@@ -63,6 +64,60 @@ class Settings extends Page implements HasForms
                 ->label('Save settings')
                 ->action('save'),
         ];
+    }
+
+    public function testMailConnectionAction(): void
+    {
+        $data = $this->form->getRawState();
+        $transport = $data['mail_transport'] ?? 'smtp';
+
+        $errorResult = null;
+        if ($transport === 'smtp') {
+            if (empty($data['mail_smtp_host'])) {
+                $errorResult = 'SMTP Host is required.';
+            } elseif (empty($data['mail_smtp_username'])) {
+                $errorResult = 'SMTP Username is required.';
+            }
+        } elseif ($transport === 'sendmail') {
+            if (empty($data['mail_sendmail_path'])) {
+                $errorResult = 'Sendmail Path is required.';
+            }
+        }
+
+        if (empty($data['mail_from_address'])) {
+            $errorResult = 'From Address is required.';
+        } elseif (empty($data['mail_admin_recipients'])) {
+            $errorResult = 'Admin Recipients are required to send a test email.';
+        }
+
+        if ($errorResult !== null) {
+            Notification::make()
+                ->title('Test Email Failed')
+                ->body(new HtmlString('<strong>Errors:</strong><br>❌ '.htmlspecialchars($errorResult).'<br>'))
+                ->color('danger')
+                ->persistent()
+                ->send();
+
+            return;
+        }
+
+        try {
+            app(MailNotificationService::class)->sendTestEmail($data);
+
+            Notification::make()
+                ->title('Test Email Sent')
+                ->body('Check the configured admin recipients for the test email.')
+                ->color('success')
+                ->persistent()
+                ->send();
+        } catch (\Exception $e) {
+            Notification::make()
+                ->title('Test Email Failed')
+                ->body(new HtmlString('<strong>Errors:</strong><br>❌ '.htmlspecialchars($e->getMessage()).'<br>'))
+                ->color('danger')
+                ->persistent()
+                ->send();
+        }
     }
 
     public function testZnunyConnectionAction(): void
@@ -325,7 +380,11 @@ class Settings extends Page implements HasForms
         $settings = Setting::query()->orderBy('key')->get();
 
         $groups = [
-            'General' => [],
+            'General' => [
+                'Main' => [],
+                'Mail' => [],
+            ],
+            'Scheduler' => [],
             'Retention' => [],
             'Audit Log' => [],
             'Cache' => [],
@@ -340,7 +399,7 @@ class Settings extends Page implements HasForms
         $initialData = $this->data ?? [];
 
         foreach ($settings as $setting) {
-            if (in_array($setting->key, ['manual_ticket_auto_close_enabled'])) {
+            if (in_array($setting->key, ['manual_ticket_auto_close_enabled', 'scheduled_tasks_paused_until', 'scheduled_tasks_pause_reason', 'scheduled_tasks_disabled_reason'])) {
                 continue;
             }
 
@@ -730,7 +789,7 @@ class Settings extends Page implements HasForms
                 $input = TextInput::make($setting->key)
                     ->label($label)
                     ->helperText($description)
-                    ->required(! in_array($setting->key, ['zabbix_problem_url_template', 'znuny_ticket_url_template']));
+                    ->required(! in_array($setting->key, ['zabbix_problem_url_template', 'znuny_ticket_url_template', 'mail_from_name', 'mail_admin_recipients', 'mail_smtp_host', 'mail_smtp_username', 'mail_from_address', 'mail_transport']));
 
                 if (in_array($setting->key, ['zabbix_api_token', 'znuny_password'])) {
                     $input->password()
@@ -742,8 +801,19 @@ class Settings extends Page implements HasForms
                 $component = $input;
             }
 
+            if ($setting->key === 'mail_smtp_password') {
+                $component->password()
+                    ->revealable()
+                    ->placeholder('Leave empty to keep current password')
+                    ->required(false);
+            }
+
             if (in_array($setting->key, ['cleanup_enabled', 'cleanup_batch_size', 'app_display_timezone', 'pagination_per_page_base'])) {
-                $groups['General'][] = $component;
+                $groups['General']['Main'][] = $component;
+            } elseif (str_starts_with($setting->key, 'mail_')) {
+                $groups['General']['Mail'][] = $component;
+            } elseif (str_starts_with($setting->key, 'scheduled_tasks_')) {
+                $groups['General']['Scheduler'][] = $component;
             } elseif (in_array($setting->key, ['retention_action_logs_days', 'retention_closed_tickets_days', 'retention_failed_jobs_days', 'retention_resolved_days', 'scheduled_task_logs_retention_days', 'scheduled_tasks_missed_run_max_age_days'])) {
                 $groups['Retention'][] = $component;
             } elseif (str_starts_with($setting->key, 'owner_suggestion_')) {
@@ -769,6 +839,10 @@ class Settings extends Page implements HasForms
             } else {
                 $groups['Other'][] = $component;
             }
+        }
+
+        if (! empty($groups['General'])) {
+            $groups['General'] = $this->buildGeneralTabGroups($groups['General']);
         }
 
         if (! empty($groups['Zabbix'])) {
@@ -1164,6 +1238,41 @@ class Settings extends Page implements HasForms
 
         return [
             Tabs::make('ZnunyTicketDefaultsTabs')->tabs($tabs),
+        ];
+    }
+
+    private function buildGeneralTabGroups(array $g): array
+    {
+        $tabs = [];
+
+        if (! empty($g['Main'])) {
+            $tabs[] = Tab::make('Main')
+                ->schema($g['Main'])
+                ->columns(1);
+        }
+
+        if (! empty($g['Mail'])) {
+            $mailSchema = $g['Mail'];
+            $mailSchema[] = Actions::make([
+                Action::make('testMailConnection')
+                    ->label('Send Test Email')
+                    ->icon('heroicon-o-paper-airplane')
+                    ->color('info')
+                    ->action('testMailConnectionAction'),
+            ]);
+            $tabs[] = Tab::make('Mail')
+                ->schema($mailSchema)
+                ->columns(1);
+        }
+
+        if (! empty($g['Scheduler'])) {
+            $tabs[] = Tab::make('Scheduler')
+                ->schema($g['Scheduler'])
+                ->columns(1);
+        }
+
+        return [
+            Tabs::make('GeneralTabs')->tabs($tabs),
         ];
     }
 }

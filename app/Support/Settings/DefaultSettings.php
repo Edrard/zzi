@@ -21,6 +21,31 @@ class DefaultSettings
             ['key' => 'scheduled_task_logs_retention_days', 'value' => '180', 'type' => 'integer', 'description' => 'Days to keep Scheduled Task run logs'],
             ['key' => 'scheduled_tasks_missed_run_max_age_days', 'value' => '30', 'type' => 'integer', 'description' => 'Maximum age in days for missed scheduled task runs to be executed via catch-up'],
 
+            // Scheduler Safety
+            ['key' => 'scheduled_tasks_enabled', 'value' => 'true', 'type' => 'boolean', 'description' => 'Global toggle to enable or disable the scheduler processing'],
+            ['key' => 'scheduled_tasks_max_processed_per_run', 'value' => '5', 'type' => 'integer', 'description' => 'Maximum number of tasks to process sequentially per command run'],
+            ['key' => 'scheduled_tasks_command_runtime_seconds', 'value' => '50', 'type' => 'integer', 'description' => 'Maximum runtime seconds for the scheduler processing command'],
+            ['key' => 'scheduled_tasks_pause_minutes', 'value' => '30', 'type' => 'integer', 'description' => 'Number of minutes to pause the scheduler on transient errors'],
+            ['key' => 'scheduled_tasks_paused_until', 'value' => null, 'type' => 'string', 'description' => 'Timestamp until which the scheduler is paused'],
+            ['key' => 'scheduled_tasks_pause_reason', 'value' => null, 'type' => 'string', 'description' => 'Reason for the current pause'],
+            ['key' => 'scheduled_tasks_disabled_reason', 'value' => null, 'type' => 'string', 'description' => 'Reason for the scheduler being globally disabled automatically'],
+            ['key' => 'scheduled_tasks_auto_disable_on_failures', 'value' => 'true', 'type' => 'boolean', 'description' => 'Automatically disable the scheduler after repeated failures'],
+            ['key' => 'scheduled_tasks_failure_threshold', 'value' => '3', 'type' => 'integer', 'description' => 'Number of consecutive failures before auto-disabling the scheduler'],
+
+            // Mail
+            ['key' => 'mail_notifications_enabled', 'value' => 'false', 'type' => 'boolean', 'description' => 'Enable or disable outgoing mail notifications'],
+            ['key' => 'mail_transport', 'value' => 'smtp', 'type' => 'string', 'description' => 'Mail transport (smtp or sendmail)'],
+            ['key' => 'mail_from_address', 'value' => '', 'type' => 'string', 'description' => 'Global FROM address for outgoing mails'],
+            ['key' => 'mail_from_name', 'value' => '', 'type' => 'string', 'description' => 'Global FROM name for outgoing mails'],
+            ['key' => 'mail_admin_recipients', 'value' => '', 'type' => 'string', 'description' => 'Comma-separated list of admin email addresses to receive system alerts'],
+            ['key' => 'mail_sendmail_path', 'value' => '/usr/sbin/sendmail -bs', 'type' => 'string', 'description' => 'Path to the sendmail binary'],
+            ['key' => 'mail_smtp_host', 'value' => '', 'type' => 'string', 'description' => 'SMTP host address'],
+            ['key' => 'mail_smtp_port', 'value' => '587', 'type' => 'integer', 'description' => 'SMTP port'],
+            ['key' => 'mail_smtp_encryption', 'value' => 'tls', 'type' => 'string', 'description' => 'SMTP encryption (none, tls, ssl)'],
+            ['key' => 'mail_smtp_username', 'value' => '', 'type' => 'string', 'description' => 'SMTP username'],
+            ['key' => 'mail_smtp_password', 'value' => '', 'type' => 'string', 'description' => 'SMTP password'],
+            ['key' => 'mail_smtp_timeout_seconds', 'value' => '15', 'type' => 'integer', 'description' => 'SMTP timeout in seconds'],
+
             // Zabbix
             ['key' => 'zabbix_api_url', 'value' => '', 'type' => 'string', 'description' => 'Zabbix API endpoint URL'],
             ['key' => 'zabbix_api_token', 'value' => '', 'type' => 'string', 'description' => 'Zabbix API token'],

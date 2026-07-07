@@ -29,6 +29,11 @@ class CronService
      */
     public function calculateNextRun(string $expression, ?string $timezone = null): ?Carbon
     {
+        return $this->calculateNextRunFrom($expression, 'now', $timezone);
+    }
+
+    public function calculateNextRunFrom(string $expression, \DateTimeInterface|string $from, ?string $timezone = null): ?Carbon
+    {
         if (! $this->isValid($expression)) {
             return null;
         }
@@ -36,7 +41,7 @@ class CronService
         try {
             $cron = new CronExpression($expression);
             $tz = $timezone ?: config('app.timezone');
-            $nextRun = $cron->getNextRunDate('now', 0, false, $tz);
+            $nextRun = $cron->getNextRunDate($from, 0, false, $tz);
 
             return Carbon::instance($nextRun)->setTimezone(config('app.timezone')); // Normalise to app timezone for DB
         } catch (\Throwable $e) {

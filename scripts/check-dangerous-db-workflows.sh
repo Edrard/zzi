@@ -15,8 +15,9 @@ DEST_COMMANDS="migrate:fresh\|migrate:refresh\|db:wipe\|schema:dump --prune"
 # Tinker commands that combine with test traits
 TINKER_TEST_TRAITS="Tests\\\\TestCase\|RefreshDatabase\|DatabaseMigrations\|DatabaseTransactions"
 
-# 1. Check for destructive commands in AGENTS.md, docs, prompts, etc.
-if grep -RIn "$DEST_COMMANDS" AGENTS.md docs scripts tests app database resources \
+# 1. Check for destructive commands in docs, scripts, tests, app, database, resources.
+# AGENTS.md is intentionally excluded because it documents forbidden commands as policy text.
+if grep -RIn "$DEST_COMMANDS" docs scripts tests app database resources \
   --exclude-dir=vendor \
   --exclude-dir=node_modules \
   --exclude-dir=.git \
