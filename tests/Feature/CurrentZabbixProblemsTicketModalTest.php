@@ -2000,4 +2000,300 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $this->assertArrayHasKey('2001', $resolved);
         $this->assertEquals(99, $resolved['2001']->znuny_ticket_id);
     }
+
+    public function test_preset_all_shows_all_problems()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->set('problemPreset', 'all')
+            ->assertSeeHtml('TestCompany CPU Load')
+            ->assertSeeHtml('No IP problem');
+    }
+
+    public function test_preset_high_shows_severity_4_and_5()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            ['eventid' => '1', 'name' => 'Sev 5', 'severity' => 5],
+            ['eventid' => '2', 'name' => 'Sev 4', 'severity' => 4],
+            ['eventid' => '3', 'name' => 'Sev 3', 'severity' => 3],
+        ], 3600);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->set('problemPreset', 'high')
+            ->assertSeeHtml('Sev 5')
+            ->assertSeeHtml('Sev 4')
+            ->assertDontSeeHtml('Sev 3');
+    }
+
+    public function test_preset_warning_shows_only_severity_2()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            ['eventid' => '1', 'name' => 'Sev 2', 'severity' => 2],
+            ['eventid' => '2', 'name' => 'Sev 4', 'severity' => 4],
+        ], 3600);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->set('problemPreset', 'warning')
+            ->assertSeeHtml('Sev 2')
+            ->assertDontSeeHtml('Sev 4');
+    }
+
+    public function test_preset_average_shows_only_severity_3()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            ['eventid' => '1', 'name' => 'Sev 3', 'severity' => 3],
+            ['eventid' => '2', 'name' => 'Sev 4', 'severity' => 4],
+        ], 3600);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->set('problemPreset', 'average')
+            ->assertSeeHtml('Sev 3')
+            ->assertDontSeeHtml('Sev 4');
+    }
+
+    public function test_preset_information_shows_only_severity_1()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            ['eventid' => '1', 'name' => 'Sev 1', 'severity' => 1],
+            ['eventid' => '2', 'name' => 'Sev 4', 'severity' => 4],
+        ], 3600);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->set('problemPreset', 'information')
+            ->assertSeeHtml('Sev 1')
+            ->assertDontSeeHtml('Sev 4');
+    }
+
+    public function test_preset_tickets_shows_rows_with_valid_resolved_tickets()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            ['eventid' => '9000', 'name' => 'Linked Prob', 'severity' => 4],
+            ['eventid' => '9001', 'name' => 'Unlinked Prob', 'severity' => 4],
+            ['eventid' => '9002', 'name' => 'Grouped Prob', 'severity' => 4, 'hostid' => '2', 'objectid' => '2'],
+            ['eventid' => '9003', 'name' => 'Grouped Prob', 'severity' => 4, 'hostid' => '2', 'objectid' => '2'],
+        ], 3600);
+
+        ZabbixTicket::create([
+            'zabbix_event_id' => '9000',
+            'zabbix_host_id' => '1',
+            'zabbix_host_name' => 'H',
+            'zabbix_trigger_id' => '1',
+            'zabbix_problem_name' => 'P',
+            'znuny_ticket_id' => 99,
+            'znuny_ticket_number' => '123456',
+            'manual_lifecycle_status' => 'active',
+        ]);
+
+        ZabbixTicket::create([
+            'zabbix_event_id' => '9003', // Related to Grouped Prob
+            'zabbix_host_id' => '2',
+            'zabbix_host_name' => 'H2',
+            'zabbix_trigger_id' => '2',
+            'zabbix_problem_name' => 'P2',
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '123457',
+            'manual_lifecycle_status' => 'active',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->set('problemPreset', 'tickets')
+            ->assertSeeHtml('Linked Prob')
+            ->assertSeeHtml('Grouped Prob')
+            ->assertDontSeeHtml('Unlinked Prob');
+    }
+
+    public function test_preset_reopen_shows_rows_with_reopen_candidate()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            ['eventid' => '9000', 'name' => 'Reopen Prob', 'severity' => 4],
+            ['eventid' => '9001', 'name' => 'Active Prob', 'severity' => 4],
+        ], 3600);
+
+        ZabbixTicket::create([
+            'zabbix_event_id' => '9000',
+            'zabbix_host_id' => '1',
+            'zabbix_host_name' => 'H',
+            'zabbix_trigger_id' => '1',
+            'zabbix_problem_name' => 'P',
+            'znuny_ticket_id' => 99,
+            'znuny_ticket_number' => '123456',
+            'manual_lifecycle_status' => 'reopen_candidate',
+        ]);
+
+        ZabbixTicket::create([
+            'zabbix_event_id' => '9001',
+            'zabbix_host_id' => '2',
+            'zabbix_host_name' => 'H2',
+            'zabbix_trigger_id' => '2',
+            'zabbix_problem_name' => 'P2',
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '123457',
+            'manual_lifecycle_status' => 'active',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->set('problemPreset', 'reopen')
+            ->assertSeeHtml('Reopen Prob')
+            ->assertDontSeeHtml('Active Prob');
+    }
+
+    public function test_preset_flapping_shows_rows_with_flapping_status()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            ['eventid' => '9000', 'name' => 'Flap Prob', 'severity' => 4],
+            ['eventid' => '9001', 'name' => 'Active Prob', 'severity' => 4],
+        ], 3600);
+
+        ZabbixTicket::create([
+            'zabbix_event_id' => '9000',
+            'zabbix_host_id' => '1',
+            'zabbix_host_name' => 'H',
+            'zabbix_trigger_id' => '1',
+            'zabbix_problem_name' => 'P',
+            'znuny_ticket_id' => 99,
+            'znuny_ticket_number' => '123456',
+            'manual_lifecycle_status' => 'flapping',
+        ]);
+
+        ZabbixTicket::create([
+            'zabbix_event_id' => '9001',
+            'zabbix_host_id' => '2',
+            'zabbix_host_name' => 'H2',
+            'zabbix_trigger_id' => '2',
+            'zabbix_problem_name' => 'P2',
+            'znuny_ticket_id' => 100,
+            'znuny_ticket_number' => '123457',
+            'manual_lifecycle_status' => 'active',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->set('problemPreset', 'flapping')
+            ->assertSeeHtml('Flap Prob')
+            ->assertDontSeeHtml('Active Prob');
+    }
+
+    public function test_search_and_preset_combine_correctly()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            ['eventid' => '1', 'name' => 'Sev 5 Alpha', 'severity' => 5],
+            ['eventid' => '2', 'name' => 'Sev 5 Beta', 'severity' => 5],
+            ['eventid' => '3', 'name' => 'Sev 3 Alpha', 'severity' => 3],
+        ], 3600);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->set('search', 'Alpha')
+            ->set('problemPreset', 'high');
+
+        $component->assertSeeHtml('Sev 5 Alpha')
+            ->assertDontSeeHtml('Sev 5 Beta') // filtered by search
+            ->assertDontSeeHtml('Sev 3 Alpha') // filtered by preset
+            ->assertSeeHtml('Showing 1 of 3 problems');
+    }
+
+    public function test_preset_reopen_includes_reopened_status()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            ['eventid' => '9000', 'name' => 'Reopened Prob', 'severity' => 4],
+            ['eventid' => '9001', 'name' => 'Active Prob', 'severity' => 4],
+        ], 3600);
+
+        ZabbixTicket::create([
+            'zabbix_event_id' => '9000',
+            'zabbix_host_id' => '1',
+            'zabbix_host_name' => 'H',
+            'zabbix_trigger_id' => '1',
+            'zabbix_problem_name' => 'P',
+            'znuny_ticket_id' => 99,
+            'znuny_ticket_number' => '123456',
+            'manual_lifecycle_status' => 'reopened',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->set('problemPreset', 'reopen')
+            ->assertSeeHtml('Reopened Prob')
+            ->assertDontSeeHtml('Active Prob');
+    }
+
+    public function test_preset_reopen_includes_manual_reopened_at()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            ['eventid' => '9000', 'name' => 'Manual Reopened Prob', 'severity' => 4],
+        ], 3600);
+
+        ZabbixTicket::create([
+            'zabbix_event_id' => '9000',
+            'zabbix_host_id' => '1',
+            'zabbix_host_name' => 'H',
+            'zabbix_trigger_id' => '1',
+            'zabbix_problem_name' => 'P',
+            'znuny_ticket_id' => 99,
+            'znuny_ticket_number' => '123456',
+            'manual_lifecycle_status' => 'active', // not reopen_candidate/reopened, but has timestamp
+            'manual_reopened_at' => now(),
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->set('problemPreset', 'reopen')
+            ->assertSeeHtml('Manual Reopened Prob');
+    }
+
+    public function test_default_sorting_is_age_ascending()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->assertSet('sortField', 'age')
+            ->assertSet('sortDirection', 'asc');
+    }
+
+    public function test_preset_buttons_render_with_active_class_for_selected_preset()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->set('problemPreset', 'tickets')
+            ->assertSeeHtml('zbx-preset-tickets active')
+            ->assertDontSeeHtml('zbx-preset-all active')
+            ->assertDontSeeHtml('zbx-preset-reopen active');
+    }
+
+    public function test_invalid_preset_is_ignored_or_safely_reset_to_all()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('setProblemPreset', 'invalid_preset')
+            ->assertSet('problemPreset', 'all'); // Should be ignored and remain 'all'
+    }
 }

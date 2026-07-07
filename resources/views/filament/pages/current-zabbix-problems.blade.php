@@ -482,7 +482,83 @@
         :is(.dark) .zbx-severity-4 { background: #7f1d1d; color: #fecaca; border-color: #991b1b; }
         :is(.dark) .zbx-severity-5 { background: #450a0a; color: #fca5a5; border-color: #7f1d1d; }
 
-        /* Modal specific styles */
+        .zbx-preset-btn {
+        padding: 0.25rem 0.75rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        border-radius: 9999px;
+        transition: all 0.2s;
+        border: 1px solid transparent;
+        cursor: pointer;
+    }
+
+    /* Preset Inactive Styles */
+    .zbx-preset-all { background: #f3f4f6; color: #4b5563; }
+    .zbx-preset-all:hover { background: #e5e7eb; }
+    :is(.dark) .zbx-preset-all { background: #374151; color: #d1d5db; }
+    :is(.dark) .zbx-preset-all:hover { background: #4b5563; }
+
+    .zbx-preset-high { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+    .zbx-preset-high:hover { background: #fee2e2; }
+    :is(.dark) .zbx-preset-high { background: rgba(185, 28, 28, 0.1); color: #fca5a5; border-color: rgba(185, 28, 28, 0.3); }
+    :is(.dark) .zbx-preset-high:hover { background: rgba(185, 28, 28, 0.2); }
+
+    .zbx-preset-warning { background: #fefce8; color: #a16207; border-color: #fef08a; }
+    .zbx-preset-warning:hover { background: #fef9c3; }
+    :is(.dark) .zbx-preset-warning { background: rgba(161, 98, 7, 0.1); color: #fde047; border-color: rgba(161, 98, 7, 0.3); }
+    :is(.dark) .zbx-preset-warning:hover { background: rgba(161, 98, 7, 0.2); }
+
+    .zbx-preset-average { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+    .zbx-preset-average:hover { background: #ffedd5; }
+    :is(.dark) .zbx-preset-average { background: rgba(194, 65, 12, 0.1); color: #fdba74; border-color: rgba(194, 65, 12, 0.3); }
+    :is(.dark) .zbx-preset-average:hover { background: rgba(194, 65, 12, 0.2); }
+
+    .zbx-preset-information { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+    .zbx-preset-information:hover { background: #dbeafe; }
+    :is(.dark) .zbx-preset-information { background: rgba(29, 78, 216, 0.1); color: #93c5fd; border-color: rgba(29, 78, 216, 0.3); }
+    :is(.dark) .zbx-preset-information:hover { background: rgba(29, 78, 216, 0.2); }
+
+    .zbx-preset-tickets { background: #eff6ff; color: #0369a1; border-color: #bae6fd; }
+    .zbx-preset-tickets:hover { background: #e0f2fe; }
+    :is(.dark) .zbx-preset-tickets { background: rgba(3, 105, 161, 0.1); color: #7dd3fc; border-color: rgba(3, 105, 161, 0.3); }
+    :is(.dark) .zbx-preset-tickets:hover { background: rgba(3, 105, 161, 0.2); }
+
+    .zbx-preset-reopen { background: #fdf4ff; color: #7e22ce; border-color: #e9d5ff; }
+    .zbx-preset-reopen:hover { background: #fae8ff; }
+    :is(.dark) .zbx-preset-reopen { background: rgba(126, 34, 206, 0.1); color: #d8b4fe; border-color: rgba(126, 34, 206, 0.3); }
+    :is(.dark) .zbx-preset-reopen:hover { background: rgba(126, 34, 206, 0.2); }
+
+    .zbx-preset-flapping { background: #fff1f2; color: #be123c; border-color: #fecdd3; }
+    .zbx-preset-flapping:hover { background: #ffe4e6; }
+    :is(.dark) .zbx-preset-flapping { background: rgba(190, 18, 60, 0.1); color: #fda4af; border-color: rgba(190, 18, 60, 0.3); }
+    :is(.dark) .zbx-preset-flapping:hover { background: rgba(190, 18, 60, 0.2); }
+
+    /* Preset Active Styles */
+    .zbx-preset-all.active { background: #4b5563; color: #ffffff; border-color: transparent; }
+    :is(.dark) .zbx-preset-all.active { background: #9ca3af; color: #111827; }
+
+    .zbx-preset-high.active { background: #dc2626; color: #ffffff; border-color: transparent; }
+    :is(.dark) .zbx-preset-high.active { background: #ef4444; color: #111827; }
+
+    .zbx-preset-warning.active { background: #ca8a04; color: #ffffff; border-color: transparent; }
+    :is(.dark) .zbx-preset-warning.active { background: #facc15; color: #111827; }
+
+    .zbx-preset-average.active { background: #ea580c; color: #ffffff; border-color: transparent; }
+    :is(.dark) .zbx-preset-average.active { background: #fb923c; color: #111827; }
+
+    .zbx-preset-information.active { background: #2563eb; color: #ffffff; border-color: transparent; }
+    :is(.dark) .zbx-preset-information.active { background: #60a5fa; color: #111827; }
+
+    .zbx-preset-tickets.active { background: #0284c7; color: #ffffff; border-color: transparent; }
+    :is(.dark) .zbx-preset-tickets.active { background: #38bdf8; color: #111827; }
+
+    .zbx-preset-reopen.active { background: #9333ea; color: #ffffff; border-color: transparent; }
+    :is(.dark) .zbx-preset-reopen.active { background: #c084fc; color: #111827; }
+
+    .zbx-preset-flapping.active { background: #e11d48; color: #ffffff; border-color: transparent; }
+    :is(.dark) .zbx-preset-flapping.active { background: #fb7185; color: #111827; }
+
+    /* Modal specific styles */
         .zbx-ticket-modal-section {
             margin-bottom: 24px;
         }
@@ -724,8 +800,8 @@
             $showingCount = count($problems);
             $totalCount = $this->totalCachedCount;
         @endphp
-        <div class="zbx-toolbar">
-            <div class="zbx-toolbar-search">
+        <div class="zbx-toolbar" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+            <div class="zbx-toolbar-search" style="flex: 0 1 350px;">
                 <x-filament::input.wrapper icon="heroicon-m-magnifying-glass">
                     <x-filament::input
                         type="text"
@@ -734,8 +810,21 @@
                     />
                 </x-filament::input.wrapper>
             </div>
-            <div class="zbx-toolbar-count">
-                @if(empty($this->search))
+
+            <div class="zbx-toolbar-presets" style="display: flex; gap: 0.375rem; flex-wrap: wrap; flex: 1;">
+                @foreach(['all' => 'All', 'high' => 'High', 'warning' => 'Warning', 'average' => 'Average', 'information' => 'Information', 'tickets' => 'Tickets', 'reopen' => 'Reopen', 'flapping' => 'Flapping'] as $preset => $label)
+                    <button
+                        type="button"
+                        wire:click="setProblemPreset('{{ $preset }}')"
+                        class="zbx-preset-btn zbx-preset-{{ $preset }} {{ $this->problemPreset === $preset ? 'active' : '' }}"
+                    >
+                        {{ $label }}
+                    </button>
+                @endforeach
+            </div>
+
+            <div class="zbx-toolbar-count" style="white-space: nowrap;">
+                @if(empty($this->search) && $this->problemPreset === 'all')
                     Showing {{ $totalCount }} problems
                 @else
                     Showing {{ $showingCount }} of {{ $totalCount }} problems

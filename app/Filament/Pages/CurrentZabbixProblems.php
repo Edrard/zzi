@@ -45,7 +45,9 @@ class CurrentZabbixProblems extends Page
 
     protected static ?string $title = 'Current Zabbix Problems';
 
-    public string $search = '';
+    public ?string $search = '';
+
+    public string $problemPreset = 'all';
 
     public string $sortField = 'age';
 
@@ -187,6 +189,14 @@ class CurrentZabbixProblems extends Page
         return parent::getAction($actions, $isMounting);
     }
 
+    public function setProblemPreset(string $preset): void
+    {
+        $allowed = ['all', 'high', 'warning', 'average', 'information', 'tickets', 'reopen', 'flapping'];
+        if (in_array($preset, $allowed, true)) {
+            $this->problemPreset = $preset;
+        }
+    }
+
     public function sortBy(string $field): void
     {
         $allowed = ['severity', 'host', 'problem', 'age'];
@@ -213,8 +223,41 @@ class CurrentZabbixProblems extends Page
         $result = $queryService->query($this->search, $this->sortField, $this->sortDirection);
 
         $this->totalCachedCount = $result['total_cached_count'];
+        $problems = $result['problems'];
 
-        return $result['problems'];
+        if ($this->problemPreset !== 'all') {
+            $filtered = [];
+
+            if (in_array($this->problemPreset, ['tickets', 'reopen', 'flapping'], true)) {
+                $resolvedTickets = $this->resolveLinkedTickets($problems);
+            }
+
+            foreach ($problems as $problem) {
+                $severity = (int) ($problem['severity'] ?? 0);
+                $eventId = (string) ($problem['eventid'] ?? $problem['objectid'] ?? $problem['triggerid'] ?? '');
+
+                $keep = match ($this->problemPreset) {
+                    'high' => $severity >= 4,
+                    'warning' => $severity === 2,
+                    'average' => $severity === 3,
+                    'information' => $severity === 1,
+                    'tickets' => isset($resolvedTickets[$eventId]),
+                    'reopen' => isset($resolvedTickets[$eventId]) && (
+                        in_array($resolvedTickets[$eventId]->manual_lifecycle_status, ['reopen_candidate', 'reopened'], true) ||
+                        ! is_null($resolvedTickets[$eventId]->manual_reopened_at)
+                    ),
+                    'flapping' => isset($resolvedTickets[$eventId]) && $resolvedTickets[$eventId]->manual_lifecycle_status === 'flapping',
+                    default => true,
+                };
+
+                if ($keep) {
+                    $filtered[] = $problem;
+                }
+            }
+            $problems = $filtered;
+        }
+
+        return $problems;
     }
 
     public function resolveLinkedTickets(array $problems): array
