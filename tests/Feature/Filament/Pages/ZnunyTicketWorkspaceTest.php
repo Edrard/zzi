@@ -746,11 +746,9 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->assertSeeHtml('border: 1px solid var(--zbx-table-border, #e5e7eb);');
     }
 
-    public function test_recent_closed_ticket_status_is_rendered_when_enabled()
+    public function test_recent_closed_ticket_status_is_rendered_for_admin()
     {
-        config(['znuny.closed_ticket_status_panel_enabled' => true]);
-
-        $user = User::factory()->create(['role' => 'operator']);
+        $user = User::factory()->create(['role' => 'admin']);
 
         Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
@@ -759,10 +757,9 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->assertSee('Recent closed ticket cache has not completed a full sync yet.');
     }
 
-    public function test_recent_closed_ticket_status_is_hidden_by_default()
+    public function test_recent_closed_ticket_status_is_hidden_for_operator()
     {
-        config(['znuny.closed_ticket_status_panel_enabled' => false]);
-        $user = User::factory()->create(['role' => 'operator']);
+        $user = User::factory()->create(['role' => 'operator', 'show_znuny_closed_ticket_status_panel' => true]);
 
         Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
@@ -770,12 +767,31 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->assertDontSee('Recent Closed Ticket Cache Status');
     }
 
-    public function test_recent_closed_ticket_status_complete_metadata_is_rendered_when_enabled()
+    public function test_recent_closed_ticket_status_is_hidden_for_viewer()
     {
-        config(['znuny.closed_ticket_status_panel_enabled' => true]);
+        $user = User::factory()->create(['role' => 'viewer', 'show_znuny_closed_ticket_status_panel' => true]);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->assertSuccessful()
+            ->assertDontSee('Recent Closed Ticket Cache Status');
+    }
+
+    public function test_recent_closed_ticket_status_is_hidden_for_admin_when_preference_disabled()
+    {
+        $user = User::factory()->create(['role' => 'admin', 'show_znuny_closed_ticket_status_panel' => false]);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->assertSuccessful()
+            ->assertDontSee('Recent Closed Ticket Cache Status');
+    }
+
+    public function test_recent_closed_ticket_status_complete_metadata_is_rendered_for_admin()
+    {
         Setting::updateOrCreate(['key' => 'app_display_timezone'], ['value' => 'Asia/Tokyo']);
 
-        $user = User::factory()->create(['role' => 'operator']);
+        $user = User::factory()->create(['role' => 'admin']);
 
         $mock = \Mockery::mock(ClosedTicketCacheService::class)->makePartial();
         $mock->shouldReceive('getMetadata')->andReturn([
@@ -824,10 +840,9 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->assertSee('Previous sync warning');
     }
 
-    public function test_recent_closed_ticket_status_lock_is_rendered_when_enabled()
+    public function test_recent_closed_ticket_status_lock_is_rendered_for_admin()
     {
-        config(['znuny.closed_ticket_status_panel_enabled' => true]);
-        $user = User::factory()->create(['role' => 'operator']);
+        $user = User::factory()->create(['role' => 'admin']);
 
         Cache::put('znuny:closed_ticket:sync:lock', true, 10);
 

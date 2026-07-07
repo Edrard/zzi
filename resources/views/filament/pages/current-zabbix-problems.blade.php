@@ -743,6 +743,7 @@
             }
         @endphp
 
+        @if(auth()->user()->canViewCurrentProblemsStatusPanel())
         <div class="zbx-status-section">
             <h3 class="font-semibold text-lg mb-4 text-gray-900 dark:text-white">Polling status</h3>
             <div class="zbx-status-grid">
@@ -793,6 +794,7 @@
                 </div>
             @endif
         </div>
+        @endif
 
         {{-- Toolbar --}}
         @php

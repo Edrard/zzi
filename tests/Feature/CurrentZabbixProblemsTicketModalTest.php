@@ -97,6 +97,52 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $this->assertEquals(1, substr_count($html, 'IP Address:'));
     }
 
+    public function test_polling_status_is_rendered_for_admin()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->assertSee('Polling status')
+            ->assertSee('Current problems');
+    }
+
+    public function test_polling_status_is_hidden_for_operator_but_table_visible()
+    {
+        $operator = User::factory()->create(['role' => 'operator', 'show_current_problems_status_panel' => true]);
+
+        Livewire::actingAs($operator)
+            ->test(CurrentZabbixProblems::class)
+            ->assertDontSee('Polling status')
+            ->assertDontSee('Excluded Breakdown:')
+            ->assertSee('TestCompany CPU Load')
+            ->assertSee('No IP problem');
+    }
+
+    public function test_polling_status_is_hidden_for_viewer_but_table_visible()
+    {
+        $viewer = User::factory()->create(['role' => 'viewer', 'show_current_problems_status_panel' => true]);
+
+        Livewire::actingAs($viewer)
+            ->test(CurrentZabbixProblems::class)
+            ->assertDontSee('Polling status')
+            ->assertDontSee('Excluded Breakdown:')
+            ->assertSee('TestCompany CPU Load')
+            ->assertSee('No IP problem');
+    }
+
+    public function test_polling_status_is_hidden_for_admin_when_preference_disabled()
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'show_current_problems_status_panel' => false]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->assertDontSee('Polling status')
+            ->assertDontSee('Excluded Breakdown:')
+            ->assertSee('TestCompany CPU Load')
+            ->assertSee('No IP problem');
+    }
+
     public function test_viewer_cannot_open_modal()
     {
         $viewer = User::factory()->create(['role' => 'viewer']);

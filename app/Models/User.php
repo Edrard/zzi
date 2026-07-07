@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password', 'role', 'is_active'])]
+#[Fillable(['name', 'email', 'password', 'role', 'is_active', 'show_current_problems_status_panel', 'show_znuny_closed_ticket_status_panel'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements FilamentUser
 {
@@ -22,6 +22,16 @@ class User extends Authenticatable implements FilamentUser
     public function canAccessPanel(Panel $panel): bool
     {
         return $this->is_active !== false && in_array($this->role, ['admin', 'operator', 'viewer'], true);
+    }
+
+    public function canViewCurrentProblemsStatusPanel(): bool
+    {
+        return $this->role === 'admin' && $this->show_current_problems_status_panel;
+    }
+
+    public function canViewZnunyClosedTicketStatusPanel(): bool
+    {
+        return $this->role === 'admin' && $this->show_znuny_closed_ticket_status_panel;
     }
 
     /**
@@ -35,6 +45,8 @@ class User extends Authenticatable implements FilamentUser
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'show_current_problems_status_panel' => 'boolean',
+            'show_znuny_closed_ticket_status_panel' => 'boolean',
         ];
     }
 }

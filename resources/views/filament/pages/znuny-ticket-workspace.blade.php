@@ -332,7 +332,7 @@
             </span>
         </div>
 
-        @if(config('znuny.closed_ticket_status_panel_enabled'))
+        @if(auth()->user()->canViewZnunyClosedTicketStatusPanel())
             @php
                 $syncMeta = app(\App\Services\Znuny\ClosedTicketCacheService::class)->getMetadata();
             @endphp
