@@ -744,7 +744,7 @@ class Settings extends Page implements HasForms
 
             if (in_array($setting->key, ['cleanup_enabled', 'cleanup_batch_size', 'app_display_timezone', 'pagination_per_page_base'])) {
                 $groups['General'][] = $component;
-            } elseif (in_array($setting->key, ['retention_action_logs_days', 'retention_closed_tickets_days', 'retention_failed_jobs_days', 'retention_resolved_days'])) {
+            } elseif (in_array($setting->key, ['retention_action_logs_days', 'retention_closed_tickets_days', 'retention_failed_jobs_days', 'retention_resolved_days', 'scheduled_task_logs_retention_days', 'scheduled_tasks_missed_run_max_age_days'])) {
                 $groups['Retention'][] = $component;
             } elseif (str_starts_with($setting->key, 'owner_suggestion_')) {
                 $groups['Statistics'][$setting->key] = $component;

@@ -18,6 +18,8 @@ class DefaultSettings
             ['key' => 'retention_closed_tickets_days', 'value' => '180', 'type' => 'integer', 'description' => 'Days to keep closed tickets'],
             ['key' => 'retention_action_logs_days', 'value' => '365', 'type' => 'integer', 'description' => 'Days to keep action logs'],
             ['key' => 'retention_failed_jobs_days', 'value' => '30', 'type' => 'integer', 'description' => 'Days to keep failed jobs'],
+            ['key' => 'scheduled_task_logs_retention_days', 'value' => '180', 'type' => 'integer', 'description' => 'Days to keep Scheduled Task run logs'],
+            ['key' => 'scheduled_tasks_missed_run_max_age_days', 'value' => '30', 'type' => 'integer', 'description' => 'Maximum age in days for missed scheduled task runs to be executed via catch-up'],
 
             // Zabbix
             ['key' => 'zabbix_api_url', 'value' => '', 'type' => 'string', 'description' => 'Zabbix API endpoint URL'],
