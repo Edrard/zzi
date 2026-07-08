@@ -16,6 +16,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class ScheduledZnunyTasksTable
 {
@@ -25,6 +26,32 @@ class ScheduledZnunyTasksTable
             ->recordClasses(fn (ScheduledZnunyTask $record) => match ($record->enabled) {
                 false => 'bg-gray-50 dark:bg-gray-800/50',
                 default => null,
+            })
+            ->modifyQueryUsing(function (Builder $query) use ($table) {
+                $livewire = $table->getLivewire();
+
+                if (method_exists($livewire, 'getTaskSearch') && ! empty($livewire->getTaskSearch())) {
+                    $s = $livewire->getTaskSearch();
+                    $query->where(function ($q) use ($s) {
+                        $q->where('name', 'like', "%{$s}%")
+                            ->orWhere('subject', 'like', "%{$s}%")
+                            ->orWhere('queue_name', 'like', "%{$s}%")
+                            ->orWhere('owner_login', 'like', "%{$s}%")
+                            ->orWhere('last_status', 'like', "%{$s}%");
+                    });
+                }
+
+                if (method_exists($livewire, 'getQueueFilter') && ! empty($livewire->getQueueFilter())) {
+                    $query->where('queue_name', $livewire->getQueueFilter());
+                }
+
+                if (method_exists($livewire, 'getOwnerFilter') && ! empty($livewire->getOwnerFilter())) {
+                    $query->where('owner_login', $livewire->getOwnerFilter());
+                }
+
+                if (method_exists($livewire, 'getActiveFilter') && $livewire->getActiveFilter() !== 'all') {
+                    $query->where('enabled', $livewire->getActiveFilter() === '1');
+                }
             })
             ->columns([
                 ToggleColumn::make('enabled')
@@ -104,7 +131,6 @@ class ScheduledZnunyTasksTable
                         $record->save();
                     }),
                 TextColumn::make('name')
-                    ->searchable()
                     ->sortable()
                     ->description(fn (ScheduledZnunyTask $record) => $record->subject),
                 TextInputColumn::make('cron_expression')
@@ -146,7 +172,6 @@ class ScheduledZnunyTasksTable
                             return [];
                         }
                     })
-                    ->searchable()
                     ->updateStateUsing(function (ScheduledZnunyTask $record, $state) {
                         $record->queue_name = $state;
                         // Reset owner and customer user if queue changes
@@ -170,16 +195,14 @@ class ScheduledZnunyTasksTable
                         } catch (\Throwable $e) {
                             return [];
                         }
-                    })
-                    ->searchable(),
+                    }),
                 TextColumn::make('last_status')
-                    ->label('Status')
-                    ->searchable()
+                    ->label('Last result')
+                    ->sortable()
                     ->badge(),
             ])
-            ->filters([
-                //
-            ])
+            ->paginated([25, 50, 100, 'all'])
+            ->defaultPaginationPageOption(25)
             ->recordActions([
                 EditAction::make(),
                 Action::make('enqueue_run')

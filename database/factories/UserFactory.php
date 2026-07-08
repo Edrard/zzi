@@ -32,6 +32,7 @@ class UserFactory extends Factory
             'remember_token' => Str::random(10),
             'show_current_problems_status_panel' => true,
             'show_znuny_closed_ticket_status_panel' => true,
+            'show_scheduled_tasks_status_panel' => true,
         ];
     }
 

@@ -22,7 +22,8 @@ class MySettingsTest extends TestCase
             ->test(MySettings::class)
             ->assertSuccessful()
             ->assertSee('Admin UI Preferences')
-            ->assertSee('Show Current Problems polling status panel');
+            ->assertSee('Show Current Problems polling status panel')
+            ->assertSee('Show Scheduled Tasks status panel');
     }
 
     public function test_operator_viewer_do_not_see_diagnostic_panel_toggles()
@@ -33,7 +34,8 @@ class MySettingsTest extends TestCase
             ->test(MySettings::class)
             ->assertSuccessful()
             ->assertDontSee('Admin UI Preferences')
-            ->assertDontSee('Show Current Problems polling status panel');
+            ->assertDontSee('Show Current Problems polling status panel')
+            ->assertDontSee('Show Scheduled Tasks status panel');
 
         $viewer = User::factory()->create(['role' => 'viewer']);
 
@@ -116,6 +118,22 @@ class MySettingsTest extends TestCase
 
         $admin->refresh();
         $this->assertFalse($admin->show_current_problems_status_panel);
+    }
+
+    public function test_admin_can_disable_scheduled_tasks_panel()
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'show_scheduled_tasks_status_panel' => true]);
+
+        Livewire::actingAs($admin)
+            ->test(MySettings::class)
+            ->fillForm([
+                'show_scheduled_tasks_status_panel' => false,
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $admin->refresh();
+        $this->assertFalse($admin->show_scheduled_tasks_status_panel);
     }
 
     public function test_my_settings_is_hidden_from_navigation()

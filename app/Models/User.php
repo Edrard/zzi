@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password', 'role', 'is_active', 'show_current_problems_status_panel', 'show_znuny_closed_ticket_status_panel', 'default_landing_page'])]
+#[Fillable(['name', 'email', 'password', 'role', 'is_active', 'show_current_problems_status_panel', 'show_znuny_closed_ticket_status_panel', 'show_scheduled_tasks_status_panel', 'default_landing_page'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements FilamentUser
 {
@@ -34,6 +34,11 @@ class User extends Authenticatable implements FilamentUser
         return $this->role === 'admin' && $this->show_znuny_closed_ticket_status_panel;
     }
 
+    public function canViewScheduledTasksStatusPanel(): bool
+    {
+        return $this->role === 'admin' && $this->show_scheduled_tasks_status_panel;
+    }
+
     /**
      * Get the attributes that should be cast.
      *
@@ -47,6 +52,7 @@ class User extends Authenticatable implements FilamentUser
             'is_active' => 'boolean',
             'show_current_problems_status_panel' => 'boolean',
             'show_znuny_closed_ticket_status_panel' => 'boolean',
+            'show_scheduled_tasks_status_panel' => 'boolean',
         ];
     }
 }

@@ -45,6 +45,7 @@ class MySettings extends Page implements HasForms
             'default_landing_page' => $currentLandingPage,
             'show_current_problems_status_panel' => $user->show_current_problems_status_panel,
             'show_znuny_closed_ticket_status_panel' => $user->show_znuny_closed_ticket_status_panel,
+            'show_scheduled_tasks_status_panel' => $user->show_scheduled_tasks_status_panel,
         ]);
     }
 
@@ -93,6 +94,8 @@ class MySettings extends Page implements HasForms
                             ->label('Show Current Problems polling status panel'),
                         Toggle::make('show_znuny_closed_ticket_status_panel')
                             ->label('Show Znuny closed ticket status panel'),
+                        Toggle::make('show_scheduled_tasks_status_panel')
+                            ->label('Show Scheduled Tasks status panel'),
                     ]),
             ])
             ->statePath('data');
@@ -123,6 +126,7 @@ class MySettings extends Page implements HasForms
         if ($user->role === 'admin') {
             $user->show_current_problems_status_panel = $data['show_current_problems_status_panel'] ?? true;
             $user->show_znuny_closed_ticket_status_panel = $data['show_znuny_closed_ticket_status_panel'] ?? true;
+            $user->show_scheduled_tasks_status_panel = $data['show_scheduled_tasks_status_panel'] ?? true;
         }
 
         $user->save();
@@ -132,6 +136,7 @@ class MySettings extends Page implements HasForms
             'default_landing_page' => $user->default_landing_page,
             'show_current_problems_status_panel' => $user->show_current_problems_status_panel,
             'show_znuny_closed_ticket_status_panel' => $user->show_znuny_closed_ticket_status_panel,
+            'show_scheduled_tasks_status_panel' => $user->show_scheduled_tasks_status_panel,
             'current_password' => null,
             'new_password' => null,
             'new_password_confirmation' => null,

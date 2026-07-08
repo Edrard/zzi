@@ -6,6 +6,7 @@ use App\Filament\Resources\ScheduledZnunyTasks\Pages\CreateScheduledZnunyTask;
 use App\Filament\Resources\ScheduledZnunyTasks\Pages\EditScheduledZnunyTask;
 use App\Filament\Resources\ScheduledZnunyTasks\Pages\ListScheduledZnunyTasks;
 use App\Filament\Resources\ScheduledZnunyTasks\ScheduledZnunyTaskResource;
+use App\Filament\Resources\ScheduledZnunyTasks\Widgets\SchedulerStatusConsole;
 use App\Models\ScheduledZnunyTask;
 use App\Models\ScheduledZnunyTaskRun;
 use App\Models\User;
@@ -15,7 +16,6 @@ use App\Services\ScheduledZnunyTicketCreationService;
 use App\Services\SchedulerSafetyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -304,7 +304,6 @@ class ScheduledZnunyTaskResourceTest extends TestCase
         $this->actingAs($admin);
 
         app(SchedulerSafetyService::class)->disableScheduler('Test Disable');
-        Cache::flush();
 
         $task = ScheduledZnunyTask::create([
             'name' => 'Valid Task',
@@ -329,5 +328,35 @@ class ScheduledZnunyTaskResourceTest extends TestCase
             'run_type' => 'manual',
             'status' => 'pending',
         ]);
+    }
+
+    public function test_scheduled_panel_is_visible_by_default()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin);
+
+        Livewire::test(ListScheduledZnunyTasks::class)
+            ->assertSeeLivewire(SchedulerStatusConsole::class);
+    }
+
+    public function test_scheduled_panel_is_hidden_when_user_disables_setting()
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'show_scheduled_tasks_status_panel' => false]);
+        $this->actingAs($admin);
+
+        Livewire::test(ListScheduledZnunyTasks::class)
+            ->assertDontSeeLivewire(SchedulerStatusConsole::class);
+    }
+
+    public function test_scheduled_tasks_table_has_filters()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin);
+
+        Livewire::test(ListScheduledZnunyTasks::class)
+            ->assertSet('taskSearch', '')
+            ->assertSet('queueFilter', '')
+            ->assertSet('ownerFilter', '')
+            ->assertSet('activeFilter', 'all');
     }
 }
