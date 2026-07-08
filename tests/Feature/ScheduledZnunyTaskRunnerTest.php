@@ -22,7 +22,7 @@ class ScheduledZnunyTaskRunnerTest extends TestCase
         app(SchedulerSafetyService::class)->enableScheduler();
     }
 
-    public function test_runner_materializes_and_processes_pending_runs(): void
+    public function test_runner_materializes_and_processes_pending_runs_with_not_sent_outcome(): void
     {
         $task = ScheduledZnunyTask::create([
             'name' => 'Test Task',
@@ -35,15 +35,13 @@ class ScheduledZnunyTaskRunnerTest extends TestCase
 
         Artisan::call('scheduled-znuny:run');
 
-        // It should have created pending runs (catch-up) and then processed them
+        // It should have created pending runs (catch-up), tried to process the first one,
+        // failed local validation (NOT_SENT), reverted it to pending, and paused the scheduler.
         $this->assertEquals(2, ScheduledZnunyTaskRun::count());
         $run = ScheduledZnunyTaskRun::orderBy('id')->first();
-        $this->assertEquals('skipped', $run->status);
-        $this->assertStringContainsString('Ticket creation is not implemented until Phase 3', $run->error_details);
+        $this->assertEquals('pending', $run->status);
 
-        $task->refresh();
-        $this->assertEquals('skipped', $task->last_status);
-        $this->assertNotNull($task->last_run_at);
+        $this->assertTrue(app(SchedulerSafetyService::class)->isSchedulerPaused());
     }
 
     public function test_scheduler_obeys_global_disabled_flag_materializing_but_not_processing(): void
