@@ -5,6 +5,7 @@ namespace App\Filament\Resources\ScheduledZnunyTaskRuns;
 use App\Filament\Resources\ScheduledZnunyTaskRuns\Pages\ManageScheduledZnunyTaskRuns;
 use App\Filament\Resources\ScheduledZnunyTasks\ScheduledZnunyTaskResource;
 use App\Models\ScheduledZnunyTaskRun;
+use App\Services\Znuny\ZnunyClient;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
@@ -13,6 +14,7 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -190,12 +192,14 @@ class ScheduledZnunyTaskRunResource extends Resource
                         'failed' => 'Failed',
                         'skipped' => 'Skipped',
                         'duplicate' => 'Duplicate',
+                        'uncertain' => 'Uncertain',
                     ]),
                 SelectFilter::make('run_type')
                     ->options([
                         'scheduled' => 'Scheduled',
                         'manual' => 'Manual',
                         'catch_up' => 'Catch Up',
+                        'manual_retry' => 'Manual Retry',
                     ]),
                 TernaryFilter::make('has_ticket')
                     ->queries(
@@ -226,6 +230,55 @@ class ScheduledZnunyTaskRunResource extends Resource
             ])
             ->recordActions([
                 ViewAction::make(),
+
+                Action::make('requeue_failed_run')
+                    ->label('Requeue Run')
+                    ->icon('heroicon-o-arrow-path-rounded-square')
+                    ->color('danger')
+                    ->visible(fn (ScheduledZnunyTaskRun $record) => $record->status === 'failed')
+                    ->requiresConfirmation()
+                    ->action(function (ScheduledZnunyTaskRun $record) {
+                        ScheduledZnunyTaskRun::create([
+                            'scheduled_znuny_task_id' => $record->scheduled_znuny_task_id,
+                            'task_name_snapshot' => $record->task_name_snapshot,
+                            'run_type' => 'manual_retry',
+                            'status' => 'pending',
+                            'scheduled_for' => now(),
+                            'created_by' => auth()->id(),
+                        ]);
+                        Notification::make()->title('Run Requeued')->body('A new pending run has been created.')->success()->send();
+                    }),
+
+                Action::make('resolve_uncertain_run')
+                    ->label('Resolve Run')
+                    ->icon('heroicon-o-check-circle')
+                    ->color('warning')
+                    ->visible(fn (ScheduledZnunyTaskRun $record) => $record->status === 'uncertain')
+                    ->form([
+                        Textarea::make('note')
+                            ->label('Manual Review Note')
+                            ->required()
+                            ->helperText('Explain how this uncertain run was resolved manually in Znuny.'),
+                    ])
+                    ->action(function (ScheduledZnunyTaskRun $record, array $data) {
+                        $record->update([
+                            'status' => 'skipped',
+                            'error_summary' => 'Uncertain run manually reviewed; no automatic retry performed.',
+                            'error_details' => "Note: {$data['note']}\nOriginal error: ".$record->error_details,
+                        ]);
+
+                        Notification::make()->title('Run Resolved')->success()->send();
+                    }),
+
+                Action::make('open_ticket')
+                    ->label('Open Ticket')
+                    ->icon('heroicon-o-ticket')
+                    ->url(fn (ScheduledZnunyTaskRun $record): ?string => $record->ticket_id
+                        ? app(ZnunyClient::class)->ticketUrl($record->ticket_id)
+                        : null)
+                    ->openUrlInNewTab()
+                    ->visible(fn (ScheduledZnunyTaskRun $record) => ! empty($record->ticket_id)),
+
                 Action::make('open_task')
                     ->label('Open Task')
                     ->icon('heroicon-o-arrow-top-right-on-square')

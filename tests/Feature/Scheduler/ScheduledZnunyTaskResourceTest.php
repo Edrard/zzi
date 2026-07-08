@@ -10,13 +10,24 @@ use App\Models\ScheduledZnunyTask;
 use App\Models\ScheduledZnunyTaskRun;
 use App\Models\User;
 use App\Services\Cron\CronService;
+use App\Services\ScheduledZnunyTaskRunProcessor;
+use App\Services\ScheduledZnunyTicketCreationService;
+use App\Services\SchedulerSafetyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
 use Tests\TestCase;
 
 class ScheduledZnunyTaskResourceTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Artisan::call('db:seed', ['--class' => 'SettingsSeeder']);
+    }
 
     public function test_admin_can_access_scheduled_tasks()
     {
@@ -251,6 +262,72 @@ class ScheduledZnunyTaskResourceTest extends TestCase
         $this->assertDatabaseHas('scheduled_znuny_tasks', [
             'id' => $task->id,
             'cron_expression' => '0 * * * *',
+        ]);
+    }
+
+    public function test_manual_enqueue_action_creates_pending_run()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin);
+
+        app(SchedulerSafetyService::class)->enableScheduler();
+
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Valid Task',
+            'enabled' => false,
+        ]);
+
+        $mockProcessor = $this->createMock(ScheduledZnunyTaskRunProcessor::class);
+        $mockProcessor->expects($this->never())->method('processNextBatch');
+        $this->app->instance(ScheduledZnunyTaskRunProcessor::class, $mockProcessor);
+
+        $mockService = $this->createMock(ScheduledZnunyTicketCreationService::class);
+        $mockService->expects($this->never())->method('createTicketFromTask');
+        $this->app->instance(ScheduledZnunyTicketCreationService::class, $mockService);
+
+        Livewire::test(ListScheduledZnunyTasks::class)
+            ->assertTableActionExists('enqueue_run')
+            ->callTableAction('enqueue_run', $task)
+            ->assertNotified('Run Queued');
+
+        $this->assertDatabaseHas('scheduled_znuny_task_runs', [
+            'scheduled_znuny_task_id' => $task->id,
+            'task_name_snapshot' => $task->name,
+            'run_type' => 'manual',
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_manual_enqueue_action_warns_when_scheduler_disabled()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin);
+
+        app(SchedulerSafetyService::class)->disableScheduler('Test Disable');
+        Cache::flush();
+
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Valid Task',
+            'enabled' => false,
+        ]);
+
+        $mockProcessor = $this->createMock(ScheduledZnunyTaskRunProcessor::class);
+        $mockProcessor->expects($this->never())->method('processNextBatch');
+        $this->app->instance(ScheduledZnunyTaskRunProcessor::class, $mockProcessor);
+
+        $mockService = $this->createMock(ScheduledZnunyTicketCreationService::class);
+        $mockService->expects($this->never())->method('createTicketFromTask');
+        $this->app->instance(ScheduledZnunyTicketCreationService::class, $mockService);
+
+        Livewire::test(ListScheduledZnunyTasks::class)
+            ->callTableAction('enqueue_run', $task)
+            ->assertNotified('Run Queued');
+
+        $this->assertDatabaseHas('scheduled_znuny_task_runs', [
+            'scheduled_znuny_task_id' => $task->id,
+            'task_name_snapshot' => $task->name,
+            'run_type' => 'manual',
+            'status' => 'pending',
         ]);
     }
 }
