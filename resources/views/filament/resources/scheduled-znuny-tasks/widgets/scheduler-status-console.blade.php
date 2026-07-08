@@ -23,7 +23,7 @@
                 @elseif($schedulerStatus === 'Enabled')
                     <x-filament::button wire:click="pauseScheduler" color="warning" size="sm">Pause</x-filament::button>
                 @endif
-                <x-filament::button tag="a" href="{{ \App\Filament\Resources\ScheduledZnunyTaskRunResource::getUrl('index') }}" color="gray" size="sm">Scheduler Log</x-filament::button>
+                <x-filament::button tag="a" href="{{ \App\Filament\Resources\ScheduledZnunyTaskRuns\ScheduledZnunyTaskRunResource::getUrl('index') }}" color="gray" size="sm">Scheduler Log</x-filament::button>
                 <x-filament::button tag="a" href="/admin/settings" color="gray" size="sm">Mail Settings</x-filament::button>
             </div>
         </div>
