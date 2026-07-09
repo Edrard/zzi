@@ -487,4 +487,37 @@ class ScheduledZnunyTaskResourceTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    public function test_resource_does_not_have_view_action()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin);
+
+        $task = ScheduledZnunyTask::create([
+            'name' => 'View Action Test Task',
+            'enabled' => false,
+        ]);
+
+        Livewire::test(ListScheduledZnunyTasks::class)
+            ->assertTableActionExists('edit')
+            ->assertTableActionDoesNotExist('view');
+    }
+
+    public function test_record_url_goes_to_edit_page()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin);
+
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Direct Edit Test Task',
+            'enabled' => false,
+        ]);
+
+        $url = ScheduledZnunyTaskResource::getUrl('edit', ['record' => $task]);
+        $this->assertStringEndsWith("/{$task->id}", $url);
+
+        $response = $this->get($url);
+        $response->assertSuccessful();
+        $response->assertSee('Direct Edit Test Task');
+    }
 }

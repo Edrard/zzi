@@ -5,7 +5,6 @@ namespace App\Filament\Resources\ScheduledZnunyTasks;
 use App\Filament\Resources\ScheduledZnunyTasks\Pages\CreateScheduledZnunyTask;
 use App\Filament\Resources\ScheduledZnunyTasks\Pages\EditScheduledZnunyTask;
 use App\Filament\Resources\ScheduledZnunyTasks\Pages\ListScheduledZnunyTasks;
-use App\Filament\Resources\ScheduledZnunyTasks\Pages\ViewScheduledZnunyTask;
 use App\Filament\Resources\ScheduledZnunyTasks\Schemas\ScheduledZnunyTaskForm;
 use App\Filament\Resources\ScheduledZnunyTasks\Schemas\ScheduledZnunyTaskInfolist;
 use App\Filament\Resources\ScheduledZnunyTasks\Tables\ScheduledZnunyTasksTable;
@@ -58,8 +57,7 @@ class ScheduledZnunyTaskResource extends Resource
         return [
             'index' => ListScheduledZnunyTasks::route('/'),
             'create' => CreateScheduledZnunyTask::route('/create'),
-            'view' => ViewScheduledZnunyTask::route('/{record}'),
-            'edit' => EditScheduledZnunyTask::route('/{record}/edit'),
+            'edit' => EditScheduledZnunyTask::route('/{record}'),
         ];
     }
 }
