@@ -3,8 +3,10 @@
 namespace App\Filament\Resources\ScheduledZnunyTasks\Schemas;
 
 use App\Services\Cron\CronService;
+use App\Services\Support\DateTimeDisplayService;
 use App\Services\Znuny\ZnunyCachedLookupService;
 use App\Services\Znuny\ZnunyClient;
+use App\Services\Znuny\ZnunyTicketAdvancedDefaultsService;
 use Carbon\Carbon;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
@@ -18,6 +20,16 @@ class ScheduledZnunyTaskForm
 {
     public static function configure(Schema $schema): Schema
     {
+        $updateNextRun = function ($set, $get) {
+            $cron = $get('cron_expression');
+            $tz = $get('timezone');
+            if (! empty($cron) && app(CronService::class)->isValid($cron)) {
+                $set('next_run_at', app(CronService::class)->calculateNextRun($cron, $tz));
+            } else {
+                $set('next_run_at', null);
+            }
+        };
+
         return $schema
             ->components([
                 Section::make('Task Details')
@@ -47,29 +59,28 @@ class ScheduledZnunyTaskForm
                                 },
                             ])
                             ->live()
-                            ->afterStateUpdated(function ($state, $set, $get) {
-                                if (empty($state) || ! app(CronService::class)->isValid($state)) {
-                                    $set('next_run_at', null);
-                                } else {
-                                    $set('next_run_at', app(CronService::class)->calculateNextRun($state, $get('timezone')));
-                                }
-                            }),
+                            ->afterStateHydrated($updateNextRun)
+                            ->afterStateUpdated($updateNextRun),
                         Select::make('timezone')
                             ->label('Timezone')
                             ->options(array_combine(\DateTimeZone::listIdentifiers(), \DateTimeZone::listIdentifiers()))
-                            ->default(config('app.timezone'))
+                            ->default(fn () => app(DateTimeDisplayService::class)->timezone())
                             ->searchable()
-                            ->required()
+                            ->required(fn ($get) => $get('enabled') === true)
                             ->live()
-                            ->afterStateUpdated(function ($state, $set, $get) {
-                                $cron = $get('cron_expression');
-                                if (! empty($cron) && app(CronService::class)->isValid($cron)) {
-                                    $set('next_run_at', app(CronService::class)->calculateNextRun($cron, $state));
-                                }
-                            }),
+                            ->afterStateHydrated($updateNextRun)
+                            ->afterStateUpdated($updateNextRun),
                         Placeholder::make('next_run_at_placeholder')
                             ->label('Next Run Preview')
-                            ->content(fn ($get) => $get('next_run_at') ? Carbon::parse($get('next_run_at'))->format('Y-m-d H:i:s') : 'N/A'),
+                            ->content(function ($get) {
+                                $runAt = $get('next_run_at');
+                                if (! $runAt) {
+                                    return 'N/A';
+                                }
+                                $tz = $get('timezone') ?: config('app.timezone');
+
+                                return Carbon::parse($runAt)->timezone($tz)->format('Y-m-d H:i:s')." {$tz}";
+                            }),
                     ])->columns(3),
 
                 Section::make('Ticket Details Overrides')
@@ -102,6 +113,7 @@ class ScheduledZnunyTaskForm
                             }),
                         Select::make('owner_login')
                             ->label('Owner')
+                            ->required(fn ($get) => $get('enabled') === true)
                             ->searchable()
                             ->preload()
                             ->options(function ($get, ZnunyCachedLookupService $lookupService) {
@@ -113,6 +125,7 @@ class ScheduledZnunyTaskForm
                             }),
                         Select::make('customer_user_login')
                             ->label('Customer User')
+                            ->required(fn ($get) => $get('enabled') === true)
                             ->searchable()
                             ->preload()
                             ->live()
@@ -183,21 +196,11 @@ class ScheduledZnunyTaskForm
                                     return $value;
                                 }
                             }),
-                        Select::make('type_name')
-                            ->label('Type')
-                            ->searchable()
-                            ->preload()
-                            ->options(function (ZnunyCachedLookupService $lookupService) {
-                                try {
-                                    return $lookupService->getTicketTypes();
-                                } catch (\Throwable $e) {
-                                    return [];
-                                }
-                            }),
                         Select::make('priority_name')
                             ->label('Priority')
                             ->searchable()
                             ->preload()
+                            ->default(fn () => app(ZnunyTicketAdvancedDefaultsService::class)->getDefaults()['priority'])
                             ->options(function (ZnunyCachedLookupService $lookupService) {
                                 try {
                                     return $lookupService->getTicketPriorities();
@@ -209,6 +212,7 @@ class ScheduledZnunyTaskForm
                             ->label('State')
                             ->searchable()
                             ->preload()
+                            ->default(fn () => app(ZnunyTicketAdvancedDefaultsService::class)->getDefaults()['state'])
                             ->options(function (ZnunyCachedLookupService $lookupService) {
                                 try {
                                     return $lookupService->getTicketStates();
@@ -216,30 +220,15 @@ class ScheduledZnunyTaskForm
                                     return [];
                                 }
                             }),
-                        Select::make('service_name')
-                            ->label('Service')
+                        Select::make('lock_name')
+                            ->label('Lock')
                             ->searchable()
                             ->preload()
-                            ->options(function (ZnunyCachedLookupService $lookupService) {
-                                try {
-                                    return $lookupService->getTicketServices();
-                                } catch (\Throwable $e) {
-                                    return [];
-                                }
-                            })
-                            ->live()
-                            ->afterStateUpdated(fn ($set) => $set('sla_name', null)),
-                        Select::make('sla_name')
-                            ->label('SLA')
-                            ->searchable()
-                            ->preload()
-                            ->options(function ($get, ZnunyCachedLookupService $lookupService) {
-                                try {
-                                    return $lookupService->getTicketSLAsForService($get('service_name') ?? '');
-                                } catch (\Throwable $e) {
-                                    return [];
-                                }
-                            }),
+                            ->default(fn () => app(ZnunyTicketAdvancedDefaultsService::class)->getDefaults()['lock'])
+                            ->options([
+                                'lock' => 'Lock',
+                                'unlock' => 'Unlock',
+                            ]),
                     ])->columns(2),
 
                 Section::make('Ticket Content')

@@ -35,11 +35,6 @@ class ScheduledZnunyTaskInfolist
                     ->placeholder('-'),
                 TextEntry::make('customer_user_login')
                     ->placeholder('-'),
-                TextEntry::make('type_id')
-                    ->numeric()
-                    ->placeholder('-'),
-                TextEntry::make('type_name')
-                    ->placeholder('-'),
                 TextEntry::make('priority_id')
                     ->numeric()
                     ->placeholder('-'),
@@ -50,15 +45,7 @@ class ScheduledZnunyTaskInfolist
                     ->placeholder('-'),
                 TextEntry::make('state_name')
                     ->placeholder('-'),
-                TextEntry::make('service_id')
-                    ->numeric()
-                    ->placeholder('-'),
-                TextEntry::make('service_name')
-                    ->placeholder('-'),
-                TextEntry::make('sla_id')
-                    ->numeric()
-                    ->placeholder('-'),
-                TextEntry::make('sla_name')
+                TextEntry::make('lock_name')
                     ->placeholder('-'),
                 TextEntry::make('subject')
                     ->placeholder('-'),

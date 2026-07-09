@@ -244,4 +244,37 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
         $this->assertEquals(ScheduledTicketCreationOutcome::UNCERTAIN, $result['outcome']);
         $this->assertStringContainsString('Exception during ticket creation HTTP request: Timeout Exception', $result['error_summary']);
     }
+
+    public function test_create_ticket_uses_task_lock_override()
+    {
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Test',
+            'enabled' => true,
+            'queue_name' => 'Q1',
+            'owner_id' => 1,
+            'customer_user_login' => 'user1',
+            'subject' => 'Sub',
+            'body' => 'Body',
+            'lock_name' => 'unlock',
+        ]);
+
+        $this->clientMock->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
+        $this->defaultsMock->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+        $this->clientMock->method('validateTicketCreate')->willReturn(['valid' => true]);
+
+        $this->clientMock->expects($this->once())
+            ->method('createTicket')
+            ->with($this->callback(function ($payload) {
+                return $payload['Ticket']['Lock'] === 'unlock';
+            }))
+            ->willReturn([
+                'success' => true,
+                'ticket_id' => 42,
+                'ticket_number' => 'TN42',
+            ]);
+
+        $result = $this->service->createTicketFromTask($task);
+
+        $this->assertEquals(ScheduledTicketCreationOutcome::SUCCESS, $result['outcome']);
+    }
 }

@@ -68,7 +68,7 @@ class ScheduledZnunyTicketCreationService
 
             $state = trim((string) $task->state_name) ?: $defaults['state'];
             $priority = trim((string) $task->priority_name) ?: $defaults['priority'];
-            $lock = $defaults['lock'];
+            $lock = trim((string) $task->lock_name) ?: $defaults['lock'];
             $type = trim((string) $task->type_name) ?: null;
             $service = trim((string) $task->service_name) ?: null;
             $sla = trim((string) $task->sla_name) ?: null;
