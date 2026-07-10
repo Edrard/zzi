@@ -97,12 +97,22 @@ class ScheduledZnunyTaskForm
                             ->live()
                             ->afterStateUpdated(function ($state, $set, ZnunyCachedLookupService $lookupService) {
                                 $set('owner_login', null);
+                                $set('owner_id', null);
                                 $set('customer_user_login', null);
 
                                 if ($state) {
                                     $candidate = $lookupService->resolveTemplateCandidate($state);
                                     if ($candidate) {
                                         $set('customer_user_login', $candidate);
+                                    }
+
+                                    $ownerOptions = $lookupService->getAssignableOwnerOptionsForQueue($state);
+                                    if (count($ownerOptions) === 1) {
+                                        $onlyOwnerKey = array_key_first($ownerOptions);
+                                        $set('owner_login', (string) $onlyOwnerKey);
+                                        if (is_numeric($onlyOwnerKey) && $onlyOwnerKey > 0) {
+                                            $set('owner_id', (int) $onlyOwnerKey);
+                                        }
                                     }
                                 }
                             })
@@ -120,11 +130,18 @@ class ScheduledZnunyTaskForm
                             ->preload()
                             ->options(function ($get, ZnunyCachedLookupService $lookupService) {
                                 try {
-                                    return $lookupService->getAssignableOwnerOptionsForQueue($get('queue_name') ?? '');
+                                    $options = $lookupService->getAssignableOwnerOptionsForQueue($get('queue_name') ?? '');
+                                    $current = $get('owner_login');
+                                    if ($current && ! isset($options[$current])) {
+                                        $options[$current] = $current;
+                                    }
+
+                                    return $options;
                                 } catch (\Throwable $e) {
                                     return [];
                                 }
                             }),
+                        Hidden::make('owner_id'),
                         Select::make('customer_user_login')
                             ->label('Customer User')
                             ->required(fn ($get) => $get('enabled') === true)

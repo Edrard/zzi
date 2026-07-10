@@ -279,7 +279,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
 
         $task = ScheduledZnunyTask::create([
             'name' => 'Valid Task',
-            'enabled' => false,
+            'enabled' => true,
             'queue_name' => 'OriginalQueue',
         ]);
 
@@ -287,7 +287,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
 
         Livewire::test(ListScheduledZnunyTasks::class)
             ->call('updateTableColumnState', 'queue_name', $task->id, '')
-            ->assertNotified('Validation Error');
+            ->assertNotified('Cannot clear Queue');
 
         $this->assertDatabaseHas('scheduled_znuny_tasks', [
             'id' => $task->id,
@@ -301,7 +301,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
 
         $task = ScheduledZnunyTask::create([
             'name' => 'Valid Task',
-            'enabled' => false,
+            'enabled' => true,
             'owner_login' => 'original.owner',
         ]);
 
@@ -309,7 +309,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
 
         Livewire::test(ListScheduledZnunyTasks::class)
             ->call('updateTableColumnState', 'owner_login', $task->id, '')
-            ->assertNotified('Validation Error');
+            ->assertNotified('Cannot clear Owner');
 
         $this->assertDatabaseHas('scheduled_znuny_tasks', [
             'id' => $task->id,
@@ -643,6 +643,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
 
         // Confirm the client side sorting script is loaded
         $this->assertStringContainsString('scheduledTasksClientSort', $html);
+        $this->assertStringContainsString('text === \'Not selected\'', $html);
 
         // Confirm Customer User column exists
         $this->assertStringContainsString('Customer User', $html);

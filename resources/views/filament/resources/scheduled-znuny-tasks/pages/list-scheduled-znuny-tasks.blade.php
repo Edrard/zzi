@@ -166,20 +166,24 @@ tr.scheduled-task-disabled-row > td {
     function extractValue(td) {
         if (!td) return { empty: true, value: '' };
 
+        let text = '';
         const select = td.querySelector('select');
         if (select) {
             const option = select.options[select.selectedIndex];
-            let text = option ? option.text.trim() : '';
-            if (text === 'Not resolved' || text === '—') text = '';
-            return { empty: text === '', value: text };
+            text = option ? option.text.trim() : '';
+        } else {
+            const attr = td.getAttribute('data-scheduled-sort-value');
+            if (attr !== null) {
+                text = attr.trim();
+            } else {
+                text = td.innerText.trim();
+            }
         }
 
-        const attr = td.getAttribute('data-scheduled-sort-value');
-        if (attr !== null) {
-            return { empty: attr === '', value: attr };
+        if (text === 'Not resolved' || text === 'Not selected' || text === 'Not calculated' || text === '—') {
+            text = '';
         }
 
-        let text = td.innerText.trim();
         return { empty: text === '', value: text };
     }
 
