@@ -2,14 +2,11 @@
 
 namespace App\Filament\Resources\ScheduledZnunyTasks\Tables;
 
-use App\Filament\Resources\ScheduledZnunyTaskRuns\ScheduledZnunyTaskRunResource;
+use App\Filament\Resources\ScheduledZnunyTasks\ScheduledZnunyTaskResource;
 use App\Models\ScheduledZnunyTask;
-use App\Models\ScheduledZnunyTaskRun;
 use App\Services\Cron\CronService;
-use App\Services\SchedulerSafetyService;
 use App\Services\Znuny\ZnunyCachedLookupService;
-use Filament\Actions\Action;
-use Filament\Actions\EditAction;
+use Carbon\Carbon;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\SelectColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -24,7 +21,7 @@ class ScheduledZnunyTasksTable
     {
         return $table
             ->recordClasses(fn (ScheduledZnunyTask $record) => match ($record->enabled) {
-                false => 'bg-gray-50 dark:bg-gray-800/50',
+                false => 'scheduled-task-disabled-row',
                 default => null,
             })
             ->modifyQueryUsing(function (Builder $query) use ($table) {
@@ -56,69 +53,26 @@ class ScheduledZnunyTasksTable
             ->columns([
                 ToggleColumn::make('enabled')
                     ->label('Active')
+                    ->extraCellAttributes(fn (ScheduledZnunyTask $record) => ['data-scheduled-sort-value' => $record->enabled ? '1' : '0'])
                     ->updateStateUsing(function (ScheduledZnunyTask $record, $state) {
-                        if ($state) { // if enabling
+                        if ($state && ! $record->isCompleteForScheduling()) {
+                            Notification::make()
+                                ->title('Cannot enable task')
+                                ->body('Task is incomplete. Open Edit and fill required fields before enabling.')
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
+                        if ($state) {
+                            // Calculate next_run_at when enabling just in case
                             $cronService = app(CronService::class);
-                            if (empty($record->cron_expression) || ! $cronService->isValid($record->cron_expression)) {
-                                Notification::make()
-                                    ->title('Cannot enable task')
-                                    ->body('A valid cron expression is required.')
-                                    ->danger()
-                                    ->send();
-
-                                return;
-                            }
-                            if (empty($record->queue_name)) {
-                                Notification::make()
-                                    ->title('Cannot enable task')
-                                    ->body('Queue override is required.')
-                                    ->danger()
-                                    ->send();
-
-                                return;
-                            }
-                            if (empty($record->owner_login)) {
-                                Notification::make()
-                                    ->title('Cannot enable task')
-                                    ->body('Owner override is required.')
-                                    ->danger()
-                                    ->send();
-
-                                return;
-                            }
-                            if (empty($record->subject)) {
-                                Notification::make()
-                                    ->title('Cannot enable task')
-                                    ->body('Subject is required.')
-                                    ->danger()
-                                    ->send();
-
-                                return;
-                            }
-                            if (empty($record->body)) {
-                                Notification::make()
-                                    ->title('Cannot enable task')
-                                    ->body('Body is required.')
-                                    ->danger()
-                                    ->send();
-
-                                return;
-                            }
-                            if (empty($record->customer_user_login)) {
-                                Notification::make()
-                                    ->title('Cannot enable task')
-                                    ->body('Customer User is required.')
-                                    ->danger()
-                                    ->send();
-
-                                return;
-                            }
-                            // Calculate next_run_at when enabling
                             $nextRunAt = $cronService->calculateNextRun($record->cron_expression, $record->timezone);
                             if ($nextRunAt === null) {
                                 Notification::make()
                                     ->title('Cannot enable task')
-                                    ->body('Next run time could not be calculated.')
+                                    ->body('Could not calculate next run time. Check timezone and cron expression.')
                                     ->danger()
                                     ->send();
 
@@ -131,10 +85,11 @@ class ScheduledZnunyTasksTable
                         $record->save();
                     }),
                 TextColumn::make('name')
-                    ->sortable()
-                    ->description(fn (ScheduledZnunyTask $record) => $record->subject),
+                    ->description(fn (ScheduledZnunyTask $record) => $record->subject)
+                    ->extraCellAttributes(fn (ScheduledZnunyTask $record) => ['data-scheduled-sort-value' => $record->name ?? '']),
                 TextInputColumn::make('cron_expression')
                     ->label('Cron')
+                    ->extraCellAttributes(fn (ScheduledZnunyTask $record) => ['data-scheduled-sort-value' => $record->cron_expression ?? ''])
                     ->rules([
                         function () {
                             return function (string $attribute, $value, \Closure $fail) {
@@ -153,6 +108,9 @@ class ScheduledZnunyTasksTable
                                 ->danger()
                                 ->send();
 
+                            $record->next_run_at = null;
+                            $record->save();
+
                             return;
                         }
 
@@ -161,10 +119,36 @@ class ScheduledZnunyTasksTable
                         $record->save();
                     }),
                 TextColumn::make('next_run_at')
-                    ->dateTime()
-                    ->sortable(),
+                    ->label('Next run at')
+                    ->extraCellAttributes(function (ScheduledZnunyTask $record) {
+                        $cron = $record->cron_expression;
+                        $tz = $record->timezone;
+                        if (empty($cron) || empty($tz) || ! app(CronService::class)->isValid($cron)) {
+                            return ['data-scheduled-sort-value' => ''];
+                        }
+                        $next = $record->next_run_at ?? app(CronService::class)->calculateNextRun($cron, $tz);
+
+                        return ['data-scheduled-sort-value' => $next ? Carbon::parse($next)->timestamp : ''];
+                    })
+                    ->getStateUsing(function (ScheduledZnunyTask $record) {
+                        $cron = $record->cron_expression;
+                        $tz = $record->timezone;
+
+                        if (empty($cron) || empty($tz) || ! app(CronService::class)->isValid($cron)) {
+                            return null;
+                        }
+
+                        $next = $record->next_run_at ?? app(CronService::class)->calculateNextRun($cron, $tz);
+                        if (! $next) {
+                            return null;
+                        }
+
+                        return Carbon::parse($next)->timezone($tz)->format('Y-m-d H:i:s e');
+                    })
+                    ->placeholder('Not calculated'),
                 SelectColumn::make('queue_name')
                     ->label('Queue')
+                    ->selectablePlaceholder(false)
                     ->options(function () {
                         try {
                             return app(ZnunyCachedLookupService::class)->getFilteredQueueOptions();
@@ -173,69 +157,88 @@ class ScheduledZnunyTasksTable
                         }
                     })
                     ->updateStateUsing(function (ScheduledZnunyTask $record, $state) {
+                        if (empty($state)) {
+                            Notification::make()->title('Validation Error')->body('Queue cannot be empty.')->danger()->send();
+
+                            return;
+                        }
                         $record->queue_name = $state;
-                        // Reset owner and customer user if queue changes
                         $record->owner_login = null;
                         $record->owner_id = null;
+                        $record->customer_user_login = null;
+
                         if ($state) {
                             $candidate = app(ZnunyCachedLookupService::class)->resolveTemplateCandidate($state);
                             if ($candidate) {
                                 $record->customer_user_login = $candidate;
                             }
-                        } else {
-                            $record->customer_user_login = null;
                         }
+                        $record->save();
+                    }),
+                SelectColumn::make('customer_user_login')
+                    ->label('Customer User')
+                    ->placeholder('Not resolved')
+                    ->options(function (ScheduledZnunyTask $record) {
+                        $queue = $record->queue_name;
+                        if (empty($queue)) {
+                            return [];
+                        }
+                        try {
+                            $lookupService = app(ZnunyCachedLookupService::class);
+                            $options = $lookupService->getCustomerUserPrimaryOptionsForQueue($queue);
+
+                            $current = $record->customer_user_login;
+                            if ($current && ! isset($options[$current])) {
+                                $label = $lookupService->getCustomerUserLabel($current);
+                                if ($label) {
+                                    $options[$current] = $label;
+                                } else {
+                                    $options[$current] = $current;
+                                }
+                            }
+
+                            return $options;
+                        } catch (\Throwable $e) {
+                            return [];
+                        }
+                    })
+                    ->updateStateUsing(function (ScheduledZnunyTask $record, $state) {
+                        if ($state === null && $record->enabled) {
+                            Notification::make()->title('Validation Error')->body('Customer User is required for active tasks.')->danger()->send();
+
+                            return;
+                        }
+                        $record->customer_user_login = $state;
                         $record->save();
                     }),
                 SelectColumn::make('owner_login')
                     ->label('Owner')
+                    ->selectablePlaceholder(false)
                     ->options(function (ScheduledZnunyTask $record) {
                         try {
                             return app(ZnunyCachedLookupService::class)->getAssignableOwnerOptionsForQueue($record->queue_name ?? '');
                         } catch (\Throwable $e) {
                             return [];
                         }
+                    })
+                    ->updateStateUsing(function (ScheduledZnunyTask $record, $state) {
+                        if (empty($state)) {
+                            Notification::make()->title('Validation Error')->body('Owner cannot be empty.')->danger()->send();
+
+                            return;
+                        }
+                        $record->owner_login = $state;
+                        $record->save();
                     }),
                 TextColumn::make('last_status')
                     ->label('Last result')
-                    ->sortable()
-                    ->badge(),
+                    ->badge()
+                    ->extraCellAttributes(fn (ScheduledZnunyTask $record) => ['data-scheduled-sort-value' => $record->last_status ?? '']),
             ])
-            ->paginated([25, 50, 100, 'all'])
-            ->defaultPaginationPageOption(25)
-            ->recordActions([
-                EditAction::make(),
-                Action::make('enqueue_run')
-                    ->label('Queue run')
-                    ->icon('heroicon-o-play')
-                    ->color('primary')
-                    ->requiresConfirmation()
-                    ->action(function (ScheduledZnunyTask $record) {
-                        ScheduledZnunyTaskRun::create([
-                            'scheduled_znuny_task_id' => $record->id,
-                            'task_name_snapshot' => $record->name,
-                            'run_type' => 'manual',
-                            'status' => 'pending',
-                            'scheduled_for' => now(),
-                            'created_by' => auth()->id(),
-                        ]);
-
-                        $safetyService = app(SchedulerSafetyService::class);
-                        if (! $safetyService->isSchedulerEnabled() || $safetyService->isSchedulerPaused()) {
-                            Notification::make()->title('Run Queued')->body('The run has been queued, but the scheduler is currently disabled or paused. It will remain pending.')->warning()->send();
-                        } else {
-                            Notification::make()->title('Run Queued')->body('The run has been queued and will be processed by the scheduler shortly.')->success()->send();
-                        }
-                    }),
-                Action::make('runs')
-                    ->label('Runs')
-                    ->icon('heroicon-o-clipboard-document-list')
-                    ->url(fn (ScheduledZnunyTask $record): string => ScheduledZnunyTaskRunResource::getUrl('index', [
-                        'tableFilters' => [
-                            'scheduled_znuny_task_id' => ['value' => $record->id],
-                        ],
-                    ])),
-            ])
+            ->defaultSort('id', 'desc')
+            ->paginated(false)
+            ->recordUrl(fn (ScheduledZnunyTask $record) => ScheduledZnunyTaskResource::getUrl('edit', ['record' => $record]))
+            ->recordActions([])
             ->toolbarActions([]);
     }
 }

@@ -8,6 +8,7 @@ use App\Services\Znuny\ZnunyCachedLookupService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketAdvancedDefaultsService;
 use Carbon\Carbon;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -81,6 +82,7 @@ class ScheduledZnunyTaskForm
 
                                 return Carbon::parse($runAt)->timezone($tz)->format('Y-m-d H:i:s')." {$tz}";
                             }),
+                        Hidden::make('next_run_at'),
                     ])->columns(3),
 
                 Section::make('Ticket Details Overrides')
