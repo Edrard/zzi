@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Setting;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 
 class SettingsService
@@ -52,21 +53,50 @@ class SettingsService
 
     private static array $requestCache = [];
 
+    private static bool $allLoaded = false;
+
     public static function clearRequestCache(): void
     {
         self::$requestCache = [];
+        self::$allLoaded = false;
+    }
+
+    public static function clearAllCaches(): void
+    {
+        self::clearRequestCache();
+        Cache::forget('app_settings_all');
+    }
+
+    private static function loadAllSettings(): void
+    {
+        if (self::$allLoaded) {
+            return;
+        }
+
+        $allSettings = Cache::rememberForever('app_settings_all', function () {
+            return Setting::all(['key', 'value', 'type'])->keyBy('key')->toArray();
+        });
+
+        foreach ($allSettings as $key => $attributes) {
+            self::$requestCache[$key] = (object) $attributes;
+        }
+
+        self::$allLoaded = true;
     }
 
     private static function getSettingRecord(string $key)
     {
+        self::loadAllSettings();
+
         if (array_key_exists($key, self::$requestCache)) {
             return self::$requestCache[$key];
         }
 
-        $setting = Setting::where('key', $key)->first();
-        self::$requestCache[$key] = $setting;
+        // If it was not in the all-settings cache, it doesn't exist.
+        // We cache the null to avoid any weirdness, though array_key_exists handles it if we did.
+        self::$requestCache[$key] = null;
 
-        return $setting;
+        return null;
     }
 
     public static function get(string $key, mixed $default = null): mixed
