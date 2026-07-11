@@ -38,8 +38,13 @@ class SchedulerStatusConsole extends Widget
         $failedRuns = ScheduledZnunyTaskRun::where('status', 'failed')->count();
         $uncertainRuns = ScheduledZnunyTaskRun::where('status', 'uncertain')->count();
 
-        $lastProcessed = ScheduledZnunyTaskRun::whereNotNull('finished_at')->orderBy('finished_at', 'desc')->first()?->finished_at;
-        $nextDue = ScheduledZnunyTask::where('enabled', true)->orderBy('next_run_at', 'asc')->first()?->next_run_at;
+        $lastProcessedRun = ScheduledZnunyTaskRun::with('task')->whereNotNull('finished_at')->orderBy('finished_at', 'desc')->first();
+        $lastProcessed = $lastProcessedRun?->finished_at;
+        $lastProcessedTz = $lastProcessedRun?->task?->timezone ?? config('app.timezone');
+
+        $nextDueTask = ScheduledZnunyTask::where('enabled', true)->orderBy('next_run_at', 'asc')->first();
+        $nextDue = $nextDueTask?->next_run_at;
+        $nextDueTz = $nextDueTask?->timezone ?? config('app.timezone');
 
         $lastActiveAlert = SystemAlert::where('status', 'active')->where('source', 'scheduler')->latest()->first();
 
@@ -52,7 +57,9 @@ class SchedulerStatusConsole extends Widget
             'failedRuns' => $failedRuns,
             'uncertainRuns' => $uncertainRuns,
             'lastProcessed' => $lastProcessed,
+            'lastProcessedTz' => $lastProcessedTz,
             'nextDue' => $nextDue,
+            'nextDueTz' => $nextDueTz,
             'pausedUntil' => $pausedUntil,
             'pauseReason' => $pauseReason,
             'disabledReason' => $disabledReason,

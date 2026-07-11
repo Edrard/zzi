@@ -1,5 +1,5 @@
 <x-filament-widgets::widget>
-    <x-filament::card class="ring-1 ring-gray-950/5 dark:ring-white/10 dark:bg-gray-900 shadow-sm">
+    <x-filament::card wire:poll.10s class="ring-1 ring-gray-950/5 dark:ring-white/10 dark:bg-gray-900 shadow-sm">
         <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <!-- Left Side: Status and Times -->
             <div class="flex flex-col gap-2">
@@ -21,8 +21,8 @@
                     @endif
                 </div>
                 <div class="text-xs text-gray-500 dark:text-gray-400 flex flex-wrap items-center mt-1">
-                    <span class="mr-4">Last processed: <span class="font-medium text-gray-700 dark:text-gray-300">{{ $lastProcessed ? $lastProcessed->diffForHumans() : 'Never' }}</span></span>
-                    <span>Next due: <span class="font-medium text-gray-700 dark:text-gray-300">{{ $nextDue ? $nextDue->diffForHumans() : 'None' }}</span></span>
+                    <span class="mr-4">Last processed: <span class="font-medium text-gray-700 dark:text-gray-300">{{ $lastProcessed ? \Carbon\Carbon::parse($lastProcessed)->timezone($lastProcessedTz)->format('Y-m-d H:i:s e') . ' (' . $lastProcessed->diffForHumans() . ')' : 'Never' }}</span></span>
+                    <span>Next due: <span class="font-medium text-gray-700 dark:text-gray-300">{{ $nextDue ? \Carbon\Carbon::parse($nextDue)->timezone($nextDueTz)->format('Y-m-d H:i:s e') . ' (' . $nextDue->diffForHumans() . ')' : 'None' }}</span></span>
                 </div>
             </div>
 

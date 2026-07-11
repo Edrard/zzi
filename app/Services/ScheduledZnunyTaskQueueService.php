@@ -39,7 +39,7 @@ class ScheduledZnunyTaskQueueService
                         'task_name_snapshot' => $task->name,
                         'run_type' => 'scheduled',
                         'status' => 'pending',
-                        'scheduled_for' => $task->next_run_at,
+                        'scheduled_for' => \Carbon\Carbon::parse($task->next_run_at)->utc()->toDateTimeString(),
                     ]);
                     $count++;
                 }

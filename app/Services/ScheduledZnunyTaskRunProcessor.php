@@ -46,13 +46,13 @@ class ScheduledZnunyTaskRunProcessor
 
     private function processRun(ScheduledZnunyTaskRun $run): bool
     {
-        $startedAt = now();
+        $startedAt = now('UTC');
         // Use conditional update to ensure another process didn't grab it
         $updated = ScheduledZnunyTaskRun::where('id', $run->id)
             ->where('status', 'pending')
             ->update([
                 'status' => 'running',
-                'started_at' => $startedAt,
+                'started_at' => $startedAt->toDateTimeString(),
             ]);
 
         if (! $updated) {
@@ -68,14 +68,14 @@ class ScheduledZnunyTaskRunProcessor
             }
 
             $result = $this->ticketService->createTicketFromTask($task);
-            $finishedAt = now();
-            $durationMs = $finishedAt->diffInMilliseconds($startedAt);
+            $finishedAt = now('UTC');
+            $durationMs = $startedAt->diffInMilliseconds($finishedAt);
 
             switch ($result['outcome']) {
                 case ScheduledTicketCreationOutcome::SUCCESS:
                     $run->update([
                         'status' => 'success',
-                        'finished_at' => $finishedAt,
+                        'finished_at' => $finishedAt->toDateTimeString(),
                         'duration_ms' => $durationMs,
                         'ticket_id' => $result['ticket_id'],
                         'ticket_number' => $result['ticket_number'],
@@ -85,8 +85,8 @@ class ScheduledZnunyTaskRunProcessor
                     ]);
 
                     $task->update([
-                        'last_run_at' => $finishedAt,
-                        'last_success_at' => $finishedAt,
+                        'last_run_at' => $finishedAt->toDateTimeString(),
+                        'last_success_at' => $finishedAt->toDateTimeString(),
                         'last_status' => 'success',
                         'last_ticket_id' => $result['ticket_id'],
                         'last_ticket_number' => $result['ticket_number'],
@@ -119,7 +119,7 @@ class ScheduledZnunyTaskRunProcessor
                 case ScheduledTicketCreationOutcome::FAILED:
                     $run->update([
                         'status' => 'failed',
-                        'finished_at' => $finishedAt,
+                        'finished_at' => $finishedAt->toDateTimeString(),
                         'duration_ms' => $durationMs,
                         'error_summary' => $result['error_summary'],
                         'error_details' => $result['error_details'],
@@ -127,8 +127,8 @@ class ScheduledZnunyTaskRunProcessor
                     ]);
 
                     $task->update([
-                        'last_run_at' => $finishedAt,
-                        'last_failure_at' => $finishedAt,
+                        'last_run_at' => $finishedAt->toDateTimeString(),
+                        'last_failure_at' => $finishedAt->toDateTimeString(),
                         'last_status' => 'failed',
                         'last_error_summary' => $result['error_summary'],
                     ]);
@@ -152,7 +152,7 @@ class ScheduledZnunyTaskRunProcessor
                     // The create request may have reached Znuny; mark uncertain and disable scheduler to prevent duplicate tickets.
                     $run->update([
                         'status' => 'uncertain',
-                        'finished_at' => $finishedAt,
+                        'finished_at' => $finishedAt->toDateTimeString(),
                         'duration_ms' => $durationMs,
                         'error_summary' => $result['error_summary'],
                         'error_details' => $result['error_details'],
@@ -160,8 +160,8 @@ class ScheduledZnunyTaskRunProcessor
                     ]);
 
                     $task->update([
-                        'last_run_at' => $finishedAt,
-                        'last_failure_at' => $finishedAt,
+                        'last_run_at' => $finishedAt->toDateTimeString(),
+                        'last_failure_at' => $finishedAt->toDateTimeString(),
                         'last_status' => 'uncertain',
                         'last_error_summary' => $result['error_summary'],
                     ]);
@@ -179,22 +179,22 @@ class ScheduledZnunyTaskRunProcessor
                     return false;
             }
         } catch (\Throwable $e) {
-            $finishedAt = now();
+            $finishedAt = now('UTC');
             Log::error('Scheduled task run processor exception: '.$e->getMessage(), ['run_id' => $run->id]);
 
             $run->update([
                 'status' => 'failed',
-                'finished_at' => $finishedAt,
-                'duration_ms' => isset($startedAt) ? $finishedAt->diffInMilliseconds($startedAt) : null,
+                'finished_at' => $finishedAt->toDateTimeString(),
+                'duration_ms' => isset($startedAt) ? $startedAt->diffInMilliseconds($finishedAt) : null,
                 'error_summary' => substr($e->getMessage(), 0, 255),
                 'error_details' => $e->getMessage()."\n".$e->getTraceAsString(),
             ]);
 
             if ($run->task) {
                 $run->task->update([
-                    'last_run_at' => $finishedAt,
+                    'last_run_at' => $finishedAt->toDateTimeString(),
                     'last_status' => 'failed',
-                    'last_failure_at' => $finishedAt,
+                    'last_failure_at' => $finishedAt->toDateTimeString(),
                     'last_error_summary' => substr($e->getMessage(), 0, 255),
                 ]);
             }

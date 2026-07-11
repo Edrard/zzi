@@ -73,3 +73,5 @@ if ($autoCloseMode === 'dry_run' && $syncInterval > 0) {
 }
 
 Schedule::command('znuny:precache-lookups')->hourly()->withoutOverlapping();
+
+Schedule::command('scheduled-znuny:run')->everyMinute()->withoutOverlapping();

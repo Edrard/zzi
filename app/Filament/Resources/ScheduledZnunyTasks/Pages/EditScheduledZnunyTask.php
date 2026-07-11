@@ -36,7 +36,7 @@ class EditScheduledZnunyTask extends EditRecord
                         'task_name_snapshot' => $this->record->name,
                         'run_type' => 'manual',
                         'status' => 'pending',
-                        'scheduled_for' => now(),
+                        'scheduled_for' => now('UTC')->toDateTimeString(),
                         'created_by' => auth()->id(),
                     ]);
 

@@ -118,11 +118,21 @@ class ScheduledZnunyTaskRunResource extends Resource
                     ->schema([
                         TextEntry::make('task_name_snapshot')->label('Task'),
                         TextEntry::make('run_type'),
-                        TextEntry::make('status')->badge(),
-                        TextEntry::make('scheduled_for')->dateTime(),
-                        TextEntry::make('started_at')->dateTime(),
-                        TextEntry::make('finished_at')->dateTime(),
-                        TextEntry::make('duration_ms')->label('Duration (ms)'),
+                        TextEntry::make('status')
+                            ->badge()
+                            ->color(fn (string $state): string => match ($state) {
+                                'success' => 'success',
+                                'pending' => 'warning',
+                                'running' => 'info',
+                                'failed' => 'danger',
+                                'uncertain' => 'warning',
+                                'skipped' => 'gray',
+                                default => 'gray',
+                            }),
+                        TextEntry::make('scheduled_for')->dateTime()->timezone(fn ($record) => $record?->task?->timezone ?? config('app.timezone')),
+                        TextEntry::make('started_at')->dateTime()->timezone(fn ($record) => $record?->task?->timezone ?? config('app.timezone')),
+                        TextEntry::make('finished_at')->dateTime()->timezone(fn ($record) => $record?->task?->timezone ?? config('app.timezone')),
+                        TextEntry::make('duration_ms')->label('Execution time')->formatStateUsing(fn ($state) => $state === null ? null : round(abs((int) $state) / 1000, 1) . ' sec'),
                     ])->columns(3),
                 Section::make('Ticket Details')
                     ->schema([
@@ -151,7 +161,8 @@ class ScheduledZnunyTaskRunResource extends Resource
                 TextColumn::make('created_at')
                     ->label('Time')
                     ->dateTime()
-                    ->sortable(),
+                    ->sortable()
+                    ->timezone(fn ($record) => $record?->task?->timezone ?? config('app.timezone')),
                 TextColumn::make('task_name_snapshot')
                     ->label('Task')
                     ->searchable(),
@@ -159,20 +170,33 @@ class ScheduledZnunyTaskRunResource extends Resource
                     ->searchable(),
                 TextColumn::make('scheduled_for')
                     ->dateTime()
-                    ->sortable(),
+                    ->sortable()
+                    ->timezone(fn ($record) => $record?->task?->timezone ?? config('app.timezone')),
                 TextColumn::make('started_at')
                     ->dateTime()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->timezone(fn ($record) => $record?->task?->timezone ?? config('app.timezone')),
                 TextColumn::make('finished_at')
                     ->dateTime()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->timezone(fn ($record) => $record?->task?->timezone ?? config('app.timezone')),
                 TextColumn::make('duration_ms')
-                    ->numeric()
+                    ->label('Execution time')
+                    ->formatStateUsing(fn ($state) => $state === null ? null : round(abs((int) $state) / 1000, 1) . ' sec')
                     ->sortable(),
                 TextColumn::make('status')
                     ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'success' => 'success',
+                        'pending' => 'warning',
+                        'running' => 'info',
+                        'failed' => 'danger',
+                        'uncertain' => 'warning',
+                        'skipped' => 'gray',
+                        default => 'gray',
+                    })
                     ->searchable(),
                 TextColumn::make('ticket_number')
                     ->searchable(),
@@ -243,7 +267,7 @@ class ScheduledZnunyTaskRunResource extends Resource
                             'task_name_snapshot' => $record->task_name_snapshot,
                             'run_type' => 'manual_retry',
                             'status' => 'pending',
-                            'scheduled_for' => now(),
+                            'scheduled_for' => now('UTC')->toDateTimeString(),
                             'created_by' => auth()->id(),
                         ]);
                         Notification::make()->title('Run Requeued')->body('A new pending run has been created.')->success()->send();
