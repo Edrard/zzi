@@ -96,10 +96,13 @@ class ZnunyCachedLookupService
         $start = microtime(true);
         try {
             $all = $this->getAllQueues();
+            $filterService = app(ZnunyUiFilterService::class);
 
             $filtered = [];
             foreach ($all as $queue) {
-                if (! $this->isQueueExcluded($queue)) {
+                $name = $queue['name'] ?? '';
+                $fullName = $queue['full_name'] ?? $queue['label'] ?? null;
+                if (! $filterService->isQueueExcluded($name, $fullName)) {
                     $filtered[$queue['name']] = $queue['label'];
                 }
             }

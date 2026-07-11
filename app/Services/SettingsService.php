@@ -50,9 +50,28 @@ class SettingsService
         return $value;
     }
 
+    private static array $requestCache = [];
+
+    public static function clearRequestCache(): void
+    {
+        self::$requestCache = [];
+    }
+
+    private static function getSettingRecord(string $key)
+    {
+        if (array_key_exists($key, self::$requestCache)) {
+            return self::$requestCache[$key];
+        }
+
+        $setting = Setting::where('key', $key)->first();
+        self::$requestCache[$key] = $setting;
+
+        return $setting;
+    }
+
     public static function get(string $key, mixed $default = null): mixed
     {
-        $setting = Setting::where('key', $key)->first();
+        $setting = self::getSettingRecord($key);
 
         if (! $setting) {
             return $default;
@@ -68,7 +87,7 @@ class SettingsService
 
     public static function string(string $key, ?string $default = null): ?string
     {
-        $setting = Setting::where('key', $key)->first();
+        $setting = self::getSettingRecord($key);
 
         if (! $setting || $setting->value === null) {
             return $default;
@@ -79,7 +98,7 @@ class SettingsService
 
     public static function int(string $key, ?int $default = null): ?int
     {
-        $setting = Setting::where('key', $key)->first();
+        $setting = self::getSettingRecord($key);
 
         if (! $setting) {
             return $default;
@@ -90,7 +109,7 @@ class SettingsService
 
     public static function bool(string $key, ?bool $default = null): ?bool
     {
-        $setting = Setting::where('key', $key)->first();
+        $setting = self::getSettingRecord($key);
 
         if (! $setting) {
             return $default;
@@ -101,7 +120,7 @@ class SettingsService
 
     public static function json(string $key, mixed $default = null): mixed
     {
-        $setting = Setting::where('key', $key)->first();
+        $setting = self::getSettingRecord($key);
 
         if (! $setting) {
             return $default;

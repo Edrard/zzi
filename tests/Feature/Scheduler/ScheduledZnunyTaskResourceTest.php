@@ -619,12 +619,12 @@ class ScheduledZnunyTaskResourceTest extends TestCase
 
         $component = Livewire::test(ListScheduledZnunyTasks::class);
 
-        $component->assertTableColumnStateSet('next_run_at', '2026-07-10 15:00:00 Europe/Kyiv', record: $task1);
+        $component->assertTableColumnStateSet('next_run_at', '2026-07-09 15:00:00 Europe/Kyiv', record: $task1);
         $component->assertTableColumnStateSet('next_run_at', null, record: $task2);
 
         // Ensure the placeholder is visible
         $component->assertSee('Not calculated');
-        $component->assertSee('2026-07-10 15:00:00 Europe/Kyiv');
+        $component->assertSee('2026-07-09 15:00:00 Europe/Kyiv');
 
         Carbon::setTestNow();
     }

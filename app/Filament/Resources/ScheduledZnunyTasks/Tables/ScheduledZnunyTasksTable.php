@@ -161,8 +161,16 @@ class ScheduledZnunyTasksTable
                     ->label('Queue')
                     ->placeholder('Not selected')
                     ->options(function () {
+                        static $queueOptionsCache = null;
+                        if ($queueOptionsCache !== null) {
+                            return $queueOptionsCache;
+                        }
+
                         try {
-                            return app(ZnunyCachedLookupService::class)->getFilteredQueueOptions();
+                            $options = app(ZnunyCachedLookupService::class)->getFilteredQueueOptions();
+                            $queueOptionsCache = $options;
+
+                            return $options;
                         } catch (\Throwable $e) {
                             return [];
                         }
@@ -201,16 +209,28 @@ class ScheduledZnunyTasksTable
                     ->label('Customer User')
                     ->placeholder('Not resolved')
                     ->options(function (ScheduledZnunyTask $record) {
+                        static $customerOptionsCache = [];
                         $queue = $record->queue_name;
                         if (empty($queue)) {
                             return [];
                         }
-                        try {
-                            $lookupService = app(ZnunyCachedLookupService::class);
-                            $options = $lookupService->getCustomerUserPrimaryOptionsForQueue($queue);
 
+                        if (isset($customerOptionsCache[$queue])) {
+                            $options = $customerOptionsCache[$queue];
+                        } else {
+                            try {
+                                $lookupService = app(ZnunyCachedLookupService::class);
+                                $options = $lookupService->getCustomerUserPrimaryOptionsForQueue($queue);
+                                $customerOptionsCache[$queue] = $options;
+                            } catch (\Throwable $e) {
+                                return [];
+                            }
+                        }
+
+                        try {
                             $current = $record->customer_user_login;
                             if ($current && ! isset($options[$current])) {
+                                $lookupService = app(ZnunyCachedLookupService::class);
                                 $label = $lookupService->getCustomerUserLabel($current);
                                 if ($label) {
                                     $options[$current] = $label;
@@ -221,7 +241,7 @@ class ScheduledZnunyTasksTable
 
                             return $options;
                         } catch (\Throwable $e) {
-                            return [];
+                            return $options ?? [];
                         }
                     })
                     ->updateStateUsing(function (ScheduledZnunyTask $record, $state) {
@@ -238,8 +258,21 @@ class ScheduledZnunyTasksTable
                     ->label('Owner')
                     ->placeholder('Not selected')
                     ->options(function (ScheduledZnunyTask $record) {
+                        static $ownerOptionsCache = [];
+                        $queue = $record->queue_name ?? '';
+
+                        if (isset($ownerOptionsCache[$queue])) {
+                            $options = $ownerOptionsCache[$queue];
+                        } else {
+                            try {
+                                $options = app(ZnunyCachedLookupService::class)->getAssignableOwnerOptionsForQueue($queue);
+                                $ownerOptionsCache[$queue] = $options;
+                            } catch (\Throwable $e) {
+                                return [];
+                            }
+                        }
+
                         try {
-                            $options = app(ZnunyCachedLookupService::class)->getAssignableOwnerOptionsForQueue($record->queue_name ?? '');
                             $current = $record->owner_login;
                             if ($current && ! isset($options[$current])) {
                                 $options[$current] = $current;
@@ -247,7 +280,7 @@ class ScheduledZnunyTasksTable
 
                             return $options;
                         } catch (\Throwable $e) {
-                            return [];
+                            return $options ?? [];
                         }
                     })
                     ->updateStateUsing(function (ScheduledZnunyTask $record, $state) {

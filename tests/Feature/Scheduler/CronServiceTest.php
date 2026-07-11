@@ -32,4 +32,15 @@ class CronServiceTest extends TestCase
         $this->assertFalse($service->isValid('* * * * * *'));
         $this->assertNull($service->calculateNextRun('* * * * * *', 'UTC'));
     }
+
+    public function test_calculate_next_run_respects_mocked_time()
+    {
+        Carbon::setTestNow('2026-07-09 10:00:00');
+        $service = new CronService;
+        // 0 15 * * * means 15:00. At 10:00, next run is 15:00 on the same day.
+        $nextRun = $service->calculateNextRun('0 15 * * *', 'UTC');
+
+        $this->assertEquals('2026-07-09 15:00:00', $nextRun->format('Y-m-d H:i:s'));
+        Carbon::setTestNow();
+    }
 }

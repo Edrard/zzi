@@ -29,7 +29,7 @@ class CronService
      */
     public function calculateNextRun(string $expression, ?string $timezone = null): ?Carbon
     {
-        return $this->calculateNextRunFrom($expression, 'now', $timezone);
+        return $this->calculateNextRunFrom($expression, now(), $timezone);
     }
 
     public function calculateNextRunFrom(string $expression, \DateTimeInterface|string $from, ?string $timezone = null): ?Carbon
