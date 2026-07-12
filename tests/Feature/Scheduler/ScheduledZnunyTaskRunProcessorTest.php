@@ -86,7 +86,7 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
         $this->assertNull(Cache::get('scheduled_tasks_consecutive_failures'));
     }
 
-    public function test_not_sent_outcome_reverts_to_pending_and_pauses_scheduler()
+    public function test_not_sent_outcome_fails_task_and_does_not_pause_scheduler()
     {
         $this->ticketServiceMock->expects($this->once())
             ->method('createTicketFromTask')
@@ -96,22 +96,20 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
                 'error_details' => 'Missing Queue',
             ]);
 
-        $this->mailServiceMock->expects($this->once())
-            ->method('sendWarning')
-            ->with(
-                $this->stringContains('Scheduler Paused'),
-                $this->stringContains('Local validation failed')
-            );
+        $this->mailServiceMock->expects($this->never())->method('sendWarning');
+        $this->mailServiceMock->expects($this->never())->method('sendAlarm');
 
         $processor = app(ScheduledZnunyTaskRunProcessor::class);
         $processor->processNextBatch(1, 10);
 
         $this->run->refresh();
-        $this->assertEquals('pending', $this->run->status);
-        $this->assertNull($this->run->started_at);
-        $this->assertNull($this->run->finished_at);
+        $this->assertEquals('failed', $this->run->status);
+        $this->assertNotNull($this->run->started_at);
+        $this->assertNotNull($this->run->finished_at);
         $this->assertNull($this->run->ticket_id);
-        $this->assertTrue(app(SchedulerSafetyService::class)->isSchedulerPaused());
+
+        // Scheduler should NOT be paused for local config errors
+        $this->assertFalse(app(SchedulerSafetyService::class)->isSchedulerPaused());
     }
 
     public function test_failed_outcome_increments_failures_and_disables_at_threshold()

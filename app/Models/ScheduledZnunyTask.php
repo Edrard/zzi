@@ -58,7 +58,7 @@ class ScheduledZnunyTask extends Model
             $missing[] = 'Queue is missing';
         }
 
-        if (empty($this->owner_login)) {
+        if (empty($this->owner_id)) {
             $missing[] = 'Owner is missing';
         }
 

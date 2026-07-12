@@ -98,23 +98,26 @@ class ScheduledZnunyTaskRunProcessor
                     return true;
 
                 case ScheduledTicketCreationOutcome::NOT_SENT:
-                    // Revert to pending
                     $run->update([
-                        'status' => 'pending',
-                        'started_at' => null,
+                        'status' => 'failed',
+                        'finished_at' => $finishedAt->toDateTimeString(),
+                        'duration_ms' => $durationMs,
+                        'error_summary' => $result['error_summary'],
+                        'error_details' => $result['error_details'],
+                        'response_snapshot' => null,
                     ]);
 
-                    $reason = 'Pre-flight/Local check failed: '.$result['error_summary'];
-                    $this->safetyService->pauseScheduler($reason);
+                    $task->update([
+                        'last_run_at' => $finishedAt->toDateTimeString(),
+                        'last_failure_at' => $finishedAt->toDateTimeString(),
+                        'last_status' => 'failed',
+                        'last_error_summary' => $result['error_summary'],
+                    ]);
 
-                    $this->alertService->warning(
-                        'scheduler',
-                        'Scheduler Paused (Not Sent)',
-                        "Task '{$run->task_name_snapshot}' paused the scheduler. {$reason}"
-                    );
-                    $this->mailService->sendWarning('Scheduler Paused (Not Sent)', "Task '{$run->task_name_snapshot}' paused the scheduler.\nReason: {$reason}\nDetails:\n".($result['error_details'] ?? ''));
+                    // Do not increment global failure threshold for local pre-flight missing config errors
+                    // Do not pause the global scheduler
 
-                    return false;
+                    return true;
 
                 case ScheduledTicketCreationOutcome::FAILED:
                     $run->update([

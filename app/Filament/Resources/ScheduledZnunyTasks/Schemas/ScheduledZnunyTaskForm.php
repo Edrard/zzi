@@ -109,9 +109,10 @@ class ScheduledZnunyTaskForm
                                     $ownerOptions = $lookupService->getAssignableOwnerOptionsForQueue($state);
                                     if (count($ownerOptions) === 1) {
                                         $onlyOwnerKey = array_key_first($ownerOptions);
-                                        $set('owner_login', (string) $onlyOwnerKey);
+                                        $onlyOwnerLabel = $ownerOptions[$onlyOwnerKey];
                                         if (is_numeric($onlyOwnerKey) && $onlyOwnerKey > 0) {
                                             $set('owner_id', (int) $onlyOwnerKey);
+                                            $set('owner_login', (string) $onlyOwnerLabel);
                                         }
                                     }
                                 }
@@ -123,17 +124,34 @@ class ScheduledZnunyTaskForm
                                     return [];
                                 }
                             }),
-                        Select::make('owner_login')
+                        Select::make('owner_id')
                             ->label('Owner')
                             ->required(fn ($get) => $get('enabled') === true)
                             ->searchable()
                             ->preload()
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(function ($state, $set, $get, ZnunyCachedLookupService $lookupService) {
+                                if (empty($state)) {
+                                    $set('owner_login', null);
+
+                                    return;
+                                }
+                                try {
+                                    $options = $lookupService->getAssignableOwnerOptionsForQueue($get('queue_name') ?? '');
+                                    $label = $options[$state] ?? null;
+                                    $set('owner_login', $label ? (string) $label : null);
+                                } catch (\Throwable $e) {
+                                    $set('owner_login', null);
+                                }
+                            })
                             ->options(function ($get, ZnunyCachedLookupService $lookupService) {
                                 try {
                                     $options = $lookupService->getAssignableOwnerOptionsForQueue($get('queue_name') ?? '');
-                                    $current = $get('owner_login');
+                                    $current = $get('owner_id');
+                                    // owner_login display fallback for currently selected option if not in queue options
+                                    $currentDisplay = $get('owner_login') ?: $current;
                                     if ($current && ! isset($options[$current])) {
-                                        $options[$current] = $current;
+                                        $options[$current] = $currentDisplay;
                                     }
 
                                     return $options;
@@ -141,7 +159,7 @@ class ScheduledZnunyTaskForm
                                     return [];
                                 }
                             }),
-                        Hidden::make('owner_id'),
+                        Hidden::make('owner_login'),
                         Select::make('customer_user_login')
                             ->label('Customer User')
                             ->required(fn ($get) => $get('enabled') === true)

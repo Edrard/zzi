@@ -42,8 +42,8 @@ class ScheduledZnunyTasksTable
                     $query->where('queue_name', $livewire->getQueueFilter());
                 }
 
-                if (method_exists($livewire, 'getOwnerFilter') && ! empty($livewire->getOwnerFilter())) {
-                    $query->where('owner_login', $livewire->getOwnerFilter());
+                if (method_exists($livewire, 'getOwnerFilter') && $livewire->getOwnerFilter() !== '' && $livewire->getOwnerFilter() !== 'all') {
+                    $query->where('owner_id', $livewire->getOwnerFilter());
                 }
 
                 if (method_exists($livewire, 'getActiveFilter') && $livewire->getActiveFilter() !== 'all') {
@@ -197,9 +197,10 @@ class ScheduledZnunyTasksTable
                             $ownerOptions = $lookupService->getAssignableOwnerOptionsForQueue($state);
                             if (count($ownerOptions) === 1) {
                                 $onlyOwnerKey = array_key_first($ownerOptions);
-                                $record->owner_login = (string) $onlyOwnerKey;
+                                $onlyOwnerLabel = $ownerOptions[$onlyOwnerKey];
                                 if (is_numeric($onlyOwnerKey) && $onlyOwnerKey > 0) {
                                     $record->owner_id = (int) $onlyOwnerKey;
+                                    $record->owner_login = (string) $onlyOwnerLabel;
                                 }
                             }
                         }
@@ -254,7 +255,7 @@ class ScheduledZnunyTasksTable
                         $record->customer_user_login = empty($state) ? null : $state;
                         $record->save();
                     }),
-                SelectColumn::make('owner_login')
+                SelectColumn::make('owner_id')
                     ->label('Owner')
                     ->placeholder('Not selected')
                     ->options(function (ScheduledZnunyTask $record) {
@@ -273,9 +274,9 @@ class ScheduledZnunyTasksTable
                         }
 
                         try {
-                            $current = $record->owner_login;
+                            $current = $record->owner_id;
                             if ($current && ! isset($options[$current])) {
-                                $options[$current] = $current;
+                                $options[$current] = $record->owner_login ?: $current;
                             }
 
                             return $options;
@@ -290,11 +291,18 @@ class ScheduledZnunyTasksTable
                             return ['error' => 'Owner is required for active tasks.'];
                         }
 
-                        $record->owner_login = empty($state) ? null : (string) $state;
                         if (empty($state)) {
                             $record->owner_id = null;
-                        } elseif (is_numeric($state) && $state > 0) {
+                            $record->owner_login = null;
+                        } else {
                             $record->owner_id = (int) $state;
+                            try {
+                                $options = app(ZnunyCachedLookupService::class)->getAssignableOwnerOptionsForQueue($record->queue_name ?? '');
+                                $label = $options[$state] ?? null;
+                                $record->owner_login = $label ? (string) $label : null;
+                            } catch (\Throwable $e) {
+                                $record->owner_login = null;
+                            }
                         }
                         $record->save();
                     }),

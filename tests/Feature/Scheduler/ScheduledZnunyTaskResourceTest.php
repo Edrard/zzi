@@ -89,6 +89,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
             'enabled' => false,
             'cron_expression' => 'invalid cron',
             'queue_name' => 'Support',
+            'owner_id' => 2,
             'owner_login' => 'john.doe',
             'subject' => 'Test',
             'body' => 'Test',
@@ -138,6 +139,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
             'enabled' => true,
             'cron_expression' => '* * * * *',
             'queue_name' => 'Support',
+            'owner_id' => 2,
             'owner_login' => 'john.doe',
             'subject' => 'Test',
             'body' => 'Test',
@@ -198,6 +200,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
             'enabled' => false,
             'cron_expression' => '* * * * *',
             'queue_name' => 'Support',
+            'owner_id' => 2,
             'owner_login' => 'john.doe',
             'customer_user_login' => null, // Missing
             'subject' => 'Test',
@@ -226,6 +229,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
             'cron_expression' => '* * * * *',
             'timezone' => 'UTC',
             'queue_name' => 'Support',
+            'owner_id' => 2,
             'owner_login' => 'john.doe',
             'customer_user_login' => 'client',
             'subject' => 'Test',
@@ -302,18 +306,19 @@ class ScheduledZnunyTaskResourceTest extends TestCase
         $task = ScheduledZnunyTask::create([
             'name' => 'Valid Task',
             'enabled' => true,
+            'owner_id' => 2,
             'owner_login' => 'original.owner',
         ]);
 
         $this->actingAs($admin);
 
         Livewire::test(ListScheduledZnunyTasks::class)
-            ->call('updateTableColumnState', 'owner_login', $task->id, '')
+            ->call('updateTableColumnState', 'owner_id', $task->id, '')
             ->assertNotified('Cannot clear Owner');
 
         $this->assertDatabaseHas('scheduled_znuny_tasks', [
             'id' => $task->id,
-            'owner_login' => 'original.owner',
+            'owner_id' => 2,
         ]);
     }
 
@@ -330,6 +335,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
             'cron_expression' => '* * * * *',
             'timezone' => 'UTC',
             'queue_name' => 'Support',
+            'owner_id' => 2,
             'owner_login' => 'john.doe',
             'customer_user_login' => 'client',
             'subject' => 'Test',
@@ -370,6 +376,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
             'cron_expression' => '* * * * *',
             'timezone' => 'UTC',
             'queue_name' => 'Support',
+            'owner_id' => 2,
             'owner_login' => 'john.doe',
             'customer_user_login' => 'client',
             'subject' => 'Test',
@@ -494,7 +501,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
                 'cron_expression' => null,
                 'timezone' => null,
                 'queue_name' => null,
-                'owner_login' => null,
+                'owner_id' => null,
                 'customer_user_login' => null,
                 'subject' => null,
                 'body' => null,
@@ -504,7 +511,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
                 'cron_expression' => 'required',
                 'timezone' => 'required',
                 'queue_name' => 'required',
-                'owner_login' => 'required',
+                'owner_id' => 'required',
                 'customer_user_login' => 'required',
                 'subject' => 'required',
                 'body' => 'required',
@@ -735,6 +742,117 @@ class ScheduledZnunyTaskResourceTest extends TestCase
             'queue_name' => 'QueueName', // Not reset
             'owner_login' => 'owner.name', // Not reset
             'customer_user_login' => 'manual.customer',
+        ]);
+    }
+
+    public function test_enable_is_blocked_when_owner_id_is_missing_but_login_is_present()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Legacy Owner Task',
+            'enabled' => false,
+            'cron_expression' => '* * * * *',
+            'queue_name' => 'Support',
+            'owner_login' => '2', // Has legacy value
+            'owner_id' => null,   // But no ID
+            'customer_user_login' => 'client',
+            'subject' => 'Test',
+            'body' => 'Test',
+        ]);
+
+        $this->actingAs($admin);
+
+        Livewire::test(ListScheduledZnunyTasks::class)
+            ->call('updateTableColumnState', 'enabled', $task->id, true)
+            ->assertNotified('Cannot enable task');
+
+        $this->assertDatabaseHas('scheduled_znuny_tasks', [
+            'id' => $task->id,
+            'enabled' => false,
+        ]);
+    }
+
+    public function test_form_owner_selection_saves_owner_id()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin);
+
+        $mock = app(ZnunyCachedLookupService::class);
+        $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['Support' => 'Support']);
+        $mock->shouldReceive('resolveTemplateCandidate')->andReturn(null);
+        $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([5 => 'Five']);
+
+        Livewire::test(CreateScheduledZnunyTask::class)
+            ->fillForm([
+                'name' => 'Form Owner Task',
+                'enabled' => false,
+                'queue_name' => 'Support',
+                'priority_name' => '3 normal',
+                'state_name' => 'new',
+            ])
+            ->set('data.owner_id', 5) // triggers updated->afterStateUpdated
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('scheduled_znuny_tasks', [
+            'name' => 'Form Owner Task',
+            'owner_id' => 5,
+            'owner_login' => 'Five',
+        ]);
+    }
+
+    public function test_inline_owner_update_saves_owner_id()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin);
+
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Valid Task',
+            'enabled' => false,
+            'owner_id' => 2,
+        ]);
+
+        $mock = app(ZnunyCachedLookupService::class);
+        $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([9 => 'Nine']);
+
+        Livewire::test(ListScheduledZnunyTasks::class)
+            ->call('updateTableColumnState', 'owner_id', $task->id, 9)
+            ->assertSuccessful();
+
+        $this->assertDatabaseHas('scheduled_znuny_tasks', [
+            'id' => $task->id,
+            'owner_id' => 9,
+            'owner_login' => 'Nine',
+        ]);
+    }
+
+    public function test_queue_selection_auto_fills_only_owner_id_and_not_login()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin);
+
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Valid Task',
+            'enabled' => false,
+            'queue_name' => 'OldQueue',
+        ]);
+
+        $mock = app(ZnunyCachedLookupService::class);
+        $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['NewQueue' => 'NewQueue']);
+        $mock->shouldReceive('resolveTemplateCandidate')->with('NewQueue')->andReturn(null);
+        // Only one owner option
+        $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->with('NewQueue')->andReturn([7 => 'Seven']);
+
+        Livewire::test(ListScheduledZnunyTasks::class)
+            ->call('updateTableColumnState', 'queue_name', $task->id, 'NewQueue')
+            ->assertSuccessful();
+
+        $this->assertDatabaseHas('scheduled_znuny_tasks', [
+            'id' => $task->id,
+            'queue_name' => 'NewQueue',
+            'owner_id' => 7,
+            'owner_login' => 'Seven',
         ]);
     }
 }

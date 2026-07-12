@@ -57,7 +57,17 @@ class ListScheduledZnunyTasks extends ListRecords
 
     public function getOwnerOptions(): array
     {
-        return ScheduledZnunyTask::whereNotNull('owner_login')->distinct()->pluck('owner_login')->toArray();
+        $tasks = ScheduledZnunyTask::whereNotNull('owner_id')
+            ->select('owner_id', 'owner_login')
+            ->distinct()
+            ->get();
+
+        $options = [];
+        foreach ($tasks as $task) {
+            $options[$task->owner_id] = $task->owner_login ?: "Owner ID: {$task->owner_id}";
+        }
+
+        return $options;
     }
 
     public function getMaxContentWidth(): Width|string|null
