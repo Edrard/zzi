@@ -85,9 +85,10 @@ class ScheduledZnunyTasksTable
                         ];
                     })
                     ->updateStateUsing(function (ScheduledZnunyTask $record, $state) {
-                        if ($state) {
-                            $cronService = app(CronService::class);
-                            $record->next_run_at = $cronService->calculateNextRun($record->cron_expression, $record->timezone);
+                        $cronService = app(CronService::class);
+                        if ($state && $record->isCompleteForScheduling()) {
+                            $next = $cronService->calculateNextRun($record->cron_expression, $record->timezone);
+                            $record->next_run_at = $next ? $next->utc()->toDateTimeString() : null;
                         } else {
                             $record->next_run_at = null;
                         }
@@ -126,7 +127,8 @@ class ScheduledZnunyTasksTable
                         }
 
                         $record->cron_expression = $state;
-                        $record->next_run_at = $cronService->calculateNextRun($state, $record->timezone);
+                        $next = $cronService->calculateNextRun($state, $record->timezone);
+                        $record->next_run_at = $next ? $next->utc()->toDateTimeString() : null;
                         $record->save();
                     }),
                 TextColumn::make('next_run_at')
@@ -137,7 +139,7 @@ class ScheduledZnunyTasksTable
                         if (empty($cron) || empty($tz) || ! app(CronService::class)->isValid($cron)) {
                             return ['data-scheduled-sort-value' => ''];
                         }
-                        $next = $record->next_run_at ?? app(CronService::class)->calculateNextRun($cron, $tz);
+                        $next = $record->next_run_at;
 
                         return ['data-scheduled-sort-value' => $next ? Carbon::parse($next)->timestamp : ''];
                     })
@@ -149,7 +151,8 @@ class ScheduledZnunyTasksTable
                             return null;
                         }
 
-                        $next = $record->next_run_at ?? app(CronService::class)->calculateNextRun($cron, $tz);
+                        $next = $record->next_run_at;
+
                         if (! $next) {
                             return null;
                         }

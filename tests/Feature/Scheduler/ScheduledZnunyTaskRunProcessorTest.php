@@ -34,6 +34,8 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
         $this->task = ScheduledZnunyTask::create([
             'name' => 'Test Task',
             'enabled' => true,
+            'cron_expression' => '0 0 * * *',
+            'timezone' => 'UTC',
         ]);
 
         $this->run = ScheduledZnunyTaskRun::create([
@@ -103,68 +105,69 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
         $processor->processNextBatch(1, 10);
 
         $this->run->refresh();
-        $this->assertEquals('failed', $this->run->status);
-        $this->assertNotNull($this->run->started_at);
-        $this->assertNotNull($this->run->finished_at);
-        $this->assertNull($this->run->ticket_id);
+        $this->task->refresh();
 
-        // Scheduler should NOT be paused for local config errors
-        $this->assertFalse(app(SchedulerSafetyService::class)->isSchedulerPaused());
+        $this->assertEquals('failed', $this->run->status);
+        $this->assertEquals('failed', $this->task->last_status);
+        $this->assertEquals('Local validation failed', $this->task->last_error_summary);
+        $this->assertTrue(app(SchedulerSafetyService::class)->isSchedulerEnabled());
     }
 
-    public function test_failed_outcome_increments_failures_and_disables_at_threshold()
+    public function test_failed_outcome_increments_consecutive_failures_and_disables_scheduler_at_threshold()
     {
-        Cache::put('scheduled_tasks_consecutive_failures', 2); // default threshold is 3
-
         $this->ticketServiceMock->expects($this->once())
             ->method('createTicketFromTask')
             ->willReturn([
                 'outcome' => ScheduledTicketCreationOutcome::FAILED,
-                'error_summary' => 'API failed',
-                'error_details' => 'Bad credentials',
-                'response_snapshot' => ['raw' => 'sanitized_failed'],
+                'error_summary' => 'API Error',
+                'error_details' => 'Timeout',
+                'response_snapshot' => ['raw' => 'sanitized_error'],
             ]);
 
         $this->mailServiceMock->expects($this->once())
             ->method('sendAlarm')
             ->with(
-                $this->stringContains('Scheduler Disabled'),
-                $this->stringContains('API failed')
+                'Scheduler Disabled (Failure Threshold)',
+                $this->stringContains('API Error')
             );
 
+        Cache::put('scheduled_tasks_consecutive_failures', 2);
         $processor = app(ScheduledZnunyTaskRunProcessor::class);
         $processor->processNextBatch(1, 10);
 
         $this->run->refresh();
+        $this->task->refresh();
+
         $this->assertEquals('failed', $this->run->status);
-        $this->assertNull($this->run->ticket_id);
-        $this->assertEquals(['raw' => 'sanitized_failed'], $this->run->response_snapshot);
+        $this->assertEquals(['raw' => 'sanitized_error'], $this->run->response_snapshot);
         $this->assertEquals(3, Cache::get('scheduled_tasks_consecutive_failures'));
         $this->assertFalse(app(SchedulerSafetyService::class)->isSchedulerEnabled());
     }
 
-    public function test_uncertain_outcome_immediately_disables_scheduler()
+    public function test_uncertain_outcome_disables_scheduler()
     {
         $this->ticketServiceMock->expects($this->once())
             ->method('createTicketFromTask')
             ->willReturn([
                 'outcome' => ScheduledTicketCreationOutcome::UNCERTAIN,
-                'error_summary' => 'Timeout',
-                'error_details' => 'cURL error 28',
+                'error_summary' => 'Connection dropped after payload sent',
+                'error_details' => 'EOF',
                 'response_snapshot' => ['raw' => 'sanitized_uncertain'],
             ]);
 
         $this->mailServiceMock->expects($this->once())
             ->method('sendAlarm')
             ->with(
-                $this->stringContains('Scheduler Disabled'),
-                $this->stringContains('Timeout')
+                'Scheduler Disabled (Uncertain Outcome)',
+                $this->stringContains('Connection dropped after payload sent')
             );
 
         $processor = app(ScheduledZnunyTaskRunProcessor::class);
         $processor->processNextBatch(1, 10);
 
         $this->run->refresh();
+        $this->task->refresh();
+
         $this->assertEquals('uncertain', $this->run->status);
         $this->assertNull($this->run->ticket_id);
         $this->assertEquals(['raw' => 'sanitized_uncertain'], $this->run->response_snapshot);

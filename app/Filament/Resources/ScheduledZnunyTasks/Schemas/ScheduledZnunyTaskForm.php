@@ -25,7 +25,8 @@ class ScheduledZnunyTaskForm
             $cron = $get('cron_expression');
             $tz = $get('timezone');
             if (! empty($cron) && app(CronService::class)->isValid($cron)) {
-                $set('next_run_at', app(CronService::class)->calculateNextRun($cron, $tz));
+                $next = app(CronService::class)->calculateNextRun($cron, $tz);
+                $set('next_run_at', $next ? $next->utc()->toDateTimeString() : null);
             } else {
                 $set('next_run_at', null);
             }

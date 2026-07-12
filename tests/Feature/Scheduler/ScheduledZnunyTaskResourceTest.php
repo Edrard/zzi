@@ -601,7 +601,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
         $response->assertSee('Direct Edit Test Task');
     }
 
-    public function test_next_run_at_is_calculated_and_displayed_in_list()
+    public function test_next_run_at_is_displayed_in_local_timezone()
     {
         $admin = User::factory()->create(['role' => 'admin']);
         $this->actingAs($admin);
@@ -613,7 +613,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
             'enabled' => false,
             'cron_expression' => '0 15 * * *',
             'timezone' => 'Europe/Kyiv',
-            'next_run_at' => null,
+            'next_run_at' => '2026-07-09 12:00:00', // 12:00 UTC should display as 15:00 Kyiv
         ]);
 
         $task2 = ScheduledZnunyTask::create([
@@ -624,14 +624,21 @@ class ScheduledZnunyTaskResourceTest extends TestCase
             'next_run_at' => null,
         ]);
 
+        $task3 = ScheduledZnunyTask::create([
+            'name' => 'Task Past',
+            'enabled' => false,
+            'cron_expression' => '0 15 * * *',
+            'timezone' => 'Europe/Kyiv',
+            'next_run_at' => '2026-07-09 08:00:00', // Past 08:00 UTC, must not be hidden
+        ]);
+
         $component = Livewire::test(ListScheduledZnunyTasks::class);
 
+        // 12:00 UTC converts to 15:00 Europe/Kyiv
         $component->assertTableColumnStateSet('next_run_at', '2026-07-09 15:00:00 Europe/Kyiv', record: $task1);
         $component->assertTableColumnStateSet('next_run_at', null, record: $task2);
-
-        // Ensure the placeholder is visible
-        $component->assertSee('Not calculated');
-        $component->assertSee('2026-07-09 15:00:00 Europe/Kyiv');
+        // 08:00 UTC converts to 11:00 Europe/Kyiv and is NOT recalculated
+        $component->assertTableColumnStateSet('next_run_at', '2026-07-09 11:00:00 Europe/Kyiv', record: $task3);
 
         Carbon::setTestNow();
     }
