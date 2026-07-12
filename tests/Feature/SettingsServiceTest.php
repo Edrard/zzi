@@ -106,6 +106,19 @@ class SettingsServiceTest extends TestCase
         $this->assertNull($val2);
     }
 
+    public function test_invalidation_works_on_create()
+    {
+        SettingsService::clearAllCaches();
+
+        $val1 = SettingsService::string('test_key_create');
+        $this->assertNull($val1);
+
+        Setting::create(['key' => 'test_key_create', 'value' => 'created_value', 'type' => 'string']);
+
+        $val2 = SettingsService::string('test_key_create');
+        $this->assertEquals('created_value', $val2);
+    }
+
     public function test_existing_encrypted_secret_behavior_remains_unchanged()
     {
         SettingsService::clearAllCaches();

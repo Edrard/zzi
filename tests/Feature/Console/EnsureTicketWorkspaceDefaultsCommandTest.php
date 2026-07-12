@@ -3,6 +3,7 @@
 namespace Tests\Feature\Console;
 
 use App\Models\Setting;
+use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -49,12 +50,20 @@ class EnsureTicketWorkspaceDefaultsCommandTest extends TestCase
         Setting::create(['key' => 'znuny_ticket_cache_closed_ttl_seconds', 'value' => '172800', 'type' => 'integer']);
         Setting::create(['key' => 'znuny_ticket_cache_active_state_types', 'value' => 'new, pending reminder, pending auto', 'type' => 'string']);
 
+        SettingsService::clearAllCaches();
+
+        // Warm the cache
+        $this->assertEquals('1800', SettingsService::string('znuny_ticket_cache_ttl_seconds'));
+
         $this->artisan('settings:ensure-ticket-workspace-defaults')
             ->assertSuccessful();
 
         $this->assertDatabaseMissing('settings', ['key' => 'znuny_ticket_cache_ttl_seconds']);
         $this->assertDatabaseMissing('settings', ['key' => 'znuny_ticket_cache_closed_ttl_seconds']);
         $this->assertDatabaseMissing('settings', ['key' => 'znuny_ticket_cache_active_state_types']);
+
+        // Check if SettingsService sees the deletion immediately
+        $this->assertNull(SettingsService::string('znuny_ticket_cache_ttl_seconds'));
     }
 
     public function test_it_does_not_overwrite_existing_new_keys()

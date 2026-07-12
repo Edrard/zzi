@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Setting;
+use App\Services\SettingsService;
 use Illuminate\Console\Command;
 
 class EnsureTicketWorkspaceDefaultsCommand extends Command
@@ -32,6 +33,7 @@ class EnsureTicketWorkspaceDefaultsCommand extends Command
 
         $deletedCount = Setting::whereIn('key', $obsoleteKeys)->delete();
         if ($deletedCount > 0) {
+            SettingsService::clearAllCaches();
             $this->info("Deleted {$deletedCount} obsolete Ticket Workspace setting(s).");
         }
     }

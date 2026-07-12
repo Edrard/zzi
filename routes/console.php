@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Setting;
 use App\Services\SettingsService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -50,9 +49,10 @@ if ($syncInterval > 0) {
 
 $autoCloseMode = 'execute';
 try {
-    $autoCloseMode = SettingsService::string('manual_ticket_auto_close_schedule_mode', 'execute');
-    // Migration fallback for environments without the new setting but having the old one.
-    if (! Setting::where('key', 'manual_ticket_auto_close_schedule_mode')->exists()) {
+    $mode = SettingsService::string('manual_ticket_auto_close_schedule_mode', null);
+    if ($mode !== null) {
+        $autoCloseMode = $mode;
+    } else {
         $oldEnabled = SettingsService::bool('manual_ticket_auto_close_enabled', true);
         $autoCloseMode = $oldEnabled ? 'execute' : 'disabled';
     }

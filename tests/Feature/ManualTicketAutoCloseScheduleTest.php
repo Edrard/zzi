@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Setting;
+use App\Services\SettingsService;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -16,6 +17,7 @@ class ManualTicketAutoCloseScheduleTest extends TestCase
     protected function getScheduledEvents()
     {
         Cache::flush();
+        SettingsService::clearAllCaches();
         app()->forgetInstance(Schedule::class);
         Facade::clearResolvedInstance(Schedule::class);
         $schedule = app(Schedule::class);

@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Setting;
+use App\Services\SettingsService;
 use App\Support\Settings\DefaultSettings;
 use Illuminate\Console\Command;
 
@@ -35,6 +36,7 @@ class EnsureSettingsDefaultsCommand extends Command
 
         $deletedCount = Setting::whereIn('key', $obsoleteKeys)->delete();
         if ($deletedCount > 0) {
+            SettingsService::clearAllCaches();
             $this->info("Deleted {$deletedCount} obsolete setting(s).");
         }
 
