@@ -35,13 +35,18 @@ class ScheduledZnunyTaskRunnerTest extends TestCase
 
         Artisan::call('scheduled-znuny:run');
 
-        // It should have created pending runs (catch-up), tried to process the first one,
-        // failed local validation (NOT_SENT), reverted it to pending, and paused the scheduler.
+        // It should have created pending runs (catch-up), tried to process them,
+        // failed local validation (NOT_SENT), marked them as failed, and DID NOT pause the scheduler.
         $this->assertEquals(2, ScheduledZnunyTaskRun::count());
-        $run = ScheduledZnunyTaskRun::orderBy('id')->first();
-        $this->assertEquals('pending', $run->status);
 
-        $this->assertTrue(app(SchedulerSafetyService::class)->isSchedulerPaused());
+        $runs = ScheduledZnunyTaskRun::orderBy('id')->get();
+        foreach ($runs as $run) {
+            $this->assertEquals('failed', $run->status);
+            $this->assertNotNull($run->finished_at);
+            $this->assertNotNull($run->error_summary);
+        }
+
+        $this->assertFalse(app(SchedulerSafetyService::class)->isSchedulerPaused());
     }
 
     public function test_scheduler_obeys_global_disabled_flag_materializing_but_not_processing(): void

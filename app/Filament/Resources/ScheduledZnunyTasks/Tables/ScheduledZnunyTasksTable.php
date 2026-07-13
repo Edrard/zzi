@@ -74,6 +74,8 @@ class ScheduledZnunyTasksTable
                 if (method_exists($livewire, 'getActiveFilter') && $livewire->getActiveFilter() !== 'all') {
                     $query->where('enabled', $livewire->getActiveFilter() === '1');
                 }
+
+                $query->orderBy('id', 'desc');
             })
             ->columns([
                 ToggleColumn::make('enabled')
@@ -315,7 +317,7 @@ class ScheduledZnunyTasksTable
                     ->badge()
                     ->extraCellAttributes(fn (ScheduledZnunyTask $record) => ['data-scheduled-sort-value' => $record->last_status ?? '']),
             ])
-            ->defaultSort('id', 'desc')
+            ->defaultSort('enabled', 'desc')
             ->paginated(false)
             ->recordUrl(fn (ScheduledZnunyTask $record) => ScheduledZnunyTaskResource::getUrl('edit', ['record' => $record]))
             ->recordActions([])
