@@ -21,13 +21,35 @@
     height: 2rem !important;
 }
 /* Disabled row muted styling (light & dark mode safe) */
-tr.scheduled-task-disabled-row,
-tr.scheduled-task-disabled-row > td {
-    background-color: #e5e7eb !important; /* Visibly neutral gray in light mode */
+#scheduled-tasks-page-wrapper tr.scheduled-task-disabled-row > td {
+    background-color: #eef2f7 !important;
+    color: #475569;
 }
-.dark tr.scheduled-task-disabled-row,
-.dark tr.scheduled-task-disabled-row > td {
-    background-color: #242424 !important; /* Neutral dark gray in dark mode */
+#scheduled-tasks-page-wrapper tr.scheduled-task-disabled-row > td:first-child {
+    box-shadow: inset 4px 0 0 #94a3b8;
+}
+#scheduled-tasks-page-wrapper tr.scheduled-task-disabled-row:hover > td {
+    background-color: #e2e8f0 !important;
+}
+
+/* Distinct hover for enabled rows to avoid looking disabled */
+#scheduled-tasks-page-wrapper tr:not(.scheduled-task-disabled-row):hover > td {
+    background-color: #eff6ff !important;
+}
+
+/* Dark mode */
+.dark #scheduled-tasks-page-wrapper tr.scheduled-task-disabled-row > td {
+    background-color: #27272a !important;
+    color: #d4d4d8;
+}
+.dark #scheduled-tasks-page-wrapper tr.scheduled-task-disabled-row > td:first-child {
+    box-shadow: inset 4px 0 0 #71717a;
+}
+.dark #scheduled-tasks-page-wrapper tr.scheduled-task-disabled-row:hover > td {
+    background-color: #3f3f46 !important;
+}
+.dark #scheduled-tasks-page-wrapper tr:not(.scheduled-task-disabled-row):hover > td {
+    background-color: #262626 !important;
 }
 </style>
     <div id="scheduled-tasks-page-wrapper" data-scheduled-tasks-page style="margin-top: 0 !important; display: flex; flex-direction: column; gap: 0.5rem;">
