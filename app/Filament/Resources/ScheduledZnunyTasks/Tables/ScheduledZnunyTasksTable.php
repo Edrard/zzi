@@ -43,7 +43,7 @@ class ScheduledZnunyTasksTable
                 }
 
                 if (method_exists($livewire, 'getOwnerFilter') && $livewire->getOwnerFilter() !== '' && $livewire->getOwnerFilter() !== 'all') {
-                    $query->where('owner_id', $livewire->getOwnerFilter());
+                    $query->where('owner_id', (int) $livewire->getOwnerFilter());
                 }
 
                 if (method_exists($livewire, 'getActiveFilter') && $livewire->getActiveFilter() !== 'all') {

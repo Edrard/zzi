@@ -52,8 +52,8 @@ tr.scheduled-task-disabled-row > td {
                 <x-filament::input.wrapper>
                     <x-filament::input.select wire:model.live="ownerFilter">
                         <option value="">All Owners</option>
-                        @foreach($this->getOwnerOptions() as $owner)
-                            <option value="{{ $owner }}">{{ $owner }}</option>
+                        @foreach($this->getOwnerOptions() as $id => $owner)
+                            <option value="{{ $id }}">{{ $owner }}</option>
                         @endforeach
                     </x-filament::input.select>
                 </x-filament::input.wrapper>

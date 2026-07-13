@@ -9,11 +9,13 @@ use App\Filament\Resources\ScheduledZnunyTasks\ScheduledZnunyTaskResource;
 use App\Filament\Resources\ScheduledZnunyTasks\Widgets\SchedulerStatusConsole;
 use App\Models\ScheduledZnunyTask;
 use App\Models\ScheduledZnunyTaskRun;
+use App\Models\SystemAlert;
 use App\Models\User;
 use App\Services\Cron\CronService;
 use App\Services\ScheduledZnunyTaskRunProcessor;
 use App\Services\ScheduledZnunyTicketCreationService;
 use App\Services\SchedulerSafetyService;
+use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyCachedLookupService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -859,7 +861,186 @@ class ScheduledZnunyTaskResourceTest extends TestCase
             'id' => $task->id,
             'queue_name' => 'NewQueue',
             'owner_id' => 7,
-            'owner_login' => 'Seven',
+            'owner_login' => 'Seven', // Now it auto-resolves login too
         ]);
+    }
+
+    public function test_list_filters_do_not_throw_reset_page_exception()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin);
+
+        $component = Livewire::test(ListScheduledZnunyTasks::class);
+
+        // Updating these properties should not crash with resetTablePage missing
+        $component->set('taskSearch', 'Test')
+            ->assertSuccessful();
+
+        $component->set('queueFilter', 'Support')
+            ->assertSuccessful();
+
+        $component->set('ownerFilter', '2')
+            ->assertSuccessful();
+
+        $component->set('activeFilter', 'active')
+            ->assertSuccessful();
+    }
+
+    public function test_owner_options_resolution_order()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin);
+
+        // Task with known owner_login
+        ScheduledZnunyTask::create([
+            'name' => 'Task A',
+            'enabled' => false,
+            'owner_id' => 10,
+            'owner_login' => 'Alice',
+            'queue_name' => 'Queue A',
+        ]);
+
+        // Task with missing owner_login, to be resolved via API mock
+        ScheduledZnunyTask::create([
+            'name' => 'Task B',
+            'enabled' => false,
+            'owner_id' => 11,
+            'owner_login' => null,
+            'queue_name' => 'Queue B',
+        ]);
+
+        // Task with missing owner_login, API mock fails/does not find it, fallback to raw ID
+        ScheduledZnunyTask::create([
+            'name' => 'Task C',
+            'enabled' => false,
+            'owner_id' => 12,
+            'owner_login' => null,
+            'queue_name' => 'Queue C',
+        ]);
+
+        // Task with owner_login perfectly matching owner_id (simulates old bug)
+        ScheduledZnunyTask::create([
+            'name' => 'Task Buggy',
+            'enabled' => false,
+            'owner_id' => 13,
+            'owner_login' => '13',
+            'queue_name' => 'Queue D',
+        ]);
+
+        $mock = app(ZnunyCachedLookupService::class);
+        $mock->shouldReceive('getAssignableOwnerOptionsForQueue')
+            ->with('Queue B')
+            ->andReturn(['11' => 'Bob API']); // string key
+
+        $mock->shouldReceive('getAssignableOwnerOptionsForQueue')
+            ->with('Queue C')
+            ->andReturn([99 => 'Other API']);
+
+        $mock->shouldReceive('getAssignableOwnerOptionsForQueue')
+            ->with('Queue D')
+            ->andReturn(['13' => 'Charlie API']); // Should resolve this via API because '13' == 13 is ignored
+
+        $component = Livewire::test(ListScheduledZnunyTasks::class);
+
+        $options = $component->instance()->getOwnerOptions();
+
+        $this->assertArrayHasKey(10, $options);
+        $this->assertEquals('Alice', $options[10]);
+
+        $this->assertArrayHasKey(11, $options);
+        $this->assertEquals('Bob API', $options[11]);
+
+        $this->assertArrayHasKey(12, $options);
+        $this->assertEquals('Owner ID: 12', $options[12]);
+
+        $this->assertArrayHasKey(13, $options);
+        $this->assertEquals('Charlie API', $options[13]);
+
+        // Ensure selecting an owner filter applies successfully and doesn't crash
+        $component->set('ownerFilter', 11)
+            ->assertSuccessful();
+    }
+
+    public function test_owner_filter_correctly_filters_by_owner_id()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin);
+
+        $task1 = ScheduledZnunyTask::create([
+            'name' => 'Task Owner 2',
+            'enabled' => false,
+            'owner_id' => 2,
+        ]);
+
+        $task2 = ScheduledZnunyTask::create([
+            'name' => 'Task Owner 3',
+            'enabled' => false,
+            'owner_id' => 3,
+        ]);
+
+        $component = Livewire::test(ListScheduledZnunyTasks::class);
+
+        // Without filter, both are visible
+        $component->assertCanSeeTableRecords([$task1, $task2]);
+
+        // Filter by string "2"
+        $component->set('ownerFilter', '2')
+            ->assertCanSeeTableRecords([$task1])
+            ->assertCanNotSeeTableRecords([$task2]);
+
+        // Filter by int 3
+        $component->set('ownerFilter', 3)
+            ->assertCanSeeTableRecords([$task2])
+            ->assertCanNotSeeTableRecords([$task1]);
+
+        // Clear filter ("")
+        $component->set('ownerFilter', '')
+            ->assertCanSeeTableRecords([$task1, $task2]);
+
+        // Clear filter ("all")
+        $component->set('ownerFilter', 'all')
+            ->assertCanSeeTableRecords([$task1, $task2]);
+    }
+
+    public function test_scheduler_status_console_renders_dark_theme_safe_alert_banner()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin);
+
+        SystemAlert::create([
+            'source' => 'scheduler',
+            'status' => 'active',
+            'severity' => 'warning',
+            'title' => 'Scheduler Paused (Not Sent)',
+            'message' => "Task 'Mikrotik' paused the scheduler. Pre-flight/Local check failed.",
+        ]);
+
+        // Default: Scheduler is enabled. Alert should NOT be visible on main panel.
+        Livewire::test(SchedulerStatusConsole::class)
+            ->assertSee('Enabled')
+            ->assertDontSee('Scheduler Paused (Not Sent)')
+            ->assertDontSee("Task 'Mikrotik' paused the scheduler.");
+
+        // Now manually disable the scheduler. The historical alert should become visible.
+        $this->artisan('app:ensure-settings-defaults');
+        app(SchedulerSafetyService::class)->disableScheduler('test');
+        SettingsService::clearAllCaches();
+
+        Livewire::test(SchedulerStatusConsole::class)
+            ->assertSee('Disabled')
+            ->assertSee('Scheduler Paused (Not Sent)')
+            ->assertSee("Task 'Mikrotik' paused the scheduler.")
+            // Verify new subdued classes exist
+            ->assertSee('bg-amber-50')
+            ->assertSee('text-amber-900')
+            ->assertSee('dark:bg-gray-800/50')
+            ->assertSee('dark:border-gray-700/50')
+            ->assertSee('dark:border-l-amber-500')
+            ->assertSee('dark:text-gray-200')
+            // Verify glowing / highly saturated amber classes are absent
+            ->assertDontSee('dark:bg-amber-950/50', false)
+            ->assertDontSee('dark:border-amber-700/50', false)
+            // Verify truncate is still removed
+            ->assertDontSee('class="truncate"', false);
     }
 }

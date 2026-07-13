@@ -72,10 +72,12 @@
         </div>
 
         @if($lastActiveAlert)
-            <div class="mt-4 p-2 rounded bg-warning-50 border border-warning-200 text-warning-800 dark:bg-warning-900/30 dark:border-warning-800 dark:text-warning-300 text-xs flex items-center gap-2">
-                <x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-4 h-4 shrink-0" />
-                <span class="font-bold">{{ $lastActiveAlert->title }}:</span>
-                <span class="truncate">{{ $lastActiveAlert->message }}</span>
+            <div class="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200 border-l-4 border-l-amber-500 text-amber-900 dark:bg-gray-800/50 dark:border-gray-700/50 dark:border-l-amber-500 dark:text-gray-200 text-sm flex items-start gap-3">
+                <x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-5 h-5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-500" />
+                <div class="flex flex-col">
+                    <span class="font-bold leading-tight dark:text-gray-100">{{ $lastActiveAlert->title }}</span>
+                    <span class="mt-1 leading-relaxed text-amber-800 dark:text-gray-300">{{ $lastActiveAlert->message }}</span>
+                </div>
             </div>
         @endif
     </x-filament::card>

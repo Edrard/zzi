@@ -46,7 +46,10 @@ class SchedulerStatusConsole extends Widget
         $nextDue = $nextDueTask?->next_run_at;
         $nextDueTz = $nextDueTask?->timezone ?? config('app.timezone');
 
-        $lastActiveAlert = SystemAlert::where('status', 'active')->where('source', 'scheduler')->latest()->first();
+        $lastActiveAlert = null;
+        if ($status !== 'Enabled') {
+            $lastActiveAlert = SystemAlert::where('status', 'active')->where('source', 'scheduler')->latest()->first();
+        }
 
         return [
             'schedulerStatus' => $status,
