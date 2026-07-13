@@ -17,6 +17,31 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ScheduledZnunyTasksTable
 {
+    private static function prepareOptions(): void
+    {
+        if (app()->has('scheduled_tasks_queue_options')) {
+            return;
+        }
+
+        $lookupService = app(ZnunyCachedLookupService::class);
+
+        $queueOptions = $lookupService->getFilteredQueueOptions();
+
+        $customerOptionsByQueue = [];
+        $ownerOptionsByQueue = [];
+
+        $queues = ScheduledZnunyTask::whereNotNull('queue_name')->distinct()->pluck('queue_name')->filter()->toArray();
+
+        foreach ($queues as $queue) {
+            $customerOptionsByQueue[$queue] = $lookupService->getCustomerUserPrimaryOptionsForQueue($queue);
+            $ownerOptionsByQueue[$queue] = $lookupService->getAssignableOwnerOptionsForQueue($queue);
+        }
+
+        app()->instance('scheduled_tasks_queue_options', $queueOptions);
+        app()->instance('scheduled_tasks_customer_options', $customerOptionsByQueue);
+        app()->instance('scheduled_tasks_owner_options', $ownerOptionsByQueue);
+    }
+
     public static function configure(Table $table): Table
     {
         return $table
@@ -86,7 +111,10 @@ class ScheduledZnunyTasksTable
                     })
                     ->updateStateUsing(function (ScheduledZnunyTask $record, $state) {
                         $cronService = app(CronService::class);
-                        if ($state && $record->isCompleteForScheduling()) {
+
+                        // We calculate the next run for preview purposes even if the task is disabled.
+                        // When enabling, this also calculates a fresh time from NOW, preventing catch-up.
+                        if (! empty($record->cron_expression) && $cronService->isValid($record->cron_expression)) {
                             $next = $cronService->calculateNextRun($record->cron_expression, $record->timezone);
                             $record->next_run_at = $next ? $next->utc()->toDateTimeString() : null;
                         } else {
@@ -157,26 +185,16 @@ class ScheduledZnunyTasksTable
                             return null;
                         }
 
-                        return Carbon::parse($next)->timezone($tz)->format('Y-m-d H:i:s e');
+                        return Carbon::parse($next)->timezone($tz)->format('Y-m-d H:i:s');
                     })
                     ->placeholder('Not calculated'),
                 SelectColumn::make('queue_name')
                     ->label('Queue')
                     ->placeholder('Not selected')
                     ->options(function () {
-                        static $queueOptionsCache = null;
-                        if ($queueOptionsCache !== null) {
-                            return $queueOptionsCache;
-                        }
+                        self::prepareOptions();
 
-                        try {
-                            $options = app(ZnunyCachedLookupService::class)->getFilteredQueueOptions();
-                            $queueOptionsCache = $options;
-
-                            return $options;
-                        } catch (\Throwable $e) {
-                            return [];
-                        }
+                        return app('scheduled_tasks_queue_options') ?? [];
                     })
                     ->updateStateUsing(function (ScheduledZnunyTask $record, $state) {
                         if ($record->enabled && empty($state)) {
@@ -213,23 +231,14 @@ class ScheduledZnunyTasksTable
                     ->label('Customer User')
                     ->placeholder('Not resolved')
                     ->options(function (ScheduledZnunyTask $record) {
-                        static $customerOptionsCache = [];
                         $queue = $record->queue_name;
                         if (empty($queue)) {
                             return [];
                         }
 
-                        if (isset($customerOptionsCache[$queue])) {
-                            $options = $customerOptionsCache[$queue];
-                        } else {
-                            try {
-                                $lookupService = app(ZnunyCachedLookupService::class);
-                                $options = $lookupService->getCustomerUserPrimaryOptionsForQueue($queue);
-                                $customerOptionsCache[$queue] = $options;
-                            } catch (\Throwable $e) {
-                                return [];
-                            }
-                        }
+                        self::prepareOptions();
+                        $customerOptionsByQueue = app('scheduled_tasks_customer_options') ?? [];
+                        $options = $customerOptionsByQueue[$queue] ?? [];
 
                         try {
                             $current = $record->customer_user_login;
@@ -262,19 +271,11 @@ class ScheduledZnunyTasksTable
                     ->label('Owner')
                     ->placeholder('Not selected')
                     ->options(function (ScheduledZnunyTask $record) {
-                        static $ownerOptionsCache = [];
                         $queue = $record->queue_name ?? '';
 
-                        if (isset($ownerOptionsCache[$queue])) {
-                            $options = $ownerOptionsCache[$queue];
-                        } else {
-                            try {
-                                $options = app(ZnunyCachedLookupService::class)->getAssignableOwnerOptionsForQueue($queue);
-                                $ownerOptionsCache[$queue] = $options;
-                            } catch (\Throwable $e) {
-                                return [];
-                            }
-                        }
+                        self::prepareOptions();
+                        $ownerOptionsByQueue = app('scheduled_tasks_owner_options') ?? [];
+                        $options = $ownerOptionsByQueue[$queue] ?? [];
 
                         try {
                             $current = $record->owner_id;

@@ -637,10 +637,10 @@ class ScheduledZnunyTaskResourceTest extends TestCase
         $component = Livewire::test(ListScheduledZnunyTasks::class);
 
         // 12:00 UTC converts to 15:00 Europe/Kyiv
-        $component->assertTableColumnStateSet('next_run_at', '2026-07-09 15:00:00 Europe/Kyiv', record: $task1);
-        $component->assertTableColumnStateSet('next_run_at', null, record: $task2);
+        $component->assertTableColumnStateSet('next_run_at', '2026-07-09 15:00:00', $task1);
+        $component->assertTableColumnStateSet('next_run_at', null, $task2);
         // 08:00 UTC converts to 11:00 Europe/Kyiv and is NOT recalculated
-        $component->assertTableColumnStateSet('next_run_at', '2026-07-09 11:00:00 Europe/Kyiv', record: $task3);
+        $component->assertTableColumnStateSet('next_run_at', '2026-07-09 11:00:00', $task3);
 
         Carbon::setTestNow();
     }
@@ -819,6 +819,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
         $task = ScheduledZnunyTask::create([
             'name' => 'Valid Task',
             'enabled' => false,
+            'queue_name' => 'ValidQueue',
             'owner_id' => 2,
         ]);
 

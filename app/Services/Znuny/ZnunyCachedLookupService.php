@@ -37,14 +37,22 @@ class ZnunyCachedLookupService
         // Or we could store a "version" integer in cache and increment it to invalidate everything.
     }
 
+    protected ?int $cacheVersion = null;
+
     public function getCacheVersion(): int
     {
-        return Cache::rememberForever('znuny_lookup_cache_version', fn () => now()->timestamp);
+        if ($this->cacheVersion !== null) {
+            return $this->cacheVersion;
+        }
+
+        return $this->cacheVersion = Cache::rememberForever('znuny_lookup_cache_version', fn () => now()->timestamp);
     }
 
     public function invalidateCache(): void
     {
-        Cache::put('znuny_lookup_cache_version', now()->timestamp);
+        $timestamp = now()->timestamp;
+        Cache::put('znuny_lookup_cache_version', $timestamp);
+        $this->cacheVersion = $timestamp;
     }
 
     private function getCacheKey(string $key): string
