@@ -19,6 +19,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Forms\Components\ToggleButtons;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
@@ -38,13 +39,28 @@ class Settings extends Page implements HasForms
 {
     use InteractsWithForms;
 
+    private const EXPLICIT_MAIL_KEYS = [
+        'mail_notifications_enabled',
+        'mail_transport',
+        'mail_admin_recipients',
+        'mail_from_address',
+        'mail_from_name',
+        'mail_sendmail_path',
+        'mail_smtp_host',
+        'mail_smtp_port',
+        'mail_smtp_encryption',
+        'mail_smtp_username',
+        'mail_smtp_password',
+        'mail_smtp_timeout_seconds',
+    ];
+
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-cog-6-tooth';
 
     protected string $view = 'filament.pages.settings';
 
     protected static string|\UnitEnum|null $navigationGroup = 'Administration';
 
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 10;
 
     protected static ?string $navigationLabel = 'Settings';
 
@@ -73,21 +89,30 @@ class Settings extends Page implements HasForms
 
         $errorResult = null;
         if ($transport === 'smtp') {
-            if (empty($data['mail_smtp_host'])) {
+            if (($data['mail_smtp_password'] ?? '') === '') {
+                if (($data['mail_smtp_password_clear'] ?? false) === true) {
+                    $data['mail_smtp_password'] = '';
+                } else {
+                    $data['mail_smtp_password'] = SettingsService::string('mail_smtp_password', '');
+                }
+            }
+            if (($data['mail_smtp_host'] ?? '') === '') {
                 $errorResult = 'SMTP Host is required.';
-            } elseif (empty($data['mail_smtp_username'])) {
-                $errorResult = 'SMTP Username is required.';
             }
         } elseif ($transport === 'sendmail') {
-            if (empty($data['mail_sendmail_path'])) {
+            if (($data['mail_sendmail_path'] ?? '') === '') {
                 $errorResult = 'Sendmail Path is required.';
             }
+        } else {
+            $errorResult = 'Unsupported mail transport.';
         }
 
-        if (empty($data['mail_from_address'])) {
-            $errorResult = 'From Address is required.';
-        } elseif (empty($data['mail_admin_recipients'])) {
-            $errorResult = 'Admin Recipients are required to send a test email.';
+        if ($errorResult === null) {
+            if (($data['mail_from_address'] ?? '') === '') {
+                $errorResult = 'From Address is required.';
+            } elseif (($data['mail_admin_recipients'] ?? '') === '') {
+                $errorResult = 'Admin Recipients are required to send a test email.';
+            }
         }
 
         if ($errorResult !== null) {
@@ -339,7 +364,7 @@ class Settings extends Page implements HasForms
         $initialData = [];
 
         foreach ($settings as $setting) {
-            if (in_array($setting->key, ['zabbix_api_token', 'znuny_password'])) {
+            if (in_array($setting->key, ['zabbix_api_token', 'znuny_password', 'mail_smtp_password'])) {
                 $initialData[$setting->key] = '';
 
                 continue;
@@ -400,6 +425,10 @@ class Settings extends Page implements HasForms
 
         foreach ($settings as $setting) {
             if (in_array($setting->key, ['manual_ticket_auto_close_enabled', 'scheduled_tasks_paused_until', 'scheduled_tasks_pause_reason', 'scheduled_tasks_disabled_reason'])) {
+                continue;
+            }
+
+            if (in_array($setting->key, self::EXPLICIT_MAIL_KEYS)) {
                 continue;
             }
 
@@ -811,7 +840,9 @@ class Settings extends Page implements HasForms
             if (in_array($setting->key, ['cleanup_enabled', 'cleanup_batch_size', 'app_display_timezone', 'pagination_per_page_base'])) {
                 $groups['General']['Main'][] = $component;
             } elseif (str_starts_with($setting->key, 'mail_')) {
-                $groups['General']['Mail'][] = $component;
+                if (! in_array($setting->key, self::EXPLICIT_MAIL_KEYS)) {
+                    $groups['General']['Mail'][] = $component;
+                }
             } elseif (str_starts_with($setting->key, 'scheduled_tasks_')) {
                 $groups['General']['Scheduler'][] = $component;
             } elseif (in_array($setting->key, ['retention_action_logs_days', 'retention_closed_tickets_days', 'retention_failed_jobs_days', 'retention_resolved_days', 'scheduled_task_logs_retention_days', 'scheduled_tasks_missed_run_max_age_days'])) {
@@ -963,12 +994,16 @@ class Settings extends Page implements HasForms
 
                 // Skip updating if a password field is submitted as empty
                 if ($newValue === '' && $isSecretKey) {
-                    continue;
+                    if ($setting->key === 'mail_smtp_password' && ($data['mail_smtp_password_clear'] ?? false) === true) {
+                        // Fall through to clear it
+                    } else {
+                        continue;
+                    }
                 }
 
                 $currentPlaintext = SettingsService::string($setting->key);
 
-                if ($currentPlaintext !== $newValue) {
+                if ($currentPlaintext !== $newValue || ($setting->key === 'mail_smtp_password' && ($data['mail_smtp_password_clear'] ?? false) === true)) {
                     $oldValueToLog = $setting->value;
                     $newValueToLog = $newValue;
                     $valueToStore = $newValue;
@@ -976,7 +1011,11 @@ class Settings extends Page implements HasForms
                     if ($isSecretKey) {
                         $oldValueToLog = '[redacted]';
                         $newValueToLog = '[redacted]';
-                        $valueToStore = SettingsService::encryptForStorage($setting->key, $newValue);
+                        if ($setting->key === 'mail_smtp_password' && $newValue === '') {
+                            $valueToStore = '';
+                        } else {
+                            $valueToStore = SettingsService::encryptForStorage($setting->key, $newValue);
+                        }
                     }
 
                     $changedSettings[] = [
@@ -987,6 +1026,10 @@ class Settings extends Page implements HasForms
                     $setting->update(['value' => $valueToStore]);
                 }
             }
+        }
+
+        if (($data['mail_smtp_password_clear'] ?? false) === true) {
+            $this->form->fill(array_merge($this->form->getState(), ['mail_smtp_password_clear' => false]));
         }
 
         $clearedZnunyCaches = false;
@@ -1251,19 +1294,102 @@ class Settings extends Page implements HasForms
                 ->columns(1);
         }
 
-        if (! empty($g['Mail'])) {
-            $mailSchema = $g['Mail'];
-            $mailSchema[] = Actions::make([
+        $mailSchema = [
+            Toggle::make('mail_notifications_enabled')
+                ->label('Mail Notifications Enabled')
+                ->helperText('Enable or disable outgoing mail notifications')
+                ->required(),
+            ToggleButtons::make('mail_transport')
+                ->label('Mail Transport')
+                ->helperText('Select the mail transport method.')
+                ->options([
+                    'sendmail' => 'Server Sendmail',
+                    'smtp' => 'External SMTP Server',
+                ])
+                ->inline()
+                ->required()
+                ->live(),
+            TextInput::make('mail_admin_recipients')
+                ->label('Mail Admin Recipients')
+                ->helperText('Comma-separated list of admin email addresses to receive system alerts')
+                ->required(false),
+            TextInput::make('mail_from_address')
+                ->label('Mail From Address')
+                ->helperText('Global FROM address for outgoing mails')
+                ->required(false),
+            TextInput::make('mail_from_name')
+                ->label('Mail From Name')
+                ->helperText('Global FROM name for outgoing mails')
+                ->required(false),
+
+            Section::make('Sendmail Configuration')
+                ->schema([
+                    TextInput::make('mail_sendmail_path')
+                        ->label('Mail Sendmail Path')
+                        ->helperText('Path to the sendmail binary')
+                        ->required(fn (callable $get) => $get('mail_transport') === 'sendmail'),
+                ])
+                ->hidden(fn (callable $get) => $get('mail_transport') !== 'sendmail')
+                ->columns(1),
+
+            Section::make('SMTP Configuration')
+                ->schema([
+                    TextInput::make('mail_smtp_host')
+                        ->label('Mail Smtp Host')
+                        ->helperText('SMTP host address')
+                        ->required(fn (callable $get) => $get('mail_transport') === 'smtp'),
+                    TextInput::make('mail_smtp_port')
+                        ->label('Mail Smtp Port')
+                        ->helperText('SMTP port')
+                        ->numeric()
+                        ->integer()
+                        ->required(fn (callable $get) => $get('mail_transport') === 'smtp'),
+                    TextInput::make('mail_smtp_encryption')
+                        ->label('Mail Smtp Encryption')
+                        ->helperText('SMTP encryption (none, tls, ssl)')
+                        ->required(fn (callable $get) => $get('mail_transport') === 'smtp'),
+                    TextInput::make('mail_smtp_username')
+                        ->label('Mail Smtp Username')
+                        ->helperText('SMTP username')
+                        ->required(false),
+                    TextInput::make('mail_smtp_password')
+                        ->label('Mail Smtp Password')
+                        ->helperText('SMTP password')
+                        ->password()
+                        ->revealable()
+                        ->placeholder('Leave empty to keep current password')
+                        ->required(false),
+                    Toggle::make('mail_smtp_password_clear')
+                        ->label('Clear Stored SMTP Password')
+                        ->default(false),
+                    TextInput::make('mail_smtp_timeout_seconds')
+                        ->label('Mail Smtp Timeout Seconds')
+                        ->helperText('SMTP timeout in seconds')
+                        ->numeric()
+                        ->integer()
+                        ->required(fn (callable $get) => $get('mail_transport') === 'smtp'),
+                ])
+                ->hidden(fn (callable $get) => $get('mail_transport') !== 'smtp')
+                ->columns(2),
+
+            Actions::make([
                 Action::make('testMailConnection')
                     ->label('Send Test Email')
                     ->icon('heroicon-o-paper-airplane')
                     ->color('info')
                     ->action('testMailConnectionAction'),
-            ]);
-            $tabs[] = Tab::make('Mail')
-                ->schema($mailSchema)
+            ]),
+        ];
+
+        if (! empty($g['Mail'])) {
+            $mailSchema[] = Section::make('Additional Mail Settings')
+                ->schema($g['Mail'])
                 ->columns(1);
         }
+
+        $tabs[] = Tab::make('Mail')
+            ->schema($mailSchema)
+            ->columns(1);
 
         if (! empty($g['Scheduler'])) {
             $tabs[] = Tab::make('Scheduler')

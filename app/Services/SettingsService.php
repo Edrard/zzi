@@ -11,6 +11,7 @@ class SettingsService
     private const SECRET_KEYS = [
         'zabbix_api_token',
         'znuny_password',
+        'mail_smtp_password',
     ];
 
     public static function isSecretKey(string $key): bool
