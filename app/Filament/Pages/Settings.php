@@ -847,7 +847,7 @@ class Settings extends Page implements HasForms
                     ->required(false);
             }
 
-            if (in_array($setting->key, ['cleanup_enabled', 'cleanup_batch_size', 'app_display_timezone', 'pagination_per_page_base'])) {
+            if (in_array($setting->key, ['app_display_timezone', 'pagination_per_page_base'])) {
                 $groups['General']['Main'][] = $component;
             } elseif (str_starts_with($setting->key, 'mail_')) {
                 if (! in_array($setting->key, self::EXPLICIT_MAIL_KEYS)) {
@@ -855,10 +855,10 @@ class Settings extends Page implements HasForms
                 }
             } elseif (str_starts_with($setting->key, 'scheduled_tasks_')) {
                 $groups['General']['Scheduler'][] = $component;
-            } elseif (in_array($setting->key, ['retention_action_logs_days', 'retention_closed_tickets_days', 'retention_failed_jobs_days', 'retention_resolved_days', 'scheduled_task_logs_retention_days'])) {
-                $groups['Retention'][] = $component;
             } elseif (str_starts_with($setting->key, 'owner_suggestion_')) {
                 $groups['Statistics'][$setting->key] = $component;
+            } elseif (in_array($setting->key, ['cleanup_enabled', 'cleanup_batch_size', 'retention_action_logs_days', 'retention_closed_tickets_days', 'retention_failed_jobs_days', 'retention_resolved_days', 'scheduled_task_logs_retention_days']) || str_starts_with($setting->key, 'retention_') || str_starts_with($setting->key, 'cleanup_') || str_ends_with($setting->key, '_retention_days')) {
+                $groups['Retention'][] = $component;
             } elseif (in_array($setting->key, ['zabbix_api_url', 'zabbix_api_token', 'zabbix_api_timeout', 'zabbix_api_verify_ssl', 'zabbix_poll_interval_minutes', 'zabbix_problem_cache_ttl_minutes', 'zabbix_problem_limit', 'zabbix_exclude_suppressed_problems', 'zabbix_problem_url_template'])) {
                 $groups['Zabbix']['Connection & Polling'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['zabbix_attention_highlighting_enabled', 'zabbix_attention_highlight_text_color', 'zabbix_attention_highlight_text_custom_hex', 'zabbix_attention_highlight_underline_style', 'zabbix_attention_highlight_underline_color', 'zabbix_attention_highlight_underline_custom_hex', 'zabbix_attention_highlight_underline_thickness'])) {
@@ -884,6 +884,10 @@ class Settings extends Page implements HasForms
 
         if (! empty($groups['General'])) {
             $groups['General'] = $this->buildGeneralTabGroups($groups['General']);
+        }
+
+        if (! empty($groups['Retention'])) {
+            $groups['Retention'] = $this->buildRetentionTabGroups($groups['Retention']);
         }
 
         if (! empty($groups['Zabbix'])) {
@@ -919,14 +923,6 @@ class Settings extends Page implements HasForms
                 ->schema($orderedStatistics)
                 ->columns(1);
             $groups['Statistics'] = [$statisticsSection];
-        }
-
-        if (! empty($groups['Retention'])) {
-            $retentionSection = Section::make('Retention Settings')
-                ->description('Controls how long this Laravel integration app keeps local logs, cached/resolved history, closed ticket links, and failed job records. These settings do not delete data from Zabbix or Znuny.')
-                ->schema($groups['Retention'])
-                ->columns(1);
-            $groups['Retention'] = [$retentionSection];
         }
 
         $tabs = [];
@@ -1300,7 +1296,7 @@ class Settings extends Page implements HasForms
 
         if (! empty($g['Main'])) {
             $tabs[] = Tab::make('Main')
-                ->schema($g['Main'])
+                ->schema($this->buildMainTabGroups($g['Main']))
                 ->columns(1);
         }
 
@@ -1479,6 +1475,184 @@ class Settings extends Page implements HasForms
         if (! empty($additionalSchedulerSettings)) {
             $schema[] = Section::make('Additional Scheduler Settings')
                 ->schema($additionalSchedulerSettings)
+                ->columns(1);
+        }
+
+        return $schema;
+    }
+
+    private function buildMainTabGroups(array $mainComponents): array
+    {
+        $explicit = [];
+        $unmatched = [];
+
+        foreach ($mainComponents as $component) {
+            $name = method_exists($component, 'getName') ? $component->getName() : null;
+            if ($name === 'app_display_timezone') {
+                $explicit['app_display_timezone'] = $component
+                    ->label('Display Time Zone')
+                    ->helperText('Time zone used only for dates and times shown in the administration interface. Stored timestamps, background processing, and scheduler timing are not changed.');
+            } elseif ($name === 'pagination_per_page_base') {
+                $explicit['pagination_per_page_base'] = $component
+                    ->label('Base Rows per Page')
+                    ->helperText('Base number of rows used by paginated tables. Available page-size choices are generated as half of this value rounded up to the nearest multiple of 5, the base value, double the value, and triple the value. For example, 100 produces 50, 100, 200, and 300.');
+            } else {
+                $unmatched[] = $component;
+            }
+        }
+
+        $schema = [];
+
+        if (isset($explicit['app_display_timezone']) || isset($explicit['pagination_per_page_base'])) {
+            $sectionSchema = [];
+            if (isset($explicit['app_display_timezone'])) {
+                $sectionSchema[] = $explicit['app_display_timezone'];
+            }
+            if (isset($explicit['pagination_per_page_base'])) {
+                $sectionSchema[] = $explicit['pagination_per_page_base'];
+            }
+
+            $schema[] = Section::make('Application Display')
+                ->description('Configure how dates, times, and table page sizes are presented in the administration interface.')
+                ->schema($sectionSchema)
+                ->columns([
+                    'default' => 1,
+                    'sm' => 2,
+                ]);
+        }
+
+        if (! empty($unmatched)) {
+            $schema[] = Section::make('Additional Application Settings')
+                ->schema($unmatched)
+                ->columns(1);
+        }
+
+        return $schema;
+    }
+
+    private function buildRetentionTabGroups(array $retentionComponents): array
+    {
+        $explicit = [];
+        $unmatched = [];
+
+        foreach ($retentionComponents as $component) {
+            $name = method_exists($component, 'getName') ? $component->getName() : null;
+            if (in_array($name, [
+                'cleanup_enabled',
+                'cleanup_batch_size',
+                'retention_resolved_days',
+                'retention_closed_tickets_days',
+                'retention_action_logs_days',
+                'scheduled_task_logs_retention_days',
+                'retention_failed_jobs_days',
+            ])) {
+                $explicit[$name] = $component;
+            } else {
+                $unmatched[] = $component;
+            }
+        }
+
+        if (isset($explicit['cleanup_enabled'])) {
+            $explicit['cleanup_enabled']
+                ->label('Automatic Local Data Cleanup')
+                ->helperText('Enable scheduled cleanup of old local integration records. Disabling this option preserves all retention settings but prevents automatic deletion. This does not delete active Zabbix problems or Znuny tickets.');
+        }
+
+        if (isset($explicit['cleanup_batch_size'])) {
+            $explicit['cleanup_batch_size']
+                ->label('Records per Cleanup Batch')
+                ->helperText('Maximum number of records removed from each cleanup category during one cleanup pass. Lower values reduce database load; higher values clear accumulated old data faster.');
+        }
+
+        if (isset($explicit['retention_resolved_days'])) {
+            $explicit['retention_resolved_days']
+                ->label('Resolved Problem History (days)')
+                ->helperText('Number of days to keep local history for Zabbix problems after they become resolved. This does not delete problems, events, or history from Zabbix.');
+        }
+
+        if (isset($explicit['retention_closed_tickets_days'])) {
+            $explicit['retention_closed_tickets_days']
+                ->label('Closed Ticket Link History (days)')
+                ->helperText('Number of days to keep local integration records and links for closed tickets. This does not delete tickets, articles, or history from Znuny.');
+        }
+
+        if (isset($explicit['retention_action_logs_days'])) {
+            $explicit['retention_action_logs_days']
+                ->label('Action Log Retention (days)')
+                ->helperText('Number of days to keep local application action-log records used for operational history, auditing, and troubleshooting.');
+        }
+
+        if (isset($explicit['scheduled_task_logs_retention_days'])) {
+            $explicit['scheduled_task_logs_retention_days']
+                ->label('Scheduled Task Run Log Retention (days)')
+                ->helperText('Number of days to keep execution logs for scheduled Znuny task runs. Scheduled task definitions and pending scheduled work are not deleted by this retention setting.');
+        }
+
+        if (isset($explicit['retention_failed_jobs_days'])) {
+            $explicit['retention_failed_jobs_days']
+                ->label('Failed Job Retention (days)')
+                ->helperText('Number of days to keep failed background-job records for diagnostics and troubleshooting.');
+        }
+
+        $schema = [];
+
+        if (isset($explicit['cleanup_enabled']) || isset($explicit['cleanup_batch_size'])) {
+            $section1 = [];
+            if (isset($explicit['cleanup_enabled'])) {
+                $section1[] = $explicit['cleanup_enabled'];
+            }
+            if (isset($explicit['cleanup_batch_size'])) {
+                $section1[] = $explicit['cleanup_batch_size'];
+            }
+            $schema[] = Section::make('Cleanup Control')
+                ->description('Controls how long this integration keeps local operational records and how scheduled cleanup removes records that exceed the retention periods configured below. These settings affect only local integration data and do not delete data from Zabbix or Znuny.')
+                ->schema($section1)
+                ->columns([
+                    'default' => 1,
+                    'sm' => 2,
+                ]);
+        }
+
+        if (isset($explicit['retention_resolved_days']) || isset($explicit['retention_closed_tickets_days'])) {
+            $section2 = [];
+            if (isset($explicit['retention_resolved_days'])) {
+                $section2[] = $explicit['retention_resolved_days'];
+            }
+            if (isset($explicit['retention_closed_tickets_days'])) {
+                $section2[] = $explicit['retention_closed_tickets_days'];
+            }
+            $schema[] = Section::make('Integration History')
+                ->description('Configure how long local history linking Zabbix problems and Znuny tickets remains available in this integration.')
+                ->schema($section2)
+                ->columns([
+                    'default' => 1,
+                    'sm' => 2,
+                ]);
+        }
+
+        if (isset($explicit['retention_action_logs_days']) || isset($explicit['scheduled_task_logs_retention_days']) || isset($explicit['retention_failed_jobs_days'])) {
+            $section3 = [];
+            if (isset($explicit['retention_action_logs_days'])) {
+                $section3[] = $explicit['retention_action_logs_days'];
+            }
+            if (isset($explicit['scheduled_task_logs_retention_days'])) {
+                $section3[] = $explicit['scheduled_task_logs_retention_days'];
+            }
+            if (isset($explicit['retention_failed_jobs_days'])) {
+                $section3[] = $explicit['retention_failed_jobs_days'];
+            }
+            $schema[] = Section::make('Logs and Processing Records')
+                ->description('Configure how long local operational logs and failed-processing records remain available for auditing and troubleshooting.')
+                ->schema($section3)
+                ->columns([
+                    'default' => 1,
+                    'sm' => 3,
+                ]);
+        }
+
+        if (! empty($unmatched)) {
+            $schema[] = Section::make('Additional Retention Settings')
+                ->schema($unmatched)
                 ->columns(1);
         }
 
