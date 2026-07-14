@@ -54,6 +54,16 @@ class Settings extends Page implements HasForms
         'mail_smtp_timeout_seconds',
     ];
 
+    private const EXPLICIT_SCHEDULER_KEYS = [
+        'scheduled_tasks_enabled',
+        'scheduled_tasks_max_processed_per_run',
+        'scheduled_tasks_command_runtime_seconds',
+        'scheduled_tasks_pause_minutes',
+        'scheduled_tasks_missed_run_max_age_days',
+        'scheduled_tasks_auto_disable_on_failures',
+        'scheduled_tasks_failure_threshold',
+    ];
+
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-cog-6-tooth';
 
     protected string $view = 'filament.pages.settings';
@@ -428,7 +438,7 @@ class Settings extends Page implements HasForms
                 continue;
             }
 
-            if (in_array($setting->key, self::EXPLICIT_MAIL_KEYS)) {
+            if (in_array($setting->key, self::EXPLICIT_MAIL_KEYS) || in_array($setting->key, self::EXPLICIT_SCHEDULER_KEYS)) {
                 continue;
             }
 
@@ -845,7 +855,7 @@ class Settings extends Page implements HasForms
                 }
             } elseif (str_starts_with($setting->key, 'scheduled_tasks_')) {
                 $groups['General']['Scheduler'][] = $component;
-            } elseif (in_array($setting->key, ['retention_action_logs_days', 'retention_closed_tickets_days', 'retention_failed_jobs_days', 'retention_resolved_days', 'scheduled_task_logs_retention_days', 'scheduled_tasks_missed_run_max_age_days'])) {
+            } elseif (in_array($setting->key, ['retention_action_logs_days', 'retention_closed_tickets_days', 'retention_failed_jobs_days', 'retention_resolved_days', 'scheduled_task_logs_retention_days'])) {
                 $groups['Retention'][] = $component;
             } elseif (str_starts_with($setting->key, 'owner_suggestion_')) {
                 $groups['Statistics'][$setting->key] = $component;
@@ -1391,14 +1401,87 @@ class Settings extends Page implements HasForms
             ->schema($mailSchema)
             ->columns(1);
 
-        if (! empty($g['Scheduler'])) {
-            $tabs[] = Tab::make('Scheduler')
-                ->schema($g['Scheduler'])
-                ->columns(1);
-        }
+        $tabs[] = Tab::make('Scheduler')
+            ->schema($this->buildSchedulerTabGroups($g['Scheduler'] ?? []))
+            ->columns(1);
 
         return [
             Tabs::make('GeneralTabs')->tabs($tabs),
         ];
+    }
+
+    private function buildSchedulerTabGroups(array $additionalSchedulerSettings): array
+    {
+        $schema = [
+            Section::make('Scheduler Control')
+                ->description('Enable or disable processing of scheduled Znuny tasks.')
+                ->schema([
+                    Toggle::make('scheduled_tasks_enabled')
+                        ->label('Scheduler Enabled')
+                        ->helperText('Global switch for scheduled Znuny task processing.')
+                        ->required(),
+                ])
+                ->columns(1),
+
+            Section::make('Execution Limits')
+                ->description('Control how much work one scheduler command may perform.')
+                ->schema([
+                    TextInput::make('scheduled_tasks_max_processed_per_run')
+                        ->label('Maximum Tasks per Run')
+                        ->helperText('Maximum number of scheduled tasks processed sequentially during one command run.')
+                        ->numeric()
+                        ->integer()
+                        ->required(),
+                    TextInput::make('scheduled_tasks_command_runtime_seconds')
+                        ->label('Command Runtime Limit (seconds)')
+                        ->helperText('Maximum time the scheduler processing command may run before it stops accepting more work.')
+                        ->numeric()
+                        ->integer()
+                        ->required(),
+                ])
+                ->columns(2),
+
+            Section::make('Recovery and Catch-up')
+                ->description('Configure temporary pauses and processing of missed scheduled runs.')
+                ->schema([
+                    TextInput::make('scheduled_tasks_pause_minutes')
+                        ->label('Pause After Transient Error (minutes)')
+                        ->helperText('How long scheduler processing pauses after a transient connection or service error.')
+                        ->numeric()
+                        ->integer()
+                        ->required(),
+                    TextInput::make('scheduled_tasks_missed_run_max_age_days')
+                        ->label('Missed Run Catch-up Window (days)')
+                        ->helperText('Maximum age of a missed scheduled run that may still be executed by the catch-up process.')
+                        ->numeric()
+                        ->integer()
+                        ->required(),
+                ])
+                ->columns(2),
+
+            Section::make('Failure Protection')
+                ->description('Automatically stop scheduler processing when repeated failures require administrator attention.')
+                ->schema([
+                    Toggle::make('scheduled_tasks_auto_disable_on_failures')
+                        ->label('Auto-disable After Repeated Failures')
+                        ->helperText('Disable scheduler processing automatically after the configured number of consecutive failures.')
+                        ->required(),
+                    TextInput::make('scheduled_tasks_failure_threshold')
+                        ->label('Consecutive Failure Threshold')
+                        ->helperText('Number of consecutive failures that triggers automatic scheduler disablement.')
+                        ->numeric()
+                        ->integer()
+                        ->required(),
+                ])
+                ->columns(1),
+        ];
+
+        if (! empty($additionalSchedulerSettings)) {
+            $schema[] = Section::make('Additional Scheduler Settings')
+                ->schema($additionalSchedulerSettings)
+                ->columns(1);
+        }
+
+        return $schema;
     }
 }
