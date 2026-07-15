@@ -2,13 +2,12 @@
 
 namespace App\Services\Znuny;
 
+use App\Services\SettingsService;
 use Illuminate\Support\Facades\Cache;
 use Throwable;
 
 class ZnunyTicketArticleCacheService
 {
-    private const TTL = 15 * 60; // 15 minutes
-
     public function __construct(
         private readonly ZnunyClient $client
     ) {}
@@ -27,8 +26,35 @@ class ZnunyTicketArticleCacheService
 
     public function forgetAll(): void
     {
-        $gen = $this->getGeneration();
-        Cache::forever('znuny:ticket:articles:generation', $gen + 1);
+        $current = Cache::get('znuny:ticket:articles:generation');
+        $timestamp = now()->timestamp;
+
+        $next = is_numeric($current)
+            ? max($timestamp, ((int) $current) + 1)
+            : $timestamp;
+
+        Cache::forever('znuny:ticket:articles:generation', $next);
+    }
+
+    private function getTtlMinutes(): int
+    {
+        $ttl = SettingsService::int('znuny_ticket_article_cache_ttl_minutes', 15);
+        if ($ttl < 0) {
+            return 15;
+        }
+
+        return $ttl;
+    }
+
+    private function rememberArticles(string $key, callable $callback): mixed
+    {
+        $ttl = $this->getTtlMinutes();
+
+        if ($ttl === 0) {
+            return $callback();
+        }
+
+        return Cache::remember($key, now()->addMinutes($ttl), $callback);
     }
 
     public function get(int|string $ticketId): array
@@ -36,7 +62,7 @@ class ZnunyTicketArticleCacheService
         $key = $this->getCacheKey($ticketId);
 
         try {
-            return Cache::remember($key, self::TTL, function () use ($ticketId) {
+            return $this->rememberArticles($key, function () use ($ticketId) {
                 return $this->client->getTicketArticles($ticketId);
             });
         } catch (Throwable $e) {

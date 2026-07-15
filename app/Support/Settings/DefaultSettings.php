@@ -99,6 +99,7 @@ class DefaultSettings
             ['key' => 'manual_ticket_extra_flapping_delay_hours', 'value' => '4', 'type' => 'integer', 'description' => 'Additional close delay added after flapping is detected for a linked manual ticket.'],
 
             // Caching
+            ['key' => 'znuny_ticket_article_cache_ttl_minutes', 'value' => '15', 'type' => 'integer', 'description' => 'Lifetime in minutes for cached Znuny ticket article data. Set to 0 to bypass persistent ticket article caching.'],
             ['key' => 'znuny_queue_cache_ttl_minutes', 'value' => '15', 'type' => 'integer', 'description' => 'How long Znuny queue lists are cached. 0 disables this cache.'],
             ['key' => 'znuny_lookup_cache_ttl_minutes', 'value' => '60', 'type' => 'integer', 'description' => 'Lifetime in minutes for reusable Znuny lookup data such as queue owners, CustomerUsers, states, priorities, types, filtered queues, and lookup candidates. Set to 0 to bypass persistent lookup caching.'],
             ['key' => 'znuny_agent_cache_ttl_minutes', 'value' => '15', 'type' => 'integer', 'description' => 'How long Znuny agent lists are cached. 0 disables this cache.'],

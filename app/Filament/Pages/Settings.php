@@ -13,6 +13,7 @@ use App\Services\Znuny\ZnunyCachedLookupService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyQueueHostMappingSchemaBuilder;
 use App\Services\Znuny\ZnunyQueueHostMappingService;
+use App\Services\Znuny\ZnunyTicketArticleCacheService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
@@ -1043,11 +1044,14 @@ class Settings extends Page implements HasForms
         }
 
         $shouldInvalidateLookupCache = false;
+        $shouldInvalidateArticleCache = false;
         $shouldClearZnunyReferenceCaches = false;
 
         foreach ($changedSettings as $change) {
             if ($change['key'] === 'znuny_lookup_cache_ttl_minutes') {
                 $shouldInvalidateLookupCache = true;
+            } elseif ($change['key'] === 'znuny_ticket_article_cache_ttl_minutes') {
+                $shouldInvalidateArticleCache = true;
             } elseif (str_starts_with($change['key'], 'znuny_')) {
                 $shouldClearZnunyReferenceCaches = true;
             }
@@ -1055,6 +1059,10 @@ class Settings extends Page implements HasForms
 
         if ($shouldInvalidateLookupCache) {
             app(ZnunyCachedLookupService::class)->invalidateCache();
+        }
+
+        if ($shouldInvalidateArticleCache) {
+            app(ZnunyTicketArticleCacheService::class)->forgetAll();
         }
 
         if ($shouldClearZnunyReferenceCaches) {
@@ -1684,6 +1692,7 @@ class Settings extends Page implements HasForms
                 'znuny_agent_cache_ttl_minutes',
                 'znuny_queue_cache_ttl_minutes',
                 'znuny_lookup_cache_ttl_minutes',
+                'znuny_ticket_article_cache_ttl_minutes',
                 'znuny_ticket_snapshot_cache_ttl_minutes',
             ])) {
                 $explicit[$name] = $component;
@@ -1708,6 +1717,12 @@ class Settings extends Page implements HasForms
             $explicit['znuny_lookup_cache_ttl_minutes']
                 ->label('Znuny Lookup Cache Lifetime (minutes)')
                 ->helperText('How long reusable Znuny lookup data such as owners by queue, CustomerUsers, states, priorities, types, filtered queues, and template or search candidates may be cached. Set to 0 to bypass persistent lookup caching.');
+        }
+
+        if (isset($explicit['znuny_ticket_article_cache_ttl_minutes'])) {
+            $explicit['znuny_ticket_article_cache_ttl_minutes']
+                ->label('Ticket Article Cache Lifetime (minutes)')
+                ->helperText('How long Znuny ticket articles fetched for linked tickets may be cached. Set to 0 to bypass persistent ticket article caching.');
         }
 
         if (isset($explicit['znuny_ticket_snapshot_cache_ttl_minutes'])) {
@@ -1738,12 +1753,18 @@ class Settings extends Page implements HasForms
                 ]);
         }
 
-        if (isset($explicit['znuny_ticket_snapshot_cache_ttl_minutes'])) {
+        if (isset($explicit['znuny_ticket_snapshot_cache_ttl_minutes']) || isset($explicit['znuny_ticket_article_cache_ttl_minutes'])) {
+            $section2 = [];
+            if (isset($explicit['znuny_ticket_article_cache_ttl_minutes'])) {
+                $section2[] = $explicit['znuny_ticket_article_cache_ttl_minutes'];
+            }
+            if (isset($explicit['znuny_ticket_snapshot_cache_ttl_minutes'])) {
+                $section2[] = $explicit['znuny_ticket_snapshot_cache_ttl_minutes'];
+            }
+
             $schema[] = Section::make('Znuny Linked Ticket Data')
-                ->description('Configure caching associated with locally linked Znuny ticket data. These settings do not delete local ticket links and do not modify or delete tickets in Znuny.')
-                ->schema([
-                    $explicit['znuny_ticket_snapshot_cache_ttl_minutes'],
-                ])
+                ->description('Configure caching for Znuny ticket articles and locally stored linked-ticket snapshots. These settings affect read performance and freshness only; they do not delete articles, ticket links, or data in Znuny.')
+                ->schema($section2)
                 ->columns(1);
         }
 
