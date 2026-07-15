@@ -33,6 +33,14 @@ class ZnunyAgentService
     }
 
     /**
+     * Clears the cached active agents exactly.
+     */
+    public function clearCache(): void
+    {
+        Cache::forget(self::CACHE_KEY);
+    }
+
+    /**
      * Get active agents from cache or fetch from API if not cached.
      * On failure, it suppresses exception and returns an empty array to prevent crashing UI,
      * but you can pass $failSilently = false to throw it.

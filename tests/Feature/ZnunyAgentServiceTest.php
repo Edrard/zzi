@@ -215,4 +215,20 @@ class ZnunyAgentServiceTest extends TestCase
 
         $this->assertTrue(Cache::has('znuny_active_agents'));
     }
+
+    public function test_clear_cache_removes_agent_cache_only(): void
+    {
+        Cache::put('znuny_active_agents', 'data');
+        Cache::put('unrelated_sentinel', 'safe');
+        Cache::put('znuny.queues', 'queue_data');
+
+        // Ensure client is not called
+        $this->clientMock->shouldNotReceive('getAgents');
+
+        $this->service->clearCache();
+
+        $this->assertNull(Cache::get('znuny_active_agents'));
+        $this->assertEquals('safe', Cache::get('unrelated_sentinel'));
+        $this->assertEquals('queue_data', Cache::get('znuny.queues'));
+    }
 }

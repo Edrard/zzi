@@ -271,4 +271,19 @@ class ZnunyQueueServiceTest extends TestCase
         $this->assertNotNull($result['error']);
         $this->assertEmpty($result['options']);
     }
+
+    public function test_clear_cache_removes_queue_cache_only(): void
+    {
+        Cache::put('znuny.queues', 'data');
+        Cache::put('unrelated_sentinel', 'safe');
+        Cache::put('znuny_active_agents', 'agent_data');
+
+        $this->clientMock->shouldNotReceive('getQueues');
+
+        $this->service->clearCache();
+
+        $this->assertNull(Cache::get('znuny.queues'));
+        $this->assertEquals('safe', Cache::get('unrelated_sentinel'));
+        $this->assertEquals('agent_data', Cache::get('znuny_active_agents'));
+    }
 }

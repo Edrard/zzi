@@ -20,6 +20,14 @@ class ZnunyQueueService
         return $ttl >= 0 ? $ttl : 15;
     }
 
+    /**
+     * Clears the cached queues exactly.
+     */
+    public function clearCache(): void
+    {
+        Cache::forget(self::QUEUE_CACHE_KEY);
+    }
+
     public function getQueues(): array
     {
         $ttl = $this->getCacheTtlMinutes();
