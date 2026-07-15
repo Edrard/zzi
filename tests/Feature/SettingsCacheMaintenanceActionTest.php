@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\Settings;
+use App\Models\AuditLog;
 use App\Models\User;
 use App\Services\RuntimeCacheMaintenanceService;
 use Filament\Notifications\Notification;
@@ -28,14 +29,16 @@ class SettingsCacheMaintenanceActionTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
 
         $actions = [
-            ['clearSettingsCacheAction', 'clearSettingsCache', 'Settings cache cleared', 'Cached application settings were cleared successfully.'],
-            ['clearZnunyAgentCacheAction', 'clearZnunyAgentCache', 'Znuny agent cache cleared', 'Cached Znuny agent data was cleared successfully.'],
-            ['clearZnunyQueueCacheAction', 'clearZnunyQueueCache', 'Znuny queue cache cleared', 'Cached Znuny queue data was cleared successfully.'],
-            ['clearZnunyLookupCacheAction', 'clearZnunyLookupCache', 'Znuny lookup cache cleared', 'Cached Znuny lookup data was invalidated successfully.'],
-            ['clearTicketArticleCacheAction', 'clearTicketArticleCache', 'Ticket article cache cleared', 'Cached Znuny ticket article data was invalidated successfully.'],
+            ['clearSettingsCacheAction', 'clearSettingsCache', 'settings.cache.clear', 'settings', 'Settings cache cleared', 'Cached application settings were cleared successfully.'],
+            ['clearZnunyAgentCacheAction', 'clearZnunyAgentCache', 'settings.znuny_agent_cache.clear', 'znuny_agent', 'Znuny agent cache cleared', 'Cached Znuny agent data was cleared successfully.'],
+            ['clearZnunyQueueCacheAction', 'clearZnunyQueueCache', 'settings.znuny_queue_cache.clear', 'znuny_queue', 'Znuny queue cache cleared', 'Cached Znuny queue data was cleared successfully.'],
+            ['clearZnunyLookupCacheAction', 'clearZnunyLookupCache', 'settings.znuny_lookup_cache.clear', 'znuny_lookup', 'Znuny lookup cache cleared', 'Cached Znuny lookup data was invalidated successfully.'],
+            ['clearTicketArticleCacheAction', 'clearTicketArticleCache', 'settings.znuny_ticket_article_cache.clear', 'znuny_ticket_article', 'Ticket article cache cleared', 'Cached Znuny ticket article data was invalidated successfully.'],
         ];
 
-        foreach ($actions as [$actionMethod, $serviceMethod, $title, $body]) {
+        foreach ($actions as [$actionMethod, $serviceMethod, $auditAction, $cacheScope, $title, $body]) {
+            AuditLog::query()->delete();
+
             $this->mock(RuntimeCacheMaintenanceService::class, function (MockInterface $mock) use ($serviceMethod) {
                 $mock->shouldReceive($serviceMethod)->once();
             });
@@ -49,6 +52,16 @@ class SettingsCacheMaintenanceActionTest extends TestCase
                         ->body($body)
                         ->success()
                 );
+
+            $this->assertDatabaseCount('audit_logs', 1);
+            $log = AuditLog::first();
+            $this->assertEquals($auditAction, $log->action);
+            $this->assertEquals('settings', $log->entity_type);
+            $this->assertNull($log->entity_id);
+            $this->assertEquals('settings_cache_tab', $log->context['source'] ?? null);
+            $this->assertEquals($cacheScope, $log->context['cache_scope'] ?? null);
+            $this->assertEquals('success', $log->context['status'] ?? null);
+            $this->assertArrayNotHasKey('exception_class', $log->context);
         }
     }
 
@@ -57,14 +70,16 @@ class SettingsCacheMaintenanceActionTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
 
         $actions = [
-            ['clearSettingsCacheAction', 'clearSettingsCache', 'Settings cache cleared', 'Cached application settings were cleared successfully.', 'The Settings cache could not be cleared. Review the application logs for details.'],
-            ['clearZnunyAgentCacheAction', 'clearZnunyAgentCache', 'Znuny agent cache cleared', 'Cached Znuny agent data was cleared successfully.', 'The Znuny Agent cache could not be cleared. Review the application logs for details.'],
-            ['clearZnunyQueueCacheAction', 'clearZnunyQueueCache', 'Znuny queue cache cleared', 'Cached Znuny queue data was cleared successfully.', 'The Znuny Queue cache could not be cleared. Review the application logs for details.'],
-            ['clearZnunyLookupCacheAction', 'clearZnunyLookupCache', 'Znuny lookup cache cleared', 'Cached Znuny lookup data was invalidated successfully.', 'The Znuny Lookup cache could not be cleared. Review the application logs for details.'],
-            ['clearTicketArticleCacheAction', 'clearTicketArticleCache', 'Ticket article cache cleared', 'Cached Znuny ticket article data was invalidated successfully.', 'The Ticket Article cache could not be cleared. Review the application logs for details.'],
+            ['clearSettingsCacheAction', 'clearSettingsCache', 'settings.cache.clear', 'settings', 'Settings cache cleared', 'Cached application settings were cleared successfully.', 'The Settings cache could not be cleared. Review the application logs for details.'],
+            ['clearZnunyAgentCacheAction', 'clearZnunyAgentCache', 'settings.znuny_agent_cache.clear', 'znuny_agent', 'Znuny agent cache cleared', 'Cached Znuny agent data was cleared successfully.', 'The Znuny Agent cache could not be cleared. Review the application logs for details.'],
+            ['clearZnunyQueueCacheAction', 'clearZnunyQueueCache', 'settings.znuny_queue_cache.clear', 'znuny_queue', 'Znuny queue cache cleared', 'Cached Znuny queue data was cleared successfully.', 'The Znuny Queue cache could not be cleared. Review the application logs for details.'],
+            ['clearZnunyLookupCacheAction', 'clearZnunyLookupCache', 'settings.znuny_lookup_cache.clear', 'znuny_lookup', 'Znuny lookup cache cleared', 'Cached Znuny lookup data was invalidated successfully.', 'The Znuny Lookup cache could not be cleared. Review the application logs for details.'],
+            ['clearTicketArticleCacheAction', 'clearTicketArticleCache', 'settings.znuny_ticket_article_cache.clear', 'znuny_ticket_article', 'Ticket article cache cleared', 'Cached Znuny ticket article data was invalidated successfully.', 'The Ticket Article cache could not be cleared. Review the application logs for details.'],
         ];
 
-        foreach ($actions as [$actionMethod, $serviceMethod, $successTitle, $successBody, $failureBody]) {
+        foreach ($actions as [$actionMethod, $serviceMethod, $auditAction, $cacheScope, $successTitle, $successBody, $failureBody]) {
+            AuditLog::query()->delete();
+
             $this->mock(RuntimeCacheMaintenanceService::class, function (MockInterface $mock) use ($serviceMethod) {
                 $mock->shouldReceive($serviceMethod)
                     ->once()
@@ -86,6 +101,19 @@ class SettingsCacheMaintenanceActionTest extends TestCase
                         ->body($successBody)
                         ->success()
                 );
+
+            $this->assertDatabaseCount('audit_logs', 1);
+            $log = AuditLog::first();
+            $this->assertEquals($auditAction, $log->action);
+            $this->assertEquals('settings', $log->entity_type);
+            $this->assertNull($log->entity_id);
+            $this->assertEquals('settings_cache_tab', $log->context['source'] ?? null);
+            $this->assertEquals($cacheScope, $log->context['cache_scope'] ?? null);
+            $this->assertEquals('failed', $log->context['status'] ?? null);
+            $this->assertEquals(\Exception::class, $log->context['exception_class'] ?? null);
+
+            $contextJson = json_encode($log->context);
+            $this->assertStringNotContainsString('Test exception', $contextJson);
         }
     }
 
@@ -103,6 +131,8 @@ class SettingsCacheMaintenanceActionTest extends TestCase
         ];
 
         foreach ($actionMethods as $actionMethod) {
+            AuditLog::query()->delete();
+
             $this->mock(RuntimeCacheMaintenanceService::class, function (MockInterface $mock) {
                 // Ensure no maintenance method is called
                 $mock->shouldReceive('clearSettingsCache')->never();
@@ -121,6 +151,8 @@ class SettingsCacheMaintenanceActionTest extends TestCase
             } catch (HttpException $e) {
                 $this->assertSame(403, $e->getStatusCode());
             }
+
+            $this->assertDatabaseCount('audit_logs', 0);
         }
     }
 

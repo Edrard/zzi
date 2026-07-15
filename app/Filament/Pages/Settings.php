@@ -377,12 +377,42 @@ class Settings extends Page implements HasForms
         );
     }
 
-    private function executeCacheMaintenance(callable $serviceCall, string $successTitle, string $successBody, string $failureBody): void
+    private function auditRuntimeCacheMaintenance(
+        string $action,
+        string $cacheScope,
+        string $status,
+        ?\Throwable $exception = null
+    ): void {
+        try {
+            $context = [
+                'source' => 'settings_cache_tab',
+                'cache_scope' => $cacheScope,
+                'status' => $status,
+            ];
+
+            if ($exception !== null) {
+                $context['exception_class'] = get_class($exception);
+            }
+
+            AuditLogger::log(
+                action: $action,
+                entityType: 'settings',
+                entityId: null,
+                context: $context
+            );
+        } catch (\Throwable $auditException) {
+            report($auditException);
+        }
+    }
+
+    private function executeCacheMaintenance(callable $serviceCall, string $auditAction, string $cacheScope, string $successTitle, string $successBody, string $failureBody): void
     {
         $this->authorizeRuntimeCacheMaintenance();
 
         try {
             $serviceCall();
+
+            $this->auditRuntimeCacheMaintenance($auditAction, $cacheScope, 'success');
 
             Notification::make()
                 ->title($successTitle)
@@ -391,6 +421,8 @@ class Settings extends Page implements HasForms
                 ->send();
         } catch (\Throwable $e) {
             report($e);
+
+            $this->auditRuntimeCacheMaintenance($auditAction, $cacheScope, 'failed', $e);
 
             Notification::make()
                 ->title('Cache clearing failed')
@@ -404,6 +436,8 @@ class Settings extends Page implements HasForms
     {
         $this->executeCacheMaintenance(
             fn () => app(RuntimeCacheMaintenanceService::class)->clearSettingsCache(),
+            'settings.cache.clear',
+            'settings',
             'Settings cache cleared',
             'Cached application settings were cleared successfully.',
             'The Settings cache could not be cleared. Review the application logs for details.'
@@ -414,6 +448,8 @@ class Settings extends Page implements HasForms
     {
         $this->executeCacheMaintenance(
             fn () => app(RuntimeCacheMaintenanceService::class)->clearZnunyAgentCache(),
+            'settings.znuny_agent_cache.clear',
+            'znuny_agent',
             'Znuny agent cache cleared',
             'Cached Znuny agent data was cleared successfully.',
             'The Znuny Agent cache could not be cleared. Review the application logs for details.'
@@ -424,6 +460,8 @@ class Settings extends Page implements HasForms
     {
         $this->executeCacheMaintenance(
             fn () => app(RuntimeCacheMaintenanceService::class)->clearZnunyQueueCache(),
+            'settings.znuny_queue_cache.clear',
+            'znuny_queue',
             'Znuny queue cache cleared',
             'Cached Znuny queue data was cleared successfully.',
             'The Znuny Queue cache could not be cleared. Review the application logs for details.'
@@ -434,6 +472,8 @@ class Settings extends Page implements HasForms
     {
         $this->executeCacheMaintenance(
             fn () => app(RuntimeCacheMaintenanceService::class)->clearZnunyLookupCache(),
+            'settings.znuny_lookup_cache.clear',
+            'znuny_lookup',
             'Znuny lookup cache cleared',
             'Cached Znuny lookup data was invalidated successfully.',
             'The Znuny Lookup cache could not be cleared. Review the application logs for details.'
@@ -444,6 +484,8 @@ class Settings extends Page implements HasForms
     {
         $this->executeCacheMaintenance(
             fn () => app(RuntimeCacheMaintenanceService::class)->clearTicketArticleCache(),
+            'settings.znuny_ticket_article_cache.clear',
+            'znuny_ticket_article',
             'Ticket article cache cleared',
             'Cached Znuny ticket article data was invalidated successfully.',
             'The Ticket Article cache could not be cleared. Review the application logs for details.'
