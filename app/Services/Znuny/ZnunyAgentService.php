@@ -2,6 +2,7 @@
 
 namespace App\Services\Znuny;
 
+use App\Services\SettingsService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -9,8 +10,6 @@ use Throwable;
 class ZnunyAgentService
 {
     private const CACHE_KEY = 'znuny_active_agents';
-
-    private const CACHE_TTL = 900; // 15 minutes
 
     private ?string $lastError = null;
 
@@ -24,6 +23,15 @@ class ZnunyAgentService
         return $this->lastError;
     }
 
+    private function getCacheTtlMinutes(): int
+    {
+        // 0 is valid and means bypass persistent cache.
+        // Negative, missing, or unreadable values fall back to 15.
+        $ttl = SettingsService::int('znuny_agent_cache_ttl_minutes', 15);
+
+        return $ttl >= 0 ? $ttl : 15;
+    }
+
     /**
      * Get active agents from cache or fetch from API if not cached.
      * On failure, it suppresses exception and returns an empty array to prevent crashing UI,
@@ -32,13 +40,18 @@ class ZnunyAgentService
     public function getAgents(bool $failSilently = true, bool $forceRefresh = false): array
     {
         $this->lastError = null;
+        $ttl = $this->getCacheTtlMinutes();
 
         if ($forceRefresh) {
             Cache::forget(self::CACHE_KEY);
         }
 
         try {
-            return Cache::remember(self::CACHE_KEY, self::CACHE_TTL, function () {
+            if ($ttl === 0) {
+                return $this->client->getAgents();
+            }
+
+            return Cache::remember(self::CACHE_KEY, now()->addMinutes($ttl), function () {
                 return $this->client->getAgents();
             });
         } catch (Throwable $e) {

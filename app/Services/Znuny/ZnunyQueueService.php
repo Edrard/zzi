@@ -11,16 +11,24 @@ class ZnunyQueueService
 
     public function __construct(private ZnunyClient $client) {}
 
-    private function getCacheTtl(): int
+    private function getCacheTtlMinutes(): int
     {
+        // 0 is valid and means bypass persistent cache.
+        // Negative, missing, or unreadable values fall back to 15.
         $ttl = SettingsService::int('znuny_queue_cache_ttl_minutes', 15);
 
-        return $ttl > 0 ? $ttl : 15;
+        return $ttl >= 0 ? $ttl : 15;
     }
 
     public function getQueues(): array
     {
-        return Cache::remember(self::QUEUE_CACHE_KEY, now()->addMinutes($this->getCacheTtl()), function () {
+        $ttl = $this->getCacheTtlMinutes();
+
+        if ($ttl === 0) {
+            return $this->client->getQueues();
+        }
+
+        return Cache::remember(self::QUEUE_CACHE_KEY, now()->addMinutes($ttl), function () {
             return $this->client->getQueues();
         });
     }

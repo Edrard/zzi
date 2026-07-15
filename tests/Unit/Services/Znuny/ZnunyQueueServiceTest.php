@@ -2,11 +2,13 @@
 
 namespace Tests\Unit\Services\Znuny;
 
+use App\Models\Setting;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyQueueService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Mockery;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class ZnunyQueueServiceTest extends TestCase
@@ -74,6 +76,84 @@ class ZnunyQueueServiceTest extends TestCase
         // Second call should hit the cache, NOT the client
         $queues2 = $this->service->getQueues();
         $this->assertCount(3, $queues2);
+    }
+
+    public function test_queue_cache_ttl_zero_bypasses_cache_and_repeated_calls_hit_api(): void
+    {
+        Setting::updateOrCreate(
+            ['key' => 'znuny_queue_cache_ttl_minutes'],
+            ['type' => 'integer', 'value' => 0]
+        );
+
+        $this->clientMock->shouldReceive('getQueues')
+            ->twice()
+            ->andReturn($this->getSampleQueues());
+
+        $this->service->getQueues();
+        $this->service->getQueues();
+
+        $this->assertFalse(Cache::has('znuny.queues'));
+    }
+
+    public function test_queue_cache_expiration(): void
+    {
+        Setting::updateOrCreate(
+            ['key' => 'znuny_queue_cache_ttl_minutes'],
+            ['type' => 'integer', 'value' => 10]
+        );
+
+        $this->clientMock->shouldReceive('getQueues')
+            ->times(2)
+            ->andReturn(
+                [['id' => 1, 'name' => 'QueueA', 'valid_id' => 1]],
+                [['id' => 2, 'name' => 'QueueB', 'valid_id' => 1]]
+            );
+
+        $result1 = $this->service->getQueues();
+        $this->assertEquals('QueueA', $result1[0]['name']);
+
+        $this->travel(9)->minutes();
+
+        $result2 = $this->service->getQueues();
+        $this->assertEquals('QueueA', $result2[0]['name']);
+
+        $this->travel(2)->minutes(); // total 11 minutes
+
+        $result3 = $this->service->getQueues();
+        $this->assertEquals('QueueB', $result3[0]['name']);
+
+        $this->travelBack();
+    }
+
+    public static function queueFallbackDataProvider(): array
+    {
+        return [
+            'missing' => [null, 'string'],
+            'unreadable string' => ['not-an-integer', 'string'],
+            'negative' => [-5, 'integer'],
+        ];
+    }
+
+    #[DataProvider('queueFallbackDataProvider')]
+    public function test_queue_cache_ttl_fallback_for_invalid_values($value, $type): void
+    {
+        if ($value !== null) {
+            Setting::updateOrCreate(
+                ['key' => 'znuny_queue_cache_ttl_minutes'],
+                ['type' => $type, 'value' => $value]
+            );
+        } else {
+            Setting::where('key', 'znuny_queue_cache_ttl_minutes')->delete();
+        }
+
+        $this->clientMock->shouldReceive('getQueues')
+            ->once()
+            ->andReturn($this->getSampleQueues());
+
+        $this->service->getQueues();
+        $this->service->getQueues();
+
+        $this->assertTrue(Cache::has('znuny.queues'));
     }
 
     public function test_get_selectable_queues_result_preserves_label_fallback(): void
