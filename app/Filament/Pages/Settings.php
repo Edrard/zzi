@@ -865,14 +865,14 @@ class Settings extends Page implements HasForms
                 $groups['Zabbix']['Problem Highlighting'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['znuny_queue_from_host_regex', 'znuny_customer_user_from_queue_template', 'znuny_queue_host_mappings', 'znuny_manual_ticket_footer', 'linked_ticket_manual_close_default_reason', 'manual_ticket_reopen_note_template', 'znuny_ticket_default_priority', 'znuny_ticket_default_state', 'znuny_ticket_default_lock'])) {
                 $groups['Znuny Ticket Defaults'][$setting->key] = $component;
-            } elseif (in_array($setting->key, ['znuny_queue_cache_ttl_minutes', 'znuny_agent_cache_ttl_minutes', 'znuny_ticket_snapshot_cache_ttl_minutes'])) {
+            } elseif (in_array($setting->key, ['znuny_ticket_workspace_enabled', 'znuny_ticket_cache_refresh_interval_minutes', 'znuny_ticket_cache_max_pages_per_run', 'znuny_ticket_cache_ttl_minutes', 'znuny_ticket_cache_default_limit', 'znuny_ticket_workspace_active_state_type_ids', 'znuny_closed_ticket_window_days', 'znuny_closed_ticket_small_sync_interval_minutes'])) {
+                $groups['Znuny']['Ticket Workspace'][$setting->key] = $component;
+            } elseif (in_array($setting->key, ['znuny_queue_cache_ttl_minutes', 'znuny_agent_cache_ttl_minutes', 'znuny_ticket_snapshot_cache_ttl_minutes']) || str_contains($setting->key, '_cache_')) {
                 $groups['Cache'][] = $component;
             } elseif (in_array($setting->key, ['znuny_detailed_sync_audit_enabled', 'zabbix_problem_sync_audit_enabled', 'znuny_ticket_workspace_sync_audit_enabled', 'znuny_closed_ticket_sync_audit_auto_enabled'])) {
                 $groups['Audit Log'][] = $component;
             } elseif (in_array($setting->key, ['znuny_linked_ticket_sync_interval_minutes', 'znuny_linked_ticket_sync_batch_size'])) {
                 $groups['Znuny']['Linked Tickets'][] = $component;
-            } elseif (in_array($setting->key, ['znuny_ticket_workspace_enabled', 'znuny_ticket_cache_refresh_interval_minutes', 'znuny_ticket_cache_max_pages_per_run', 'znuny_ticket_cache_ttl_minutes', 'znuny_ticket_cache_default_limit', 'znuny_ticket_workspace_active_state_type_ids', 'znuny_closed_ticket_window_days', 'znuny_closed_ticket_small_sync_interval_minutes'])) {
-                $groups['Znuny']['Ticket Workspace'][$setting->key] = $component;
             } elseif (str_starts_with($setting->key, 'znuny_')) {
                 $groups['Znuny'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['default_close_delay_hours', 'default_reopen_window_hours', 'manual_ticket_auto_close_schedule_mode', 'manual_ticket_flap_threshold', 'manual_ticket_extra_flapping_delay_hours'])) {
@@ -888,6 +888,10 @@ class Settings extends Page implements HasForms
 
         if (! empty($groups['Retention'])) {
             $groups['Retention'] = $this->buildRetentionTabGroups($groups['Retention']);
+        }
+
+        if (! empty($groups['Cache'])) {
+            $groups['Cache'] = $this->buildCacheTabGroups($groups['Cache']);
         }
 
         if (! empty($groups['Zabbix'])) {
@@ -1652,6 +1656,80 @@ class Settings extends Page implements HasForms
 
         if (! empty($unmatched)) {
             $schema[] = Section::make('Additional Retention Settings')
+                ->schema($unmatched)
+                ->columns(1);
+        }
+
+        return $schema;
+    }
+
+    private function buildCacheTabGroups(array $cacheComponents): array
+    {
+        $explicit = [];
+        $unmatched = [];
+
+        foreach ($cacheComponents as $component) {
+            $name = method_exists($component, 'getName') ? $component->getName() : null;
+            if (in_array($name, [
+                'znuny_agent_cache_ttl_minutes',
+                'znuny_queue_cache_ttl_minutes',
+                'znuny_ticket_snapshot_cache_ttl_minutes',
+            ])) {
+                $explicit[$name] = $component;
+            } else {
+                $unmatched[] = $component;
+            }
+        }
+
+        if (isset($explicit['znuny_agent_cache_ttl_minutes'])) {
+            $explicit['znuny_agent_cache_ttl_minutes']
+                ->label('Znuny Agent Cache Lifetime (minutes)')
+                ->helperText('Configured lifetime for cached active Znuny agent data used by owner selectors and agent-name displays.');
+        }
+
+        if (isset($explicit['znuny_queue_cache_ttl_minutes'])) {
+            $explicit['znuny_queue_cache_ttl_minutes']
+                ->label('Znuny Queue Cache Lifetime (minutes)')
+                ->helperText('Configured lifetime for cached Znuny queue data used by queue selectors, queue detection, and queue-mapping validation.');
+        }
+
+        if (isset($explicit['znuny_ticket_snapshot_cache_ttl_minutes'])) {
+            $explicit['znuny_ticket_snapshot_cache_ttl_minutes']
+                ->label('Linked Ticket Snapshot Cache Lifetime (minutes)')
+                ->helperText('Configured lifetime for cached linked-ticket snapshot data. A snapshot may include locally stored Znuny ticket details such as state, owner, queue, priority, and synchronization metadata. This setting does not control Ticket Workspace caching and does not delete local ticket links or data in Znuny.');
+        }
+
+        $schema = [];
+
+        if (isset($explicit['znuny_agent_cache_ttl_minutes']) || isset($explicit['znuny_queue_cache_ttl_minutes'])) {
+            $section1 = [];
+            if (isset($explicit['znuny_agent_cache_ttl_minutes'])) {
+                $section1[] = $explicit['znuny_agent_cache_ttl_minutes'];
+            }
+            if (isset($explicit['znuny_queue_cache_ttl_minutes'])) {
+                $section1[] = $explicit['znuny_queue_cache_ttl_minutes'];
+            }
+            $schema[] = Section::make('Znuny Reference Data')
+                ->description('Configure how long reusable Znuny agent and queue reference data may be kept before the application requests updated data from Znuny. Shorter values provide fresher reference data but may increase API requests.')
+                ->schema($section1)
+                ->columns([
+                    'default' => 1,
+                    'sm' => 2,
+                ]);
+        }
+
+        if (isset($explicit['znuny_ticket_snapshot_cache_ttl_minutes'])) {
+            $schema[] = Section::make('Znuny Linked Ticket Data')
+                ->description('Configure caching associated with locally linked Znuny ticket data. These settings do not delete local ticket links and do not modify or delete tickets in Znuny.')
+                ->schema([
+                    $explicit['znuny_ticket_snapshot_cache_ttl_minutes'],
+                ])
+                ->columns(1);
+        }
+
+        if (! empty($unmatched)) {
+            $schema[] = Section::make('Additional Cache Settings')
+                ->description('Additional cache-related settings that are not yet assigned to a dedicated Cache section.')
                 ->schema($unmatched)
                 ->columns(1);
         }
