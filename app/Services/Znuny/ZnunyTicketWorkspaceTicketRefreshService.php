@@ -16,6 +16,14 @@ class ZnunyTicketWorkspaceTicketRefreshService
 
     public function refreshTicket(int|string $ticketId): array
     {
+        if (! (SettingsService::bool('znuny_ticket_workspace_enabled', true) ?? true)) {
+            return [
+                'status' => 'skipped',
+                'reason' => 'workspace_disabled',
+                'ticket' => null,
+            ];
+        }
+
         // 1. Fetch fresh ticket details
         $ticket = $this->client->getTicket($ticketId);
 

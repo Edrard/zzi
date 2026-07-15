@@ -35,6 +35,49 @@ class ClosedTicketSyncServiceTest extends TestCase
         $this->syncService = new ClosedTicketSyncService($this->cacheServiceMock, $this->znunyClientMock);
     }
 
+    public function test_sync_auto_aborts_when_workspace_disabled()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'false']);
+
+        $this->cacheServiceMock->shouldNotReceive('validateMetadata');
+        $this->cacheServiceMock->shouldNotReceive('getMetadata');
+        $this->znunyClientMock->shouldNotReceive('searchTickets');
+
+        $result = $this->syncService->syncAuto();
+
+        $this->assertEquals('auto', $result['mode']);
+        $this->assertEquals('skipped', $result['effective_mode']);
+        $this->assertEquals('disabled', $result['reason']);
+    }
+
+    public function test_sync_manual_aborts_when_workspace_disabled()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'false']);
+
+        $this->cacheServiceMock->shouldNotReceive('getMetadata');
+        $this->znunyClientMock->shouldNotReceive('searchTickets');
+
+        $result = $this->syncService->syncManual();
+
+        $this->assertEquals('manual', $result['mode']);
+        $this->assertEquals('skipped', $result['effective_mode']);
+        $this->assertEquals('disabled', $result['reason']);
+    }
+
+    public function test_sync_full_aborts_when_workspace_disabled()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'false']);
+
+        $this->cacheServiceMock->shouldNotReceive('getMetadata');
+        $this->znunyClientMock->shouldNotReceive('searchTickets');
+
+        $result = $this->syncService->syncFull();
+
+        $this->assertEquals('full', $result['mode']);
+        $this->assertEquals('skipped', $result['effective_mode']);
+        $this->assertEquals('disabled', $result['reason']);
+    }
+
     public function test_sync_auto_with_good_metadata_runs_small_sync()
     {
         $this->cacheServiceMock->shouldReceive('validateMetadata')->with(30)->andReturn([

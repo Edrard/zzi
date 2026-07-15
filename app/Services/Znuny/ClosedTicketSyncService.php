@@ -28,6 +28,7 @@ class ClosedTicketSyncService
         }
 
         return [
+            'enabled' => SettingsService::bool('znuny_ticket_workspace_enabled', true) ?? true,
             'window_days' => $windowDays,
             'small_sync_interval' => $smallSyncInterval,
             'auto_audit_enabled' => SettingsService::bool('znuny_closed_ticket_sync_audit_auto_enabled', false) ?? false,
@@ -89,12 +90,28 @@ class ClosedTicketSyncService
 
     private function runWithLock(callable $callback, string $mode): array
     {
+        $settings = $this->getSettings();
+
+        if (! $settings['enabled']) {
+            $result = [
+                'mode' => $mode,
+                'effective_mode' => 'skipped',
+                'reason' => 'disabled',
+                'window_days' => $settings['window_days'],
+                'fetched_count' => 0,
+                'cached_count' => 0,
+            ];
+            $this->auditIfApplicable($result);
+
+            return $result;
+        }
+
         if (! Cache::add(self::LOCK_KEY, true, now()->addMinutes(30))) {
             $result = [
                 'mode' => $mode,
                 'effective_mode' => 'skipped',
                 'reason' => 'locked',
-                'window_days' => $this->getSettings()['window_days'],
+                'window_days' => $settings['window_days'],
                 'fetched_count' => 0,
                 'cached_count' => 0,
             ];

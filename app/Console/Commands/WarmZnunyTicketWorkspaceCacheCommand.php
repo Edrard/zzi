@@ -23,7 +23,7 @@ class WarmZnunyTicketWorkspaceCacheCommand extends Command
         ZnunyTicketCacheService $cacheService,
         ZnunyTicketWorkspaceStateTypeMapper $mapper
     ): int {
-        $enabled = SettingsService::bool('znuny_ticket_workspace_enabled', false) ?? false;
+        $enabled = SettingsService::bool('znuny_ticket_workspace_enabled', true) ?? true;
         $isManual = (bool) $this->option('manual');
         $shouldAudit = $isManual || SettingsService::bool('znuny_ticket_workspace_sync_audit_enabled', false);
 
@@ -86,7 +86,8 @@ class WarmZnunyTicketWorkspaceCacheCommand extends Command
         }
 
         $limit = SettingsService::int('znuny_ticket_cache_default_limit', 50) ?? 50;
-        $maxPages = SettingsService::int('znuny_ticket_cache_max_pages_per_run', 3) ?? 3;
+        $configuredMaxPages = SettingsService::int('znuny_ticket_cache_max_pages_per_run', 3);
+        $maxPages = ($configuredMaxPages !== null && $configuredMaxPages >= 1) ? $configuredMaxPages : 3;
 
         $combinedStateTypes = implode(',', $mappedStateTypes);
         $this->info("Warming cache for StateTypes: {$combinedStateTypes}");

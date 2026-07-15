@@ -2,7 +2,9 @@
 
 namespace Tests\Unit\Services\Znuny;
 
+use App\Models\Setting;
 use App\Models\ZabbixTicket;
+use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixProblemCache;
 use App\Services\Znuny\ZnunyTicketCacheService;
 use App\Services\Znuny\ZnunyTicketWorkspaceCacheReader;
@@ -17,7 +19,14 @@ class ZnunyTicketWorkspaceCacheReaderTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        SettingsService::clearAllCaches();
         Redis::flushall();
+    }
+
+    protected function tearDown(): void
+    {
+        SettingsService::clearAllCaches();
+        parent::tearDown();
     }
 
     protected function seedTicket(array $ticketOverrides): void
@@ -67,6 +76,50 @@ class ZnunyTicketWorkspaceCacheReaderTest extends TestCase
         // Ensure defaults are set
         $t1 = collect($tickets)->firstWhere('TicketID', 101);
         $this->assertFalse($t1['is_linked_to_zabbix_problem']);
+    }
+
+    public function test_returns_empty_when_workspace_disabled()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
+        SettingsService::clearAllCaches();
+
+        $this->seedTicket(['TicketID' => 101, 'TicketNumber' => 'TN101', 'Title' => 'First', 'StateType' => 'open']);
+
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'false']);
+        SettingsService::clearAllCaches();
+
+        $reader = app(ZnunyTicketWorkspaceCacheReader::class);
+        $res = $reader->getTicketsPaginated(['state_types' => ['open']], 1, 50);
+
+        $this->assertCount(0, $res['rows']);
+        $this->assertEquals(0, $res['total']);
+        $this->assertNotNull(Redis::get('znuny:ticket:101'));
+    }
+
+    public function test_reenable_restores_data()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
+        SettingsService::clearAllCaches();
+
+        $this->seedTicket(['TicketID' => 101, 'TicketNumber' => 'TN101', 'Title' => 'First', 'StateType' => 'open']);
+
+        $reader = app(ZnunyTicketWorkspaceCacheReader::class);
+
+        $res = $reader->getTicketsPaginated(['state_types' => ['open']], 1, 50);
+        $this->assertCount(1, $res['rows']);
+
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'false']);
+        SettingsService::clearAllCaches();
+
+        $res = $reader->getTicketsPaginated(['state_types' => ['open']], 1, 50);
+        $this->assertCount(0, $res['rows']);
+
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
+        SettingsService::clearAllCaches();
+
+        $res = $reader->getTicketsPaginated(['state_types' => ['open']], 1, 50);
+        $this->assertCount(1, $res['rows']);
+        $this->assertEquals(101, $res['rows'][0]['TicketID']);
     }
 
     public function test_it_enriches_tickets_with_local_zabbix_links()

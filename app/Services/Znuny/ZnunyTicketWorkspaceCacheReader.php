@@ -3,6 +3,7 @@
 namespace App\Services\Znuny;
 
 use App\Models\ZabbixTicket;
+use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixProblemCache;
 use App\Services\Zabbix\ZabbixProblemFormatter;
 use Illuminate\Support\Facades\Redis;
@@ -26,6 +27,36 @@ class ZnunyTicketWorkspaceCacheReader
         string $sortField = 'Changed',
         string $sortDirection = 'desc'
     ): array {
+        $enabled = SettingsService::bool('znuny_ticket_workspace_enabled', true) ?? true;
+        if (! $enabled) {
+            return [
+                'rows' => [],
+                'total' => 0,
+                'page' => $page,
+                'per_page' => $perPage,
+                'last_page' => 1,
+                'filter_options' => [
+                    'queues' => [],
+                    'owners' => [],
+                    'agent_name_map' => [],
+                    'link_status' => [
+                        'all' => 'All tickets',
+                        'linked' => 'Linked to Zabbix problem',
+                        'linked_active' => 'Linked to active problem',
+                        'linked_resolved' => 'Linked to resolved/recovered problem',
+                        'unlinked' => 'Unlinked tickets',
+                    ],
+                    'state_types' => [
+                        'new' => 'New',
+                        'open' => 'Open',
+                        'pending reminder' => 'Pending Reminder',
+                        'pending auto' => 'Pending Auto',
+                        'closed' => 'Closed',
+                        'merged' => 'Merged',
+                    ],
+                ],
+            ];
+        }
         $activeStIds = [];
         $closedStIds = [];
         $redis = Redis::connection();

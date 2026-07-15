@@ -2,22 +2,71 @@
 
 namespace Tests\Unit\Services\Znuny;
 
+use App\Models\Setting;
+use App\Services\SettingsService;
 use App\Services\Znuny\ClosedTicketCacheService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketArticleCacheService;
 use App\Services\Znuny\ZnunyTicketCacheService;
 use App\Services\Znuny\ZnunyTicketWorkspaceCacheReader;
 use App\Services\Znuny\ZnunyTicketWorkspaceTicketRefreshService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Redis;
 use Mockery;
 use Tests\TestCase;
 
 class TicketWorkspaceTicketRefreshTest extends TestCase
 {
+    use RefreshDatabase;
+
     protected function setUp(): void
     {
         parent::setUp();
+        SettingsService::clearAllCaches();
         Redis::flushall();
+    }
+
+    protected function tearDown(): void
+    {
+        SettingsService::clearAllCaches();
+        parent::tearDown();
+    }
+
+    public function test_aborts_when_workspace_disabled()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'false']);
+        SettingsService::clearAllCaches();
+
+        $mockClient = Mockery::mock(ZnunyClient::class)->makePartial();
+        $mockClient->shouldNotReceive('getTicket');
+
+        $mockActiveCache = Mockery::mock(ZnunyTicketCacheService::class)->makePartial();
+        $mockActiveCache->shouldNotReceive('upsertTicket');
+        $mockActiveCache->shouldNotReceive('forgetTicket');
+
+        $mockClosedCache = Mockery::mock(ClosedTicketCacheService::class)->makePartial();
+        $mockClosedCache->shouldNotReceive('upsertTicket');
+        $mockClosedCache->shouldNotReceive('forgetTicket');
+
+        $mockArticleCache = Mockery::mock(ZnunyTicketArticleCacheService::class)->makePartial();
+        $mockArticleCache->shouldNotReceive('refresh');
+
+        $mockReader = Mockery::mock(ZnunyTicketWorkspaceCacheReader::class)->makePartial();
+        $mockReader->shouldNotReceive('normalizeSingleTicket');
+
+        $service = new ZnunyTicketWorkspaceTicketRefreshService(
+            $mockClient,
+            $mockArticleCache,
+            $mockActiveCache,
+            $mockClosedCache,
+            $mockReader
+        );
+
+        $result = $service->refreshTicket(123);
+
+        $this->assertEquals('skipped', $result['status']);
+        $this->assertEquals('workspace_disabled', $result['reason']);
+        $this->assertNull($result['ticket']);
     }
 
     public function test_skips_article_refresh_when_unchanged()

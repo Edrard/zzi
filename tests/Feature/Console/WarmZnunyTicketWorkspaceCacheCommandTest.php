@@ -4,6 +4,7 @@ namespace Tests\Feature\Console;
 
 use App\Models\AuditLog;
 use App\Models\Setting;
+use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketCacheService;
 use Carbon\Carbon;
@@ -33,11 +34,213 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
     public function test_it_exits_when_disabled(): void
     {
         Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'false']);
+        SettingsService::clearAllCaches();
 
-        $this->client->shouldNotReceive('searchTickets');
+        $this->client->shouldNotReceive('searchTicketsWithMetadata');
+        $this->cacheService->shouldNotReceive('upsertOrRefreshFromSearchResult');
 
         $this->artisan('znuny:warm-ticket-workspace-cache')
             ->expectsOutput('Ticket Workspace is disabled in settings. Exiting cleanly.')
+            ->assertSuccessful();
+    }
+
+    public function test_max_pages_normalization_with_zero(): void
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['value' => '["new"]']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_default_limit'], ['value' => '2']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_max_pages_per_run'], ['value' => '0']); // Should fallback to 3
+        SettingsService::clearAllCaches();
+
+        $this->client->shouldReceive('searchTicketsWithMetadata')
+            ->once()
+            ->withArgs(function ($args) {
+                return isset($args['CountOnly']);
+            })
+            ->andReturn([
+                'total_count' => 10,
+                'count_only' => true,
+                'warnings' => [],
+            ]);
+
+        // Expect 3 pages to be requested
+        $this->client->shouldReceive('searchTicketsWithMetadata')
+            ->times(3)
+            ->andReturn([
+                'tickets' => [
+                    ['TicketID' => 1],
+                    ['TicketID' => 2],
+                ],
+                'warnings' => [],
+            ]);
+
+        $this->cacheService->shouldReceive('upsertOrRefreshFromSearchResult')->andReturn('cached_new');
+
+        $this->artisan('znuny:warm-ticket-workspace-cache')
+            ->expectsTable(['Metric', 'Count'], [
+                ['state_types', 1],
+                ['total_count', 10],
+                ['count_only_requests', 1],
+                ['pages_requested', 3],
+                ['tickets_seen', 6],
+                ['cached_new', 6],
+                ['refreshed_unchanged', 0],
+                ['updated_changed', 0],
+                ['skipped_missing_ticket_id', 0],
+                ['skipped_disabled', 0],
+                ['errors', 0],
+                ['warnings', 0],
+            ])
+            ->assertSuccessful();
+    }
+
+    public function test_max_pages_normalization_with_negative(): void
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['value' => '["new"]']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_default_limit'], ['value' => '2']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_max_pages_per_run'], ['value' => '-5']); // Should fallback to 3
+        SettingsService::clearAllCaches();
+
+        $this->client->shouldReceive('searchTicketsWithMetadata')
+            ->once()
+            ->withArgs(function ($args) {
+                return isset($args['CountOnly']);
+            })
+            ->andReturn([
+                'total_count' => 10,
+                'count_only' => true,
+                'warnings' => [],
+            ]);
+
+        // Expect 3 pages to be requested
+        $this->client->shouldReceive('searchTicketsWithMetadata')
+            ->times(3)
+            ->andReturn([
+                'tickets' => [
+                    ['TicketID' => 1],
+                    ['TicketID' => 2],
+                ],
+                'warnings' => [],
+            ]);
+
+        $this->cacheService->shouldReceive('upsertOrRefreshFromSearchResult')->andReturn('cached_new');
+
+        $this->artisan('znuny:warm-ticket-workspace-cache')
+            ->expectsTable(['Metric', 'Count'], [
+                ['state_types', 1],
+                ['total_count', 10],
+                ['count_only_requests', 1],
+                ['pages_requested', 3], // Verifies max_pages normalized to 3
+                ['tickets_seen', 6],
+                ['cached_new', 6],
+                ['refreshed_unchanged', 0],
+                ['updated_changed', 0],
+                ['skipped_missing_ticket_id', 0],
+                ['skipped_disabled', 0],
+                ['errors', 0],
+                ['warnings', 0],
+            ])
+            ->assertSuccessful();
+    }
+
+    public function test_max_pages_normalization_with_missing_setting(): void
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['value' => '["new"]']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_default_limit'], ['value' => '2']);
+        Setting::where('key', 'znuny_ticket_cache_max_pages_per_run')->delete(); // Should fallback to 3
+        SettingsService::clearAllCaches();
+
+        $this->client->shouldReceive('searchTicketsWithMetadata')
+            ->once()
+            ->withArgs(function ($args) {
+                return isset($args['CountOnly']);
+            })
+            ->andReturn([
+                'total_count' => 10,
+                'count_only' => true,
+                'warnings' => [],
+            ]);
+
+        // Expect 3 pages to be requested
+        $this->client->shouldReceive('searchTicketsWithMetadata')
+            ->times(3)
+            ->andReturn([
+                'tickets' => [
+                    ['TicketID' => 1],
+                    ['TicketID' => 2],
+                ],
+                'warnings' => [],
+            ]);
+
+        $this->cacheService->shouldReceive('upsertOrRefreshFromSearchResult')->andReturn('cached_new');
+
+        $this->artisan('znuny:warm-ticket-workspace-cache')
+            ->expectsTable(['Metric', 'Count'], [
+                ['state_types', 1],
+                ['total_count', 10],
+                ['count_only_requests', 1],
+                ['pages_requested', 3], // Verifies max_pages normalized to 3
+                ['tickets_seen', 6],
+                ['cached_new', 6],
+                ['refreshed_unchanged', 0],
+                ['updated_changed', 0],
+                ['skipped_missing_ticket_id', 0],
+                ['skipped_disabled', 0],
+                ['errors', 0],
+                ['warnings', 0],
+            ])
+            ->assertSuccessful();
+    }
+
+    public function test_max_pages_normalization_with_invalid_setting(): void
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['value' => '["new"]']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_default_limit'], ['value' => '2']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_max_pages_per_run'], ['value' => 'invalid']); // Should fallback to 3
+        SettingsService::clearAllCaches();
+
+        $this->client->shouldReceive('searchTicketsWithMetadata')
+            ->once()
+            ->withArgs(function ($args) {
+                return isset($args['CountOnly']);
+            })
+            ->andReturn([
+                'total_count' => 10,
+                'count_only' => true,
+                'warnings' => [],
+            ]);
+
+        // Expect 3 pages to be requested
+        $this->client->shouldReceive('searchTicketsWithMetadata')
+            ->times(3)
+            ->andReturn([
+                'tickets' => [
+                    ['TicketID' => 1],
+                    ['TicketID' => 2],
+                ],
+                'warnings' => [],
+            ]);
+
+        $this->cacheService->shouldReceive('upsertOrRefreshFromSearchResult')->andReturn('cached_new');
+
+        $this->artisan('znuny:warm-ticket-workspace-cache')
+            ->expectsTable(['Metric', 'Count'], [
+                ['state_types', 1],
+                ['total_count', 10],
+                ['count_only_requests', 1],
+                ['pages_requested', 3], // Verifies max_pages normalized to 3
+                ['tickets_seen', 6],
+                ['cached_new', 6],
+                ['refreshed_unchanged', 0],
+                ['updated_changed', 0],
+                ['skipped_missing_ticket_id', 0],
+                ['skipped_disabled', 0],
+                ['errors', 0],
+                ['warnings', 0],
+            ])
             ->assertSuccessful();
     }
 
