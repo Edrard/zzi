@@ -27,66 +27,100 @@ class SettingsCacheMaintenanceActionTest extends TestCase
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
-        $this->mock(RuntimeCacheMaintenanceService::class, function (MockInterface $mock) {
-            $mock->shouldReceive('clearSettingsCache')->once();
-        });
+        $actions = [
+            ['clearSettingsCacheAction', 'clearSettingsCache', 'Settings cache cleared', 'Cached application settings were cleared successfully.'],
+            ['clearZnunyAgentCacheAction', 'clearZnunyAgentCache', 'Znuny agent cache cleared', 'Cached Znuny agent data was cleared successfully.'],
+            ['clearZnunyQueueCacheAction', 'clearZnunyQueueCache', 'Znuny queue cache cleared', 'Cached Znuny queue data was cleared successfully.'],
+            ['clearZnunyLookupCacheAction', 'clearZnunyLookupCache', 'Znuny lookup cache cleared', 'Cached Znuny lookup data was invalidated successfully.'],
+            ['clearTicketArticleCacheAction', 'clearTicketArticleCache', 'Ticket article cache cleared', 'Cached Znuny ticket article data was invalidated successfully.'],
+        ];
 
-        Livewire::actingAs($admin)
-            ->test(Settings::class)
-            ->call('clearSettingsCacheAction')
-            ->assertNotified(
-                Notification::make()
-                    ->title('Settings cache cleared')
-                    ->body('Cached application settings were cleared successfully.')
-                    ->success()
-            );
+        foreach ($actions as [$actionMethod, $serviceMethod, $title, $body]) {
+            $this->mock(RuntimeCacheMaintenanceService::class, function (MockInterface $mock) use ($serviceMethod) {
+                $mock->shouldReceive($serviceMethod)->once();
+            });
+
+            Livewire::actingAs($admin)
+                ->test(Settings::class)
+                ->call($actionMethod)
+                ->assertNotified(
+                    Notification::make()
+                        ->title($title)
+                        ->body($body)
+                        ->success()
+                );
+        }
     }
 
     public function test_admin_failure()
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
-        $this->mock(RuntimeCacheMaintenanceService::class, function (MockInterface $mock) {
-            $mock->shouldReceive('clearSettingsCache')
-                ->once()
-                ->andThrow(new \Exception('Test exception'));
-        });
+        $actions = [
+            ['clearSettingsCacheAction', 'clearSettingsCache', 'Settings cache cleared', 'Cached application settings were cleared successfully.', 'The Settings cache could not be cleared. Review the application logs for details.'],
+            ['clearZnunyAgentCacheAction', 'clearZnunyAgentCache', 'Znuny agent cache cleared', 'Cached Znuny agent data was cleared successfully.', 'The Znuny Agent cache could not be cleared. Review the application logs for details.'],
+            ['clearZnunyQueueCacheAction', 'clearZnunyQueueCache', 'Znuny queue cache cleared', 'Cached Znuny queue data was cleared successfully.', 'The Znuny Queue cache could not be cleared. Review the application logs for details.'],
+            ['clearZnunyLookupCacheAction', 'clearZnunyLookupCache', 'Znuny lookup cache cleared', 'Cached Znuny lookup data was invalidated successfully.', 'The Znuny Lookup cache could not be cleared. Review the application logs for details.'],
+            ['clearTicketArticleCacheAction', 'clearTicketArticleCache', 'Ticket article cache cleared', 'Cached Znuny ticket article data was invalidated successfully.', 'The Ticket Article cache could not be cleared. Review the application logs for details.'],
+        ];
 
-        Livewire::actingAs($admin)
-            ->test(Settings::class)
-            ->call('clearSettingsCacheAction')
-            ->assertNotified(
-                Notification::make()
-                    ->title('Cache clearing failed')
-                    ->body('The Settings cache could not be cleared. Review the application logs for details.')
-                    ->danger()
-            )
-            ->assertNotNotified(
-                Notification::make()
-                    ->title('Settings cache cleared')
-                    ->body('Cached application settings were cleared successfully.')
-                    ->success()
-            );
+        foreach ($actions as [$actionMethod, $serviceMethod, $successTitle, $successBody, $failureBody]) {
+            $this->mock(RuntimeCacheMaintenanceService::class, function (MockInterface $mock) use ($serviceMethod) {
+                $mock->shouldReceive($serviceMethod)
+                    ->once()
+                    ->andThrow(new \Exception('Test exception'));
+            });
+
+            Livewire::actingAs($admin)
+                ->test(Settings::class)
+                ->call($actionMethod)
+                ->assertNotified(
+                    Notification::make()
+                        ->title('Cache clearing failed')
+                        ->body($failureBody)
+                        ->danger()
+                )
+                ->assertNotNotified(
+                    Notification::make()
+                        ->title($successTitle)
+                        ->body($successBody)
+                        ->success()
+                );
+        }
     }
 
     public function test_direct_non_admin_invocation()
     {
         $viewer = User::factory()->create(['role' => 'viewer']);
-
-        $this->mock(RuntimeCacheMaintenanceService::class, function (MockInterface $mock) {
-            $mock->shouldReceive('clearSettingsCache')->never();
-        });
-
         $this->actingAs($viewer);
 
-        $page = app(Settings::class);
+        $actionMethods = [
+            'clearSettingsCacheAction',
+            'clearZnunyAgentCacheAction',
+            'clearZnunyQueueCacheAction',
+            'clearZnunyLookupCacheAction',
+            'clearTicketArticleCacheAction',
+        ];
 
-        try {
-            $page->clearSettingsCacheAction();
+        foreach ($actionMethods as $actionMethod) {
+            $this->mock(RuntimeCacheMaintenanceService::class, function (MockInterface $mock) {
+                // Ensure no maintenance method is called
+                $mock->shouldReceive('clearSettingsCache')->never();
+                $mock->shouldReceive('clearZnunyAgentCache')->never();
+                $mock->shouldReceive('clearZnunyQueueCache')->never();
+                $mock->shouldReceive('clearZnunyLookupCache')->never();
+                $mock->shouldReceive('clearTicketArticleCache')->never();
+            });
 
-            $this->fail('Direct non-admin invocation should have been rejected.');
-        } catch (HttpException $e) {
-            $this->assertSame(403, $e->getStatusCode());
+            $page = app(Settings::class);
+
+            try {
+                $page->$actionMethod();
+
+                $this->fail("Direct non-admin invocation of $actionMethod should have been rejected.");
+            } catch (HttpException $e) {
+                $this->assertSame(403, $e->getStatusCode());
+            }
         }
     }
 
@@ -130,19 +164,73 @@ class SettingsCacheMaintenanceActionTest extends TestCase
 
         $searchActions($maintenanceSection->getChildComponents());
 
-        $this->assertCount(1, $maintenanceActions);
+        $this->assertCount(5, $maintenanceActions);
 
-        $clearSettingsAction = $maintenanceActions[0];
-
-        $this->assertEquals('clearSettingsCache', $clearSettingsAction->getName());
-        $this->assertEquals('Clear Settings Cache', $clearSettingsAction->getLabel());
-        $this->assertTrue($clearSettingsAction->isConfirmationRequired(), 'Action should require confirmation');
-
-        $this->actingAs($admin);
-        $this->assertTrue($clearSettingsAction->isVisible());
+        $expectedActions = [
+            [
+                'name' => 'clearSettingsCache',
+                'label' => 'Clear Settings Cache',
+                'modalHeading' => 'Clear Settings Cache?',
+                'modalDescription' => 'This clears the cached application settings. Saved settings remain unchanged and will be loaded again when needed.',
+                'modalSubmit' => 'Clear Settings Cache',
+            ],
+            [
+                'name' => 'clearZnunyAgentCache',
+                'label' => 'Clear Znuny Agent Cache',
+                'modalHeading' => 'Clear Znuny Agent Cache?',
+                'modalDescription' => 'This clears the cached active Znuny agent list. The next agent request may contact Znuny again.',
+                'modalSubmit' => 'Clear Agent Cache',
+            ],
+            [
+                'name' => 'clearZnunyQueueCache',
+                'label' => 'Clear Znuny Queue Cache',
+                'modalHeading' => 'Clear Znuny Queue Cache?',
+                'modalDescription' => 'This clears the cached Znuny queue list. The next queue request may contact Znuny again.',
+                'modalSubmit' => 'Clear Queue Cache',
+            ],
+            [
+                'name' => 'clearZnunyLookupCache',
+                'label' => 'Clear Znuny Lookup Cache',
+                'modalHeading' => 'Clear Znuny Lookup Cache?',
+                'modalDescription' => 'This invalidates reusable Znuny lookup data such as owners, CustomerUsers, states, priorities, types, queues, and search candidates.',
+                'modalSubmit' => 'Clear Lookup Cache',
+            ],
+            [
+                'name' => 'clearTicketArticleCache',
+                'label' => 'Clear Ticket Article Cache',
+                'modalHeading' => 'Clear Ticket Article Cache?',
+                'modalDescription' => 'This invalidates cached Znuny ticket articles used by linked-ticket views. The next article request may contact Znuny again.',
+                'modalSubmit' => 'Clear Article Cache',
+            ],
+        ];
 
         $viewer = User::factory()->create(['role' => 'viewer']);
-        $this->actingAs($viewer);
-        $this->assertFalse($clearSettingsAction->isVisible());
+
+        foreach ($maintenanceActions as $index => $action) {
+            $expected = $expectedActions[$index];
+
+            $this->assertEquals($expected['name'], $action->getName());
+            $this->assertEquals($expected['label'], $action->getLabel());
+            $this->assertTrue($action->isConfirmationRequired(), "Action {$expected['name']} should require confirmation");
+
+            if (method_exists($action, 'getModalHeading')) {
+                $this->assertEquals($expected['modalHeading'], $action->getModalHeading());
+            }
+            if (method_exists($action, 'getModalDescription')) {
+                $this->assertEquals($expected['modalDescription'], $action->getModalDescription());
+            }
+            if (method_exists($action, 'getModalSubmitActionLabel')) {
+                $this->assertEquals($expected['modalSubmit'], $action->getModalSubmitActionLabel());
+            }
+
+            $this->assertNotEquals('Clear All Runtime Caches', $action->getName());
+            $this->assertNotEquals('Clear All Runtime Caches', $action->getLabel());
+
+            $this->actingAs($admin);
+            $this->assertTrue($action->isVisible(), "Action {$expected['name']} should be visible to admin");
+
+            $this->actingAs($viewer);
+            $this->assertFalse($action->isVisible(), "Action {$expected['name']} should not be visible to viewer");
+        }
     }
 }

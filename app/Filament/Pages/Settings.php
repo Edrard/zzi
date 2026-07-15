@@ -377,16 +377,16 @@ class Settings extends Page implements HasForms
         );
     }
 
-    public function clearSettingsCacheAction(): void
+    private function executeCacheMaintenance(callable $serviceCall, string $successTitle, string $successBody, string $failureBody): void
     {
         $this->authorizeRuntimeCacheMaintenance();
 
         try {
-            app(RuntimeCacheMaintenanceService::class)->clearSettingsCache();
+            $serviceCall();
 
             Notification::make()
-                ->title('Settings cache cleared')
-                ->body('Cached application settings were cleared successfully.')
+                ->title($successTitle)
+                ->body($successBody)
                 ->success()
                 ->send();
         } catch (\Throwable $e) {
@@ -394,10 +394,60 @@ class Settings extends Page implements HasForms
 
             Notification::make()
                 ->title('Cache clearing failed')
-                ->body('The Settings cache could not be cleared. Review the application logs for details.')
+                ->body($failureBody)
                 ->danger()
                 ->send();
         }
+    }
+
+    public function clearSettingsCacheAction(): void
+    {
+        $this->executeCacheMaintenance(
+            fn () => app(RuntimeCacheMaintenanceService::class)->clearSettingsCache(),
+            'Settings cache cleared',
+            'Cached application settings were cleared successfully.',
+            'The Settings cache could not be cleared. Review the application logs for details.'
+        );
+    }
+
+    public function clearZnunyAgentCacheAction(): void
+    {
+        $this->executeCacheMaintenance(
+            fn () => app(RuntimeCacheMaintenanceService::class)->clearZnunyAgentCache(),
+            'Znuny agent cache cleared',
+            'Cached Znuny agent data was cleared successfully.',
+            'The Znuny Agent cache could not be cleared. Review the application logs for details.'
+        );
+    }
+
+    public function clearZnunyQueueCacheAction(): void
+    {
+        $this->executeCacheMaintenance(
+            fn () => app(RuntimeCacheMaintenanceService::class)->clearZnunyQueueCache(),
+            'Znuny queue cache cleared',
+            'Cached Znuny queue data was cleared successfully.',
+            'The Znuny Queue cache could not be cleared. Review the application logs for details.'
+        );
+    }
+
+    public function clearZnunyLookupCacheAction(): void
+    {
+        $this->executeCacheMaintenance(
+            fn () => app(RuntimeCacheMaintenanceService::class)->clearZnunyLookupCache(),
+            'Znuny lookup cache cleared',
+            'Cached Znuny lookup data was invalidated successfully.',
+            'The Znuny Lookup cache could not be cleared. Review the application logs for details.'
+        );
+    }
+
+    public function clearTicketArticleCacheAction(): void
+    {
+        $this->executeCacheMaintenance(
+            fn () => app(RuntimeCacheMaintenanceService::class)->clearTicketArticleCache(),
+            'Ticket article cache cleared',
+            'Cached Znuny ticket article data was invalidated successfully.',
+            'The Ticket Article cache could not be cleared. Review the application logs for details.'
+        );
     }
 
     public function mount(): void
@@ -1821,6 +1871,46 @@ class Settings extends Page implements HasForms
                         ->modalDescription('This clears the cached application settings. Saved settings remain unchanged and will be loaded again when needed.')
                         ->modalSubmitActionLabel('Clear Settings Cache')
                         ->action('clearSettingsCacheAction')
+                        ->visible(fn () => auth()->user()?->role === 'admin'),
+                    Action::make('clearZnunyAgentCache')
+                        ->label('Clear Znuny Agent Cache')
+                        ->color('warning')
+                        ->icon('heroicon-o-arrow-path')
+                        ->requiresConfirmation()
+                        ->modalHeading('Clear Znuny Agent Cache?')
+                        ->modalDescription('This clears the cached active Znuny agent list. The next agent request may contact Znuny again.')
+                        ->modalSubmitActionLabel('Clear Agent Cache')
+                        ->action('clearZnunyAgentCacheAction')
+                        ->visible(fn () => auth()->user()?->role === 'admin'),
+                    Action::make('clearZnunyQueueCache')
+                        ->label('Clear Znuny Queue Cache')
+                        ->color('warning')
+                        ->icon('heroicon-o-arrow-path')
+                        ->requiresConfirmation()
+                        ->modalHeading('Clear Znuny Queue Cache?')
+                        ->modalDescription('This clears the cached Znuny queue list. The next queue request may contact Znuny again.')
+                        ->modalSubmitActionLabel('Clear Queue Cache')
+                        ->action('clearZnunyQueueCacheAction')
+                        ->visible(fn () => auth()->user()?->role === 'admin'),
+                    Action::make('clearZnunyLookupCache')
+                        ->label('Clear Znuny Lookup Cache')
+                        ->color('warning')
+                        ->icon('heroicon-o-arrow-path')
+                        ->requiresConfirmation()
+                        ->modalHeading('Clear Znuny Lookup Cache?')
+                        ->modalDescription('This invalidates reusable Znuny lookup data such as owners, CustomerUsers, states, priorities, types, queues, and search candidates.')
+                        ->modalSubmitActionLabel('Clear Lookup Cache')
+                        ->action('clearZnunyLookupCacheAction')
+                        ->visible(fn () => auth()->user()?->role === 'admin'),
+                    Action::make('clearTicketArticleCache')
+                        ->label('Clear Ticket Article Cache')
+                        ->color('warning')
+                        ->icon('heroicon-o-arrow-path')
+                        ->requiresConfirmation()
+                        ->modalHeading('Clear Ticket Article Cache?')
+                        ->modalDescription('This invalidates cached Znuny ticket articles used by linked-ticket views. The next article request may contact Znuny again.')
+                        ->modalSubmitActionLabel('Clear Article Cache')
+                        ->action('clearTicketArticleCacheAction')
                         ->visible(fn () => auth()->user()?->role === 'admin'),
                 ]),
             ])
