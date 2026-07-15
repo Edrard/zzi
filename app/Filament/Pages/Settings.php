@@ -1042,14 +1042,24 @@ class Settings extends Page implements HasForms
             $this->form->fill(array_merge($this->form->getState(), ['mail_smtp_password_clear' => false]));
         }
 
-        $clearedZnunyCaches = false;
+        $shouldInvalidateLookupCache = false;
+        $shouldClearZnunyReferenceCaches = false;
+
         foreach ($changedSettings as $change) {
-            if (str_starts_with($change['key'], 'znuny_')) {
-                Cache::forget('znuny_active_agents');
-                Cache::forget('znuny.queues');
-                $clearedZnunyCaches = true;
-                break;
+            if ($change['key'] === 'znuny_lookup_cache_ttl_minutes') {
+                $shouldInvalidateLookupCache = true;
+            } elseif (str_starts_with($change['key'], 'znuny_')) {
+                $shouldClearZnunyReferenceCaches = true;
             }
+        }
+
+        if ($shouldInvalidateLookupCache) {
+            app(ZnunyCachedLookupService::class)->invalidateCache();
+        }
+
+        if ($shouldClearZnunyReferenceCaches) {
+            Cache::forget('znuny_active_agents');
+            Cache::forget('znuny.queues');
         }
 
         app(SettingsAuditLogService::class)->logChanges($changedSettings);
@@ -1673,6 +1683,7 @@ class Settings extends Page implements HasForms
             if (in_array($name, [
                 'znuny_agent_cache_ttl_minutes',
                 'znuny_queue_cache_ttl_minutes',
+                'znuny_lookup_cache_ttl_minutes',
                 'znuny_ticket_snapshot_cache_ttl_minutes',
             ])) {
                 $explicit[$name] = $component;
@@ -1693,6 +1704,12 @@ class Settings extends Page implements HasForms
                 ->helperText('Configured lifetime for cached Znuny queue data used by queue selectors, queue detection, and queue-mapping validation.');
         }
 
+        if (isset($explicit['znuny_lookup_cache_ttl_minutes'])) {
+            $explicit['znuny_lookup_cache_ttl_minutes']
+                ->label('Znuny Lookup Cache Lifetime (minutes)')
+                ->helperText('How long reusable Znuny lookup data such as owners by queue, CustomerUsers, states, priorities, types, filtered queues, and template or search candidates may be cached. Set to 0 to bypass persistent lookup caching.');
+        }
+
         if (isset($explicit['znuny_ticket_snapshot_cache_ttl_minutes'])) {
             $explicit['znuny_ticket_snapshot_cache_ttl_minutes']
                 ->label('Linked Ticket Snapshot Cache Lifetime (minutes)')
@@ -1701,7 +1718,7 @@ class Settings extends Page implements HasForms
 
         $schema = [];
 
-        if (isset($explicit['znuny_agent_cache_ttl_minutes']) || isset($explicit['znuny_queue_cache_ttl_minutes'])) {
+        if (isset($explicit['znuny_agent_cache_ttl_minutes']) || isset($explicit['znuny_queue_cache_ttl_minutes']) || isset($explicit['znuny_lookup_cache_ttl_minutes'])) {
             $section1 = [];
             if (isset($explicit['znuny_agent_cache_ttl_minutes'])) {
                 $section1[] = $explicit['znuny_agent_cache_ttl_minutes'];
@@ -1709,8 +1726,11 @@ class Settings extends Page implements HasForms
             if (isset($explicit['znuny_queue_cache_ttl_minutes'])) {
                 $section1[] = $explicit['znuny_queue_cache_ttl_minutes'];
             }
+            if (isset($explicit['znuny_lookup_cache_ttl_minutes'])) {
+                $section1[] = $explicit['znuny_lookup_cache_ttl_minutes'];
+            }
             $schema[] = Section::make('Znuny Reference Data')
-                ->description('Configure how long reusable Znuny agent and queue reference data may be kept before the application requests updated data from Znuny. Shorter values provide fresher reference data but may increase API requests.')
+                ->description('Configure how long reusable Znuny agent, queue, and lookup reference data may be kept before the application requests updated data from Znuny. Shorter values provide fresher reference data but may increase API requests.')
                 ->schema($section1)
                 ->columns([
                     'default' => 1,

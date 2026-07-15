@@ -21,20 +21,25 @@ class ZnunyCachedLookupService
 
     public function getCacheTtl(): int
     {
-        return 60 * 60; // 1 hour in seconds
+        $ttl = SettingsService::int('znuny_lookup_cache_ttl_minutes', 60);
+
+        return $ttl >= 0 ? $ttl : 60;
+    }
+
+    private function rememberLookup(string $key, callable $callback): mixed
+    {
+        $ttl = $this->getCacheTtl();
+
+        if ($ttl === 0) {
+            return $callback();
+        }
+
+        return Cache::remember($key, now()->addMinutes($ttl), $callback);
     }
 
     public function clearCache(): void
     {
-        Cache::forget('znuny_lookup_queues_all');
-        Cache::forget('znuny_lookup_queues_filtered');
-        Cache::forget('znuny_lookup_states');
-        Cache::forget('znuny_lookup_priorities');
-        Cache::forget('znuny_lookup_types');
-
-        // Clearing individual queue/owner keys would require tagging (Redis)
-        // Since we only have file/database cache, we just wait for TTL or provide a way to clear them if possible.
-        // Or we could store a "version" integer in cache and increment it to invalidate everything.
+        $this->invalidateCache();
     }
 
     protected ?int $cacheVersion = null;
@@ -50,9 +55,15 @@ class ZnunyCachedLookupService
 
     public function invalidateCache(): void
     {
+        $current = Cache::get('znuny_lookup_cache_version');
         $timestamp = now()->timestamp;
-        Cache::put('znuny_lookup_cache_version', $timestamp);
-        $this->cacheVersion = $timestamp;
+
+        $next = is_numeric($current)
+            ? max($timestamp, ((int) $current) + 1)
+            : $timestamp;
+
+        Cache::forever('znuny_lookup_cache_version', $next);
+        $this->cacheVersion = $next;
     }
 
     private function getCacheKey(string $key): string
@@ -78,9 +89,10 @@ class ZnunyCachedLookupService
         $start = microtime(true);
         try {
             $key = $this->getCacheKey('znuny_lookup_queues_all');
-            $hit = Cache::has($key);
+            $ttl = $this->getCacheTtl();
+            $hit = $ttl > 0 && Cache::has($key);
 
-            $result = Cache::remember($key, $this->getCacheTtl(), function () {
+            $result = $this->rememberLookup($key, function () {
                 return $this->client->getQueues();
             });
 
@@ -139,9 +151,10 @@ class ZnunyCachedLookupService
         $start = microtime(true);
         try {
             $key = $this->getCacheKey('znuny_lookup_owners_raw_'.md5($queueName));
-            $hit = Cache::has($key);
+            $ttl = $this->getCacheTtl();
+            $hit = $ttl > 0 && Cache::has($key);
 
-            $rawUsers = Cache::remember($key, $this->getCacheTtl(), function () use ($queueName) {
+            $rawUsers = $this->rememberLookup($key, function () use ($queueName) {
                 // 1. Find Queue ID
                 $all = $this->getAllQueues(); // Also using cached queues here!
                 $queueId = null;
@@ -230,7 +243,7 @@ class ZnunyCachedLookupService
     public function getTicketStates(): array
     {
         try {
-            return Cache::remember($this->getCacheKey('znuny_lookup_states'), $this->getCacheTtl(), function () {
+            return $this->rememberLookup($this->getCacheKey('znuny_lookup_states'), function () {
                 $states = $this->client->getTicketStates();
                 $normalized = $this->normalizeDictionaryOptions($states);
 
@@ -250,7 +263,7 @@ class ZnunyCachedLookupService
     public function getTicketPriorities(): array
     {
         try {
-            return Cache::remember($this->getCacheKey('znuny_lookup_priorities'), $this->getCacheTtl(), function () {
+            return $this->rememberLookup($this->getCacheKey('znuny_lookup_priorities'), function () {
                 $priorities = $this->client->getTicketPriorities();
                 $normalized = $this->normalizeDictionaryOptions($priorities);
 
@@ -270,7 +283,7 @@ class ZnunyCachedLookupService
     public function getTicketTypes(): array
     {
         try {
-            return Cache::remember($this->getCacheKey('znuny_lookup_types'), $this->getCacheTtl(), function () {
+            return $this->rememberLookup($this->getCacheKey('znuny_lookup_types'), function () {
                 $types = $this->client->getTicketTypes();
                 $normalized = $this->normalizeDictionaryOptions($types);
 
@@ -296,9 +309,10 @@ class ZnunyCachedLookupService
         $start = microtime(true);
         try {
             $key = $this->getCacheKey('znuny_lookup_customers_'.md5($queueName));
-            $hit = Cache::has($key);
+            $ttl = $this->getCacheTtl();
+            $hit = $ttl > 0 && Cache::has($key);
 
-            $result = Cache::remember($key, $this->getCacheTtl(), function () use ($queueName) {
+            $result = $this->rememberLookup($key, function () use ($queueName) {
                 $terms = $this->getCustomerUserSearchTerms($queueName);
 
                 $options = [];
@@ -338,7 +352,12 @@ class ZnunyCachedLookupService
 
         $start = microtime(true);
         $key = $this->getCacheKey('znuny_lookup_customer_label_'.md5($login));
-        $cached = Cache::get($key);
+        $ttl = $this->getCacheTtl();
+        $cached = null;
+
+        if ($ttl > 0) {
+            $cached = Cache::get($key);
+        }
 
         if ($cached !== null) {
             $duration = round((microtime(true) - $start) * 1000, 2);
@@ -356,7 +375,9 @@ class ZnunyCachedLookupService
 
             if (! empty($user['found'])) {
                 $label = $user['label'] ?? $login;
-                Cache::put($key, $label, $this->getCacheTtl());
+                if ($ttl > 0) {
+                    Cache::put($key, $label, now()->addMinutes($ttl));
+                }
 
                 $duration = round((microtime(true) - $start) * 1000, 2);
                 Log::debug('ZnunyCachedLookupService::getCustomerUserLabel', [
@@ -466,9 +487,10 @@ class ZnunyCachedLookupService
         $start = microtime(true);
         try {
             $key = $this->getCacheKey('znuny_lookup_candidate_'.md5($queueName));
-            $hit = Cache::has($key);
+            $ttl = $this->getCacheTtl();
+            $hit = $ttl > 0 && Cache::has($key);
 
-            $result = Cache::remember($key, $this->getCacheTtl(), function () use ($queueName) {
+            $result = $this->rememberLookup($key, function () use ($queueName) {
                 $terms = $this->getCustomerUserSearchTerms($queueName);
                 $ruleService = app(ZnunyTicketDefaultRuleService::class);
 

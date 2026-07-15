@@ -3,17 +3,24 @@
 namespace Tests\Feature\Services\Znuny;
 
 use App\Models\Setting;
+use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyCachedLookupService;
 use App\Services\Znuny\ZnunyClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Date;
 use Mockery\MockInterface;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class ZnunyCachedLookupServiceTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function tearDown(): void
+    {
+        app(SettingsService::class)->clearAllCaches();
+        parent::tearDown();
+    }
 
     public function test_caches_all_queues()
     {
@@ -141,13 +148,35 @@ class ZnunyCachedLookupServiceTest extends TestCase
         $service = app(ZnunyCachedLookupService::class);
         $v1 = $service->getCacheVersion();
 
-        // Mock time to ensure version changes
-        Date::setTestNow(now()->addSeconds(5));
-
         $service->invalidateCache();
         $v2 = $service->getCacheVersion();
 
-        $this->assertNotEquals($v1, $v2);
+        $service->invalidateCache();
+        $v3 = $service->getCacheVersion();
+
+        $this->assertGreaterThan($v1, $v2);
+        $this->assertGreaterThan($v2, $v3);
+    }
+
+    public function test_clear_cache_forces_next_lookup_to_call_client()
+    {
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getQueues')->once()->andReturn([
+                ['id' => 1, 'name' => 'First', 'label' => 'First'],
+            ]);
+            $mock->shouldReceive('getQueues')->once()->andReturn([
+                ['id' => 1, 'name' => 'Second', 'label' => 'Second'],
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $result1 = $service->getAllQueues();
+        $this->assertEquals('First', $result1[0]['name']);
+
+        $service->clearCache();
+
+        $result2 = $service->getAllQueues();
+        $this->assertEquals('Second', $result2[0]['name']);
     }
 
     public function test_exception_does_not_cache_empty_array()
@@ -351,5 +380,137 @@ class ZnunyCachedLookupServiceTest extends TestCase
         // Third call hits cache, not the mock
         $states3 = $service->getTicketStates();
         $this->assertEquals(['open' => 'open'], $states3);
+    }
+
+    public function test_positive_ttl_caches_and_expires_exactly()
+    {
+        Setting::updateOrCreate(
+            ['key' => 'znuny_lookup_cache_ttl_minutes'],
+            ['type' => 'integer', 'value' => '10']
+        );
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getQueues')->once()->andReturn([
+                ['id' => 1, 'name' => 'DatasetA', 'label' => 'DatasetA'],
+            ]);
+            $mock->shouldReceive('getQueues')->once()->andReturn([
+                ['id' => 2, 'name' => 'DatasetB', 'label' => 'DatasetB'],
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+
+        // First call populates cache
+        $result1 = $service->getAllQueues();
+        $this->assertEquals('DatasetA', $result1[0]['name']);
+
+        // Travel 9 minutes - still cached
+        try {
+            $this->travel(9)->minutes();
+            $result2 = $service->getAllQueues();
+            $this->assertEquals('DatasetA', $result2[0]['name']);
+
+            // Travel to > 10 minutes - expires, fetches DatasetB
+            $this->travel(2)->minutes(); // total 11
+            $result3 = $service->getAllQueues();
+            $this->assertEquals('DatasetB', $result3[0]['name']);
+        } finally {
+            $this->travelBack();
+        }
+    }
+
+    public function test_zero_ttl_bypasses_cache()
+    {
+        Setting::updateOrCreate(
+            ['key' => 'znuny_lookup_cache_ttl_minutes'],
+            ['type' => 'integer', 'value' => '0']
+        );
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getQueues')->times(3)->andReturn([
+                ['id' => 1, 'name' => 'Live', 'label' => 'Live'],
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+
+        $service->getAllQueues();
+        $service->getAllQueues();
+        $service->getAllQueues();
+
+        $key = 'znuny_lookup_queues_all_v'.$service->getCacheVersion();
+        $this->assertFalse(Cache::has($key));
+    }
+
+    public function test_zero_ttl_bypasses_cache_for_customer_user_label()
+    {
+        Setting::updateOrCreate(
+            ['key' => 'znuny_lookup_cache_ttl_minutes'],
+            ['type' => 'integer', 'value' => '0']
+        );
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getCustomerUser')->with('testuser')->twice()->andReturn([
+                'found' => true,
+                'login' => 'testuser',
+                'label' => 'Test User',
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+
+        $result1 = $service->getCustomerUserLabel('testuser');
+        $this->assertEquals('Test User', $result1);
+
+        $result2 = $service->getCustomerUserLabel('testuser');
+        $this->assertEquals('Test User', $result2);
+
+        $key = 'znuny_lookup_customer_label_'.md5('testuser').'_v'.$service->getCacheVersion();
+        $this->assertFalse(Cache::has($key));
+    }
+
+    #[DataProvider('invalidTtlProvider')]
+    public function test_invalid_ttl_falls_back_to_60_minutes($value, $type)
+    {
+        if ($value !== null) {
+            Setting::updateOrCreate(
+                ['key' => 'znuny_lookup_cache_ttl_minutes'],
+                ['type' => $type, 'value' => $value]
+            );
+        } else {
+            Setting::where('key', 'znuny_lookup_cache_ttl_minutes')->delete();
+        }
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getQueues')->once()->andReturn([
+                ['id' => 1, 'name' => 'Fallback', 'label' => 'Fallback'],
+            ]);
+            $mock->shouldReceive('getQueues')->once()->andReturn([
+                ['id' => 2, 'name' => 'Expired', 'label' => 'Expired'],
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+
+        $service->getAllQueues();
+
+        try {
+            $this->travel(59)->minutes();
+            $service->getAllQueues(); // Still cached at 59 mins
+
+            $this->travel(2)->minutes(); // 61 mins
+            $service->getAllQueues(); // Expired at 61 mins
+        } finally {
+            $this->travelBack();
+        }
+    }
+
+    public static function invalidTtlProvider(): array
+    {
+        return [
+            'missing setting' => [null, 'integer'],
+            'unreadable string' => ['invalid', 'string'],
+            'negative value' => [-15, 'integer'],
+        ];
     }
 }
