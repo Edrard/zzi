@@ -638,36 +638,36 @@ class Settings extends Page implements HasForms
                 ],
                 'znuny_ticket_workspace_enabled' => [
                     'label' => 'Enable Ticket Workspace',
-                    'description' => $setting->description,
+                    'description' => 'Master switch for the entire Ticket Workspace subsystem. When disabled, scheduled and manual synchronization, individual ticket refreshes, and cached ticket reads are blocked. Existing cached data is retained and becomes available again after the feature is re-enabled.',
                 ],
                 'znuny_ticket_cache_refresh_interval_minutes' => [
                     'label' => 'Active Cache Refresh Interval (Minutes)',
-                    'description' => $setting->description,
+                    'description' => 'How often the scheduled active-ticket cache warmer is allowed to run. The scheduler checks regularly but skips warming until this interval has elapsed; manual refreshes are not limited by this value. Lower values increase Znuny API load.',
                 ],
                 'znuny_ticket_cache_default_limit' => [
-                    'label' => 'Default Page Size',
-                    'description' => $setting->description,
+                    'label' => 'Znuny API Fetch Batch Size',
+                    'description' => 'Number of active tickets requested from Znuny in each API page during cache warming. This does not control the number of rows displayed in Ticket Workspace. Larger values reduce request count but increase response size and processing load.',
                 ],
                 'znuny_ticket_cache_max_pages_per_run' => [
                     'label' => 'Max Pages Per Run',
-                    'description' => $setting->description,
+                    'description' => 'Maximum number of Znuny API pages processed during one active-ticket cache warming run. The approximate upper limit per run is Znuny API Fetch Batch Size × Max Pages Per Run; fewer pages are requested when Znuny has no more results.',
                 ],
                 'znuny_ticket_cache_ttl_minutes' => [
                     'label' => 'Active Ticket Cache TTL (Minutes)',
-                    'description' => $setting->description,
+                    'description' => 'Base Redis lifetime for cached active tickets. The application may automatically increase the effective TTL so cached data does not expire before the next scheduled refresh and UI polling cycle. Increasing this value retains stale active-ticket data longer if synchronization stops.',
                 ],
 
                 'znuny_ticket_workspace_active_state_type_ids' => [
                     'label' => 'Active State Types',
-                    'description' => 'Select which Znuny state types should be included in the Ticket Workspace active working set.',
+                    'description' => 'Select the Znuny state types included in the active ticket working set. These values are state type names, not numeric IDs. Changes apply to the next active-ticket cache refresh.',
                 ],
                 'znuny_closed_ticket_window_days' => [
-                    'label' => 'Recent Closed Window (Days)',
-                    'description' => 'How many recent days of closed tickets will be available in Ticket Workspace. Physical Redis retention is managed automatically and equals 6× this window.',
+                    'label' => 'Closed Ticket Creation Window (Days)',
+                    'description' => 'Closed tickets are cached only when their Created timestamp falls within this number of days. The window is not based on the actual close time because Znuny does not provide a sufficiently reliable close timestamp for this workflow. Reducing the value does not immediately remove entries already retained in Redis; cached entries expire naturally and may remain physically stored for up to six times this window.',
                 ],
                 'znuny_closed_ticket_small_sync_interval_minutes' => [
-                    'label' => 'Small Sync Interval (Minutes)',
-                    'description' => 'How often the small closed-ticket sync should refresh recent closed tickets.',
+                    'label' => 'Recent Closed Tickets Sync Interval (Minutes)',
+                    'description' => 'How often the scheduled small synchronization checks Znuny for recently changed closed tickets and refreshes the closed-ticket cache. Only tickets whose Created timestamp falls inside the configured creation window are stored. Lower values increase Znuny API load, and synchronization does not run while Ticket Workspace is disabled.',
                 ],
                 'znuny_closed_ticket_sync_audit_auto_enabled' => [
                     'label' => 'Log Automatic Closed-Ticket Syncs',
@@ -752,7 +752,7 @@ class Settings extends Page implements HasForms
                 $min = 0;
                 $max = null;
 
-                if ($setting->key === 'cleanup_batch_size' || $setting->key === 'znuny_linked_ticket_sync_interval_minutes' || $setting->key === 'znuny_closed_ticket_window_days' || $setting->key === 'znuny_closed_ticket_small_sync_interval_minutes') {
+                if ($setting->key === 'cleanup_batch_size' || $setting->key === 'znuny_linked_ticket_sync_interval_minutes' || $setting->key === 'znuny_closed_ticket_window_days' || $setting->key === 'znuny_closed_ticket_small_sync_interval_minutes' || $setting->key === 'znuny_ticket_cache_max_pages_per_run') {
                     $min = 1;
                 } elseif ($setting->key === 'pagination_per_page_base') {
                     $min = 11;
@@ -1359,7 +1359,7 @@ class Settings extends Page implements HasForms
             ]);
             if (! empty($coreFields)) {
                 $workspaceSchema[] = Section::make('Ticket Workspace')
-                    ->description('Core Ticket Workspace behavior.')
+                    ->description('Controls the Redis-backed Ticket Workspace subsystem, including active and closed ticket synchronization, manual refresh operations, and cached ticket access.')
                     ->schema($coreFields)->columns(1);
             }
 
@@ -1371,7 +1371,7 @@ class Settings extends Page implements HasForms
             ]);
             if (! empty($activeFields)) {
                 $workspaceSchema[] = Section::make('Active Ticket Cache')
-                    ->description('Redis cache warmer settings for active Znuny tickets.')
+                    ->description('Controls how active Znuny tickets are fetched and retained in Redis. Shorter refresh intervals and larger API batches provide fresher data but increase Znuny API and processing load.')
                     ->schema($activeFields)->columns(1);
             }
 
@@ -1381,7 +1381,7 @@ class Settings extends Page implements HasForms
             ]);
             if (! empty($recentFields)) {
                 $workspaceSchema[] = Section::make('Recent Closed Tickets')
-                    ->description('Redis-only recent closed-ticket window configuration.')
+                    ->description('Controls how closed tickets are synchronized and retained for Ticket Workspace. Eligibility is based on the ticket creation time, not the actual close or last-modified time, so later edits do not cause very old closed tickets to appear as recent.')
                     ->schema($recentFields)->columns(1);
             }
 

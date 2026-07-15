@@ -25,6 +25,11 @@ class ZnunyTicketWorkspace extends Page
         return Width::Full;
     }
 
+    public function isTicketWorkspaceEnabled(): bool
+    {
+        return SettingsService::bool('znuny_ticket_workspace_enabled', true) ?? true;
+    }
+
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-inbox-stack';
 
     protected static string|\UnitEnum|null $navigationGroup = 'Znuny';
@@ -217,13 +222,23 @@ class ZnunyTicketWorkspace extends Page
                 ->label('Refresh from Znuny')
                 ->icon('heroicon-o-arrow-path')
                 ->action('refreshFromZnuny')
-                ->visible(fn () => in_array(auth()->user()->role ?? '', ['admin', 'operator'], true)),
+                ->visible(fn () => in_array(auth()->user()->role ?? '', ['admin', 'operator'], true) && $this->isTicketWorkspaceEnabled()),
         ];
     }
 
     public function refreshFromZnuny(): void
     {
         abort_unless(in_array(auth()->user()->role ?? '', ['admin', 'operator'], true), 403);
+
+        if (! $this->isTicketWorkspaceEnabled()) {
+            Notification::make()
+                ->title('Ticket Workspace is disabled')
+                ->body('Enable Ticket Workspace in Settings before running synchronization or refresh actions.')
+                ->warning()
+                ->send();
+
+            return;
+        }
 
         try {
             $exitCode = Artisan::call('znuny:warm-ticket-workspace-cache', ['--manual' => true]);

@@ -13,6 +13,7 @@ use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyLinkedTicketReopenService;
 use App\Services\Znuny\ZnunyTicketArticleWriteService;
 use App\Services\Znuny\ZnunyTicketCacheService;
+use Filament\Notifications\Notification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
@@ -1608,5 +1609,62 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ])
             ->callMountedAction()
             ->assertHasActionErrors(['target_owner']);
+    }
+
+    public function test_workspace_disabled_state_shows_notice_and_hides_table()
+    {
+        $user = User::factory()->create(['role' => 'admin']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => '0']);
+        SettingsService::clearAllCaches();
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->assertSuccessful()
+            ->assertSee('Ticket Workspace is disabled')
+            ->assertSee('Enable Ticket Workspace in Settings to resume active and closed ticket synchronization, manual refresh actions, and cached ticket access. Existing cached data is retained.')
+            ->assertDontSee('Ticket Workspace legend')
+            ->assertDontSeeHtml('wire:poll')
+            ->assertActionHidden('refresh');
+    }
+
+    public function test_workspace_refresh_action_notifies_if_disabled()
+    {
+        $user = User::factory()->create(['role' => 'admin']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => '0']);
+        SettingsService::clearAllCaches();
+
+        Artisan::shouldReceive('call')->never();
+        Artisan::shouldReceive('output')->never();
+
+        $closedSync = \Mockery::mock(ClosedTicketSyncService::class);
+        $closedSync->shouldNotReceive('syncManual');
+        $this->app->instance(ClosedTicketSyncService::class, $closedSync);
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->assertSuccessful()
+            ->call('refreshFromZnuny')
+            ->assertSuccessful()
+            ->assertNotified(
+                Notification::make()
+                    ->title('Ticket Workspace is disabled')
+                    ->body('Enable Ticket Workspace in Settings before running synchronization or refresh actions.')
+                    ->warning()
+            );
+    }
+
+    public function test_workspace_enabled_state_shows_normal_workspace()
+    {
+        $user = User::factory()->create(['role' => 'admin']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => '1']);
+        SettingsService::clearAllCaches();
+
+        Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->assertSuccessful()
+            ->assertDontSee('Ticket Workspace is disabled')
+            ->assertSee('Ticket Workspace legend')
+            ->assertSeeHtml('wire:poll')
+            ->assertActionVisible('refresh');
     }
 }

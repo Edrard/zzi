@@ -301,19 +301,29 @@
 
     </style>
 
-    <div class="zbx-page-stack" wire:poll.{{ $this->getRefreshIntervalString() }}>
-        @php
-            $data = $this->ticketData();
-            $tickets = $data['rows'];
-            $filterOptions = $data['filter_options'];
-            $total = $data['total'];
-            $page = $data['page'];
-            $perPage = $data['per_page'];
-            $lastPage = $data['last_page'];
-            $offset = ($page - 1) * $perPage;
-            $startCount = $total > 0 ? $offset + 1 : 0;
-            $endCount = min($offset + $perPage, $total);
-        @endphp
+    @if(! $this->isTicketWorkspaceEnabled())
+        <x-filament::section>
+            <x-slot name="heading">
+                Ticket Workspace is disabled
+            </x-slot>
+            <x-slot name="description">
+                Enable Ticket Workspace in Settings to resume active and closed ticket synchronization, manual refresh actions, and cached ticket access. Existing cached data is retained.
+            </x-slot>
+        </x-filament::section>
+    @else
+        <div class="zbx-page-stack" wire:poll.{{ $this->getRefreshIntervalString() }}>
+            @php
+                $data = $this->ticketData();
+                $tickets = $data['rows'];
+                $filterOptions = $data['filter_options'];
+                $total = $data['total'];
+                $page = $data['page'];
+                $perPage = $data['per_page'];
+                $lastPage = $data['last_page'];
+                $offset = ($page - 1) * $perPage;
+                $startCount = $total > 0 ? $offset + 1 : 0;
+                $endCount = min($offset + $perPage, $total);
+            @endphp
 
         <div class="zbx-legend" aria-label="Ticket Workspace legend">
             <span class="zbx-legend-item">
@@ -644,7 +654,8 @@
                 </div>
             @endif
         </div>
-    </div>
+        </div>
+    @endif
 
     <x-filament-actions::modals />
 </x-filament-panels::page>
