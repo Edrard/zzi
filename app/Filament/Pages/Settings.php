@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Models\Setting;
 use App\Services\AuditLogger;
 use App\Services\MailNotificationService;
+use App\Services\RuntimeCacheMaintenanceService;
 use App\Services\SettingsAuditLogService;
 use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixAttentionHighlightStyleService;
@@ -363,6 +364,38 @@ class Settings extends Page implements HasForms
                 ->body(new HtmlString('<strong>Errors:</strong><br>❌ '.htmlspecialchars($e->getMessage()).'<br>'))
                 ->color('danger')
                 ->persistent()
+                ->send();
+        }
+    }
+
+    private function authorizeRuntimeCacheMaintenance(): void
+    {
+        abort_unless(
+            auth()->user()?->role === 'admin',
+            403,
+            'Only admins can clear runtime caches.'
+        );
+    }
+
+    public function clearSettingsCacheAction(): void
+    {
+        $this->authorizeRuntimeCacheMaintenance();
+
+        try {
+            app(RuntimeCacheMaintenanceService::class)->clearSettingsCache();
+
+            Notification::make()
+                ->title('Settings cache cleared')
+                ->body('Cached application settings were cleared successfully.')
+                ->success()
+                ->send();
+        } catch (\Throwable $e) {
+            report($e);
+
+            Notification::make()
+                ->title('Cache clearing failed')
+                ->body('The Settings cache could not be cleared. Review the application logs for details.')
+                ->danger()
                 ->send();
         }
     }
@@ -1774,6 +1807,24 @@ class Settings extends Page implements HasForms
                 ->schema($unmatched)
                 ->columns(1);
         }
+
+        $schema[] = Section::make('Runtime Cache Maintenance')
+            ->description('Clear individual application runtime caches without changing saved settings or clearing unrelated cache scopes.')
+            ->schema([
+                Actions::make([
+                    Action::make('clearSettingsCache')
+                        ->label('Clear Settings Cache')
+                        ->color('warning')
+                        ->icon('heroicon-o-arrow-path')
+                        ->requiresConfirmation()
+                        ->modalHeading('Clear Settings Cache?')
+                        ->modalDescription('This clears the cached application settings. Saved settings remain unchanged and will be loaded again when needed.')
+                        ->modalSubmitActionLabel('Clear Settings Cache')
+                        ->action('clearSettingsCacheAction')
+                        ->visible(fn () => auth()->user()?->role === 'admin'),
+                ]),
+            ])
+            ->columns(1);
 
         return $schema;
     }

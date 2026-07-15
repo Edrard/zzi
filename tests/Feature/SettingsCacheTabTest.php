@@ -104,6 +104,7 @@ class SettingsCacheTabTest extends TestCase
         $expectedSectionsOrder = [
             'Znuny Reference Data',
             'Znuny Linked Ticket Data',
+            'Runtime Cache Maintenance',
         ];
 
         $this->assertEquals($expectedSectionsOrder, $sectionsOrder);
@@ -184,8 +185,9 @@ class SettingsCacheTabTest extends TestCase
         $schema = $component->instance()->getForm('form')->getComponents();
 
         $unknownSettingFoundInSection = null;
+        $sectionsOrder = [];
 
-        $search = function ($components, $inCacheTab = false, $currentSection = null) use (&$search, &$unknownSettingFoundInSection) {
+        $search = function ($components, $inCacheTab = false, $currentSection = null) use (&$search, &$unknownSettingFoundInSection, &$sectionsOrder) {
             foreach ($components as $c) {
                 $type = class_basename($c);
                 $name = method_exists($c, 'getName') ? $c->getName() : null;
@@ -196,6 +198,7 @@ class SettingsCacheTabTest extends TestCase
 
                 if ($isThisTab && $type === 'Section' && $heading) {
                     $currentSection = $heading;
+                    $sectionsOrder[] = $heading;
                 }
 
                 if ($isThisTab && $name === 'znuny_future_cache_ttl_minutes') {
@@ -211,6 +214,7 @@ class SettingsCacheTabTest extends TestCase
         $search($schema);
 
         $this->assertEquals('Additional Cache Settings', $unknownSettingFoundInSection);
+        $this->assertEquals('Runtime Cache Maintenance', end($sectionsOrder));
     }
 
     private function getValidSettingsPayload(array $overrides = []): array
