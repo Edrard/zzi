@@ -1055,6 +1055,24 @@ class Settings extends Page implements HasForms
             $groups['Statistics'] = [$statisticsSection];
         }
 
+        if (! empty($groups['Audit Log'])) {
+            $groups['Audit Log'] = [
+                Section::make('Audit Logging')
+                    ->description('Configure which synchronization and Ticket Workspace operations are recorded in the application audit log.')
+                    ->schema(array_values($groups['Audit Log']))
+                    ->columns(1),
+            ];
+        }
+
+        if (! empty($groups['Automation'])) {
+            $groups['Automation'] = [
+                Section::make('Ticket Automation')
+                    ->description('Configure automatic closing, reopening, scheduling, and flapping behavior for manually created Znuny tickets.')
+                    ->schema(array_values($groups['Automation']))
+                    ->columns(1),
+            ];
+        }
+
         $tabs = [];
         foreach ($groups as $groupName => $components) {
             if (! empty($components)) {
