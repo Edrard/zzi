@@ -7,6 +7,8 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Services\Znuny\ZnunyClient;
 use App\Support\Settings\DefaultSettings;
+use Filament\Actions\Action;
+use Filament\Schemas\Components\Actions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Livewire\Livewire;
@@ -15,6 +17,16 @@ use Tests\TestCase;
 class SettingsLivewireTest extends TestCase
 {
     use RefreshDatabase;
+
+    private const TRANSIENT_FORM_FIELD_NAMES = [
+        'mail_smtp_password_clear',
+    ];
+
+    private function isActionComponent(object $component): bool
+    {
+        return $component instanceof Actions
+            || $component instanceof Action;
+    }
 
     public function test_global_save_normalizes_znuny_queue_host_mappings()
     {
@@ -187,7 +199,7 @@ class SettingsLivewireTest extends TestCase
                     }
                 }
 
-                if ($name && $parentGroupName) {
+                if ($name && $parentGroupName && ! $this->isActionComponent($c)) {
                     $sections[$parentGroupName][] = $name;
                 }
 
@@ -223,7 +235,10 @@ class SettingsLivewireTest extends TestCase
         $renderedSettings = collect($sections)->flatten()->unique()->toArray();
         foreach ($renderedSettings as $renderedSetting) {
             // Some keys are dynamic or not settings, but all 'znuny_' or standard setting keys should exist
-            if (in_array($renderedSetting, ['znuny_queue_host_mappings', 'host_prefix', 'queue_name', 'note'])) {
+            if (
+                in_array($renderedSetting, ['znuny_queue_host_mappings', 'host_prefix', 'queue_name', 'note'], true)
+                || in_array($renderedSetting, self::TRANSIENT_FORM_FIELD_NAMES, true)
+            ) {
                 continue;
             } // Mappings are handled specially
             $this->assertContains($renderedSetting, $allDefaults, "Setting $renderedSetting rendered in form but not found in DefaultSettings");
@@ -491,7 +506,18 @@ class SettingsLivewireTest extends TestCase
                     $name = $c->getName();
                     if ($name && ! in_array($name, ['SettingsTabs', 'data', 'saveBottom', 'save'])) {
                         // Skip actions or placeholders that are not actual setting keys
-                        if (! str_contains($name, 'testZnunyConnection') && $name !== 'testMailConnection' && ! str_starts_with($name, 'tester_help_') && $name !== 'testZabbixConnection' && $name !== 'zabbix_tester_help' && $name !== 'host_prefix' && $name !== 'queue_name' && $name !== 'note' && $name !== 'auto_tickets_placeholder' && $name !== 'problem_highlighting_preview' && $name !== 'regex') {
+                        if (
+                            ! $this->isActionComponent($c)
+                            && ! str_starts_with($name, 'tester_help_')
+                            && $name !== 'zabbix_tester_help'
+                            && $name !== 'host_prefix'
+                            && $name !== 'queue_name'
+                            && $name !== 'note'
+                            && $name !== 'auto_tickets_placeholder'
+                            && $name !== 'problem_highlighting_preview'
+                            && $name !== 'regex'
+                            && ! in_array($name, self::TRANSIENT_FORM_FIELD_NAMES, true)
+                        ) {
                             $formKeys[] = $name;
                         }
                     }
@@ -839,5 +865,75 @@ class SettingsLivewireTest extends TestCase
 
         $setting = Setting::where('key', 'znuny_global_queue_exclusion_regexes')->first();
         $this->assertEquals('[{"regex":"^Postmaster::"},{"regex":"^Test"}]', $setting->value);
+    }
+
+    public function test_mail_smtp_password_clear_is_a_transient_form_only_control()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+        $form = $component->instance()->getForm('form');
+        $schema = $form->getComponents();
+
+        $formKeys = [];
+
+        $search = function ($components) use (&$search, &$formKeys) {
+            foreach ($components as $c) {
+                if (method_exists($c, 'getName')) {
+                    $name = $c->getName();
+                    if ($name) {
+                        $formKeys[] = $name;
+                    }
+                }
+
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents());
+                }
+            }
+        };
+
+        $search($schema);
+
+        $this->assertContains('mail_smtp_password_clear', $formKeys, 'The actual Settings form must contain mail_smtp_password_clear');
+
+        $allDefaults = collect(DefaultSettings::all())->pluck('key')->toArray();
+        $this->assertNotContains('mail_smtp_password_clear', $allDefaults, 'DefaultSettings::all() must not contain mail_smtp_password_clear');
+    }
+
+    public function test_named_settings_actions_are_not_treated_as_persistent_settings()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+        $form = $component->instance()->getForm('form');
+        $schema = $form->getComponents();
+
+        $actionNames = [];
+
+        $search = function ($components) use (&$search, &$actionNames) {
+            foreach ($components as $c) {
+                if ($this->isActionComponent($c)) {
+                    $name = method_exists($c, 'getName') ? $c->getName() : null;
+                    if ($name) {
+                        $actionNames[] = $name;
+                    }
+                }
+
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents());
+                }
+            }
+        };
+
+        $search($schema);
+
+        $this->assertContains('testMailConnection', $actionNames);
+        $this->assertContains('clearSettingsCache', $actionNames);
+        $this->assertContains('clearZnunyAgentCache', $actionNames);
+
+        $allDefaults = collect(DefaultSettings::all())->pluck('key')->toArray();
+        $this->assertNotContains('testMailConnection', $allDefaults);
+        $this->assertNotContains('clearSettingsCache', $allDefaults);
+        $this->assertNotContains('clearZnunyAgentCache', $allDefaults);
     }
 }
