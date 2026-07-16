@@ -1548,7 +1548,10 @@ class Settings extends Page implements HasForms
                     TextInput::make('mail_sendmail_path')
                         ->label('Mail Sendmail Path')
                         ->helperText('Path to the sendmail binary')
-                        ->required(fn (callable $get) => $get('mail_transport') === 'sendmail'),
+                        ->required(
+                            fn (callable $get): bool => (bool) $get('mail_notifications_enabled')
+                                && $get('mail_transport') === 'sendmail'
+                        ),
                 ])
                 ->hidden(fn (callable $get) => $get('mail_transport') !== 'sendmail')
                 ->columns(1),
@@ -1559,17 +1562,26 @@ class Settings extends Page implements HasForms
                     TextInput::make('mail_smtp_host')
                         ->label('Mail Smtp Host')
                         ->helperText('SMTP host address')
-                        ->required(fn (callable $get) => $get('mail_transport') === 'smtp'),
+                        ->required(
+                            fn (callable $get): bool => (bool) $get('mail_notifications_enabled')
+                                && $get('mail_transport') === 'smtp'
+                        ),
                     TextInput::make('mail_smtp_port')
                         ->label('Mail Smtp Port')
                         ->helperText('SMTP port')
                         ->numeric()
                         ->integer()
-                        ->required(fn (callable $get) => $get('mail_transport') === 'smtp'),
+                        ->required(
+                            fn (callable $get): bool => (bool) $get('mail_notifications_enabled')
+                                && $get('mail_transport') === 'smtp'
+                        ),
                     TextInput::make('mail_smtp_encryption')
                         ->label('Mail Smtp Encryption')
                         ->helperText('SMTP encryption (none, tls, ssl)')
-                        ->required(fn (callable $get) => $get('mail_transport') === 'smtp'),
+                        ->required(
+                            fn (callable $get): bool => (bool) $get('mail_notifications_enabled')
+                                && $get('mail_transport') === 'smtp'
+                        ),
                     TextInput::make('mail_smtp_username')
                         ->label('Mail Smtp Username')
                         ->helperText('SMTP username')
