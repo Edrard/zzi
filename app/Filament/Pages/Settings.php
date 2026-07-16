@@ -100,7 +100,7 @@ class Settings extends Page implements HasForms
     {
         return [
             Action::make('save')
-                ->label('Save settings')
+                ->label(__('settings.settings_page.actions.save'))
                 ->action('save'),
         ];
     }
@@ -1066,8 +1066,9 @@ class Settings extends Page implements HasForms
                 }
             }
 
-            $statisticsSection = Section::make('Statistics')
-                ->description('Configure how owner statistics are collected and retained.')
+            $statisticsSection = Section::make('statistics')
+                ->heading(__('settings.settings_page.sections.statistics.heading'))
+                ->description(__('settings.settings_page.sections.statistics.description'))
                 ->schema($orderedStatistics)
                 ->columns(1);
             $groups['Statistics'] = [$statisticsSection];
@@ -1075,8 +1076,9 @@ class Settings extends Page implements HasForms
 
         if (! empty($groups['Audit Log'])) {
             $groups['Audit Log'] = [
-                Section::make('Audit Logging')
-                    ->description('Configure which synchronization and Ticket Workspace operations are recorded in the application audit log.')
+                Section::make('audit_logging')
+                    ->heading(__('settings.settings_page.sections.audit_logging.heading'))
+                    ->description(__('settings.settings_page.sections.audit_logging.description'))
                     ->schema(array_values($groups['Audit Log']))
                     ->columns(1),
             ];
@@ -1084,8 +1086,9 @@ class Settings extends Page implements HasForms
 
         if (! empty($groups['Automation'])) {
             $groups['Automation'] = [
-                Section::make('Ticket Automation')
-                    ->description('Configure automatic closing, reopening, scheduling, and flapping behavior for manually created Znuny tickets.')
+                Section::make('ticket_automation')
+                    ->heading(__('settings.settings_page.sections.ticket_automation.heading'))
+                    ->description(__('settings.settings_page.sections.ticket_automation.description'))
                     ->schema(array_values($groups['Automation']))
                     ->columns(1),
             ];
@@ -1094,7 +1097,9 @@ class Settings extends Page implements HasForms
         $tabs = [];
         foreach ($groups as $groupName => $components) {
             if (! empty($components)) {
-                $tabs[] = Tab::make($groupName)
+                $tabId = Str::snake($groupName);
+                $tabs[] = Tab::make($tabId)
+                    ->label(__('settings.settings_page.tabs.'.$tabId))
                     ->schema($components)
                     ->columns(1);
             }
@@ -1105,7 +1110,7 @@ class Settings extends Page implements HasForms
                 ->tabs($tabs),
             Actions::make([
                 Action::make('saveBottom')
-                    ->label('Save settings')
+                    ->label(__('settings.settings_page.actions.save'))
                     ->action('save'),
             ])->alignEnd(),
         ];
@@ -1254,7 +1259,8 @@ class Settings extends Page implements HasForms
         $connectionFields = $z['Connection & Polling'] ?? [];
 
         $tabs = [
-            Tab::make('Connection')
+            Tab::make('connection')
+                ->label(__('settings.settings_page.tabs.connection'))
                 ->schema(array_filter([
                     $connectionFields['zabbix_api_url'] ?? null,
                     $connectionFields['zabbix_api_token'] ?? null,
@@ -1272,7 +1278,8 @@ class Settings extends Page implements HasForms
                         ->content('Tests current Zabbix form values without saving settings.'),
                 ]))
                 ->columns(1),
-            Tab::make('Problem Handling & UI')
+            Tab::make('problem_handling_and_ui')
+                ->label(__('settings.settings_page.tabs.problem_handling_and_ui'))
                 ->schema(array_filter([
                     $connectionFields['zabbix_poll_interval_minutes'] ?? null,
                     $connectionFields['zabbix_problem_cache_ttl_minutes'] ?? null,
@@ -1290,7 +1297,8 @@ class Settings extends Page implements HasForms
                 ->label('Live Preview')
                 ->content(fn (callable $get) => new HtmlString($this->generateHighlightPreview($get)));
 
-            $tabs[] = Tab::make('Problem Highlighting')
+            $tabs[] = Tab::make('problem_highlighting')
+                ->label(__('settings.settings_page.tabs.problem_highlighting'))
                 ->schema(array_filter([
                     $ph['zabbix_attention_highlighting_enabled'] ?? null,
                     $previewBlock,
@@ -1363,7 +1371,8 @@ class Settings extends Page implements HasForms
     private function buildZnunyTabGroups(array $z): array
     {
         $tabs = [
-            Tab::make('Credentials')
+            Tab::make('credentials')
+                ->label(__('settings.settings_page.tabs.credentials'))
                 ->schema(array_filter([
                     $z['znuny_username'] ?? null,
                     $z['znuny_password'] ?? null,
@@ -1371,7 +1380,8 @@ class Settings extends Page implements HasForms
                     $this->getZnunyConnectionTestHelperPlaceholder('tester_help_Credentials'),
                 ]))->columns(1),
 
-            Tab::make('Endpoints & Connection')
+            Tab::make('endpoints_and_connection')
+                ->label(__('settings.settings_page.tabs.endpoints_and_connection'))
                 ->schema(array_filter([
                     $z['znuny_api_url'] ?? null,
                     $z['znuny_web_url'] ?? null,
@@ -1382,7 +1392,8 @@ class Settings extends Page implements HasForms
                     $this->getZnunyConnectionTestHelperPlaceholder('tester_help_Endpoints'),
                 ]))->columns(1),
 
-            Tab::make('Excludes')
+            Tab::make('excludes')
+                ->label(__('settings.settings_page.tabs.excludes'))
                 ->schema(array_filter([
                     $z['znuny_agent_exclude_logins'] ?? null,
                     $z['znuny_global_queue_exclusion_regexes'] ?? null,
@@ -1390,7 +1401,8 @@ class Settings extends Page implements HasForms
         ];
 
         if (isset($z['Linked Tickets'])) {
-            $tabs[] = Tab::make('Linked Tickets')
+            $tabs[] = Tab::make('linked_tickets')
+                ->label(__('settings.settings_page.tabs.linked_tickets'))
                 ->schema($z['Linked Tickets'])
                 ->columns(1);
         }
@@ -1404,8 +1416,9 @@ class Settings extends Page implements HasForms
                 $ws['znuny_ticket_workspace_active_state_type_ids'] ?? null,
             ]);
             if (! empty($coreFields)) {
-                $workspaceSchema[] = Section::make('Ticket Workspace')
-                    ->description('Controls the Redis-backed Ticket Workspace subsystem, including active and closed ticket synchronization, manual refresh operations, and cached ticket access.')
+                $workspaceSchema[] = Section::make('ticket_workspace')
+                    ->heading(__('settings.settings_page.sections.ticket_workspace.heading'))
+                    ->description(__('settings.settings_page.sections.ticket_workspace.description'))
                     ->schema($coreFields)->columns(1);
             }
 
@@ -1416,8 +1429,9 @@ class Settings extends Page implements HasForms
                 $ws['znuny_ticket_cache_ttl_minutes'] ?? null,
             ]);
             if (! empty($activeFields)) {
-                $workspaceSchema[] = Section::make('Active Ticket Cache')
-                    ->description('Controls how active Znuny tickets are fetched and retained in Redis. Shorter refresh intervals and larger API batches provide fresher data but increase Znuny API and processing load.')
+                $workspaceSchema[] = Section::make('active_ticket_cache')
+                    ->heading(__('settings.settings_page.sections.active_ticket_cache.heading'))
+                    ->description(__('settings.settings_page.sections.active_ticket_cache.description'))
                     ->schema($activeFields)->columns(1);
             }
 
@@ -1426,12 +1440,14 @@ class Settings extends Page implements HasForms
                 $ws['znuny_closed_ticket_small_sync_interval_minutes'] ?? null,
             ]);
             if (! empty($recentFields)) {
-                $workspaceSchema[] = Section::make('Recent Closed Tickets')
-                    ->description('Controls how closed tickets are synchronized and retained for Ticket Workspace. Eligibility is based on the ticket creation time, not the actual close or last-modified time, so later edits do not cause very old closed tickets to appear as recent.')
+                $workspaceSchema[] = Section::make('recent_closed_tickets')
+                    ->heading(__('settings.settings_page.sections.recent_closed_tickets.heading'))
+                    ->description(__('settings.settings_page.sections.recent_closed_tickets.description'))
                     ->schema($recentFields)->columns(1);
             }
 
-            $tabs[] = Tab::make('Ticket Workspace')
+            $tabs[] = Tab::make('ticket_workspace')
+                ->label(__('settings.settings_page.tabs.ticket_workspace'))
                 ->schema($workspaceSchema)
                 ->columns(1);
         }
@@ -1446,10 +1462,12 @@ class Settings extends Page implements HasForms
         $tabs = [];
 
         if (isset($zd['znuny_queue_host_mappings'])) {
-            $tabs[] = Tab::make('Queue Host Prefix Mappings')
+            $tabs[] = Tab::make('queue_host_prefix_mappings')
+                ->label(__('settings.settings_page.tabs.queue_host_prefix_mappings'))
                 ->schema([
-                    Section::make('Queue host prefix mappings')
-                        ->description('Fallback Queue mapping for standardized Zabbix host prefixes. CustomerUser is still generated from the original host prefix.')
+                    Section::make('queue_host_prefix_mappings')
+                        ->heading(__('settings.settings_page.sections.queue_host_prefix_mappings.heading'))
+                        ->description(__('settings.settings_page.sections.queue_host_prefix_mappings.description'))
                         ->schema([
                             $zd['znuny_queue_host_mappings'],
                         ])
@@ -1461,7 +1479,8 @@ class Settings extends Page implements HasForms
                 ]);
         }
 
-        $tabs[] = Tab::make('Ticket Default Rules')
+        $tabs[] = Tab::make('ticket_default_rules')
+            ->label(__('settings.settings_page.tabs.ticket_default_rules'))
             ->schema(array_filter([
                 $zd['znuny_queue_from_host_regex'] ?? null,
                 $zd['znuny_customer_user_from_queue_template'] ?? null,
@@ -1471,7 +1490,8 @@ class Settings extends Page implements HasForms
                 $zd['manual_ticket_reopen_note_template'] ?? null,
             ]))->columns(1);
 
-        $tabs[] = Tab::make('Advanced Ticket Preset')
+        $tabs[] = Tab::make('advanced_ticket_preset')
+            ->label(__('settings.settings_page.tabs.advanced_ticket_preset'))
             ->schema(array_filter([
                 $zd['znuny_ticket_default_priority'] ?? null,
                 $zd['znuny_ticket_default_state'] ?? null,
@@ -1488,7 +1508,8 @@ class Settings extends Page implements HasForms
         $tabs = [];
 
         if (! empty($g['Main'])) {
-            $tabs[] = Tab::make('Main')
+            $tabs[] = Tab::make('main')
+                ->label(__('settings.settings_page.tabs.main'))
                 ->schema($this->buildMainTabGroups($g['Main']))
                 ->columns(1);
         }
@@ -1521,7 +1542,8 @@ class Settings extends Page implements HasForms
                 ->helperText('Global FROM name for outgoing mails')
                 ->required(false),
 
-            Section::make('Sendmail Configuration')
+            Section::make('sendmail_configuration')
+                ->heading(__('settings.settings_page.sections.sendmail_configuration.heading'))
                 ->schema([
                     TextInput::make('mail_sendmail_path')
                         ->label('Mail Sendmail Path')
@@ -1531,7 +1553,8 @@ class Settings extends Page implements HasForms
                 ->hidden(fn (callable $get) => $get('mail_transport') !== 'sendmail')
                 ->columns(1),
 
-            Section::make('SMTP Configuration')
+            Section::make('smtp_configuration')
+                ->heading(__('settings.settings_page.sections.smtp_configuration.heading'))
                 ->schema([
                     TextInput::make('mail_smtp_host')
                         ->label('Mail Smtp Host')
@@ -1581,16 +1604,19 @@ class Settings extends Page implements HasForms
         ];
 
         if (! empty($g['Mail'])) {
-            $mailSchema[] = Section::make('Additional Mail Settings')
+            $mailSchema[] = Section::make('additional_mail_settings')
+                ->heading(__('settings.settings_page.sections.additional_mail_settings.heading'))
                 ->schema($g['Mail'])
                 ->columns(1);
         }
 
-        $tabs[] = Tab::make('Mail')
+        $tabs[] = Tab::make('mail')
+            ->label(__('settings.settings_page.tabs.mail'))
             ->schema($mailSchema)
             ->columns(1);
 
-        $tabs[] = Tab::make('Scheduler')
+        $tabs[] = Tab::make('scheduler')
+            ->label(__('settings.settings_page.tabs.scheduler'))
             ->schema($this->buildSchedulerTabGroups($g['Scheduler'] ?? []))
             ->columns(1);
 
@@ -1602,8 +1628,9 @@ class Settings extends Page implements HasForms
     private function buildSchedulerTabGroups(array $additionalSchedulerSettings): array
     {
         $schema = [
-            Section::make('Scheduler Control')
-                ->description('Enable or disable processing of scheduled Znuny tasks.')
+            Section::make('scheduler_control')
+                ->heading(__('settings.settings_page.sections.scheduler_control.heading'))
+                ->description(__('settings.settings_page.sections.scheduler_control.description'))
                 ->schema([
                     Toggle::make('scheduled_tasks_enabled')
                         ->label('Scheduler Enabled')
@@ -1612,8 +1639,9 @@ class Settings extends Page implements HasForms
                 ])
                 ->columns(1),
 
-            Section::make('Execution Limits')
-                ->description('Control how much work one scheduler command may perform.')
+            Section::make('execution_limits')
+                ->heading(__('settings.settings_page.sections.execution_limits.heading'))
+                ->description(__('settings.settings_page.sections.execution_limits.description'))
                 ->schema([
                     TextInput::make('scheduled_tasks_max_processed_per_run')
                         ->label('Maximum Tasks per Run')
@@ -1630,8 +1658,9 @@ class Settings extends Page implements HasForms
                 ])
                 ->columns(2),
 
-            Section::make('Recovery and Catch-up')
-                ->description('Configure temporary pauses and processing of missed scheduled runs.')
+            Section::make('recovery_and_catch_up')
+                ->heading(__('settings.settings_page.sections.recovery_and_catch_up.heading'))
+                ->description(__('settings.settings_page.sections.recovery_and_catch_up.description'))
                 ->schema([
                     TextInput::make('scheduled_tasks_pause_minutes')
                         ->label('Pause After Transient Error (minutes)')
@@ -1648,8 +1677,9 @@ class Settings extends Page implements HasForms
                 ])
                 ->columns(2),
 
-            Section::make('Failure Protection')
-                ->description('Automatically stop scheduler processing when repeated failures require administrator attention.')
+            Section::make('failure_protection')
+                ->heading(__('settings.settings_page.sections.failure_protection.heading'))
+                ->description(__('settings.settings_page.sections.failure_protection.description'))
                 ->schema([
                     Toggle::make('scheduled_tasks_auto_disable_on_failures')
                         ->label('Auto-disable After Repeated Failures')
@@ -1666,7 +1696,8 @@ class Settings extends Page implements HasForms
         ];
 
         if (! empty($additionalSchedulerSettings)) {
-            $schema[] = Section::make('Additional Scheduler Settings')
+            $schema[] = Section::make('additional_scheduler_settings')
+                ->heading(__('settings.settings_page.sections.additional_scheduler_settings.heading'))
                 ->schema($additionalSchedulerSettings)
                 ->columns(1);
         }
@@ -1710,8 +1741,9 @@ class Settings extends Page implements HasForms
                 $sectionSchema[] = $explicit['ui_locale'];
             }
 
-            $schema[] = Section::make('Application Display')
-                ->description('Configure how dates, times, and table page sizes are presented in the administration interface.')
+            $schema[] = Section::make('application_display')
+                ->heading(__('settings.settings_page.sections.application_display.heading'))
+                ->description(__('settings.settings_page.sections.application_display.description'))
                 ->schema($sectionSchema)
                 ->columns([
                     'default' => 1,
@@ -1720,7 +1752,8 @@ class Settings extends Page implements HasForms
         }
 
         if (! empty($unmatched)) {
-            $schema[] = Section::make('Additional Application Settings')
+            $schema[] = Section::make('additional_application_settings')
+                ->heading(__('settings.settings_page.sections.additional_application_settings.heading'))
                 ->schema($unmatched)
                 ->columns(1);
         }
@@ -1802,8 +1835,9 @@ class Settings extends Page implements HasForms
             if (isset($explicit['cleanup_batch_size'])) {
                 $section1[] = $explicit['cleanup_batch_size'];
             }
-            $schema[] = Section::make('Cleanup Control')
-                ->description('Controls how long this integration keeps local operational records and how scheduled cleanup removes records that exceed the retention periods configured below. These settings affect only local integration data and do not delete data from Zabbix or Znuny.')
+            $schema[] = Section::make('cleanup_control')
+                ->heading(__('settings.settings_page.sections.cleanup_control.heading'))
+                ->description(__('settings.settings_page.sections.cleanup_control.description'))
                 ->schema($section1)
                 ->columns([
                     'default' => 1,
@@ -1819,8 +1853,9 @@ class Settings extends Page implements HasForms
             if (isset($explicit['retention_closed_tickets_days'])) {
                 $section2[] = $explicit['retention_closed_tickets_days'];
             }
-            $schema[] = Section::make('Integration History')
-                ->description('Configure how long local history linking Zabbix problems and Znuny tickets remains available in this integration.')
+            $schema[] = Section::make('integration_history')
+                ->heading(__('settings.settings_page.sections.integration_history.heading'))
+                ->description(__('settings.settings_page.sections.integration_history.description'))
                 ->schema($section2)
                 ->columns([
                     'default' => 1,
@@ -1839,8 +1874,9 @@ class Settings extends Page implements HasForms
             if (isset($explicit['retention_failed_jobs_days'])) {
                 $section3[] = $explicit['retention_failed_jobs_days'];
             }
-            $schema[] = Section::make('Logs and Processing Records')
-                ->description('Configure how long local operational logs and failed-processing records remain available for auditing and troubleshooting.')
+            $schema[] = Section::make('logs_and_processing_records')
+                ->heading(__('settings.settings_page.sections.logs_and_processing_records.heading'))
+                ->description(__('settings.settings_page.sections.logs_and_processing_records.description'))
                 ->schema($section3)
                 ->columns([
                     'default' => 1,
@@ -1849,7 +1885,8 @@ class Settings extends Page implements HasForms
         }
 
         if (! empty($unmatched)) {
-            $schema[] = Section::make('Additional Retention Settings')
+            $schema[] = Section::make('additional_retention_settings')
+                ->heading(__('settings.settings_page.sections.additional_retention_settings.heading'))
                 ->schema($unmatched)
                 ->columns(1);
         }
@@ -1920,8 +1957,9 @@ class Settings extends Page implements HasForms
             if (isset($explicit['znuny_lookup_cache_ttl_minutes'])) {
                 $section1[] = $explicit['znuny_lookup_cache_ttl_minutes'];
             }
-            $schema[] = Section::make('Znuny Reference Data')
-                ->description('Configure how long reusable Znuny agent, queue, and lookup reference data may be kept before the application requests updated data from Znuny. Shorter values provide fresher reference data but may increase API requests.')
+            $schema[] = Section::make('znuny_reference_data')
+                ->heading(__('settings.settings_page.sections.znuny_reference_data.heading'))
+                ->description(__('settings.settings_page.sections.znuny_reference_data.description'))
                 ->schema($section1)
                 ->columns([
                     'default' => 1,
@@ -1938,21 +1976,24 @@ class Settings extends Page implements HasForms
                 $section2[] = $explicit['znuny_ticket_snapshot_cache_ttl_minutes'];
             }
 
-            $schema[] = Section::make('Znuny Linked Ticket Data')
-                ->description('Configure caching for Znuny ticket articles and locally stored linked-ticket snapshots. These settings affect read performance and freshness only; they do not delete articles, ticket links, or data in Znuny.')
+            $schema[] = Section::make('znuny_linked_ticket_data')
+                ->heading(__('settings.settings_page.sections.znuny_linked_ticket_data.heading'))
+                ->description(__('settings.settings_page.sections.znuny_linked_ticket_data.description'))
                 ->schema($section2)
                 ->columns(1);
         }
 
         if (! empty($unmatched)) {
-            $schema[] = Section::make('Additional Cache Settings')
-                ->description('Additional cache-related settings that are not yet assigned to a dedicated Cache section.')
+            $schema[] = Section::make('additional_cache_settings')
+                ->heading(__('settings.settings_page.sections.additional_cache_settings.heading'))
+                ->description(__('settings.settings_page.sections.additional_cache_settings.description'))
                 ->schema($unmatched)
                 ->columns(1);
         }
 
-        $schema[] = Section::make('Runtime Cache Maintenance')
-            ->description('Clear individual application runtime caches without changing saved settings or clearing unrelated cache scopes.')
+        $schema[] = Section::make('runtime_cache_maintenance')
+            ->heading(__('settings.settings_page.sections.runtime_cache_maintenance.heading'))
+            ->description(__('settings.settings_page.sections.runtime_cache_maintenance.description'))
             ->schema([
                 Actions::make([
                     Action::make('clearSettingsCache')
