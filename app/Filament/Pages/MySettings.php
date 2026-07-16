@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Models\User;
+use App\Services\Support\ApplicationLocaleService;
 use App\Services\UserLandingPageService;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -50,6 +51,7 @@ class MySettings extends Page implements HasForms
             'show_current_problems_status_panel' => $user->show_current_problems_status_panel,
             'show_znuny_closed_ticket_status_panel' => $user->show_znuny_closed_ticket_status_panel,
             'show_scheduled_tasks_status_panel' => $user->show_scheduled_tasks_status_panel,
+            'ui_locale' => $user->ui_locale ?? '__system__',
         ]);
     }
 
@@ -78,6 +80,24 @@ class MySettings extends Page implements HasForms
                             ->password()
                             ->label('Confirm new password')
                             ->requiredWith('new_password'),
+                    ]),
+
+                Section::make('Personalization')
+                    ->description('Customize your interface.')
+                    ->schema([
+                        Select::make('ui_locale')
+                            ->label(__('settings.my_settings.ui_locale.label'))
+                            ->helperText(__('settings.my_settings.ui_locale.helper_text'))
+                            ->options(array_merge(
+                                ['__system__' => __('settings.my_settings.ui_locale.system_default')],
+                                app(ApplicationLocaleService::class)->options()
+                            ))
+                            ->required()
+                            ->in(fn () => array_merge(
+                                ['__system__'],
+                                app(ApplicationLocaleService::class)->supportedLocales()
+                            ))
+                            ->native(false),
                     ]),
 
                 Section::make('Startup / Default page')
@@ -113,6 +133,9 @@ class MySettings extends Page implements HasForms
         $user = auth()->user();
 
         $service = app(UserLandingPageService::class);
+        $localeService = app(ApplicationLocaleService::class);
+
+        $previousLocale = $localeService->resolve($user);
 
         // Update password if provided
         if (! empty($data['new_password'])) {
@@ -133,7 +156,15 @@ class MySettings extends Page implements HasForms
             $user->show_scheduled_tasks_status_panel = $data['show_scheduled_tasks_status_panel'] ?? true;
         }
 
+        if (isset($data['ui_locale'])) {
+            $user->ui_locale = $data['ui_locale'] === '__system__' ? null : $data['ui_locale'];
+        }
+
         $user->save();
+        $user->refresh();
+
+        $newLocale = $localeService->resolve($user);
+        $localeService->apply($newLocale);
 
         // Reset password fields
         $this->getForm('form')->fill([
@@ -141,6 +172,7 @@ class MySettings extends Page implements HasForms
             'show_current_problems_status_panel' => $user->show_current_problems_status_panel,
             'show_znuny_closed_ticket_status_panel' => $user->show_znuny_closed_ticket_status_panel,
             'show_scheduled_tasks_status_panel' => $user->show_scheduled_tasks_status_panel,
+            'ui_locale' => $user->ui_locale ?? '__system__',
             'current_password' => null,
             'new_password' => null,
             'new_password_confirmation' => null,
@@ -150,5 +182,9 @@ class MySettings extends Page implements HasForms
             ->title('Settings saved successfully')
             ->success()
             ->send();
+
+        if ($newLocale !== $previousLocale) {
+            $this->redirect(static::getUrl(), navigate: false);
+        }
     }
 }

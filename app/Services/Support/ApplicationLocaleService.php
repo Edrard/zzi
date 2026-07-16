@@ -2,6 +2,7 @@
 
 namespace App\Services\Support;
 
+use App\Models\User;
 use App\Services\SettingsService;
 use Illuminate\Support\Facades\App;
 
@@ -35,9 +36,20 @@ class ApplicationLocaleService
         return self::DEFAULT_LOCALE;
     }
 
-    public function resolve(): string
+    public function resolveSystem(): string
     {
         return $this->normalize(SettingsService::string('ui_locale'));
+    }
+
+    public function resolve(?User $user = null): string
+    {
+        $user = $user ?? auth()->user();
+
+        if ($user && $this->isSupported($user->ui_locale)) {
+            return $user->ui_locale;
+        }
+
+        return $this->resolveSystem();
     }
 
     public function apply(?string $locale = null): string

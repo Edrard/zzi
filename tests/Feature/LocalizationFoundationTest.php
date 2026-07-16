@@ -189,12 +189,12 @@ class LocalizationFoundationTest extends TestCase
         $this->assertTrue($found);
     }
 
-    public function test_saving_ui_locale_from_uk_to_en_persists_applies_and_redirects(): void
+    public function test_admin_with_null_locale_is_redirected_when_global_setting_changes_effective_locale(): void
     {
         Setting::updateOrCreate(['key' => 'ui_locale'], ['value' => 'uk', 'type' => 'string']);
         SettingsService::clearAllCaches();
         App::setLocale('uk');
-        $admin = User::factory()->create(['role' => 'admin']);
+        $admin = User::factory()->create(['role' => 'admin', 'ui_locale' => null]);
 
         $payload = array_merge(
             $this->getValidSettingsPayload(),
@@ -212,12 +212,12 @@ class LocalizationFoundationTest extends TestCase
         $this->assertSame('en', App::getLocale());
     }
 
-    public function test_saving_ui_locale_from_en_to_uk_persists_applies_and_redirects(): void
+    public function test_admin_with_personal_en_is_not_redirected_when_global_setting_changes_to_uk_but_it_is_persisted(): void
     {
         Setting::updateOrCreate(['key' => 'ui_locale'], ['value' => 'en', 'type' => 'string']);
         SettingsService::clearAllCaches();
         App::setLocale('en');
-        $admin = User::factory()->create(['role' => 'admin']);
+        $admin = User::factory()->create(['role' => 'admin', 'ui_locale' => 'en']);
 
         $payload = array_merge(
             $this->getValidSettingsPayload(),
@@ -229,10 +229,11 @@ class LocalizationFoundationTest extends TestCase
             ->fillForm($payload)
             ->call('save')
             ->assertHasNoFormErrors()
-            ->assertRedirect(Settings::getUrl());
+            ->assertNoRedirect();
 
         $this->assertSame('uk', Setting::where('key', 'ui_locale')->value('value'));
-        $this->assertSame('uk', App::getLocale());
+        // effective locale remains 'en' due to personal override
+        $this->assertSame('en', App::getLocale());
     }
 
     public function test_saving_with_same_effective_locale_does_not_redirect(): void

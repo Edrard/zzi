@@ -4,9 +4,16 @@ return [
     'general' => [
         'main' => [
             'ui_locale' => [
-                'label' => 'Interface language',
-                'helper_text' => 'Controls the interface language for all users. Saved operational content and data received from Zabbix or Znuny are not translated.',
+                'label' => 'Default interface language',
+                'helper_text' => 'Used on the sign-in page and for users who have not selected a personal interface language.',
             ],
+        ],
+    ],
+    'my_settings' => [
+        'ui_locale' => [
+            'label' => 'Interface language',
+            'helper_text' => 'Choose a personal interface language or use the system default.',
+            'system_default' => 'Use system default',
         ],
     ],
 ];

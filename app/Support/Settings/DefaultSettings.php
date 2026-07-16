@@ -12,7 +12,7 @@ class DefaultSettings
             ['key' => 'cleanup_enabled', 'value' => 'true', 'type' => 'boolean', 'description' => 'Enable automated cleanup'],
             ['key' => 'cleanup_batch_size', 'value' => '1000', 'type' => 'integer', 'description' => 'Records to delete per cleanup batch'],
             ['key' => 'app_display_timezone', 'value' => 'UTC', 'type' => 'string', 'description' => 'Timezone used to display dates and times in the admin interface.'],
-            ['key' => 'ui_locale', 'value' => 'en', 'type' => 'string', 'description' => 'Global interface language for all users.'],
+            ['key' => 'ui_locale', 'value' => 'en', 'type' => 'string', 'description' => 'Default interface language used for unauthenticated pages and users without a personal override.'],
 
             // Retention
             ['key' => 'retention_resolved_days', 'value' => '90', 'type' => 'integer', 'description' => 'Days to keep resolved problems'],
