@@ -9,20 +9,30 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Schema;
+use Illuminate\Contracts\Support\Htmlable;
 
 class CreateTicket extends Page implements HasForms
 {
     use InteractsWithForms;
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Znuny';
+    public static function getNavigationGroup(): ?string
+    {
+        return __('navigation.groups.znuny');
+    }
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-plus-circle';
 
     protected static ?int $navigationSort = 40;
 
-    protected static ?string $navigationLabel = 'Create Ticket';
+    public static function getNavigationLabel(): string
+    {
+        return __('navigation.pages.create_ticket.navigation_label');
+    }
 
-    protected static ?string $title = 'Create Znuny Ticket';
+    public function getTitle(): string|Htmlable
+    {
+        return __('navigation.pages.create_ticket.title');
+    }
 
     protected string $view = 'filament.pages.create-ticket';
 

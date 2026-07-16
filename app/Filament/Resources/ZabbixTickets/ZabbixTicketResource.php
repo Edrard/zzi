@@ -18,15 +18,27 @@ class ZabbixTicketResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTicket;
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Znuny';
+    public static function getNavigationGroup(): ?string
+    {
+        return __('navigation.groups.znuny');
+    }
 
     protected static ?int $navigationSort = 20;
 
-    protected static ?string $navigationLabel = 'Linked Tickets';
+    public static function getNavigationLabel(): string
+    {
+        return __('navigation.resources.linked_tickets.plural');
+    }
 
-    protected static ?string $modelLabel = 'Linked Ticket';
+    public static function getModelLabel(): string
+    {
+        return __('navigation.resources.linked_tickets.singular');
+    }
 
-    protected static ?string $pluralModelLabel = 'Linked Tickets';
+    public static function getPluralModelLabel(): string
+    {
+        return __('navigation.resources.linked_tickets.plural');
+    }
 
     public static function infolist(Schema $schema): Schema
     {

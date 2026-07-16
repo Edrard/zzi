@@ -28,22 +28,28 @@ class ZabbixProblemFilterResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedFunnel;
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Zabbix';
+    public static function getNavigationGroup(): ?string
+    {
+        return __('navigation.groups.zabbix');
+    }
 
     protected static ?int $navigationSort = 2;
 
-    protected static ?string $navigationLabel = 'Ignore Filters';
+    public static function getNavigationLabel(): string
+    {
+        return __('navigation.resources.ignore_filters.navigation_label');
+    }
 
     protected static ?string $recordTitleAttribute = 'name';
 
     public static function getModelLabel(): string
     {
-        return 'Ignore Filter';
+        return __('navigation.resources.ignore_filters.singular');
     }
 
     public static function getPluralModelLabel(): string
     {
-        return 'Ignore Filters';
+        return __('navigation.resources.ignore_filters.plural');
     }
 
     public static function form(Schema $schema): Schema

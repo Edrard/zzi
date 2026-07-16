@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Pages\Settings;
 use App\Models\Setting;
 use App\Models\User;
+use App\Services\Support\ApplicationLocaleService;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -22,7 +23,7 @@ class SettingsMainTabTest extends TestCase
         Artisan::call('app:ensure-settings-defaults');
     }
 
-    public function test_main_schema_is_rendered_in_correct_order_with_sections()
+    public function test_main_schema_is_rendered_in_correct_order_with_sections(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
@@ -47,7 +48,7 @@ class SettingsMainTabTest extends TestCase
                 }
 
                 if ($isThisTab && $name) {
-                    if (in_array($name, ['app_display_timezone', 'pagination_per_page_base'])) {
+                    if (in_array($name, ['app_display_timezone', 'pagination_per_page_base', 'ui_locale'])) {
                         $mainFieldsOrder[] = $name;
                     }
                     if (in_array($name, ['cleanup_enabled', 'cleanup_batch_size'])) {
@@ -64,11 +65,11 @@ class SettingsMainTabTest extends TestCase
         $search($schema);
 
         $this->assertEquals(['Application Display'], $sectionsOrder);
-        $this->assertEquals(['app_display_timezone', 'pagination_per_page_base'], $mainFieldsOrder);
+        $this->assertEquals(['app_display_timezone', 'pagination_per_page_base', 'ui_locale'], $mainFieldsOrder);
         $this->assertFalse($cleanupFound, 'Cleanup fields should not be present in Main tab.');
     }
 
-    public function test_main_components_have_correct_type_and_behavior()
+    public function test_main_components_have_correct_type_and_behavior(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
@@ -80,7 +81,7 @@ class SettingsMainTabTest extends TestCase
         $search = function ($components) use (&$search, &$componentsByName) {
             foreach ($components as $c) {
                 $name = method_exists($c, 'getName') ? $c->getName() : null;
-                if ($name && in_array($name, ['app_display_timezone', 'pagination_per_page_base'])) {
+                if ($name && in_array($name, ['app_display_timezone', 'pagination_per_page_base', 'ui_locale'])) {
                     $componentsByName[$name] = $c;
                 }
                 if (method_exists($c, 'getChildComponents')) {
@@ -101,6 +102,12 @@ class SettingsMainTabTest extends TestCase
         $this->assertInstanceOf(TextInput::class, $pagination);
         $this->assertTrue($pagination->isNumeric());
         $this->assertEquals('Base Rows per Page', $pagination->getLabel());
+
+        $uiLocale = $componentsByName['ui_locale'];
+        $this->assertInstanceOf(Select::class, $uiLocale);
+        $this->assertEquals(__('settings.general.main.ui_locale.label'), $uiLocale->getLabel());
+        $this->assertEquals(app(ApplicationLocaleService::class)->options(), $uiLocale->getOptions());
+        $this->assertTrue($uiLocale->isRequired());
 
         $component->assertSee('Time zone used only for dates and times shown in the administration interface. Stored timestamps, background processing, and scheduler timing are not changed.');
         $component->assertSee('Base number of rows used by paginated tables. Available page-size choices are generated as half of this value rounded up to the nearest multiple of 5, the base value, double the value, and triple the value. For example, 100 produces 50, 100, 200, and 300.');
@@ -139,10 +146,11 @@ class SettingsMainTabTest extends TestCase
             'mail_smtp_timeout_seconds' => 10,
             'mail_smtp_password' => '',
             'mail_smtp_password_clear' => false,
+            'ui_locale' => 'uk',
         ], $overrides);
     }
 
-    public function test_persistence_of_main_settings()
+    public function test_persistence_of_main_settings(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
@@ -159,5 +167,6 @@ class SettingsMainTabTest extends TestCase
 
         $this->assertEquals('Europe/Kyiv', Setting::where('key', 'app_display_timezone')->value('value'));
         $this->assertEquals('25', Setting::where('key', 'pagination_per_page_base')->value('value'));
+        $this->assertEquals('uk', Setting::where('key', 'ui_locale')->value('value'));
     }
 }

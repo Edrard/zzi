@@ -21,9 +21,27 @@ class ScheduledZnunyTaskResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClock;
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Znuny';
+    public static function getNavigationGroup(): ?string
+    {
+        return __('navigation.groups.znuny');
+    }
 
     protected static ?int $navigationSort = 30;
+
+    public static function getNavigationLabel(): string
+    {
+        return __('navigation.resources.scheduled_tasks.plural');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('navigation.resources.scheduled_tasks.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('navigation.resources.scheduled_tasks.plural');
+    }
 
     protected static ?string $recordTitleAttribute = 'name';
 

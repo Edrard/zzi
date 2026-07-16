@@ -33,15 +33,27 @@ class ScheduledZnunyTaskRunResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Administration';
+    public static function getNavigationGroup(): ?string
+    {
+        return __('navigation.groups.administration');
+    }
 
     protected static ?int $navigationSort = 20;
 
-    protected static ?string $navigationLabel = 'Scheduler Log';
+    public static function getNavigationLabel(): string
+    {
+        return __('navigation.resources.scheduler_log.navigation_label');
+    }
 
-    protected static ?string $modelLabel = 'Scheduler Log';
+    public static function getModelLabel(): string
+    {
+        return __('navigation.resources.scheduler_log.singular');
+    }
 
-    protected static ?string $pluralModelLabel = 'Scheduler Logs';
+    public static function getPluralModelLabel(): string
+    {
+        return __('navigation.resources.scheduler_log.plural');
+    }
 
     protected static ?string $recordTitleAttribute = 'task_name_snapshot';
 

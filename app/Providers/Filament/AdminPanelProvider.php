@@ -4,6 +4,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\Pages\Dashboard;
 use App\Filament\Pages\MySettings;
+use App\Http\Middleware\SetApplicationLocale;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -41,22 +42,22 @@ class AdminPanelProvider extends PanelProvider
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->navigationGroups([
                 NavigationGroup::make()
-                    ->label('Zabbix'),
+                    ->label(fn () => __('navigation.groups.zabbix')),
                 NavigationGroup::make()
-                    ->label('Znuny'),
+                    ->label(fn () => __('navigation.groups.znuny')),
                 NavigationGroup::make()
-                    ->label('Reports / Statistics'),
+                    ->label(fn () => __('navigation.groups.reports')),
                 NavigationGroup::make()
-                    ->label('Automation'),
+                    ->label(fn () => __('navigation.groups.automation')),
                 NavigationGroup::make()
-                    ->label('Administration'),
+                    ->label(fn () => __('navigation.groups.administration')),
             ])
             ->pages([
                 Dashboard::class,
             ])
             ->userMenuItems([
                 MenuItem::make()
-                    ->label('My Settings')
+                    ->label(fn () => __('navigation.pages.my_settings'))
                     ->url(fn (): string => MySettings::getUrl())
                     ->icon('heroicon-o-cog-6-tooth'),
             ])
@@ -72,6 +73,11 @@ class AdminPanelProvider extends PanelProvider
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
                 StartSession::class,
+            ])
+            ->middleware([
+                SetApplicationLocale::class,
+            ], isPersistent: true)
+            ->middleware([
                 AuthenticateSession::class,
                 ShareErrorsFromSession::class,
                 PreventRequestForgery::class,

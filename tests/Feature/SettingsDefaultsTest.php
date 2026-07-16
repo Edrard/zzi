@@ -102,4 +102,33 @@ class SettingsDefaultsTest extends TestCase
         $defaults = DefaultSettings::all();
         $this->assertNotContains('znuny_ticket_cache_closed_ttl_minutes', array_column($defaults, 'key'));
     }
+
+    public function test_ui_locale_defaults_are_correct(): void
+    {
+        $defaults = DefaultSettings::all();
+        $uiLocaleDefaults = array_filter($defaults, fn ($d) => $d['key'] === 'ui_locale');
+
+        $this->assertCount(1, $uiLocaleDefaults);
+        $this->assertEquals('uk', reset($uiLocaleDefaults)['value']);
+        $this->assertEquals('string', reset($uiLocaleDefaults)['type']);
+    }
+
+    public function test_ensure_settings_defaults_creates_missing_ui_locale(): void
+    {
+        $this->assertDatabaseMissing('settings', ['key' => 'ui_locale']);
+        Artisan::call('app:ensure-settings-defaults');
+        $this->assertDatabaseHas('settings', ['key' => 'ui_locale', 'value' => 'uk']);
+    }
+
+    public function test_ensure_settings_defaults_does_not_overwrite_ui_locale(): void
+    {
+        Setting::create([
+            'key' => 'ui_locale',
+            'value' => 'en',
+            'type' => 'string',
+        ]);
+
+        Artisan::call('app:ensure-settings-defaults');
+        $this->assertDatabaseHas('settings', ['key' => 'ui_locale', 'value' => 'en']);
+    }
 }

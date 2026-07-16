@@ -16,6 +16,7 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Artisan;
 
 class ZnunyTicketWorkspace extends Page
@@ -32,11 +33,20 @@ class ZnunyTicketWorkspace extends Page
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-inbox-stack';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Znuny';
+    public static function getNavigationGroup(): ?string
+    {
+        return __('navigation.groups.znuny');
+    }
 
-    protected static ?string $navigationLabel = 'Ticket Workspace';
+    public static function getNavigationLabel(): string
+    {
+        return __('navigation.pages.ticket_workspace');
+    }
 
-    protected static ?string $title = 'Ticket Workspace';
+    public function getTitle(): string|Htmlable
+    {
+        return __('navigation.pages.ticket_workspace');
+    }
 
     protected static ?int $navigationSort = 10;
 

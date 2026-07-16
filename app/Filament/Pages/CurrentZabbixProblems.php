@@ -24,6 +24,7 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
@@ -39,11 +40,20 @@ class CurrentZabbixProblems extends Page
 
     protected string $view = 'filament.pages.current-zabbix-problems';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Zabbix';
+    public static function getNavigationGroup(): ?string
+    {
+        return __('navigation.groups.zabbix');
+    }
 
-    protected static ?string $navigationLabel = 'Current Problems';
+    public static function getNavigationLabel(): string
+    {
+        return __('navigation.pages.current_zabbix_problems.navigation_label');
+    }
 
-    protected static ?string $title = 'Current Zabbix Problems';
+    public function getTitle(): string|Htmlable
+    {
+        return __('navigation.pages.current_zabbix_problems.title');
+    }
 
     public ?string $search = '';
 

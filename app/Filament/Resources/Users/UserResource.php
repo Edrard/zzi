@@ -18,13 +18,27 @@ class UserResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-users';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Administration';
+    public static function getNavigationGroup(): ?string
+    {
+        return __('navigation.groups.administration');
+    }
 
     protected static ?int $navigationSort = 40;
 
-    protected static ?string $navigationLabel = 'Users';
+    public static function getNavigationLabel(): string
+    {
+        return __('navigation.resources.users.plural');
+    }
 
-    protected static ?string $pluralLabel = 'Users';
+    public static function getModelLabel(): string
+    {
+        return __('navigation.resources.users.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('navigation.resources.users.plural');
+    }
 
     public static function canAccess(): bool
     {

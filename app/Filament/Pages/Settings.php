@@ -8,6 +8,7 @@ use App\Services\MailNotificationService;
 use App\Services\RuntimeCacheMaintenanceService;
 use App\Services\SettingsAuditLogService;
 use App\Services\SettingsService;
+use App\Services\Support\ApplicationLocaleService;
 use App\Services\Zabbix\ZabbixAttentionHighlightStyleService;
 use App\Services\Zabbix\ZabbixClient;
 use App\Services\Znuny\ZnunyCachedLookupService;
@@ -32,6 +33,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\HtmlString;
@@ -70,13 +72,22 @@ class Settings extends Page implements HasForms
 
     protected string $view = 'filament.pages.settings';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Administration';
+    public static function getNavigationGroup(): ?string
+    {
+        return __('navigation.groups.administration');
+    }
 
     protected static ?int $navigationSort = 10;
 
-    protected static ?string $navigationLabel = 'Settings';
+    public static function getNavigationLabel(): string
+    {
+        return __('navigation.pages.settings');
+    }
 
-    protected static ?string $title = 'Settings';
+    public function getTitle(): string|Htmlable
+    {
+        return __('navigation.pages.settings');
+    }
 
     public ?array $data = [];
 
@@ -906,6 +917,13 @@ class Settings extends Page implements HasForms
                     ->options(array_combine(\DateTimeZone::listIdentifiers(), \DateTimeZone::listIdentifiers()))
                     ->searchable()
                     ->required();
+            } elseif ($setting->key === 'ui_locale') {
+                $component = Select::make($setting->key)
+                    ->label(__('settings.general.main.ui_locale.label'))
+                    ->helperText(__('settings.general.main.ui_locale.helper_text'))
+                    ->options(fn () => app(ApplicationLocaleService::class)->options())
+                    ->in(fn () => app(ApplicationLocaleService::class)->supportedLocales())
+                    ->required();
             } elseif ($setting->key === 'owner_suggestion_old_weight_coefficient') {
                 $component = TextInput::make($setting->key)
                     ->label($label)
@@ -973,7 +991,7 @@ class Settings extends Page implements HasForms
                     ->required(false);
             }
 
-            if (in_array($setting->key, ['app_display_timezone', 'pagination_per_page_base'])) {
+            if (in_array($setting->key, ['app_display_timezone', 'pagination_per_page_base', 'ui_locale'])) {
                 $groups['General']['Main'][] = $component;
             } elseif (str_starts_with($setting->key, 'mail_')) {
                 if (! in_array($setting->key, self::EXPLICIT_MAIL_KEYS)) {
@@ -1214,6 +1232,8 @@ class Settings extends Page implements HasForms
         }
 
         app(SettingsAuditLogService::class)->logChanges($changedSettings);
+
+        app(ApplicationLocaleService::class)->apply();
 
         Notification::make()
             ->title('Settings saved successfully.')
@@ -1661,6 +1681,8 @@ class Settings extends Page implements HasForms
                 $explicit['pagination_per_page_base'] = $component
                     ->label('Base Rows per Page')
                     ->helperText('Base number of rows used by paginated tables. Available page-size choices are generated as half of this value rounded up to the nearest multiple of 5, the base value, double the value, and triple the value. For example, 100 produces 50, 100, 200, and 300.');
+            } elseif ($name === 'ui_locale') {
+                $explicit['ui_locale'] = $component;
             } else {
                 $unmatched[] = $component;
             }
@@ -1668,13 +1690,16 @@ class Settings extends Page implements HasForms
 
         $schema = [];
 
-        if (isset($explicit['app_display_timezone']) || isset($explicit['pagination_per_page_base'])) {
+        if (isset($explicit['app_display_timezone']) || isset($explicit['pagination_per_page_base']) || isset($explicit['ui_locale'])) {
             $sectionSchema = [];
             if (isset($explicit['app_display_timezone'])) {
                 $sectionSchema[] = $explicit['app_display_timezone'];
             }
             if (isset($explicit['pagination_per_page_base'])) {
                 $sectionSchema[] = $explicit['pagination_per_page_base'];
+            }
+            if (isset($explicit['ui_locale'])) {
+                $sectionSchema[] = $explicit['ui_locale'];
             }
 
             $schema[] = Section::make('Application Display')

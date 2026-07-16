@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Models\User;
 use App\Services\UserLandingPageService;
 use Filament\Pages\Page;
+use Illuminate\Contracts\Support\Htmlable;
 
 /**
  * Dashboard Redirect Shim
@@ -20,6 +21,16 @@ class Dashboard extends Page
     public static function getNavigationIcon(): ?string
     {
         return 'heroicon-o-home';
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('navigation.pages.dashboard');
+    }
+
+    public function getTitle(): string|Htmlable
+    {
+        return __('navigation.pages.dashboard');
     }
 
     protected static bool $shouldRegisterNavigation = false;

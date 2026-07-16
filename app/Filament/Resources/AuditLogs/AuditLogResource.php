@@ -20,13 +20,27 @@ class AuditLogResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Administration';
+    public static function getNavigationGroup(): ?string
+    {
+        return __('navigation.groups.administration');
+    }
 
     protected static ?int $navigationSort = 30;
 
-    protected static ?string $navigationLabel = 'Audit Log';
+    public static function getNavigationLabel(): string
+    {
+        return __('navigation.resources.audit_log.navigation_label');
+    }
 
-    protected static ?string $pluralLabel = 'Audit Log';
+    public static function getModelLabel(): string
+    {
+        return __('navigation.resources.audit_log.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('navigation.resources.audit_log.plural');
+    }
 
     public static function canCreate(): bool
     {

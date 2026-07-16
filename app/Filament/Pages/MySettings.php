@@ -13,6 +13,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Hash;
 
 class MySettings extends Page implements HasForms
@@ -23,7 +24,10 @@ class MySettings extends Page implements HasForms
 
     protected static bool $shouldRegisterNavigation = false;
 
-    protected static ?string $title = 'My Settings';
+    public function getTitle(): string|Htmlable
+    {
+        return __('navigation.pages.my_settings');
+    }
 
     public ?array $data = [];
 

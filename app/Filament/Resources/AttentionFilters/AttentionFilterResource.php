@@ -26,22 +26,28 @@ class AttentionFilterResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedExclamationCircle;
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Zabbix';
+    public static function getNavigationGroup(): ?string
+    {
+        return __('navigation.groups.zabbix');
+    }
 
     protected static ?int $navigationSort = 3;
 
-    protected static ?string $navigationLabel = 'Attention Filters';
+    public static function getNavigationLabel(): string
+    {
+        return __('navigation.resources.attention_filters.plural');
+    }
 
     protected static ?string $recordTitleAttribute = 'name';
 
     public static function getModelLabel(): string
     {
-        return 'Attention Filter';
+        return __('navigation.resources.attention_filters.singular');
     }
 
     public static function getPluralModelLabel(): string
     {
-        return 'Attention Filters';
+        return __('navigation.resources.attention_filters.plural');
     }
 
     public static function form(Schema $schema): Schema
