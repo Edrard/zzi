@@ -63,27 +63,29 @@ class MySettings extends Page implements HasForms
 
         return $schema
             ->schema([
-                Section::make('Profile / Password')
-                    ->description('Update your account password. Leave blank if you do not wish to change it.')
+                Section::make('profilePassword')
+                    ->heading(__('settings.my_settings.sections.profile_password.title'))
+                    ->description(__('settings.my_settings.sections.profile_password.description'))
                     ->schema([
                         TextInput::make('current_password')
                             ->password()
-                            ->label('Current password')
+                            ->label(__('settings.my_settings.fields.current_password.label'))
                             ->requiredWith('new_password')
                             ->currentPassword(),
                         TextInput::make('new_password')
                             ->password()
-                            ->label('New password')
+                            ->label(__('settings.my_settings.fields.new_password.label'))
                             ->confirmed()
                             ->requiredWith('current_password'),
                         TextInput::make('new_password_confirmation')
                             ->password()
-                            ->label('Confirm new password')
+                            ->label(__('settings.my_settings.fields.new_password_confirmation.label'))
                             ->requiredWith('new_password'),
                     ]),
 
-                Section::make('Personalization')
-                    ->description('Customize your interface.')
+                Section::make('personalization')
+                    ->heading(__('settings.my_settings.sections.personalization.title'))
+                    ->description(__('settings.my_settings.sections.personalization.description'))
                     ->schema([
                         Select::make('ui_locale')
                             ->label(__('settings.my_settings.ui_locale.label'))
@@ -100,26 +102,28 @@ class MySettings extends Page implements HasForms
                             ->native(false),
                     ]),
 
-                Section::make('Startup / Default page')
-                    ->description('Choose which page you land on after logging in.')
+                Section::make('startup')
+                    ->heading(__('settings.my_settings.sections.startup.title'))
+                    ->description(__('settings.my_settings.sections.startup.description'))
                     ->schema([
                         Select::make('default_landing_page')
-                            ->label('Default landing page')
+                            ->label(__('settings.my_settings.fields.default_landing_page.label'))
                             ->options($service->availableOptionsForUser($user))
                             ->required()
                             ->in(array_keys($service->availableOptionsForUser($user))),
                     ]),
 
-                Section::make('Admin UI Preferences')
-                    ->description('Toggle visibility of diagnostic panels.')
+                Section::make('adminUiPreferences')
+                    ->heading(__('settings.my_settings.sections.admin_ui_preferences.title'))
+                    ->description(__('settings.my_settings.sections.admin_ui_preferences.description'))
                     ->visible(fn () => $user->role === 'admin')
                     ->schema([
                         Toggle::make('show_current_problems_status_panel')
-                            ->label('Show Current Problems polling status panel'),
+                            ->label(__('settings.my_settings.fields.show_current_problems_status_panel.label')),
                         Toggle::make('show_znuny_closed_ticket_status_panel')
-                            ->label('Show Znuny closed ticket status panel'),
+                            ->label(__('settings.my_settings.fields.show_znuny_closed_ticket_status_panel.label')),
                         Toggle::make('show_scheduled_tasks_status_panel')
-                            ->label('Show Scheduled Tasks status panel'),
+                            ->label(__('settings.my_settings.fields.show_scheduled_tasks_status_panel.label')),
                     ]),
             ])
             ->statePath('data');
@@ -179,7 +183,7 @@ class MySettings extends Page implements HasForms
         ]);
 
         Notification::make()
-            ->title('Settings saved successfully')
+            ->title(__('settings.my_settings.notifications.saved.title'))
             ->success()
             ->send();
 
