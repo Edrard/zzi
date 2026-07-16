@@ -20,7 +20,7 @@ class UserResource extends Resource
 
     protected static string|\UnitEnum|null $navigationGroup = 'Administration';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 40;
 
     protected static ?string $navigationLabel = 'Users';
 

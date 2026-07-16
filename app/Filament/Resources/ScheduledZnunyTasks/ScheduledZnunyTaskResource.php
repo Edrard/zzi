@@ -23,6 +23,8 @@ class ScheduledZnunyTaskResource extends Resource
 
     protected static string|\UnitEnum|null $navigationGroup = 'Znuny';
 
+    protected static ?int $navigationSort = 30;
+
     protected static ?string $recordTitleAttribute = 'name';
 
     public static function canAccess(): bool

@@ -18,7 +18,7 @@ class CreateTicket extends Page implements HasForms
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-plus-circle';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 40;
 
     protected static ?string $navigationLabel = 'Create Ticket';
 

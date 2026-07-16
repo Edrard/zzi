@@ -35,6 +35,8 @@ class ScheduledZnunyTaskRunResource extends Resource
 
     protected static string|\UnitEnum|null $navigationGroup = 'Administration';
 
+    protected static ?int $navigationSort = 20;
+
     protected static ?string $navigationLabel = 'Scheduler Log';
 
     protected static ?string $modelLabel = 'Scheduler Log';
@@ -132,7 +134,7 @@ class ScheduledZnunyTaskRunResource extends Resource
                         TextEntry::make('scheduled_for')->dateTime()->timezone(fn ($record) => $record?->task?->timezone ?? config('app.timezone')),
                         TextEntry::make('started_at')->dateTime()->timezone(fn ($record) => $record?->task?->timezone ?? config('app.timezone')),
                         TextEntry::make('finished_at')->dateTime()->timezone(fn ($record) => $record?->task?->timezone ?? config('app.timezone')),
-                        TextEntry::make('duration_ms')->label('Execution time')->formatStateUsing(fn ($state) => $state === null ? null : round(abs((int) $state) / 1000, 1) . ' sec'),
+                        TextEntry::make('duration_ms')->label('Execution time')->formatStateUsing(fn ($state) => $state === null ? null : round(abs((int) $state) / 1000, 1).' sec'),
                     ])->columns(3),
                 Section::make('Ticket Details')
                     ->schema([
@@ -184,7 +186,7 @@ class ScheduledZnunyTaskRunResource extends Resource
                     ->timezone(fn ($record) => $record?->task?->timezone ?? config('app.timezone')),
                 TextColumn::make('duration_ms')
                     ->label('Execution time')
-                    ->formatStateUsing(fn ($state) => $state === null ? null : round(abs((int) $state) / 1000, 1) . ' sec')
+                    ->formatStateUsing(fn ($state) => $state === null ? null : round(abs((int) $state) / 1000, 1).' sec')
                     ->sortable(),
                 TextColumn::make('status')
                     ->badge()
