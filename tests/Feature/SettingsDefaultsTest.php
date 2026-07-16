@@ -109,7 +109,7 @@ class SettingsDefaultsTest extends TestCase
         $uiLocaleDefaults = array_filter($defaults, fn ($d) => $d['key'] === 'ui_locale');
 
         $this->assertCount(1, $uiLocaleDefaults);
-        $this->assertEquals('uk', reset($uiLocaleDefaults)['value']);
+        $this->assertEquals('en', reset($uiLocaleDefaults)['value']);
         $this->assertEquals('string', reset($uiLocaleDefaults)['type']);
     }
 
@@ -117,18 +117,18 @@ class SettingsDefaultsTest extends TestCase
     {
         $this->assertDatabaseMissing('settings', ['key' => 'ui_locale']);
         Artisan::call('app:ensure-settings-defaults');
-        $this->assertDatabaseHas('settings', ['key' => 'ui_locale', 'value' => 'uk']);
+        $this->assertDatabaseHas('settings', ['key' => 'ui_locale', 'value' => 'en']);
     }
 
     public function test_ensure_settings_defaults_does_not_overwrite_ui_locale(): void
     {
         Setting::create([
             'key' => 'ui_locale',
-            'value' => 'en',
+            'value' => 'uk',
             'type' => 'string',
         ]);
 
         Artisan::call('app:ensure-settings-defaults');
-        $this->assertDatabaseHas('settings', ['key' => 'ui_locale', 'value' => 'en']);
+        $this->assertDatabaseHas('settings', ['key' => 'ui_locale', 'value' => 'uk']);
     }
 }

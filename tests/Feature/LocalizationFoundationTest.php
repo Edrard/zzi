@@ -34,12 +34,12 @@ class LocalizationFoundationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_config_locale_defaults_to_uk(): void
+    public function test_config_locale_defaults_to_en(): void
     {
         $appConfig = file_get_contents(config_path('app.php'));
 
         $this->assertStringContainsString(
-            "'locale' => env('APP_LOCALE', 'uk'),",
+            "'locale' => env('APP_LOCALE', 'en'),",
             $appConfig,
             'config/app.php does not declare the correct locale default'
         );
@@ -51,7 +51,7 @@ class LocalizationFoundationTest extends TestCase
         );
 
         $envExample = file_get_contents(base_path('.env.example'));
-        $this->assertStringContainsString('APP_LOCALE=uk', $envExample);
+        $this->assertStringContainsString('APP_LOCALE=en', $envExample);
         $this->assertStringContainsString('APP_FALLBACK_LOCALE=en', $envExample);
     }
 
@@ -61,10 +61,10 @@ class LocalizationFoundationTest extends TestCase
         $this->assertEquals(['uk', 'en'], $service->supportedLocales());
     }
 
-    public function test_default_locale_is_uk(): void
+    public function test_default_locale_is_en(): void
     {
         $service = app(ApplicationLocaleService::class);
-        $this->assertEquals('uk', $service->defaultLocale());
+        $this->assertEquals('en', $service->defaultLocale());
     }
 
     public function test_normalize_accepts_uk(): void
@@ -79,14 +79,14 @@ class LocalizationFoundationTest extends TestCase
         $this->assertEquals('en', $service->normalize('en'));
     }
 
-    public function test_normalize_returns_uk_for_invalid_values(): void
+    public function test_normalize_returns_en_for_invalid_values(): void
     {
         $service = app(ApplicationLocaleService::class);
-        $this->assertEquals('uk', $service->normalize(null));
-        $this->assertEquals('uk', $service->normalize(''));
-        $this->assertEquals('uk', $service->normalize(' '));
-        $this->assertEquals('uk', $service->normalize('fr'));
-        $this->assertEquals('uk', $service->normalize('EN'));
+        $this->assertEquals('en', $service->normalize(null));
+        $this->assertEquals('en', $service->normalize(''));
+        $this->assertEquals('en', $service->normalize(' '));
+        $this->assertEquals('en', $service->normalize('fr'));
+        $this->assertEquals('en', $service->normalize('EN'));
     }
 
     public function test_locale_options_are_exactly_uk_and_en(): void
@@ -105,7 +105,7 @@ class LocalizationFoundationTest extends TestCase
 
         $this->assertCount(1, $uiLocales);
         $uiLocale = reset($uiLocales);
-        $this->assertEquals('uk', $uiLocale['value']);
+        $this->assertEquals('en', $uiLocale['value']);
         $this->assertEquals('string', $uiLocale['type']);
     }
 
@@ -113,28 +113,28 @@ class LocalizationFoundationTest extends TestCase
     {
         $this->assertDatabaseMissing('settings', ['key' => 'ui_locale']);
         Artisan::call('app:ensure-settings-defaults');
-        $this->assertDatabaseHas('settings', ['key' => 'ui_locale', 'value' => 'uk']);
-    }
-
-    public function test_ensure_settings_defaults_does_not_overwrite_existing_en(): void
-    {
-        Setting::create(['key' => 'ui_locale', 'value' => 'en', 'type' => 'string']);
-        Artisan::call('app:ensure-settings-defaults');
         $this->assertDatabaseHas('settings', ['key' => 'ui_locale', 'value' => 'en']);
     }
 
-    public function test_middleware_applies_stored_en_during_request(): void
+    public function test_ensure_settings_defaults_does_not_overwrite_existing_uk(): void
     {
-        Setting::updateOrCreate(['key' => 'ui_locale'], ['value' => 'en', 'type' => 'string']);
+        Setting::create(['key' => 'ui_locale', 'value' => 'uk', 'type' => 'string']);
+        Artisan::call('app:ensure-settings-defaults');
+        $this->assertDatabaseHas('settings', ['key' => 'ui_locale', 'value' => 'uk']);
+    }
+
+    public function test_middleware_applies_stored_uk_during_request(): void
+    {
+        Setting::updateOrCreate(['key' => 'ui_locale'], ['value' => 'uk', 'type' => 'string']);
         SettingsService::clearAllCaches();
 
         $user = User::factory()->create(['role' => 'admin']);
         $this->actingAs($user)->get('/admin');
 
-        $this->assertEquals('en', App::getLocale());
+        $this->assertEquals('uk', App::getLocale());
     }
 
-    public function test_middleware_falls_back_to_uk_for_invalid_stored_value(): void
+    public function test_middleware_falls_back_to_en_for_invalid_stored_value(): void
     {
         Setting::updateOrCreate(['key' => 'ui_locale'], ['value' => 'fr', 'type' => 'string']);
         SettingsService::clearAllCaches();
@@ -142,7 +142,7 @@ class LocalizationFoundationTest extends TestCase
         $user = User::factory()->create(['role' => 'admin']);
         $this->actingAs($user)->get('/admin');
 
-        $this->assertEquals('uk', App::getLocale());
+        $this->assertEquals('en', App::getLocale());
     }
 
     public function test_admin_panel_registers_locale_as_persistent_middleware(): void
@@ -189,8 +189,10 @@ class LocalizationFoundationTest extends TestCase
         $this->assertTrue($found);
     }
 
-    public function test_saving_ui_locale_en_persists_and_applies_en(): void
+    public function test_saving_ui_locale_from_uk_to_en_persists_applies_and_redirects(): void
     {
+        Setting::updateOrCreate(['key' => 'ui_locale'], ['value' => 'uk', 'type' => 'string']);
+        SettingsService::clearAllCaches();
         App::setLocale('uk');
         $admin = User::factory()->create(['role' => 'admin']);
 
@@ -203,10 +205,74 @@ class LocalizationFoundationTest extends TestCase
             ->test(Settings::class)
             ->fillForm($payload)
             ->call('save')
-            ->assertHasNoFormErrors();
+            ->assertHasNoFormErrors()
+            ->assertRedirect(Settings::getUrl());
 
         $this->assertSame('en', Setting::where('key', 'ui_locale')->value('value'));
         $this->assertSame('en', App::getLocale());
+    }
+
+    public function test_saving_ui_locale_from_en_to_uk_persists_applies_and_redirects(): void
+    {
+        Setting::updateOrCreate(['key' => 'ui_locale'], ['value' => 'en', 'type' => 'string']);
+        SettingsService::clearAllCaches();
+        App::setLocale('en');
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $payload = array_merge(
+            $this->getValidSettingsPayload(),
+            ['ui_locale' => 'uk']
+        );
+
+        Livewire::actingAs($admin)
+            ->test(Settings::class)
+            ->fillForm($payload)
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertRedirect(Settings::getUrl());
+
+        $this->assertSame('uk', Setting::where('key', 'ui_locale')->value('value'));
+        $this->assertSame('uk', App::getLocale());
+    }
+
+    public function test_saving_with_same_effective_locale_does_not_redirect(): void
+    {
+        Setting::updateOrCreate(['key' => 'ui_locale'], ['value' => 'en', 'type' => 'string']);
+        SettingsService::clearAllCaches();
+        App::setLocale('en');
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $payload = array_merge(
+            $this->getValidSettingsPayload(),
+            ['ui_locale' => 'en']
+        );
+
+        Livewire::actingAs($admin)
+            ->test(Settings::class)
+            ->fillForm($payload)
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertNoRedirect();
+    }
+
+    public function test_saving_another_setting_while_locale_remains_unchanged_does_not_redirect(): void
+    {
+        Setting::updateOrCreate(['key' => 'ui_locale'], ['value' => 'en', 'type' => 'string']);
+        SettingsService::clearAllCaches();
+        App::setLocale('en');
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $payload = array_merge(
+            $this->getValidSettingsPayload(),
+            ['ui_locale' => 'en', 'app_display_timezone' => 'Europe/Berlin']
+        );
+
+        Livewire::actingAs($admin)
+            ->test(Settings::class)
+            ->fillForm($payload)
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertNoRedirect();
     }
 
     public static function invalidLocaleProvider(): array

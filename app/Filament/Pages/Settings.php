@@ -1121,6 +1121,9 @@ class Settings extends Page implements HasForms
             abort(403, 'Only admins can modify settings.');
         }
 
+        $localeService = app(ApplicationLocaleService::class);
+        $previousLocale = $localeService->resolve();
+
         $data = $this->form->getState();
         $settings = Setting::query()->orderBy('key')->get();
         $changedSettings = [];
@@ -1233,12 +1236,17 @@ class Settings extends Page implements HasForms
 
         app(SettingsAuditLogService::class)->logChanges($changedSettings);
 
-        app(ApplicationLocaleService::class)->apply();
+        $localeService->apply();
+        $newLocale = $localeService->resolve();
 
         Notification::make()
             ->title('Settings saved successfully.')
             ->success()
             ->send();
+
+        if ($newLocale !== $previousLocale) {
+            $this->redirect(static::getUrl(), navigate: false);
+        }
     }
 
     private function buildZabbixTabGroups(array $z): array

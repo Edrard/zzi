@@ -9,7 +9,7 @@ class ApplicationLocaleService
 {
     private const SUPPORTED_LOCALES = ['uk', 'en'];
 
-    private const DEFAULT_LOCALE = 'uk';
+    private const DEFAULT_LOCALE = 'en';
 
     public function supportedLocales(): array
     {

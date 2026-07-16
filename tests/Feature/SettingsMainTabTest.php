@@ -146,7 +146,7 @@ class SettingsMainTabTest extends TestCase
             'mail_smtp_timeout_seconds' => 10,
             'mail_smtp_password' => '',
             'mail_smtp_password_clear' => false,
-            'ui_locale' => 'uk',
+            'ui_locale' => 'en',
         ], $overrides);
     }
 
@@ -167,6 +167,6 @@ class SettingsMainTabTest extends TestCase
 
         $this->assertEquals('Europe/Kyiv', Setting::where('key', 'app_display_timezone')->value('value'));
         $this->assertEquals('25', Setting::where('key', 'pagination_per_page_base')->value('value'));
-        $this->assertEquals('uk', Setting::where('key', 'ui_locale')->value('value'));
+        $this->assertEquals('en', Setting::where('key', 'ui_locale')->value('value'));
     }
 }
