@@ -27,17 +27,17 @@ class UserResource extends Resource
 
     public static function getNavigationLabel(): string
     {
-        return __('navigation.resources.users.plural');
+        return __('users.resource.plural');
     }
 
     public static function getModelLabel(): string
     {
-        return __('navigation.resources.users.singular');
+        return __('users.resource.singular');
     }
 
     public static function getPluralModelLabel(): string
     {
-        return __('navigation.resources.users.plural');
+        return __('users.resource.plural');
     }
 
     public static function canAccess(): bool

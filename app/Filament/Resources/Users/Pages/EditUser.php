@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\AuditLogger;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Support\Enums\Width;
+use Illuminate\Contracts\Support\Htmlable;
 
 class EditUser extends EditRecord
 {
@@ -15,6 +16,11 @@ class EditUser extends EditRecord
     public function getMaxContentWidth(): Width|string|null
     {
         return Width::SixExtraLarge;
+    }
+
+    public function getTitle(): string|Htmlable
+    {
+        return __('users.pages.edit.title');
     }
 
     protected array $originalAuditData = [];
