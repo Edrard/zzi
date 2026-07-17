@@ -13,6 +13,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class AuditLogResource extends Resource
 {
@@ -29,17 +30,17 @@ class AuditLogResource extends Resource
 
     public static function getNavigationLabel(): string
     {
-        return __('navigation.resources.audit_log.navigation_label');
+        return __('audit_logs.navigation.label');
     }
 
     public static function getModelLabel(): string
     {
-        return __('navigation.resources.audit_log.singular');
+        return __('audit_logs.model.label');
     }
 
     public static function getPluralModelLabel(): string
     {
-        return __('navigation.resources.audit_log.plural');
+        return __('audit_logs.model.plural_label');
     }
 
     public static function canCreate(): bool
@@ -55,6 +56,44 @@ class AuditLogResource extends Resource
     public static function canDelete(Model $record): bool
     {
         return false;
+    }
+
+    public static function actionLabel(?string $action): ?string
+    {
+        if ($action === null) {
+            return null;
+        }
+
+        $key = "audit_logs.actions.{$action}";
+        $translated = __($key);
+
+        return $translated === $key ? $action : $translated;
+    }
+
+    public static function entityTypeLabel(?string $entityType): ?string
+    {
+        if ($entityType === null) {
+            return null;
+        }
+
+        if ($entityType === '') {
+            return '';
+        }
+
+        $type = Str::snake(class_basename($entityType));
+        $key = "audit_logs.entity_types.{$type}";
+        $translated = __($key);
+
+        return $translated === $key ? $entityType : $translated;
+    }
+
+    public static function actorLabel(?string $name): string
+    {
+        if (empty($name)) {
+            return __('audit_logs.entity_types.system');
+        }
+
+        return $name;
     }
 
     public static function infolist(Schema $schema): Schema

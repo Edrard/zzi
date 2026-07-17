@@ -183,21 +183,39 @@ class AuditLogResourceTest extends TestCase
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
-        Setting::updateOrCreate(['key' => 'app_display_timezone'], ['value' => 'Europe/Kyiv']);
+        $setting = Setting::where('key', 'app_display_timezone')->first();
+        $originalTimezone = $setting ? $setting->value : null;
 
-        $auditLog = AuditLog::create([
-            'action' => 'test.timezone',
-            'context' => [],
-        ]);
-        $auditLog->created_at = '2026-06-21 12:00:00';
-        $auditLog->save();
+        try {
+            Setting::updateOrCreate(['key' => 'app_display_timezone'], ['value' => 'Europe/Kyiv']);
 
-        $expected = 'Jun 21, 2026 15:00:00';
+            $auditLog = AuditLog::create([
+                'action' => 'test.timezone',
+                'context' => [],
+            ]);
+            $auditLog->created_at = '2026-06-21 12:00:00';
+            $auditLog->save();
 
-        $this->actingAs($admin)
-            ->get(AuditLogResource::getUrl('view', ['record' => $auditLog]))
-            ->assertSuccessful()
-            ->assertSee($expected)
-            ->assertDontSee('Europe/Kyiv');
+            $expected = '21 June 2026, 15:00:00';
+
+            $originalLocale = app()->getLocale();
+            try {
+                app()->setLocale('en');
+
+                $this->actingAs($admin)
+                    ->get(AuditLogResource::getUrl('view', ['record' => $auditLog]))
+                    ->assertSuccessful()
+                    ->assertSee($expected)
+                    ->assertDontSee('Europe/Kyiv');
+            } finally {
+                app()->setLocale($originalLocale);
+            }
+        } finally {
+            if ($originalTimezone === null) {
+                Setting::where('key', 'app_display_timezone')->first()?->delete();
+            } else {
+                Setting::updateOrCreate(['key' => 'app_display_timezone'], ['value' => $originalTimezone]);
+            }
+        }
     }
 }

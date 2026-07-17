@@ -14,10 +14,32 @@ class DateTimeDisplayServiceTest extends TestCase
 
     private DateTimeDisplayService $service;
 
+    private ?string $originalTimezone = null;
+
+    private ?string $originalLocale = null;
+
     protected function setUp(): void
     {
         parent::setUp();
+
+        $setting = Setting::where('key', 'app_display_timezone')->first();
+        $this->originalTimezone = $setting ? $setting->value : null;
+        $this->originalLocale = app()->getLocale();
+
         $this->service = app(DateTimeDisplayService::class);
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->originalTimezone === null) {
+            Setting::where('key', 'app_display_timezone')->first()?->delete();
+        } else {
+            Setting::updateOrCreate(['key' => 'app_display_timezone'], ['value' => $this->originalTimezone]);
+        }
+
+        app()->setLocale($this->originalLocale);
+
+        parent::tearDown();
     }
 
     public function test_it_uses_configured_timezone()
@@ -28,6 +50,7 @@ class DateTimeDisplayServiceTest extends TestCase
 
     public function test_it_falls_back_to_utc_if_missing()
     {
+        Setting::where('key', 'app_display_timezone')->first()?->delete();
         $service = new DateTimeDisplayService;
         $this->assertEquals('UTC', $service->timezone());
     }
@@ -63,6 +86,27 @@ class DateTimeDisplayServiceTest extends TestCase
     {
         $this->assertNull($this->service->formatDateTime(null));
         $this->assertNull($this->service->formatDateTimeWithTimezone(null));
+        $this->assertNull($this->service->formatLocalizedDateTime(null));
         $this->assertNull($this->service->diffForHumans(null));
+    }
+
+    public function test_it_formats_localized_datetime()
+    {
+        Setting::updateOrCreate(['key' => 'app_display_timezone'], ['value' => 'Europe/Kyiv']);
+
+        $utcTime = '2026-06-21 12:00:00'; // UTC
+        $expectedEn = '21 June 2026, 15:00:00';
+        $expectedUk = '21 червня 2026, 15:00:00';
+
+        $originalLocale = app()->getLocale();
+        try {
+            app()->setLocale('en');
+            $this->assertEquals($expectedEn, $this->service->formatLocalizedDateTime(Carbon::parse($utcTime, 'UTC')));
+
+            app()->setLocale('uk');
+            $this->assertEquals($expectedUk, $this->service->formatLocalizedDateTime(Carbon::parse($utcTime, 'UTC')));
+        } finally {
+            app()->setLocale($originalLocale);
+        }
     }
 }

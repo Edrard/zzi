@@ -13,4 +13,9 @@ class ViewAuditLog extends ViewRecord
     {
         return [];
     }
+
+    public function getTitle(): string
+    {
+        return __('audit_logs.model.label');
+    }
 }

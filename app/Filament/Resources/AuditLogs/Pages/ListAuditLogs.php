@@ -13,4 +13,9 @@ class ListAuditLogs extends ListRecords
     {
         return [];
     }
+
+    public function getTitle(): string
+    {
+        return __('audit_logs.model.plural_label');
+    }
 }
