@@ -166,8 +166,10 @@ class Settings extends Page implements HasForms
 
         if ($errorResult !== null) {
             Notification::make()
-                ->title('Test Email Failed')
-                ->body(new HtmlString('<strong>Errors:</strong><br>❌ '.htmlspecialchars($errorResult).'<br>'))
+                ->title(__('settings.settings_page.notifications.test_email_failed.title'))
+                ->body(new HtmlString(
+                    '<strong>'.__('settings.settings_page.notifications.test_email_failed.errors_heading').'</strong><br>❌ '.htmlspecialchars($errorResult).'<br>'
+                ))
                 ->color('danger')
                 ->persistent()
                 ->send();
@@ -179,15 +181,17 @@ class Settings extends Page implements HasForms
             app(MailNotificationService::class)->sendTestEmail($data);
 
             Notification::make()
-                ->title('Test Email Sent')
-                ->body('Check the configured admin recipients for the test email.')
+                ->title(__('settings.settings_page.notifications.test_email_sent.title'))
+                ->body(__('settings.settings_page.notifications.test_email_sent.body'))
                 ->color('success')
                 ->persistent()
                 ->send();
         } catch (\Exception $e) {
             Notification::make()
-                ->title('Test Email Failed')
-                ->body(new HtmlString('<strong>Errors:</strong><br>❌ '.htmlspecialchars($e->getMessage()).'<br>'))
+                ->title(__('settings.settings_page.notifications.test_email_failed.title'))
+                ->body(new HtmlString(
+                    '<strong>'.__('settings.settings_page.notifications.test_email_failed.errors_heading').'</strong><br>❌ '.htmlspecialchars($e->getMessage()).'<br>'
+                ))
                 ->color('danger')
                 ->persistent()
                 ->send();
@@ -233,8 +237,10 @@ class Settings extends Page implements HasForms
             );
 
             Notification::make()
-                ->title('Znuny API Connection Failed')
-                ->body(new HtmlString('<strong>Errors:</strong><br>❌ '.htmlspecialchars($errorResult).'<br>'))
+                ->title(__('settings.settings_page.notifications.znuny_connection_failed.title'))
+                ->body(new HtmlString(
+                    '<strong>'.__('settings.settings_page.notifications.znuny_connection_failed.errors_heading').'</strong><br>❌ '.htmlspecialchars($errorResult).'<br>'
+                ))
                 ->color('danger')
                 ->persistent()
                 ->send();
@@ -258,33 +264,33 @@ class Settings extends Page implements HasForms
         };
 
         $title = match ($status) {
-            'success' => 'Znuny API Connection Successful',
-            'partial' => 'Znuny API Connection Partial Success',
-            default => 'Znuny API Connection Failed',
+            'success' => __('settings.settings_page.notifications.znuny_connection_successful.title'),
+            'partial' => __('settings.settings_page.notifications.znuny_connection_partial.title'),
+            default => __('settings.settings_page.notifications.znuny_connection_failed.title'),
         };
 
-        $body = '<strong>Checks:</strong><br>';
+        $body = '<strong>'.__('settings.settings_page.notifications.znuny_connection_successful.checks_heading').'</strong><br>';
         foreach ($checks as $key => $passed) {
             $icon = $passed ? '✅' : '❌';
             $body .= "{$icon} ".Str::title(str_replace('_', ' ', $key)).'<br>';
         }
 
         if (! empty($counts)) {
-            $body .= '<br><strong>Counts:</strong><br>';
+            $body .= '<br><strong>'.__('settings.settings_page.notifications.znuny_connection_successful.counts_heading').'</strong><br>';
             foreach ($counts as $key => $count) {
                 $body .= Str::title(str_replace('_', ' ', $key)).": {$count}<br>";
             }
         }
 
         if (! empty($warnings)) {
-            $body .= '<br><strong>Warnings:</strong><br>';
+            $body .= '<br><strong>'.__('settings.settings_page.notifications.znuny_connection_successful.warnings_heading').'</strong><br>';
             foreach ($warnings as $warning) {
                 $body .= '⚠️ '.htmlspecialchars($warning).'<br>';
             }
         }
 
         if (! empty($errors)) {
-            $body .= '<br><strong>Errors:</strong><br>';
+            $body .= '<br><strong>'.__('settings.settings_page.notifications.znuny_connection_successful.errors_heading').'</strong><br>';
             foreach ($errors as $error) {
                 $body .= '❌ '.htmlspecialchars($error).'<br>';
             }
@@ -348,8 +354,10 @@ class Settings extends Page implements HasForms
             );
 
             Notification::make()
-                ->title('Zabbix API Connection Failed')
-                ->body(new HtmlString('<strong>Errors:</strong><br>❌ '.htmlspecialchars($errorResult).'<br>'))
+                ->title(__('settings.settings_page.notifications.zabbix_connection_failed.title'))
+                ->body(new HtmlString(
+                    '<strong>'.__('settings.settings_page.notifications.zabbix_connection_failed.errors_heading').'</strong><br>❌ '.htmlspecialchars($errorResult).'<br>'
+                ))
                 ->color('danger')
                 ->persistent()
                 ->send();
@@ -377,8 +385,8 @@ class Settings extends Page implements HasForms
             );
 
             Notification::make()
-                ->title('Zabbix API Connection Successful')
-                ->body("Connected successfully. API Version: {$version}")
+                ->title(__('settings.settings_page.notifications.zabbix_connection_successful.title'))
+                ->body(__('settings.settings_page.notifications.zabbix_connection_successful.body', ['version' => $version]))
                 ->color('success')
                 ->persistent()
                 ->send();
@@ -397,8 +405,10 @@ class Settings extends Page implements HasForms
             );
 
             Notification::make()
-                ->title('Zabbix API Connection Failed')
-                ->body(new HtmlString('<strong>Errors:</strong><br>❌ '.htmlspecialchars($e->getMessage()).'<br>'))
+                ->title(__('settings.settings_page.notifications.zabbix_connection_failed.title'))
+                ->body(new HtmlString(
+                    '<strong>'.__('settings.settings_page.notifications.zabbix_connection_failed.errors_heading').'</strong><br>❌ '.htmlspecialchars($e->getMessage()).'<br>'
+                ))
                 ->color('danger')
                 ->persistent()
                 ->send();
@@ -462,7 +472,7 @@ class Settings extends Page implements HasForms
             $this->auditRuntimeCacheMaintenance($auditAction, $cacheScope, 'failed', $e);
 
             Notification::make()
-                ->title('Cache clearing failed')
+                ->title(__('settings.settings_page.notifications.cache_clearing_failed.title'))
                 ->body($failureBody)
                 ->danger()
                 ->send();
@@ -475,9 +485,9 @@ class Settings extends Page implements HasForms
             fn () => app(RuntimeCacheMaintenanceService::class)->clearSettingsCache(),
             'settings.cache.clear',
             'settings',
-            'Settings cache cleared',
-            'Cached application settings were cleared successfully.',
-            'The Settings cache could not be cleared. Review the application logs for details.'
+            __('settings.settings_page.notifications.cache_clearing_successful.title_settings'),
+            __('settings.settings_page.notifications.cache_clearing_successful.body_settings'),
+            __('settings.settings_page.notifications.cache_clearing_failed.body_settings')
         );
     }
 
@@ -487,9 +497,9 @@ class Settings extends Page implements HasForms
             fn () => app(RuntimeCacheMaintenanceService::class)->clearZnunyAgentCache(),
             'settings.znuny_agent_cache.clear',
             'znuny_agent',
-            'Znuny agent cache cleared',
-            'Cached Znuny agent data was cleared successfully.',
-            'The Znuny Agent cache could not be cleared. Review the application logs for details.'
+            __('settings.settings_page.notifications.cache_clearing_successful.title_agent'),
+            __('settings.settings_page.notifications.cache_clearing_successful.body_agent'),
+            __('settings.settings_page.notifications.cache_clearing_failed.body_agent')
         );
     }
 
@@ -499,9 +509,9 @@ class Settings extends Page implements HasForms
             fn () => app(RuntimeCacheMaintenanceService::class)->clearZnunyQueueCache(),
             'settings.znuny_queue_cache.clear',
             'znuny_queue',
-            'Znuny queue cache cleared',
-            'Cached Znuny queue data was cleared successfully.',
-            'The Znuny Queue cache could not be cleared. Review the application logs for details.'
+            __('settings.settings_page.notifications.cache_clearing_successful.title_queue'),
+            __('settings.settings_page.notifications.cache_clearing_successful.body_queue'),
+            __('settings.settings_page.notifications.cache_clearing_failed.body_queue')
         );
     }
 
@@ -511,9 +521,9 @@ class Settings extends Page implements HasForms
             fn () => app(RuntimeCacheMaintenanceService::class)->clearZnunyLookupCache(),
             'settings.znuny_lookup_cache.clear',
             'znuny_lookup',
-            'Znuny lookup cache cleared',
-            'Cached Znuny lookup data was invalidated successfully.',
-            'The Znuny Lookup cache could not be cleared. Review the application logs for details.'
+            __('settings.settings_page.notifications.cache_clearing_successful.title_lookup'),
+            __('settings.settings_page.notifications.cache_clearing_successful.body_lookup'),
+            __('settings.settings_page.notifications.cache_clearing_failed.body_lookup')
         );
     }
 
@@ -523,9 +533,9 @@ class Settings extends Page implements HasForms
             fn () => app(RuntimeCacheMaintenanceService::class)->clearTicketArticleCache(),
             'settings.znuny_ticket_article_cache.clear',
             'znuny_ticket_article',
-            'Ticket article cache cleared',
-            'Cached Znuny ticket article data was invalidated successfully.',
-            'The Ticket Article cache could not be cleared. Review the application logs for details.'
+            __('settings.settings_page.notifications.cache_clearing_successful.title_article'),
+            __('settings.settings_page.notifications.cache_clearing_successful.body_article'),
+            __('settings.settings_page.notifications.cache_clearing_failed.body_article')
         );
     }
 
@@ -725,13 +735,13 @@ class Settings extends Page implements HasForms
             if ($setting->key === 'znuny_agent_exclude_logins') {
                 $component = Textarea::make($setting->key)
                     ->label($label)
-                    ->helperText('Znuny agent logins that must not be selectable as ticket owners in the manual ticket creation modal. Put one login per line.')
+                    ->helperText(__('settings.settings_page.fields.znuny_agent_exclude_logins.description'))
                     ->required(false)
                     ->rows(4);
             } elseif ($setting->key === 'znuny_manual_ticket_footer') {
                 $component = Textarea::make($setting->key)
                     ->label($label)
-                    ->helperText($setting->description)
+                    ->helperText($description)
                     ->required(false)
                     ->rows(3);
             } elseif ($setting->key === 'linked_ticket_manual_close_default_reason') {
@@ -748,8 +758,8 @@ class Settings extends Page implements HasForms
                     ->rows(2);
             } elseif ($setting->key === 'znuny_queue_from_host_regex') {
                 $component = TextInput::make($setting->key)
-                    ->label('Queue detection regex from Zabbix host')
-                    ->helperText('Extracts the primary queue/customer prefix from the Zabbix host name. It must contain the named capture group (?<queue>...). Default takes the first word of the host name. Example: "ExampleCompany swiss test01" → "ExampleCompany".')
+                    ->label(__('settings.settings_page.fields.znuny_queue_from_host_regex.label'))
+                    ->helperText(__('settings.settings_page.fields.znuny_queue_from_host_regex.description'))
                     ->required()
                     ->rules([
                         function () {
@@ -767,8 +777,8 @@ class Settings extends Page implements HasForms
                     ]);
             } elseif ($setting->key === 'znuny_customer_user_from_queue_template') {
                 $component = TextInput::make($setting->key)
-                    ->label('CustomerUser template from Queue')
-                    ->helperText('Generates the default Znuny CustomerUser login from the primary prefix extracted from the Zabbix host name. Use <queue> as placeholder. Default: <queue>Clients. Example: primary prefix "ExampleCompany" → "ExampleCompanyClients". This does not use Queue host prefix mappings.')
+                    ->label(__('settings.settings_page.fields.znuny_customer_user_from_queue_template.label'))
+                    ->helperText(__('settings.settings_page.fields.znuny_customer_user_from_queue_template.description'))
                     ->required()
                     ->rules([
                         function () {
@@ -828,14 +838,14 @@ class Settings extends Page implements HasForms
             } elseif ($setting->key === 'znuny_global_queue_exclusion_regexes') {
                 $component = \Filament\Forms\Components\Repeater::make($setting->key)
                     ->label($label)
-                    ->helperText('Enter regex patterns without delimiters or modifiers. Matching is case-insensitive and UTF-8 aware by default, and is checked against queue Name and FullName. Blank rows are ignored. Invalid regex patterns are ignored and logged.')
+                    ->helperText(__('settings.settings_page.fields.znuny_global_queue_exclusion_regexes.helper_text'))
                     ->schema([
                         TextInput::make('regex')
-                            ->label('Regex pattern')
-                            ->placeholder('^Postmaster::')
-                            ->helperText("Examples:\n^Postmaster:: hides queues starting with Postmaster::\n^Test hides queues starting with Test\nArchive hides queues containing Archive\n^(Postmaster|Junk):: hides queues starting with Postmaster:: or Junk::"),
+                            ->label(__('settings.settings_page.fields.znuny_global_queue_exclusion_regexes.columns.regex_pattern'))
+                            ->placeholder(__('settings.settings_page.fields.znuny_global_queue_exclusion_regexes.placeholders.regex_pattern'))
+                            ->helperText(__('settings.settings_page.fields.znuny_global_queue_exclusion_regexes.examples')),
                     ])
-                    ->addActionLabel('Add regex pattern');
+                    ->addActionLabel(__('settings.settings_page.fields.znuny_global_queue_exclusion_regexes.add_action_label'));
             } elseif ($setting->key === 'znuny_ticket_workspace_active_state_type_ids') {
                 $component = Select::make($setting->key)
                     ->label($label)
@@ -945,7 +955,7 @@ class Settings extends Page implements HasForms
             } elseif ($setting->key === 'app_display_timezone') {
                 $component = Select::make($setting->key)
                     ->label($label)
-                    ->helperText('Timezone used to display dates and times in the admin interface. Backend timestamps and scheduler logic remain unchanged.')
+                    ->helperText(__('settings.settings_page.fields.app_display_timezone.description'))
                     ->options(array_combine(\DateTimeZone::listIdentifiers(), \DateTimeZone::listIdentifiers()))
                     ->searchable()
                     ->required();
@@ -1009,7 +1019,7 @@ class Settings extends Page implements HasForms
                 if (in_array($setting->key, ['zabbix_api_token', 'znuny_password'])) {
                     $input->password()
                         ->revealable()
-                        ->placeholder('Leave empty to keep current password')
+                        ->placeholder(__('settings.settings_page.fields.'.$setting->key.'.placeholder'))
                         ->required(false);
                 }
 
@@ -1019,7 +1029,7 @@ class Settings extends Page implements HasForms
             if ($setting->key === 'mail_smtp_password') {
                 $component->password()
                     ->revealable()
-                    ->placeholder('Leave empty to keep current password')
+                    ->placeholder(__('settings.settings_page.fields.mail_smtp_password.placeholder'))
                     ->required(false);
             }
 
@@ -1277,7 +1287,7 @@ class Settings extends Page implements HasForms
         $newLocale = $localeService->resolve();
 
         Notification::make()
-            ->title('Settings saved successfully.')
+            ->title(__('settings.settings_page.notifications.settings_saved.title'))
             ->success()
             ->send();
 
@@ -1300,14 +1310,14 @@ class Settings extends Page implements HasForms
                     $connectionFields['zabbix_api_verify_ssl'] ?? null,
                     Actions::make([
                         Action::make('testZabbixConnection')
-                            ->label('Test Zabbix API connection')
+                            ->label(__('settings.settings_page.actions.test_zabbix_api.label'))
                             ->icon('heroicon-o-signal')
                             ->color('info')
                             ->action('testZabbixConnectionAction'),
                     ]),
                     Placeholder::make('zabbix_tester_help')
                         ->hiddenLabel()
-                        ->content('Tests current Zabbix form values without saving settings.'),
+                        ->content(__('settings.settings_page.actions.test_zabbix_api.description')),
                 ]))
                 ->columns(1),
             Tab::make('problem_handling_and_ui')
@@ -1326,7 +1336,7 @@ class Settings extends Page implements HasForms
             $ph = $z['Problem Highlighting'];
 
             $previewBlock = Placeholder::make('problem_highlighting_preview')
-                ->label('Live Preview')
+                ->label(__('settings.settings_page.fields.problem_highlighting_preview.label'))
                 ->content(fn (callable $get) => new HtmlString($this->generateHighlightPreview($get)));
 
             $tabs[] = Tab::make('problem_highlighting')
@@ -1352,7 +1362,7 @@ class Settings extends Page implements HasForms
 
     private function generateHighlightPreview(callable $get): string
     {
-        $text = 'Kreisel fastiv ipmi01[main]';
+        $text = __('settings.settings_page.fields.problem_highlighting_preview.sample');
 
         if (! $get('zabbix_attention_highlighting_enabled')) {
             return $text;
@@ -1386,7 +1396,7 @@ class Settings extends Page implements HasForms
     {
         return Actions::make([
             Action::make($name)
-                ->label('Test Znuny API Connection')
+                ->label(__('settings.settings_page.actions.test_znuny_api.label'))
                 ->icon('heroicon-o-signal')
                 ->color('info')
                 ->action('testZnunyConnectionAction'),
@@ -1397,7 +1407,7 @@ class Settings extends Page implements HasForms
     {
         return Placeholder::make($name)
             ->hiddenLabel()
-            ->content('Tests current Znuny form values without saving settings.');
+            ->content(__('settings.settings_page.actions.test_znuny_api.description'));
     }
 
     private function buildZnunyTabGroups(array $z): array
@@ -1623,7 +1633,7 @@ class Settings extends Page implements HasForms
                         ->helperText($this->localizedSettingDescription('mail_smtp_password', 'SMTP password'))
                         ->password()
                         ->revealable()
-                        ->placeholder(Lang::has('settings.settings_page.fields.mail_smtp_password.placeholder') ? __('settings.settings_page.fields.mail_smtp_password.placeholder') : 'Leave empty to keep current password')
+                        ->placeholder(__('settings.settings_page.fields.mail_smtp_password.placeholder'))
                         ->required(false),
                     Toggle::make('mail_smtp_password_clear')
                         ->label(Lang::has('settings.settings_page.fields.mail_smtp_password_clear.label') ? __('settings.settings_page.fields.mail_smtp_password_clear.label') : 'Clear Stored SMTP Password')
@@ -1640,7 +1650,7 @@ class Settings extends Page implements HasForms
 
             Actions::make([
                 Action::make('testMailConnection')
-                    ->label('Send Test Email')
+                    ->label(__('settings.settings_page.actions.send_test_email.label'))
                     ->icon('heroicon-o-paper-airplane')
                     ->color('info')
                     ->action('testMailConnectionAction'),
@@ -2041,53 +2051,53 @@ class Settings extends Page implements HasForms
             ->schema([
                 Actions::make([
                     Action::make('clearSettingsCache')
-                        ->label('Clear Settings Cache')
+                        ->label(__('settings.settings_page.actions.clear_settings_cache.label'))
                         ->color('warning')
                         ->icon('heroicon-o-arrow-path')
                         ->requiresConfirmation()
-                        ->modalHeading('Clear Settings Cache?')
-                        ->modalDescription('This clears the cached application settings. Saved settings remain unchanged and will be loaded again when needed.')
-                        ->modalSubmitActionLabel('Clear Settings Cache')
+                        ->modalHeading(__('settings.settings_page.actions.clear_settings_cache.modal_heading'))
+                        ->modalDescription(__('settings.settings_page.actions.clear_settings_cache.modal_description'))
+                        ->modalSubmitActionLabel(__('settings.settings_page.actions.clear_settings_cache.modal_submit_action_label'))
                         ->action('clearSettingsCacheAction')
                         ->visible(fn () => auth()->user()?->role === 'admin'),
                     Action::make('clearZnunyAgentCache')
-                        ->label('Clear Znuny Agent Cache')
+                        ->label(__('settings.settings_page.actions.clear_znuny_agent_cache.label'))
                         ->color('warning')
                         ->icon('heroicon-o-arrow-path')
                         ->requiresConfirmation()
-                        ->modalHeading('Clear Znuny Agent Cache?')
-                        ->modalDescription('This clears the cached active Znuny agent list. The next agent request may contact Znuny again.')
-                        ->modalSubmitActionLabel('Clear Agent Cache')
+                        ->modalHeading(__('settings.settings_page.actions.clear_znuny_agent_cache.modal_heading'))
+                        ->modalDescription(__('settings.settings_page.actions.clear_znuny_agent_cache.modal_description'))
+                        ->modalSubmitActionLabel(__('settings.settings_page.actions.clear_znuny_agent_cache.modal_submit_action_label'))
                         ->action('clearZnunyAgentCacheAction')
                         ->visible(fn () => auth()->user()?->role === 'admin'),
                     Action::make('clearZnunyQueueCache')
-                        ->label('Clear Znuny Queue Cache')
+                        ->label(__('settings.settings_page.actions.clear_znuny_queue_cache.label'))
                         ->color('warning')
                         ->icon('heroicon-o-arrow-path')
                         ->requiresConfirmation()
-                        ->modalHeading('Clear Znuny Queue Cache?')
-                        ->modalDescription('This clears the cached Znuny queue list. The next queue request may contact Znuny again.')
-                        ->modalSubmitActionLabel('Clear Queue Cache')
+                        ->modalHeading(__('settings.settings_page.actions.clear_znuny_queue_cache.modal_heading'))
+                        ->modalDescription(__('settings.settings_page.actions.clear_znuny_queue_cache.modal_description'))
+                        ->modalSubmitActionLabel(__('settings.settings_page.actions.clear_znuny_queue_cache.modal_submit_action_label'))
                         ->action('clearZnunyQueueCacheAction')
                         ->visible(fn () => auth()->user()?->role === 'admin'),
                     Action::make('clearZnunyLookupCache')
-                        ->label('Clear Znuny Lookup Cache')
+                        ->label(__('settings.settings_page.actions.clear_znuny_lookup_cache.label'))
                         ->color('warning')
                         ->icon('heroicon-o-arrow-path')
                         ->requiresConfirmation()
-                        ->modalHeading('Clear Znuny Lookup Cache?')
-                        ->modalDescription('This invalidates reusable Znuny lookup data such as owners, CustomerUsers, states, priorities, types, queues, and search candidates.')
-                        ->modalSubmitActionLabel('Clear Lookup Cache')
+                        ->modalHeading(__('settings.settings_page.actions.clear_znuny_lookup_cache.modal_heading'))
+                        ->modalDescription(__('settings.settings_page.actions.clear_znuny_lookup_cache.modal_description'))
+                        ->modalSubmitActionLabel(__('settings.settings_page.actions.clear_znuny_lookup_cache.modal_submit_action_label'))
                         ->action('clearZnunyLookupCacheAction')
                         ->visible(fn () => auth()->user()?->role === 'admin'),
                     Action::make('clearTicketArticleCache')
-                        ->label('Clear Ticket Article Cache')
+                        ->label(__('settings.settings_page.actions.clear_ticket_article_cache.label'))
                         ->color('warning')
                         ->icon('heroicon-o-arrow-path')
                         ->requiresConfirmation()
-                        ->modalHeading('Clear Ticket Article Cache?')
-                        ->modalDescription('This invalidates cached Znuny ticket articles used by linked-ticket views. The next article request may contact Znuny again.')
-                        ->modalSubmitActionLabel('Clear Article Cache')
+                        ->modalHeading(__('settings.settings_page.actions.clear_ticket_article_cache.modal_heading'))
+                        ->modalDescription(__('settings.settings_page.actions.clear_ticket_article_cache.modal_description'))
+                        ->modalSubmitActionLabel(__('settings.settings_page.actions.clear_ticket_article_cache.modal_submit_action_label'))
                         ->action('clearTicketArticleCacheAction')
                         ->visible(fn () => auth()->user()?->role === 'admin'),
                 ]),

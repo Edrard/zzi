@@ -99,6 +99,41 @@ return [
             'mail_smtp_password_clear' => [
                 'label' => 'Очистити збережений пароль SMTP',
             ],
+            'znuny_password' => [
+                'placeholder' => 'Залиште порожнім, щоб зберегти поточний пароль',
+            ],
+            'zabbix_api_token' => [
+                'placeholder' => 'Залиште порожнім, щоб зберегти поточний пароль',
+            ],
+            'znuny_agent_exclude_logins' => [
+                'description' => 'Логіни агентів Znuny, які не можна вибирати як власників заявок у модальному вікні створення заявки вручну. Вводьте по одному логіну в рядку.',
+            ],
+            'app_display_timezone' => [
+                'description' => 'Часовий пояс, який використовується для відображення дат і часу в інтерфейсі адміністратора. Мітки часу в базі та логіка планувальника залишаються незмінними.',
+            ],
+            'znuny_global_queue_exclusion_regexes' => [
+                'add_action_label' => 'Додати регулярний вираз',
+                'helper_text' => 'Введіть регулярні вирази без розділювачів або модифікаторів. Зіставлення нечутливе до регістру та підтримує UTF-8 за замовчуванням, а також перевіряється з назвою черги (Name) та повною назвою (FullName). Порожні рядки ігноруються. Недійсні регулярні вирази ігноруються та записуються в журнал.',
+                'columns' => [
+                    'regex_pattern' => 'Регулярний вираз',
+                ],
+                'placeholders' => [
+                    'regex_pattern' => '^Postmaster::',
+                ],
+                'examples' => "Приклади:\n^Postmaster:: приховує черги, що починаються з Postmaster::\n^Test приховує черги, що починаються з Test\nArchive приховує черги, що містять Archive\n^(Postmaster|Junk):: приховує черги, що починаються з Postmaster:: або Junk::",
+            ],
+            'znuny_queue_from_host_regex' => [
+                'label' => 'Регулярний вираз виявлення черги з хоста Zabbix',
+                'description' => 'Витягує основну чергу / префікс клієнта з імені хоста Zabbix. Повинен містити іменовану групу захоплення (?<queue>...). За замовчуванням береться перше слово імені хоста. Приклад: "ExampleCompany swiss test01" → "ExampleCompany".',
+            ],
+            'znuny_customer_user_from_queue_template' => [
+                'label' => 'Шаблон CustomerUser із черги',
+                'description' => 'Генерує логін CustomerUser Znuny за замовчуванням з основного префікса, витягнутого з імені хоста Zabbix. Використовуйте <queue> як заповнювач. За замовчуванням: <queue>Clients. Приклад: основний префікс "ExampleCompany" → "ExampleCompanyClients". Це не використовує зіставлення префіксів хостів із чергами.',
+            ],
+            'problem_highlighting_preview' => [
+                'label' => 'Попередній перегляд виділення',
+                'sample' => 'ExampleCompany server01[main]',
+            ],
         ],
         'sections' => [
             'statistics' => [
@@ -204,6 +239,145 @@ return [
         ],
         'actions' => [
             'save' => 'Зберегти налаштування',
+            'test_zabbix_api' => [
+                'label' => 'Перевірити підключення до API Zabbix',
+                'description' => 'Перевіряє поточні значення форми Zabbix без збереження налаштувань.',
+            ],
+            'live_preview' => [
+                'label' => 'Попередній перегляд',
+            ],
+            'test_znuny_api' => [
+                'label' => 'Тест з\'єднання API Znuny',
+                'description' => 'Перевіряє поточні значення форми Znuny без збереження налаштувань.',
+            ],
+
+            'save_queue_mappings' => [
+                'label' => 'Зберегти зіставлення черг',
+            ],
+            'scan_missing_queue_mappings' => [
+                'label' => 'Шукати відсутні зіставлення черг у поточних проблемах',
+            ],
+            'send_test_email' => [
+                'label' => 'Надіслати тестовий лист',
+            ],
+            'clear_settings_cache' => [
+                'label' => 'Очистити кеш налаштувань',
+                'modal_heading' => 'Очистити кеш налаштувань?',
+                'modal_description' => 'Це очистить кешовані налаштування програми. Збережені налаштування залишаться незмінними і будуть завантажені знову за потреби.',
+                'modal_submit_action_label' => 'Очистити кеш налаштувань',
+            ],
+            'clear_znuny_agent_cache' => [
+                'label' => 'Очистити кеш агентів Znuny',
+                'modal_heading' => 'Очистити кеш агентів Znuny?',
+                'modal_description' => 'Це очистить кешований список активних агентів Znuny. Наступний запит агента може знову звернутися до Znuny.',
+                'modal_submit_action_label' => 'Очистити кеш агентів',
+            ],
+            'clear_znuny_queue_cache' => [
+                'label' => 'Очистити кеш черг Znuny',
+                'modal_heading' => 'Очистити кеш черг Znuny?',
+                'modal_description' => 'Це очистить кешований список черг Znuny. Наступний запит черги може знову звернутися до Znuny.',
+                'modal_submit_action_label' => 'Очистити кеш черг',
+            ],
+            'clear_znuny_lookup_cache' => [
+                'label' => 'Очистити кеш пошуку Znuny',
+                'modal_heading' => 'Очистити кеш пошуку Znuny?',
+                'modal_description' => 'Це призведе до недійсності придатних для повторного використання даних пошуку Znuny, таких як власники, CustomerUser, стани, пріоритети, типи, черги та кандидати для пошуку.',
+                'modal_submit_action_label' => 'Очистити кеш пошуку',
+            ],
+            'clear_ticket_article_cache' => [
+                'label' => 'Очистити кеш статей заявок',
+                'modal_heading' => 'Очистити кеш статей заявок?',
+                'modal_description' => 'Це призведе до недійсності кешованих статей заявок Znuny, які використовуються в переглядах пов\'язаних заявок. Наступний запит статті може знову звернутися до Znuny.',
+                'modal_submit_action_label' => 'Очистити кеш статей',
+            ],
+        ],
+        'queue_mappings' => [
+            'heading' => 'Зіставлення префіксів хостів із чергами',
+            'helper_text' => 'Зіставляє основні префікси хостів Zabbix з наявними чергами Znuny. Використовується лише тоді, коли кандидат в основну чергу не знайдений у Znuny.',
+            'columns' => [
+                'host_prefix' => 'Префікс хоста',
+                'queue_name' => 'Назва черги',
+                'note' => 'Примітка',
+            ],
+            'fields' => [
+                'host_prefix' => [
+                    'helper_text' => 'Приклад: TestCompany',
+                ],
+                'note' => [
+                    'placeholder' => 'Виявлено в поточних проблемах Zabbix',
+                    'generated_value' => 'Виявлено в поточних проблемах Zabbix',
+                ],
+            ],
+            'actions' => [
+                'save_mappings' => [
+                    'label' => 'Зберегти зіставлення черг',
+                ],
+                'scan_missing' => [
+                    'label' => 'Сканувати поточні проблеми на відсутність зіставлень черг',
+                ],
+            ],
+            'notifications' => [
+                'saved_successfully' => 'Зіставлення черг успішно збережено.',
+                'scan_complete' => [
+                    'title' => 'Сканування завершено',
+                    'body' => "Проскановано :scanned проблем (:unique_prefixes унікальних префіксів).\nДодано :added чернеток зіставлень.\nПропущено :skipped_existing_queue наявних черг.\nПропущено :skipped_existing_mapping наявних зіставлень.\nНевдалі перевірки API: :failed_api.",
+                ],
+            ],
+            'errors' => [
+                'only_admins' => 'Лише адміністратори можуть змінювати налаштування.',
+            ],
+        ],
+        'notifications' => [
+            'test_email_failed' => [
+                'title' => 'Не вдалося надіслати тестовий лист',
+                'errors_heading' => 'Помилки:',
+            ],
+            'test_email_sent' => [
+                'title' => 'Тестовий лист надіслано',
+                'body' => 'Перевірте налаштованих одержувачів-адміністраторів на наявність тестового листа.',
+            ],
+            'znuny_connection_failed' => [
+                'title' => 'Помилка підключення до API Znuny',
+                'errors_heading' => 'Помилки:',
+            ],
+            'znuny_connection_successful' => [
+                'title' => 'Успішне підключення до API Znuny',
+                'checks_heading' => 'Перевірки:',
+                'counts_heading' => 'Кількість:',
+                'warnings_heading' => 'Попередження:',
+                'errors_heading' => 'Помилки:',
+            ],
+            'znuny_connection_partial' => [
+                'title' => 'Частково успішне підключення до API Znuny',
+            ],
+            'zabbix_connection_failed' => [
+                'title' => 'Помилка підключення до API Zabbix',
+                'errors_heading' => 'Помилки:',
+            ],
+            'zabbix_connection_successful' => [
+                'title' => 'Успішне підключення до API Zabbix',
+                'body' => 'Підключено успішно. Версія API: :version',
+            ],
+            'cache_clearing_failed' => [
+                'title' => 'Помилка очищення кешу',
+                'body_settings' => 'Не вдалося очистити кеш налаштувань. Перегляньте журнали програми для отримання деталей.',
+                'body_agent' => 'Не вдалося очистити кеш агентів Znuny. Перегляньте журнали програми для отримання деталей.',
+                'body_queue' => 'Не вдалося очистити кеш черг Znuny. Перегляньте журнали програми для отримання деталей.',
+                'body_lookup' => 'Не вдалося очистити кеш пошуку Znuny. Перегляньте журнали програми для отримання деталей.',
+                'body_article' => 'Не вдалося очистити кеш статей заявок. Перегляньте журнали програми для отримання деталей.',
+            ],
+            'cache_clearing_successful' => [
+                'title_settings' => 'Кеш налаштувань очищено',
+                'body_settings' => 'Кешовані налаштування програми успішно очищено.',
+                'title_agent' => 'Кеш агентів Znuny очищено',
+                'body_agent' => 'Кешовані дані агентів Znuny успішно очищено.',
+                'title_queue' => 'Кеш черг Znuny очищено',
+                'body_queue' => 'Кешовані дані черг Znuny успішно очищено.',
+                'title_lookup' => 'Кеш пошуку Znuny очищено',
+                'body_lookup' => 'Кешовані дані пошуку Znuny, придатні для повторного використання, успішно очищено.',
+                'title_article' => 'Кеш статей заявок очищено',
+                'body_article' => 'Кешовані статті заявок Znuny успішно очищено.',
+            ],
         ],
     ],
     'metadata' => [
@@ -374,7 +548,7 @@ return [
         ],
         'zabbix_problem_url_template' => [
             'label' => 'Шаблон URL проблеми Zabbix',
-            'description' => 'Шаблон URL-адреси проблеми Zabbix',
+            'description' => 'Використовується для створення прямих посилань на проблеми Zabbix у модальному вікні створення заявки та пов\'язаних поданнях. Точний підтримуваний токен заповнювача - {trigger_id}. Приклад: https://zabbix.example.com/tr_events.php?triggerid={trigger_id} Заповнювач замінюється під час виконання.',
         ],
         'zabbix_problem_sync_audit_enabled' => [
             'label' => 'Аудит синхронізації проблем Zabbix увімкнено',
@@ -467,7 +641,7 @@ return [
         ],
         'znuny_ticket_url_template' => [
             'label' => 'Шаблон URL заявки Znuny',
-            'description' => 'Шаблон URL-адреси заявки агента Znuny',
+            'description' => 'Використовується для створення прямих посилань на заявки Znuny в інтерфейсі. Точний підтримуваний токен заповнювача - {ticket_id}. Приклад: https://znuny.example.com/index.pl?Action=AgentTicketZoom;TicketID={ticket_id} Заповнювач замінюється під час виконання.',
         ],
         'znuny_username' => [
             'label' => 'Ім’я користувача Znuny',

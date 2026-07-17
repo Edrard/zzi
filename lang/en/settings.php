@@ -99,6 +99,43 @@ return [
             'mail_smtp_password_clear' => [
                 'label' => 'Clear Stored SMTP Password',
             ],
+            'znuny_password' => [
+                'placeholder' => 'Leave empty to keep current password',
+            ],
+            'zabbix_api_token' => [
+                'placeholder' => 'Leave empty to keep current password',
+            ],
+
+            'znuny_agent_exclude_logins' => [
+                'description' => 'Znuny agent logins that must not be selectable as ticket owners in the manual ticket creation modal. Put one login per line.',
+            ],
+            'app_display_timezone' => [
+                'description' => 'Timezone used to display dates and times in the admin interface. Backend timestamps and scheduler logic remain unchanged.',
+            ],
+
+            'znuny_global_queue_exclusion_regexes' => [
+                'add_action_label' => 'Add regex pattern',
+                'helper_text' => 'Enter regex patterns without delimiters or modifiers. Matching is case-insensitive and UTF-8 aware by default, and is checked against queue Name and FullName. Blank rows are ignored. Invalid regex patterns are ignored and logged.',
+                'columns' => [
+                    'regex_pattern' => 'Regex pattern',
+                ],
+                'placeholders' => [
+                    'regex_pattern' => '^Postmaster::',
+                ],
+                'examples' => "Examples:\n^Postmaster:: hides queues starting with Postmaster::\n^Test hides queues starting with Test\nArchive hides queues containing Archive\n^(Postmaster|Junk):: hides queues starting with Postmaster:: or Junk::",
+            ],
+            'znuny_queue_from_host_regex' => [
+                'label' => 'Queue detection regex from Zabbix host',
+                'description' => 'Extracts the primary queue/customer prefix from the Zabbix host name. It must contain the named capture group (?<queue>...). Default takes the first word of the host name. Example: "ExampleCompany swiss test01" → "ExampleCompany".',
+            ],
+            'znuny_customer_user_from_queue_template' => [
+                'label' => 'CustomerUser template from Queue',
+                'description' => 'Generates the default Znuny CustomerUser login from the primary prefix extracted from the Zabbix host name. Use <queue> as placeholder. Default: <queue>Clients. Example: primary prefix "ExampleCompany" → "ExampleCompanyClients". This does not use Queue host prefix mappings.',
+            ],
+            'problem_highlighting_preview' => [
+                'label' => 'Highlight Preview',
+                'sample' => 'ExampleCompany server01[main]',
+            ],
         ],
         'sections' => [
             'statistics' => [
@@ -204,6 +241,144 @@ return [
         ],
         'actions' => [
             'save' => 'Save settings',
+            'test_zabbix_api' => [
+                'label' => 'Test Zabbix API connection',
+                'description' => 'Tests current Zabbix form values without saving settings.',
+            ],
+            'live_preview' => [
+                'label' => 'Live Preview',
+            ],
+            'test_znuny_api' => [
+                'label' => 'Test Znuny API Connection',
+                'description' => 'Tests current Znuny form values without saving settings.',
+            ],
+            'save_queue_mappings' => [
+                'label' => 'Save queue mappings',
+            ],
+            'scan_missing_queue_mappings' => [
+                'label' => 'Scan current problems for missing queue mappings',
+            ],
+            'send_test_email' => [
+                'label' => 'Send Test Email',
+            ],
+            'clear_settings_cache' => [
+                'label' => 'Clear Settings Cache',
+                'modal_heading' => 'Clear Settings Cache?',
+                'modal_description' => 'This clears the cached application settings. Saved settings remain unchanged and will be loaded again when needed.',
+                'modal_submit_action_label' => 'Clear Settings Cache',
+            ],
+            'clear_znuny_agent_cache' => [
+                'label' => 'Clear Znuny Agent Cache',
+                'modal_heading' => 'Clear Znuny Agent Cache?',
+                'modal_description' => 'This clears the cached active Znuny agent list. The next agent request may contact Znuny again.',
+                'modal_submit_action_label' => 'Clear Agent Cache',
+            ],
+            'clear_znuny_queue_cache' => [
+                'label' => 'Clear Znuny Queue Cache',
+                'modal_heading' => 'Clear Znuny Queue Cache?',
+                'modal_description' => 'This clears the cached Znuny queue list. The next queue request may contact Znuny again.',
+                'modal_submit_action_label' => 'Clear Queue Cache',
+            ],
+            'clear_znuny_lookup_cache' => [
+                'label' => 'Clear Znuny Lookup Cache',
+                'modal_heading' => 'Clear Znuny Lookup Cache?',
+                'modal_description' => 'This invalidates reusable Znuny lookup data such as owners, CustomerUsers, states, priorities, types, queues, and search candidates.',
+                'modal_submit_action_label' => 'Clear Lookup Cache',
+            ],
+            'clear_ticket_article_cache' => [
+                'label' => 'Clear Ticket Article Cache',
+                'modal_heading' => 'Clear Ticket Article Cache?',
+                'modal_description' => 'This invalidates cached Znuny ticket articles used by linked-ticket views. The next article request may contact Znuny again.',
+                'modal_submit_action_label' => 'Clear Article Cache',
+            ],
+        ],
+        'queue_mappings' => [
+            'heading' => 'Queue host prefix mappings',
+            'helper_text' => 'Maps primary Zabbix host prefixes to existing Znuny queues. Used only when the primary queue candidate is not found in Znuny.',
+            'columns' => [
+                'host_prefix' => 'Host prefix',
+                'queue_name' => 'Queue name',
+                'note' => 'Note',
+            ],
+            'fields' => [
+                'host_prefix' => [
+                    'helper_text' => 'Example: TestCompany',
+                ],
+                'note' => [
+                    'placeholder' => 'Detected from current Zabbix problems',
+                    'generated_value' => 'Detected from current Zabbix problems',
+                ],
+            ],
+            'actions' => [
+                'save_mappings' => [
+                    'label' => 'Save queue mappings',
+                ],
+                'scan_missing' => [
+                    'label' => 'Scan current problems for missing queue mappings',
+                ],
+            ],
+            'notifications' => [
+                'saved_successfully' => 'Queue mappings saved successfully.',
+                'scan_complete' => [
+                    'title' => 'Scan Complete',
+                    'body' => "Scanned :scanned problems (:unique_prefixes unique prefixes).\nAdded :added draft mappings.\nSkipped :skipped_existing_queue existing queues.\nSkipped :skipped_existing_mapping existing mappings.\nFailed API checks: :failed_api.",
+                ],
+            ],
+            'errors' => [
+                'only_admins' => 'Only admins can modify settings.',
+            ],
+        ],
+        'notifications' => [
+            'test_email_failed' => [
+                'title' => 'Test Email Failed',
+                'errors_heading' => 'Errors:',
+            ],
+            'test_email_sent' => [
+                'title' => 'Test Email Sent',
+                'body' => 'Check the configured admin recipients for the test email.',
+            ],
+            'znuny_connection_failed' => [
+                'title' => 'Znuny API Connection Failed',
+                'errors_heading' => 'Errors:',
+            ],
+            'znuny_connection_successful' => [
+                'title' => 'Znuny API Connection Successful',
+                'checks_heading' => 'Checks:',
+                'counts_heading' => 'Counts:',
+                'warnings_heading' => 'Warnings:',
+                'errors_heading' => 'Errors:',
+            ],
+            'znuny_connection_partial' => [
+                'title' => 'Znuny API Connection Partial Success',
+            ],
+            'zabbix_connection_failed' => [
+                'title' => 'Zabbix API Connection Failed',
+                'errors_heading' => 'Errors:',
+            ],
+            'zabbix_connection_successful' => [
+                'title' => 'Zabbix API Connection Successful',
+                'body' => 'Connected successfully. API Version: :version',
+            ],
+            'cache_clearing_failed' => [
+                'title' => 'Cache clearing failed',
+                'body_settings' => 'The Settings cache could not be cleared. Review the application logs for details.',
+                'body_agent' => 'The Znuny Agent cache could not be cleared. Review the application logs for details.',
+                'body_queue' => 'The Znuny Queue cache could not be cleared. Review the application logs for details.',
+                'body_lookup' => 'The Znuny Lookup cache could not be cleared. Review the application logs for details.',
+                'body_article' => 'The Ticket Article cache could not be cleared. Review the application logs for details.',
+            ],
+            'cache_clearing_successful' => [
+                'title_settings' => 'Settings cache cleared',
+                'body_settings' => 'Cached application settings were cleared successfully.',
+                'title_agent' => 'Znuny agent cache cleared',
+                'body_agent' => 'Cached Znuny agent data was cleared successfully.',
+                'title_queue' => 'Znuny queue cache cleared',
+                'body_queue' => 'Cached Znuny queue data was cleared successfully.',
+                'title_lookup' => 'Znuny lookup cache cleared',
+                'body_lookup' => 'Cached reusable Znuny lookup data was cleared successfully.',
+                'title_article' => 'Ticket article cache cleared',
+                'body_article' => 'Cached Znuny ticket articles were cleared successfully.',
+            ],
         ],
     ],
     'metadata' => [
@@ -374,7 +549,7 @@ return [
         ],
         'zabbix_problem_url_template' => [
             'label' => 'Zabbix Problem Url Template',
-            'description' => 'Zabbix Problem URL Template',
+            'description' => 'Used to generate direct links to Zabbix problems in the ticket creation modal and related views. The exact supported placeholder token is {trigger_id}. Example: https://zabbix.example.com/tr_events.php?triggerid={trigger_id} The placeholder is replaced at runtime.',
         ],
         'zabbix_problem_sync_audit_enabled' => [
             'label' => 'Zabbix Problem Sync Audit Enabled',
@@ -467,7 +642,7 @@ return [
         ],
         'znuny_ticket_url_template' => [
             'label' => 'Znuny Ticket Url Template',
-            'description' => 'Znuny agent ticket URL template',
+            'description' => 'Used to generate direct links to Znuny tickets in the UI. The exact supported placeholder token is {ticket_id}. Example: https://znuny.example.com/index.pl?Action=AgentTicketZoom;TicketID={ticket_id} The placeholder is replaced at runtime.',
         ],
         'znuny_username' => [
             'label' => 'Znuny Username',

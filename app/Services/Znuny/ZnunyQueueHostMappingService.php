@@ -125,7 +125,7 @@ class ZnunyQueueHostMappingService
                     $missingDrafts[] = [
                         'host_prefix' => trim($prefix),
                         'queue_name' => '',
-                        'note' => 'Detected from current Zabbix problems',
+                        'note' => __('settings.settings_page.queue_mappings.fields.note.generated_value'),
                     ];
                     $stats['added']++;
                     $existingPrefixes[] = $lowerPrefix;

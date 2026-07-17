@@ -36,22 +36,29 @@ class ZnunyQueueHostMappingSchemaBuilder
         }
 
         return Repeater::make($setting->key)
-            ->label('Queue host prefix mappings')
-            ->helperText(new HtmlString('Maps primary Zabbix host prefixes to existing Znuny queues. Used only when the primary queue candidate is not found in Znuny.'.($queueError ? '<br><span style="color: #e11d48; font-weight: bold;">'.$queueError.'</span>' : '')))
+            ->label(__('settings.settings_page.queue_mappings.heading'))
+            ->helperText(new HtmlString(
+                __('settings.settings_page.queue_mappings.helper_text').(
+                    $queueError
+                        ? '<br><span style="color: #e11d48; font-weight: bold;">'.$queueError.'</span>'
+                        : ''
+                )
+            ))
             ->schema([
                 TextInput::make('host_prefix')
-                    ->label('Host prefix')
-                    ->helperText('Example: TestCompany')
+                    ->label(__('settings.settings_page.queue_mappings.columns.host_prefix'))
+                    ->helperText(__('settings.settings_page.queue_mappings.fields.host_prefix.helper_text'))
                     ->dehydrateStateUsing(fn ($state) => trim($state))
                     ->distinct()
                     ->required(false),
                 Select::make('queue_name')
-                    ->label('Queue name')
+                    ->label(__('settings.settings_page.queue_mappings.columns.queue_name'))
                     ->options($queueOptions)
                     ->searchable()
                     ->required(false),
                 TextInput::make('note')
-                    ->label('Note')
+                    ->label(__('settings.settings_page.queue_mappings.columns.note'))
+                    ->placeholder(__('settings.settings_page.queue_mappings.fields.note.placeholder'))
                     ->required(false),
             ])
             ->columns(3)
@@ -62,12 +69,12 @@ class ZnunyQueueHostMappingSchemaBuilder
     public function getSaveAction(): Action
     {
         return Action::make('saveMappings')
-            ->label('Save queue mappings')
+            ->label(__('settings.settings_page.queue_mappings.actions.save_mappings.label'))
             ->icon('heroicon-o-check')
             ->color('success')
             ->action(function (Settings $livewire) {
                 if (auth()->user()->role !== 'admin') {
-                    abort(403, 'Only admins can modify settings.');
+                    abort(403, __('settings.settings_page.queue_mappings.errors.only_admins'));
                 }
 
                 $mappingService = app(ZnunyQueueHostMappingService::class);
@@ -75,7 +82,7 @@ class ZnunyQueueHostMappingSchemaBuilder
                 $mappingService->saveMappings($state);
 
                 Notification::make()
-                    ->title('Queue mappings saved successfully.')
+                    ->title(__('settings.settings_page.queue_mappings.notifications.saved_successfully'))
                     ->success()
                     ->send();
             });
@@ -84,7 +91,7 @@ class ZnunyQueueHostMappingSchemaBuilder
     public function getScanMissingAction(): Action
     {
         return Action::make('scanMissing')
-            ->label('Scan current problems for missing queue mappings')
+            ->label(__('settings.settings_page.queue_mappings.actions.scan_missing.label'))
             ->button()
             ->action(function (Settings $livewire) {
                 $mappingService = app(ZnunyQueueHostMappingService::class);
@@ -105,14 +112,17 @@ class ZnunyQueueHostMappingSchemaBuilder
                     $livewire->form->fill($fullState);
                 }
 
-                $message = "Scanned {$stats['scanned']} problems ({$stats['unique_prefixes']} unique prefixes).\n"
-                    ."Added {$stats['added']} draft mappings.\n"
-                    ."Skipped {$stats['skipped_existing_queue']} existing queues.\n"
-                    ."Skipped {$stats['skipped_existing_mapping']} existing mappings.\n"
-                    ."Failed API checks: {$stats['failed_api']}.";
+                $message = __('settings.settings_page.queue_mappings.notifications.scan_complete.body', [
+                    'scanned' => $stats['scanned'],
+                    'unique_prefixes' => $stats['unique_prefixes'],
+                    'added' => $stats['added'],
+                    'skipped_existing_queue' => $stats['skipped_existing_queue'],
+                    'skipped_existing_mapping' => $stats['skipped_existing_mapping'],
+                    'failed_api' => $stats['failed_api'],
+                ]);
 
                 Notification::make()
-                    ->title('Scan Complete')
+                    ->title(__('settings.settings_page.queue_mappings.notifications.scan_complete.title'))
                     ->body($message)
                     ->success()
                     ->send();

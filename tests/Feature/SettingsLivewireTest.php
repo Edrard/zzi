@@ -5,9 +5,14 @@ namespace Tests\Feature;
 use App\Filament\Pages\Settings;
 use App\Models\Setting;
 use App\Models\User;
+use App\Services\Zabbix\ZabbixProblemCache;
 use App\Services\Znuny\ZnunyClient;
+use App\Services\Znuny\ZnunyQueueHostMappingService;
+use App\Services\Znuny\ZnunyQueueService;
+use App\Services\Znuny\ZnunyTicketDefaultRuleService;
 use App\Support\Settings\DefaultSettings;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Placeholder;
 use Filament\Schemas\Components\Actions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -627,7 +632,7 @@ class SettingsLivewireTest extends TestCase
         $this->assertEquals($expectedOrder, $settingsFound, 'The Problem Highlighting fields are missing or incorrectly ordered.');
 
         // Verify live preview renders correctly
-        $component->assertSee('Kreisel fastiv ipmi01[main]');
+        $component->assertSee(__('settings.settings_page.fields.problem_highlighting_preview.sample'), false);
     }
 
     public function test_missing_settings_are_created_automatically_on_mount_without_overwriting_existing_ones()
@@ -1090,5 +1095,208 @@ class SettingsLivewireTest extends TestCase
         $componentUk->assertSet('data.znuny_manual_ticket_footer', 'EN_FOOTER_TEST');
         $componentUk->assertSet('data.linked_ticket_manual_close_default_reason', 'EN_CLOSE_TEST');
         $componentUk->assertSet('data.manual_ticket_reopen_note_template', 'EN_REOPEN_TEST');
+    }
+
+    public function test_custom_settings_actions_placeholders_and_helpers_are_localized()
+    {
+        app()->setLocale('uk');
+        $admin = User::factory()->create(['role' => 'admin']);
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+        $ukTranslations = require base_path('lang/uk/settings.php');
+
+        $form = $component->instance()->getForm('form');
+        $schema = $form->getComponents();
+
+        $foundFields = [];
+        $placeholders = [];
+        $search = function ($components) use (&$search, &$foundFields, &$placeholders) {
+            foreach ($components as $c) {
+                if (method_exists($c, 'getName') && $c->getName()) {
+                    $foundFields[$c->getName()] = $c;
+                }
+
+                if ($c instanceof Placeholder) {
+                    $placeholders[] = $c;
+                }
+
+                if ($c instanceof Actions) {
+                    foreach ($c->getChildComponents() as $action) {
+                        if (method_exists($action, 'getName') && $action->getName()) {
+                            $foundFields[$action->getName()] = $action;
+                        }
+                    }
+                }
+
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents());
+                }
+            }
+        };
+        $search($schema);
+
+        $this->assertArrayHasKey('mail_smtp_password', $foundFields);
+        $this->assertArrayHasKey('zabbix_api_token', $foundFields);
+        $this->assertArrayHasKey('znuny_password', $foundFields);
+
+        $this->assertEquals($ukTranslations['settings_page']['fields']['mail_smtp_password']['placeholder'], $foundFields['mail_smtp_password']->getPlaceholder());
+        $this->assertEquals($ukTranslations['settings_page']['fields']['zabbix_api_token']['placeholder'], $foundFields['zabbix_api_token']->getPlaceholder());
+        $this->assertEquals($ukTranslations['settings_page']['fields']['znuny_password']['placeholder'], $foundFields['znuny_password']->getPlaceholder());
+
+        $this->assertArrayHasKey('testZabbixConnection', $foundFields);
+        $this->assertEquals($ukTranslations['settings_page']['actions']['test_zabbix_api']['label'], $foundFields['testZabbixConnection']->getLabel());
+
+        $this->assertArrayHasKey('testZnunyConnection_Credentials', $foundFields);
+        $this->assertEquals($ukTranslations['settings_page']['actions']['test_znuny_api']['label'], $foundFields['testZnunyConnection_Credentials']->getLabel());
+
+        $zabbixDescription = $ukTranslations['settings_page']['actions']['test_zabbix_api']['description'];
+        $znunyDescription = $ukTranslations['settings_page']['actions']['test_znuny_api']['description'];
+
+        $foundZabbixDesc = false;
+        $foundZnunyDesc = false;
+
+        foreach ($placeholders as $p) {
+            $content = (string) $p->getContent();
+            if (str_contains($content, $zabbixDescription)) {
+                $foundZabbixDesc = true;
+            }
+            if (str_contains($content, $znunyDescription)) {
+                $foundZnunyDesc = true;
+            }
+        }
+
+        $this->assertTrue($foundZabbixDesc, 'Zabbix action description placeholder not found.');
+        $this->assertTrue($foundZnunyDesc, 'Znuny action description placeholder not found.');
+    }
+
+    public function test_ticket_default_rule_custom_fields_are_localized()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_queue_from_host_regex'], ['type' => 'string', 'value' => 'RAW_QUEUE_REGEX']);
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['type' => 'string', 'value' => 'RAW_CUSTOMER_USER']);
+
+        app()->setLocale('uk');
+        $admin = User::factory()->create(['role' => 'admin']);
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+        $ukTranslations = require base_path('lang/uk/settings.php');
+
+        $form = $component->instance()->getForm('form');
+        $schema = $form->getComponents();
+
+        $foundFields = [];
+        $search = function ($components) use (&$search, &$foundFields) {
+            foreach ($components as $c) {
+                if (method_exists($c, 'getName') && $c->getName()) {
+                    $foundFields[$c->getName()] = $c;
+                }
+
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents());
+                }
+            }
+        };
+        $search($schema);
+
+        $this->assertArrayHasKey('znuny_queue_from_host_regex', $foundFields);
+        $this->assertArrayHasKey('znuny_customer_user_from_queue_template', $foundFields);
+
+        $queueField = $foundFields['znuny_queue_from_host_regex'];
+        $customerUserField = $foundFields['znuny_customer_user_from_queue_template'];
+
+        $this->assertEquals($ukTranslations['settings_page']['fields']['znuny_queue_from_host_regex']['label'], $queueField->getLabel());
+        $queueHelper = (string) $queueField->getChildComponents('below_content')[0]->getContent();
+        $this->assertEquals($ukTranslations['settings_page']['fields']['znuny_queue_from_host_regex']['description'], $queueHelper);
+        $this->assertStringContainsString('(?<queue>...)', $queueHelper);
+
+        $this->assertEquals($ukTranslations['settings_page']['fields']['znuny_customer_user_from_queue_template']['label'], $customerUserField->getLabel());
+        $customerUserHelper = (string) $customerUserField->getChildComponents('below_content')[0]->getContent();
+        $this->assertEquals($ukTranslations['settings_page']['fields']['znuny_customer_user_from_queue_template']['description'], $customerUserHelper);
+        $this->assertStringContainsString('<queue>', $customerUserHelper);
+        $this->assertStringContainsString('CustomerUser', $customerUserHelper);
+
+        $component->assertSet('data.znuny_queue_from_host_regex', 'RAW_QUEUE_REGEX');
+        $component->assertSet('data.znuny_customer_user_from_queue_template', 'RAW_CUSTOMER_USER');
+    }
+
+    public function test_url_template_examples_are_localized_without_changing_values()
+    {
+        Setting::updateOrCreate(['key' => 'zabbix_problem_url_template'], ['type' => 'string', 'value' => 'http://my-zabbix/?triggerid={trigger_id}']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_url_template'], ['type' => 'string', 'value' => 'http://my-znuny/?ticketid={ticket_id}']);
+
+        app()->setLocale('uk');
+        $admin = User::factory()->create(['role' => 'admin']);
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+        $ukTranslations = require base_path('lang/uk/settings.php');
+
+        $component->assertSee('{trigger_id}', false);
+        $component->assertSee('https://zabbix.example.com/', false);
+
+        $component->assertSee('{ticket_id}', false);
+        $component->assertSee('https://znuny.example.com/', false);
+
+        $component->assertSet('data.zabbix_problem_url_template', 'http://my-zabbix/?triggerid={trigger_id}');
+        $component->assertSet('data.znuny_ticket_url_template', 'http://my-znuny/?ticketid={ticket_id}');
+    }
+
+    public function test_problem_highlighting_preview_uses_generic_localized_sample()
+    {
+        app()->setLocale('uk');
+        $admin = User::factory()->create(['role' => 'admin']);
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+        $ukTranslations = require base_path('lang/uk/settings.php');
+
+        $label = $ukTranslations['settings_page']['fields']['problem_highlighting_preview']['label'];
+        $component->assertSee($label, false);
+        $component->assertSee('ExampleCompany server01[main]', false);
+        $component->assertDontSee('Kreisel fastiv ipmi01[main]', false);
+        $component->assertDontSee('settings.settings_page.fields.problem_highlighting_preview.sample', false);
+    }
+
+    public function test_queue_mapping_generated_note_uses_current_locale_without_rewriting_existing_notes()
+    {
+        $existingMappings = [
+            [
+                'host_prefix' => 'OldClient',
+                'queue_name' => 'OldQueue',
+                'note' => 'OLD_ENGLISH_NOTE',
+            ],
+        ];
+        Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], ['type' => 'json', 'value' => json_encode($existingMappings)]);
+
+        app()->setLocale('uk');
+        $admin = User::factory()->create(['role' => 'admin']);
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+
+        // existing note must remain unchanged
+        $data = $component->instance()->data;
+        $mappings = array_values($data['znuny_queue_host_mappings'] ?? []);
+        $this->assertEquals('OLD_ENGLISH_NOTE', $mappings[0]['note'] ?? null);
+
+        $queueService = $this->createMock(ZnunyQueueService::class);
+        $queueService->method('getQueues')->willReturn([['name' => 'ExistingQueue']]);
+
+        $ruleService = $this->createMock(ZnunyTicketDefaultRuleService::class);
+        $ruleService->method('detectQueueFromHost')->willReturn('NewClient');
+
+        $problemCache = $this->createMock(ZabbixProblemCache::class);
+        $problemCache->method('all')->willReturn([
+            ['hosts' => [['name' => 'NewClient-Server01']]],
+        ]);
+
+        $serviceEn = new ZnunyQueueHostMappingService($queueService, $ruleService, $problemCache);
+
+        // En
+        app()->setLocale('en');
+        $enTranslations = require base_path('lang/en/settings.php');
+        $enResult = $serviceEn->scanMissingMappings([]);
+        $this->assertNotEmpty($enResult['drafts']);
+        $this->assertEquals($enTranslations['settings_page']['queue_mappings']['fields']['note']['generated_value'], $enResult['drafts'][0]['note']);
+
+        $serviceUk = new ZnunyQueueHostMappingService($queueService, $ruleService, $problemCache);
+
+        // Uk
+        app()->setLocale('uk');
+        $ukTranslations = require base_path('lang/uk/settings.php');
+        $ukResult = $serviceUk->scanMissingMappings([]);
+        $this->assertNotEmpty($ukResult['drafts']);
+        $this->assertEquals($ukTranslations['settings_page']['queue_mappings']['fields']['note']['generated_value'], $ukResult['drafts'][0]['note']);
     }
 }
