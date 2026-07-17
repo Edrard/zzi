@@ -92,6 +92,14 @@ return [
             'ticket_default_rules' => 'Ticket Default Rules',
             'advanced_ticket_preset' => 'Advanced Ticket Preset',
         ],
+        'fields' => [
+            'mail_smtp_password' => [
+                'placeholder' => 'Leave empty to keep current password',
+            ],
+            'mail_smtp_password_clear' => [
+                'label' => 'Clear Stored SMTP Password',
+            ],
+        ],
         'sections' => [
             'statistics' => [
                 'heading' => 'Statistics',
@@ -196,6 +204,467 @@ return [
         ],
         'actions' => [
             'save' => 'Save settings',
+        ],
+    ],
+    'metadata' => [
+        'pagination_per_page_base' => [
+            'label' => 'Base Rows per Page',
+            'description' => 'Base number of rows used by paginated tables. Available page-size choices are generated as half of this value rounded up to the nearest multiple of 5, the base value, double the value, and triple the value. For example, 100 produces 50, 100, 200, and 300.',
+        ],
+        'cleanup_enabled' => [
+            'label' => 'Automatic Local Data Cleanup',
+            'description' => 'Enable scheduled cleanup of old local integration records. Disabling this option preserves all retention settings but prevents automatic deletion. This does not delete active Zabbix problems or Znuny tickets.',
+        ],
+        'cleanup_batch_size' => [
+            'label' => 'Records per Cleanup Batch',
+            'description' => 'Maximum number of records removed from each cleanup category during one cleanup pass. Lower values reduce database load; higher values clear accumulated old data faster.',
+        ],
+        'app_display_timezone' => [
+            'label' => 'Display Time Zone',
+            'description' => 'Time zone used only for dates and times shown in the administration interface. Stored timestamps, background processing, and scheduler timing are not changed.',
+        ],
+        'ui_locale' => [
+            'label' => 'Ui Locale',
+            'description' => 'Default interface language used for unauthenticated pages and users without a personal override.',
+        ],
+        'retention_resolved_days' => [
+            'label' => 'Resolved Problem History (days)',
+            'description' => 'Number of days to keep local history for Zabbix problems after they become resolved. This does not delete problems, events, or history from Zabbix.',
+        ],
+        'retention_closed_tickets_days' => [
+            'label' => 'Closed Ticket Link History (days)',
+            'description' => 'Number of days to keep local integration records and links for closed tickets. This does not delete tickets, articles, or history from Znuny.',
+        ],
+        'retention_action_logs_days' => [
+            'label' => 'Action Log Retention (days)',
+            'description' => 'Number of days to keep local application action-log records used for operational history, auditing, and troubleshooting.',
+        ],
+        'retention_failed_jobs_days' => [
+            'label' => 'Failed Job Retention (days)',
+            'description' => 'Number of days to keep failed background-job records for diagnostics and troubleshooting.',
+        ],
+        'scheduled_task_logs_retention_days' => [
+            'label' => 'Scheduled Task Run Log Retention (days)',
+            'description' => 'Number of days to keep execution logs for scheduled Znuny task runs. Scheduled task definitions and pending scheduled work are not deleted by this retention setting.',
+        ],
+        'scheduled_tasks_missed_run_max_age_days' => [
+            'label' => 'Missed Run Catch-up Window (days)',
+            'description' => 'Maximum age of a missed scheduled run that may still be executed by the catch-up process.',
+        ],
+        'scheduled_tasks_enabled' => [
+            'label' => 'Scheduler Enabled',
+            'description' => 'Global switch for scheduled Znuny task processing.',
+        ],
+        'scheduled_tasks_max_processed_per_run' => [
+            'label' => 'Maximum Tasks per Run',
+            'description' => 'Maximum number of scheduled tasks processed sequentially during one command run.',
+        ],
+        'scheduled_tasks_command_runtime_seconds' => [
+            'label' => 'Command Runtime Limit (seconds)',
+            'description' => 'Maximum time the scheduler processing command may run before it stops accepting more work.',
+        ],
+        'scheduled_tasks_pause_minutes' => [
+            'label' => 'Pause After Transient Error (minutes)',
+            'description' => 'How long scheduler processing pauses after a transient connection or service error.',
+        ],
+        'scheduled_tasks_paused_until' => [
+            'label' => 'Scheduled Tasks Paused Until',
+            'description' => 'Timestamp until which the scheduler is paused',
+        ],
+        'scheduled_tasks_pause_reason' => [
+            'label' => 'Scheduled Tasks Pause Reason',
+            'description' => 'Reason for the current pause',
+        ],
+        'scheduled_tasks_disabled_reason' => [
+            'label' => 'Scheduled Tasks Disabled Reason',
+            'description' => 'Reason for the scheduler being globally disabled automatically',
+        ],
+        'scheduled_tasks_auto_disable_on_failures' => [
+            'label' => 'Auto-disable After Repeated Failures',
+            'description' => 'Disable scheduler processing automatically after the configured number of consecutive failures.',
+        ],
+        'scheduled_tasks_failure_threshold' => [
+            'label' => 'Consecutive Failure Threshold',
+            'description' => 'Number of consecutive failures that triggers automatic scheduler disablement.',
+        ],
+        'mail_notifications_enabled' => [
+            'label' => 'Mail Notifications Enabled',
+            'description' => 'Enable or disable outgoing mail notifications',
+        ],
+        'mail_transport' => [
+            'label' => 'Mail Transport',
+            'description' => 'Select the mail transport method.',
+            'options' => [
+                'sendmail' => 'Server Sendmail',
+                'smtp' => 'External SMTP Server',
+            ],
+        ],
+        'mail_from_address' => [
+            'label' => 'Mail From Address',
+            'description' => 'Global FROM address for outgoing mails',
+        ],
+        'mail_from_name' => [
+            'label' => 'Mail From Name',
+            'description' => 'Global FROM name for outgoing mails',
+        ],
+        'mail_admin_recipients' => [
+            'label' => 'Mail Admin Recipients',
+            'description' => 'Comma-separated list of admin email addresses to receive system alerts',
+        ],
+        'mail_sendmail_path' => [
+            'label' => 'Mail Sendmail Path',
+            'description' => 'Path to the sendmail binary',
+        ],
+        'mail_smtp_host' => [
+            'label' => 'Mail Smtp Host',
+            'description' => 'SMTP host address',
+        ],
+        'mail_smtp_port' => [
+            'label' => 'Mail Smtp Port',
+            'description' => 'SMTP port',
+        ],
+        'mail_smtp_encryption' => [
+            'label' => 'Mail Smtp Encryption',
+            'description' => 'SMTP encryption (none, tls, ssl)',
+        ],
+        'mail_smtp_username' => [
+            'label' => 'Mail Smtp Username',
+            'description' => 'SMTP username',
+        ],
+        'mail_smtp_password' => [
+            'label' => 'Mail Smtp Password',
+            'description' => 'SMTP password',
+        ],
+        'mail_smtp_timeout_seconds' => [
+            'label' => 'Mail Smtp Timeout Seconds',
+            'description' => 'SMTP timeout in seconds',
+        ],
+
+        'zabbix_api_url' => [
+            'label' => 'Zabbix Api Url',
+            'description' => 'Zabbix API endpoint URL',
+        ],
+        'zabbix_api_token' => [
+            'label' => 'Zabbix Api Token',
+            'description' => 'Zabbix API token',
+        ],
+        'zabbix_api_timeout' => [
+            'label' => 'Zabbix Api Timeout',
+            'description' => 'Zabbix API request timeout in seconds',
+        ],
+        'zabbix_api_verify_ssl' => [
+            'label' => 'Zabbix Api Verify Ssl',
+            'description' => 'Verify Zabbix API SSL certificate',
+        ],
+        'zabbix_poll_interval_minutes' => [
+            'label' => 'Zabbix Poll Interval Minutes',
+            'description' => 'Zabbix polling interval in minutes',
+        ],
+        'zabbix_problem_cache_ttl_minutes' => [
+            'label' => 'Zabbix Problem Cache Ttl Minutes',
+            'description' => 'Redis TTL for cached Zabbix problems in minutes',
+        ],
+        'zabbix_problem_limit' => [
+            'label' => 'Zabbix Problem Limit',
+            'description' => 'Maximum number of Zabbix problems to fetch per poll',
+        ],
+        'zabbix_exclude_suppressed_problems' => [
+            'label' => 'Zabbix Exclude Suppressed Problems',
+            'description' => 'Exclude suppressed Zabbix problems from polling results',
+        ],
+        'zabbix_problem_url_template' => [
+            'label' => 'Zabbix Problem Url Template',
+            'description' => 'Zabbix Problem URL Template',
+        ],
+        'zabbix_problem_sync_audit_enabled' => [
+            'label' => 'Zabbix Problem Sync Audit Enabled',
+            'description' => 'Write summary audit records for scheduled Zabbix problem polling.',
+        ],
+        'zabbix_attention_highlighting_enabled' => [
+            'label' => 'Zabbix Attention Highlighting Enabled',
+            'description' => 'Enable highlighting of Zabbix problems matching Attention Filters.',
+        ],
+        'zabbix_attention_highlight_text_color' => [
+            'label' => 'Zabbix Attention Highlight Text Color',
+            'description' => 'Text color for highlighted problems.',
+            'options' => [
+                'custom_hex' => 'Custom HEX',
+                'aquamarine' => 'Aquamarine',
+                'white' => 'White',
+                'gray' => 'Gray',
+                'red' => 'Red',
+                'orange' => 'Orange',
+                'amber' => 'Amber',
+                'yellow' => 'Yellow',
+                'lime' => 'Lime',
+                'green' => 'Green',
+                'emerald' => 'Emerald',
+                'cyan' => 'Cyan',
+                'sky' => 'Sky',
+                'blue' => 'Blue',
+                'violet' => 'Violet',
+                'pink' => 'Pink',
+            ],
+        ],
+        'zabbix_attention_highlight_text_custom_hex' => [
+            'label' => 'Zabbix Attention Highlight Text Custom Hex',
+            'description' => 'Custom HEX text color.',
+        ],
+        'zabbix_attention_highlight_underline_style' => [
+            'label' => 'Zabbix Attention Highlight Underline Style',
+            'description' => 'Underline style for highlighted problems.',
+            'options' => [
+                'disabled' => 'Disabled',
+                'solid' => 'Solid',
+                'dashed' => 'Dashed',
+                'dotted' => 'Dotted',
+                'double' => 'Double',
+                'wavy' => 'Wavy',
+            ],
+        ],
+        'zabbix_attention_highlight_underline_color' => [
+            'label' => 'Zabbix Attention Highlight Underline Color',
+            'description' => 'Underline color for highlighted problems.',
+            'options' => [
+                'custom_hex' => 'Custom HEX',
+                'aquamarine' => 'Aquamarine',
+                'white' => 'White',
+                'gray' => 'Gray',
+                'red' => 'Red',
+                'orange' => 'Orange',
+                'amber' => 'Amber',
+                'yellow' => 'Yellow',
+                'lime' => 'Lime',
+                'green' => 'Green',
+                'emerald' => 'Emerald',
+                'cyan' => 'Cyan',
+                'sky' => 'Sky',
+                'blue' => 'Blue',
+                'violet' => 'Violet',
+                'pink' => 'Pink',
+            ],
+        ],
+        'zabbix_attention_highlight_underline_custom_hex' => [
+            'label' => 'Zabbix Attention Highlight Underline Custom Hex',
+            'description' => 'Custom HEX underline color.',
+        ],
+        'zabbix_attention_highlight_underline_thickness' => [
+            'label' => 'Zabbix Attention Highlight Underline Thickness',
+            'description' => 'Underline thickness for highlighted problems.',
+            'options' => [
+                '1px' => '1px',
+                '2px' => '2px',
+                '3px' => '3px',
+            ],
+        ],
+        'znuny_api_url' => [
+            'label' => 'Znuny Api Url',
+            'description' => 'Znuny GenericTicketConnectorREST base URL',
+        ],
+        'znuny_web_url' => [
+            'label' => 'Znuny Web Url',
+            'description' => 'Znuny agent web interface URL',
+        ],
+        'znuny_ticket_url_template' => [
+            'label' => 'Znuny Ticket Url Template',
+            'description' => 'Znuny agent ticket URL template',
+        ],
+        'znuny_username' => [
+            'label' => 'Znuny Username',
+            'description' => 'Znuny integration agent login',
+        ],
+        'znuny_password' => [
+            'label' => 'Znuny Password',
+            'description' => 'Znuny integration agent password',
+        ],
+        'znuny_api_timeout' => [
+            'label' => 'Znuny Api Timeout',
+            'description' => 'Znuny API request timeout in seconds',
+        ],
+        'znuny_api_verify_ssl' => [
+            'label' => 'Znuny Api Verify Ssl',
+            'description' => 'Verify Znuny API SSL certificate',
+        ],
+        'znuny_global_queue_exclusion_regexes' => [
+            'label' => 'Znuny Global Queue Exclusion Regexes',
+            'description' => 'JSON array of regex patterns. Queues matching any pattern will be excluded from selection dropdowns globally.',
+        ],
+        'znuny_queue_from_host_regex' => [
+            'label' => 'Znuny Queue From Host Regex',
+            'description' => 'Extracts the primary queue/customer prefix from the Zabbix host name.',
+        ],
+        'znuny_customer_user_from_queue_template' => [
+            'label' => 'Znuny Customer User From Queue Template',
+            'description' => 'Generates the default Znuny CustomerUser login from the detected Queue.',
+        ],
+        'znuny_queue_host_mappings' => [
+            'label' => 'Znuny Queue Host Mappings',
+            'description' => 'Manual queue host mappings.',
+        ],
+        'znuny_manual_ticket_footer' => [
+            'label' => 'Znuny Manual Ticket Footer',
+            'description' => 'Optional text appended to manually created Znuny tickets. Leave empty to disable.',
+        ],
+        'znuny_agent_exclude_logins' => [
+            'label' => 'Znuny Agent Exclude Logins',
+            'description' => 'Znuny agent logins to exclude',
+        ],
+        'linked_ticket_manual_close_default_reason' => [
+            'label' => 'Linked Ticket Manual Close Default Reason',
+            'description' => 'Default reason for closing linked tickets manually.',
+        ],
+        'manual_ticket_reopen_note_template' => [
+            'label' => 'Manual Ticket Reopen Note Template',
+            'description' => 'Template for manual ticket reopen notes.',
+        ],
+        'znuny_ticket_default_priority' => [
+            'label' => 'Znuny Ticket Default Priority',
+            'description' => 'Default Znuny ticket priority used by Create Ticket and Current Problems ticket creation.',
+        ],
+        'znuny_ticket_default_state' => [
+            'label' => 'Znuny Ticket Default State',
+            'description' => 'Default Znuny ticket state used by Create Ticket and Current Problems ticket creation.',
+        ],
+        'znuny_ticket_default_lock' => [
+            'label' => 'Znuny Ticket Default Lock',
+            'description' => 'Default Znuny ticket lock mode used by Create Ticket and Current Problems ticket creation.',
+            'options' => [
+                'lock' => 'Lock',
+                'unlock' => 'Unlock',
+            ],
+        ],
+        'default_close_delay_hours' => [
+            'label' => 'Default Close Delay Hours',
+            'description' => 'Hours before auto-closing tickets',
+        ],
+        'default_reopen_window_hours' => [
+            'label' => 'Default Reopen Window Hours',
+            'description' => 'Hours window to reopen tickets',
+        ],
+        'manual_ticket_auto_close_enabled' => [
+            'label' => 'Manual Ticket Auto Close Enabled',
+            'description' => 'Automatically close manually created linked tickets after the Zabbix problem stays resolved long enough.',
+        ],
+        'manual_ticket_auto_close_schedule_mode' => [
+            'label' => 'Manual Ticket Auto Close Schedule Mode',
+            'description' => 'disabled: scheduler will not auto-close manual tickets; dry_run: scheduler logs what would be closed without changing Znuny; execute: scheduler closes eligible manual tickets using the verified /TicketClose workflow.',
+            'options' => [
+                'disabled' => 'Disabled',
+                'dry_run' => 'Dry Run',
+                'execute' => 'Execute',
+            ],
+        ],
+        'manual_ticket_flap_threshold' => [
+            'label' => 'Manual Ticket Flap Threshold',
+            'description' => 'Number of repeated active/resolved cycles before a linked problem is considered flapping. 0 disables flapping detection.',
+        ],
+        'manual_ticket_extra_flapping_delay_hours' => [
+            'label' => 'Manual Ticket Extra Flapping Delay Hours',
+            'description' => 'Additional close delay added after flapping is detected for a linked manual ticket.',
+        ],
+        'znuny_ticket_article_cache_ttl_minutes' => [
+            'label' => 'Ticket Article Cache Lifetime (minutes)',
+            'description' => 'How long Znuny ticket articles fetched for linked tickets may be cached. Set to 0 to bypass persistent ticket article caching.',
+        ],
+        'znuny_queue_cache_ttl_minutes' => [
+            'label' => 'Znuny Queue Cache Lifetime (minutes)',
+            'description' => 'Configured lifetime for cached Znuny queue data used by queue selectors, queue detection, and queue-mapping validation.',
+        ],
+        'znuny_lookup_cache_ttl_minutes' => [
+            'label' => 'Znuny Lookup Cache Lifetime (minutes)',
+            'description' => 'How long reusable Znuny lookup data such as owners by queue, CustomerUsers, states, priorities, types, filtered queues, and template or search candidates may be cached. Set to 0 to bypass persistent lookup caching.',
+        ],
+        'znuny_agent_cache_ttl_minutes' => [
+            'label' => 'Znuny Agent Cache Lifetime (minutes)',
+            'description' => 'Configured lifetime for cached active Znuny agent data used by owner selectors and agent-name displays.',
+        ],
+        'znuny_ticket_snapshot_cache_ttl_minutes' => [
+            'label' => 'Linked Ticket Snapshot Cache Lifetime (minutes)',
+            'description' => 'Configured lifetime for cached linked-ticket snapshot data. A snapshot may include locally stored Znuny ticket details such as state, owner, queue, priority, and synchronization metadata. This setting does not control Ticket Workspace caching and does not delete local ticket links or data in Znuny.',
+        ],
+        'znuny_linked_ticket_sync_interval_minutes' => [
+            'label' => 'Znuny Linked Ticket Sync Interval Minutes',
+            'description' => 'How often linked Znuny tickets should be synchronized by the scheduler.',
+        ],
+        'znuny_linked_ticket_sync_batch_size' => [
+            'label' => 'Znuny Linked Ticket Sync Batch Size',
+            'description' => 'Maximum linked tickets to synchronize per run. 0 means all eligible tickets.',
+        ],
+        'znuny_detailed_sync_audit_enabled' => [
+            'label' => 'Znuny Detailed Sync Audit Enabled',
+            'description' => 'When enabled, detailed ticket sync events are written to the audit log. Keep disabled unless debugging.',
+        ],
+        'znuny_ticket_workspace_enabled' => [
+            'label' => 'Znuny Ticket Workspace Enabled',
+            'description' => 'Enable Redis-backed Ticket Workspace.',
+        ],
+        'znuny_ticket_cache_refresh_interval_minutes' => [
+            'label' => 'Znuny Ticket Cache Refresh Interval Minutes',
+            'description' => 'Interval for the Ticket Workspace cache warmer in minutes.',
+        ],
+        'znuny_ticket_cache_max_pages_per_run' => [
+            'label' => 'Znuny Ticket Cache Max Pages Per Run',
+            'description' => 'Safety limit for paginated ZnunyTicketSearch cache warming.',
+        ],
+        'znuny_ticket_cache_ttl_minutes' => [
+            'label' => 'Znuny Ticket Cache Ttl Minutes',
+            'description' => 'Default TTL for cached active Znuny tickets in minutes.',
+        ],
+        'znuny_ticket_cache_default_limit' => [
+            'label' => 'Znuny Ticket Cache Default Limit',
+            'description' => 'Default page size for Znuny ticket cache warming/search.',
+        ],
+        'znuny_ticket_workspace_default_per_page' => [
+            'label' => 'Znuny Ticket Workspace Default Per Page',
+            'description' => 'Default per page value for Ticket Workspace UI.',
+        ],
+        'znuny_ticket_workspace_active_state_type_ids' => [
+            'label' => 'Znuny Ticket Workspace Active State Type Ids',
+            'description' => 'JSON array of active operational state type IDs.',
+            'options' => [
+                'new' => 'New',
+                'open' => 'Open',
+                'pending_reminder' => 'Pending reminder',
+                'pending_auto' => 'Pending auto',
+                'closed' => 'Closed',
+                'merged' => 'Merged',
+            ],
+        ],
+        'znuny_ticket_workspace_sync_audit_enabled' => [
+            'label' => 'Znuny Ticket Workspace Sync Audit Enabled',
+            'description' => 'Write summary audit records for scheduled Ticket Workspace cache warming.',
+        ],
+        'znuny_closed_ticket_window_days' => [
+            'label' => 'Znuny Closed Ticket Window Days',
+            'description' => 'Number of recent days to retain in the closed ticket cache.',
+        ],
+        'znuny_closed_ticket_small_sync_interval_minutes' => [
+            'label' => 'Znuny Closed Ticket Small Sync Interval Minutes',
+            'description' => 'Interval for small closed ticket sync in minutes.',
+        ],
+        'znuny_closed_ticket_sync_audit_auto_enabled' => [
+            'label' => 'Znuny Closed Ticket Sync Audit Auto Enabled',
+            'description' => 'Write summary audit records for automatic closed ticket syncs.',
+        ],
+        'owner_suggestion_similarity_threshold' => [
+            'label' => 'Owner Suggestion Similarity Threshold',
+            'description' => 'Minimum similarity percentage used later when grouping similar problem names for owner suggestions',
+        ],
+        'owner_suggestion_statistics_retention_days' => [
+            'label' => 'Owner Suggestion Statistics Retention Days',
+            'description' => 'Observations older than this remain stored but will later receive the old-statistics weight coefficient during aggregation',
+        ],
+        'owner_suggestion_old_weight_coefficient' => [
+            'label' => 'Owner Suggestion Old Weight Coefficient',
+            'description' => 'Coefficient applied later to observations older than the retention window',
+        ],
+        'owner_suggestion_observation_cleanup_days' => [
+            'label' => 'Owner Suggestion Observation Cleanup Days',
+            'description' => 'Raw owner suggestion observations older than this will be physically deleted by future cleanup logic',
+        ],
+        'owner_suggestion_rebuild_interval_minutes' => [
+            'label' => 'Owner Suggestion Rebuild Interval Minutes',
+            'description' => 'Minimum interval between future owner suggestion aggregate rebuilds',
         ],
     ],
 ];

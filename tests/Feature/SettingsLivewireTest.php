@@ -936,4 +936,159 @@ class SettingsLivewireTest extends TestCase
         $this->assertNotContains('clearSettingsCache', $allDefaults);
         $this->assertNotContains('clearZnunyAgentCache', $allDefaults);
     }
+
+    public function test_all_default_settings_have_complete_metadata_translations_for_supported_locales()
+    {
+        $defaultKeys = collect(DefaultSettings::all())->pluck('key')->toArray();
+        $enTranslations = require base_path('lang/en/settings.php');
+        $ukTranslations = require base_path('lang/uk/settings.php');
+
+        $enMetadataKeys = array_keys($enTranslations['metadata'] ?? []);
+        $ukMetadataKeys = array_keys($ukTranslations['metadata'] ?? []);
+
+        $missingEn = array_diff($defaultKeys, $enMetadataKeys);
+        $extraEn = array_diff($enMetadataKeys, $defaultKeys);
+        $this->assertEmpty($missingEn, 'Missing EN keys: '.implode(', ', $missingEn));
+        $this->assertEmpty($extraEn, 'Extra EN keys: '.implode(', ', $extraEn));
+
+        $missingUk = array_diff($defaultKeys, $ukMetadataKeys);
+        $extraUk = array_diff($ukMetadataKeys, $defaultKeys);
+        $this->assertEmpty($missingUk, 'Missing UK keys: '.implode(', ', $missingUk));
+        $this->assertEmpty($extraUk, 'Extra UK keys: '.implode(', ', $extraUk));
+
+        $this->assertEqualsCanonicalizing($enMetadataKeys, $ukMetadataKeys);
+
+        $this->assertNotContains('mail_smtp_password_clear', $enMetadataKeys);
+        $this->assertNotContains('mail_smtp_password_clear', $ukMetadataKeys);
+
+        foreach ($defaultKeys as $key) {
+            $this->assertNotEmpty($enTranslations['metadata'][$key]['label']);
+            $this->assertNotEmpty($ukTranslations['metadata'][$key]['label']);
+
+            $defaultSetting = collect(DefaultSettings::all())->firstWhere('key', $key);
+            if (! empty($defaultSetting['description'])) {
+                $this->assertNotEmpty($enTranslations['metadata'][$key]['description'] ?? null);
+                $this->assertNotEmpty($ukTranslations['metadata'][$key]['description'] ?? null);
+            }
+        }
+    }
+
+    public function test_settings_metadata_is_localized_without_altering_default_settings_or_values()
+    {
+        app()->setLocale('uk');
+        $admin = User::factory()->create(['role' => 'admin']);
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+        $form = $component->instance()->getForm('form');
+        $schema = $form->getComponents();
+
+        $foundFields = [];
+        $search = function ($components) use (&$search, &$foundFields) {
+            foreach ($components as $c) {
+                if (method_exists($c, 'getName') && $c->getName()) {
+                    $foundFields[$c->getName()] = $c;
+                }
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents());
+                }
+            }
+        };
+        $search($schema);
+
+        $ukTranslations = require base_path('lang/uk/settings.php');
+
+        // General
+        $this->assertEquals($ukTranslations['metadata']['pagination_per_page_base']['label'], $foundFields['pagination_per_page_base']->getLabel());
+        // Scheduler
+        $this->assertEquals($ukTranslations['metadata']['scheduled_tasks_enabled']['label'], $foundFields['scheduled_tasks_enabled']->getLabel());
+        // Mail
+        $this->assertEquals($ukTranslations['metadata']['mail_notifications_enabled']['label'], $foundFields['mail_notifications_enabled']->getLabel());
+        // Zabbix
+        $this->assertEquals($ukTranslations['metadata']['zabbix_api_url']['label'], $foundFields['zabbix_api_url']->getLabel());
+        // Znuny
+        $this->assertEquals($ukTranslations['metadata']['znuny_api_url']['label'], $foundFields['znuny_api_url']->getLabel());
+        // workflow
+        $this->assertEquals($ukTranslations['metadata']['manual_ticket_auto_close_schedule_mode']['label'], $foundFields['manual_ticket_auto_close_schedule_mode']->getLabel());
+
+        $this->assertEquals('Очистити збережений пароль SMTP', $foundFields['mail_smtp_password_clear']->getLabel());
+        $this->assertEquals('Залиште порожнім, щоб зберегти поточний пароль', $foundFields['mail_smtp_password']->getPlaceholder());
+
+        $expectedHelperText = $ukTranslations['metadata']['manual_ticket_auto_close_schedule_mode']['description'] ?? '';
+        $component->assertSee($expectedHelperText, false);
+
+        $defaultSetting = collect(DefaultSettings::all())->firstWhere('key', 'manual_ticket_auto_close_schedule_mode');
+        $this->assertSame(
+            'Scheduler mode for manual ticket auto-closing (disabled, dry_run, execute).',
+            $defaultSetting['description'],
+        );
+        $this->assertNotSame($expectedHelperText, $defaultSetting['description']);
+
+        $ticketTextSetting = $foundFields['znuny_manual_ticket_footer'] ?? null;
+        $this->assertNotNull($ticketTextSetting);
+    }
+
+    public function test_localized_settings_option_labels_preserve_raw_values()
+    {
+        app()->setLocale('uk');
+        $admin = User::factory()->create(['role' => 'admin']);
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+        $form = $component->instance()->getForm('form');
+        $schema = $form->getComponents();
+
+        $foundFields = [];
+        $search = function ($components) use (&$search, &$foundFields) {
+            foreach ($components as $c) {
+                if (method_exists($c, 'getName') && $c->getName()) {
+                    $foundFields[$c->getName()] = $c;
+                }
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents());
+                }
+            }
+        };
+        $search($schema);
+
+        $ukTranslations = require base_path('lang/uk/settings.php');
+
+        $mailTransportOptions = $foundFields['mail_transport']->getOptions();
+        $this->assertArrayHasKey('sendmail', $mailTransportOptions);
+        $this->assertArrayHasKey('smtp', $mailTransportOptions);
+        $this->assertEquals($ukTranslations['metadata']['mail_transport']['options']['sendmail'], $mailTransportOptions['sendmail']);
+        $this->assertEquals($ukTranslations['metadata']['mail_transport']['options']['smtp'], $mailTransportOptions['smtp']);
+
+        $scheduleModeOptions = $foundFields['manual_ticket_auto_close_schedule_mode']->getOptions();
+        $this->assertArrayHasKey('disabled', $scheduleModeOptions);
+        $this->assertArrayHasKey('dry_run', $scheduleModeOptions);
+        $this->assertArrayHasKey('execute', $scheduleModeOptions);
+        $this->assertEquals($ukTranslations['metadata']['manual_ticket_auto_close_schedule_mode']['options']['disabled'], $scheduleModeOptions['disabled']);
+        $this->assertEquals($ukTranslations['metadata']['manual_ticket_auto_close_schedule_mode']['options']['dry_run'], $scheduleModeOptions['dry_run']);
+        $this->assertEquals($ukTranslations['metadata']['manual_ticket_auto_close_schedule_mode']['options']['execute'], $scheduleModeOptions['execute']);
+    }
+
+    public function test_settings_ui_locale_does_not_rewrite_configurable_ticket_text_values()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        // 1. use distinct known custom values for every confirmed ticket-text field
+        Setting::updateOrCreate(['key' => 'znuny_manual_ticket_footer'], ['type' => 'string', 'value' => 'EN_FOOTER_TEST']);
+        Setting::updateOrCreate(['key' => 'linked_ticket_manual_close_default_reason'], ['type' => 'string', 'value' => 'EN_CLOSE_TEST']);
+        Setting::updateOrCreate(['key' => 'manual_ticket_reopen_note_template'], ['type' => 'string', 'value' => 'EN_REOPEN_TEST']);
+
+        // 2. mount/hydrate the real Settings page under en
+        app()->setLocale('en');
+        $componentEn = Livewire::actingAs($admin)->test(Settings::class);
+
+        // 3. verify values remain exact
+        $componentEn->assertSet('data.znuny_manual_ticket_footer', 'EN_FOOTER_TEST');
+        $componentEn->assertSet('data.linked_ticket_manual_close_default_reason', 'EN_CLOSE_TEST');
+        $componentEn->assertSet('data.manual_ticket_reopen_note_template', 'EN_REOPEN_TEST');
+
+        // 4. mount/hydrate under uk
+        app()->setLocale('uk');
+        $componentUk = Livewire::actingAs($admin)->test(Settings::class);
+
+        // 5. verify the same values remain exact
+        $componentUk->assertSet('data.znuny_manual_ticket_footer', 'EN_FOOTER_TEST');
+        $componentUk->assertSet('data.linked_ticket_manual_close_default_reason', 'EN_CLOSE_TEST');
+        $componentUk->assertSet('data.manual_ticket_reopen_note_template', 'EN_REOPEN_TEST');
+    }
 }
