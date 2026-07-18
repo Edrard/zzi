@@ -328,6 +328,9 @@ return [
             ],
         ],
         'notifications' => [
+            'settings_saved' => [
+                'title' => 'Налаштування успішно збережено',
+            ],
             'test_email_failed' => [
                 'title' => 'Не вдалося надіслати тестовий лист',
                 'errors_heading' => 'Помилки:',

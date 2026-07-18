@@ -13,6 +13,7 @@ use App\Services\Znuny\ZnunyTicketDefaultRuleService;
 use App\Support\Settings\DefaultSettings;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Placeholder;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Actions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -1298,5 +1299,60 @@ class SettingsLivewireTest extends TestCase
         $ukResult = $serviceUk->scanMissingMappings([]);
         $this->assertNotEmpty($ukResult['drafts']);
         $this->assertEquals($ukTranslations['settings_page']['queue_mappings']['fields']['note']['generated_value'], $ukResult['drafts'][0]['note']);
+    }
+
+    public function test_successful_save_emits_localized_notification_in_english()
+    {
+        app()->setLocale('en');
+        $admin = User::factory()->create(['role' => 'admin']);
+        Artisan::call('app:ensure-settings-defaults');
+
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+
+        $component->fillForm([
+            'zabbix_api_url' => 'http://example.com',
+            'znuny_api_url' => 'http://example.com',
+            'znuny_web_url' => 'http://example.com',
+            'znuny_username' => 'user',
+        ])->call('save')
+            ->assertHasNoFormErrors();
+
+        $enTranslations = require base_path('lang/en/settings.php');
+        $expectedTitle = $enTranslations['settings_page']['notifications']['settings_saved']['title'];
+        $this->assertNotEquals('settings.settings_page.notifications.settings_saved.title', $expectedTitle);
+
+        $component->assertNotified(
+            Notification::make()
+                ->title($expectedTitle)
+                ->success()
+        );
+    }
+
+    public function test_successful_save_emits_localized_notification_in_ukrainian()
+    {
+        app()->setLocale('uk');
+        $admin = User::factory()->create(['role' => 'admin', 'ui_locale' => 'uk']);
+        Artisan::call('app:ensure-settings-defaults');
+
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+
+        $component->fillForm([
+            'zabbix_api_url' => 'http://example.com',
+            'znuny_api_url' => 'http://example.com',
+            'znuny_web_url' => 'http://example.com',
+            'znuny_username' => 'user',
+            'ui_locale' => 'uk',
+        ])->call('save')
+            ->assertHasNoFormErrors();
+
+        $ukTranslations = require base_path('lang/uk/settings.php');
+        $expectedTitle = $ukTranslations['settings_page']['notifications']['settings_saved']['title'];
+        $this->assertNotEquals('settings.settings_page.notifications.settings_saved.title', $expectedTitle);
+
+        $component->assertNotified(
+            Notification::make()
+                ->title($expectedTitle)
+                ->success()
+        );
     }
 }

@@ -329,6 +329,9 @@ return [
             ],
         ],
         'notifications' => [
+            'settings_saved' => [
+                'title' => 'Settings saved successfully',
+            ],
             'test_email_failed' => [
                 'title' => 'Test Email Failed',
                 'errors_heading' => 'Errors:',
