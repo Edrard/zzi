@@ -5,6 +5,7 @@ namespace App\Filament\Resources\ScheduledZnunyTaskRuns;
 use App\Filament\Resources\ScheduledZnunyTaskRuns\Pages\ManageScheduledZnunyTaskRuns;
 use App\Filament\Resources\ScheduledZnunyTasks\ScheduledZnunyTaskResource;
 use App\Models\ScheduledZnunyTaskRun;
+use App\Services\Support\DateTimeDisplayService;
 use App\Services\Znuny\ZnunyClient;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -42,17 +43,41 @@ class ScheduledZnunyTaskRunResource extends Resource
 
     public static function getNavigationLabel(): string
     {
-        return __('navigation.resources.scheduler_log.navigation_label');
+        return __('scheduled_znuny_task_runs.navigation_label');
     }
 
     public static function getModelLabel(): string
     {
-        return __('navigation.resources.scheduler_log.singular');
+        return __('scheduled_znuny_task_runs.singular');
     }
 
     public static function getPluralModelLabel(): string
     {
-        return __('navigation.resources.scheduler_log.plural');
+        return __('scheduled_znuny_task_runs.plural');
+    }
+
+    public static function statusLabel(?string $status): ?string
+    {
+        if ($status === null || $status === '') {
+            return $status;
+        }
+
+        $key = 'scheduled_znuny_task_runs.statuses.'.$status;
+        $translated = __($key);
+
+        return $translated === $key ? $status : $translated;
+    }
+
+    public static function runTypeLabel(?string $runType): ?string
+    {
+        if ($runType === null || $runType === '') {
+            return $runType;
+        }
+
+        $key = 'scheduled_znuny_task_runs.run_types.'.$runType;
+        $translated = __($key);
+
+        return $translated === $key ? $runType : $translated;
     }
 
     protected static ?string $recordTitleAttribute = 'task_name_snapshot';
@@ -130,9 +155,13 @@ class ScheduledZnunyTaskRunResource extends Resource
             ->components([
                 Section::make('Run Information')
                     ->schema([
-                        TextEntry::make('task_name_snapshot')->label('Task'),
-                        TextEntry::make('run_type'),
+                        TextEntry::make('task_name_snapshot')->label(__('scheduled_znuny_task_runs.table.task_name_snapshot')),
+                        TextEntry::make('run_type')
+                            ->label(__('scheduled_znuny_task_runs.table.run_type'))
+                            ->formatStateUsing(fn (?string $state): ?string => static::runTypeLabel($state)),
                         TextEntry::make('status')
+                            ->label(__('scheduled_znuny_task_runs.table.status'))
+                            ->formatStateUsing(fn (?string $state): ?string => static::statusLabel($state))
                             ->badge()
                             ->color(fn (string $state): string => match ($state) {
                                 'success' => 'success',
@@ -143,19 +172,27 @@ class ScheduledZnunyTaskRunResource extends Resource
                                 'skipped' => 'gray',
                                 default => 'gray',
                             }),
-                        TextEntry::make('scheduled_for')->dateTime()->timezone(fn ($record) => $record?->task?->timezone ?? config('app.timezone')),
-                        TextEntry::make('started_at')->dateTime()->timezone(fn ($record) => $record?->task?->timezone ?? config('app.timezone')),
-                        TextEntry::make('finished_at')->dateTime()->timezone(fn ($record) => $record?->task?->timezone ?? config('app.timezone')),
-                        TextEntry::make('duration_ms')->label('Execution time')->formatStateUsing(fn ($state) => $state === null ? null : round(abs((int) $state) / 1000, 1).' sec'),
+                        TextEntry::make('scheduled_for')
+                            ->label(__('scheduled_znuny_task_runs.table.scheduled_for'))
+                            ->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatLocalizedDateTime($state)),
+                        TextEntry::make('started_at')
+                            ->label(__('scheduled_znuny_task_runs.table.started_at'))
+                            ->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatLocalizedDateTime($state)),
+                        TextEntry::make('finished_at')
+                            ->label(__('scheduled_znuny_task_runs.table.finished_at'))
+                            ->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatLocalizedDateTime($state)),
+                        TextEntry::make('duration_ms')
+                            ->label(__('scheduled_znuny_task_runs.table.duration_ms'))
+                            ->formatStateUsing(fn ($state) => $state === null ? null : round(abs((int) $state) / 1000, 1).' '.__('scheduled_znuny_task_runs.units.sec')),
                     ])->columns(3),
                 Section::make('Ticket Details')
                     ->schema([
                         TextEntry::make('ticket_id'),
-                        TextEntry::make('ticket_number'),
+                        TextEntry::make('ticket_number')->label(__('scheduled_znuny_task_runs.table.ticket_number')),
                     ])->columns(2),
                 Section::make('Errors')
                     ->schema([
-                        TextEntry::make('error_summary'),
+                        TextEntry::make('error_summary')->label(__('scheduled_znuny_task_runs.table.error_summary')),
                         TextEntry::make('error_details')->columnSpanFull(),
                     ]),
                 Section::make('Snapshots')
@@ -171,36 +208,40 @@ class ScheduledZnunyTaskRunResource extends Resource
         return $table
             ->recordTitleAttribute('task_name_snapshot')
             ->defaultSort('created_at', 'desc')
+            ->emptyStateHeading(__('scheduled_znuny_task_runs.empty_state'))
             ->columns([
                 TextColumn::make('created_at')
-                    ->label('Time')
-                    ->dateTime()
-                    ->sortable()
-                    ->timezone(fn ($record) => $record?->task?->timezone ?? config('app.timezone')),
+                    ->label(__('scheduled_znuny_task_runs.table.created_at'))
+                    ->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatLocalizedDateTime($state))
+                    ->sortable(),
                 TextColumn::make('task_name_snapshot')
-                    ->label('Task')
+                    ->label(__('scheduled_znuny_task_runs.table.task_name_snapshot'))
                     ->searchable(),
                 TextColumn::make('run_type')
+                    ->label(__('scheduled_znuny_task_runs.table.run_type'))
+                    ->formatStateUsing(fn (?string $state): ?string => static::runTypeLabel($state))
                     ->searchable(),
                 TextColumn::make('scheduled_for')
-                    ->dateTime()
-                    ->sortable()
-                    ->timezone(fn ($record) => $record?->task?->timezone ?? config('app.timezone')),
+                    ->label(__('scheduled_znuny_task_runs.table.scheduled_for'))
+                    ->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatLocalizedDateTime($state))
+                    ->sortable(),
                 TextColumn::make('started_at')
-                    ->dateTime()
+                    ->label(__('scheduled_znuny_task_runs.table.started_at'))
+                    ->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatLocalizedDateTime($state))
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true)
-                    ->timezone(fn ($record) => $record?->task?->timezone ?? config('app.timezone')),
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('finished_at')
-                    ->dateTime()
+                    ->label(__('scheduled_znuny_task_runs.table.finished_at'))
+                    ->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatLocalizedDateTime($state))
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true)
-                    ->timezone(fn ($record) => $record?->task?->timezone ?? config('app.timezone')),
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('duration_ms')
-                    ->label('Execution time')
-                    ->formatStateUsing(fn ($state) => $state === null ? null : round(abs((int) $state) / 1000, 1).' sec')
+                    ->label(__('scheduled_znuny_task_runs.table.duration_ms'))
+                    ->formatStateUsing(fn ($state) => $state === null ? null : round(abs((int) $state) / 1000, 1).' '.__('scheduled_znuny_task_runs.units.sec'))
                     ->sortable(),
                 TextColumn::make('status')
+                    ->label(__('scheduled_znuny_task_runs.table.status'))
+                    ->formatStateUsing(fn (?string $state): ?string => static::statusLabel($state))
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'success' => 'success',
@@ -213,46 +254,52 @@ class ScheduledZnunyTaskRunResource extends Resource
                     })
                     ->searchable(),
                 TextColumn::make('ticket_number')
+                    ->label(__('scheduled_znuny_task_runs.table.ticket_number'))
                     ->searchable(),
                 TextColumn::make('error_summary')
+                    ->label(__('scheduled_znuny_task_runs.table.error_summary'))
                     ->searchable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('scheduled_znuny_task_id')
-                    ->label('Task')
+                    ->label(__('scheduled_znuny_task_runs.filters.scheduled_znuny_task_id'))
                     ->relationship('task', 'name'),
                 SelectFilter::make('status')
+                    ->label(__('scheduled_znuny_task_runs.filters.status'))
                     ->options([
-                        'pending' => 'Pending',
-                        'running' => 'Running',
-                        'success' => 'Success',
-                        'failed' => 'Failed',
-                        'skipped' => 'Skipped',
-                        'duplicate' => 'Duplicate',
-                        'uncertain' => 'Uncertain',
+                        'pending' => static::statusLabel('pending'),
+                        'running' => static::statusLabel('running'),
+                        'success' => static::statusLabel('success'),
+                        'failed' => static::statusLabel('failed'),
+                        'skipped' => static::statusLabel('skipped'),
+                        'duplicate' => static::statusLabel('duplicate'),
+                        'uncertain' => static::statusLabel('uncertain'),
                     ]),
                 SelectFilter::make('run_type')
+                    ->label(__('scheduled_znuny_task_runs.filters.run_type'))
                     ->options([
-                        'scheduled' => 'Scheduled',
-                        'manual' => 'Manual',
-                        'catch_up' => 'Catch Up',
-                        'manual_retry' => 'Manual Retry',
+                        'scheduled' => static::runTypeLabel('scheduled'),
+                        'manual' => static::runTypeLabel('manual'),
+                        'catch_up' => static::runTypeLabel('catch_up'),
+                        'manual_retry' => static::runTypeLabel('manual_retry'),
                     ]),
                 TernaryFilter::make('has_ticket')
+                    ->label(__('scheduled_znuny_task_runs.filters.has_ticket'))
                     ->queries(
                         true: fn ($query) => $query->whereNotNull('ticket_number'),
                         false: fn ($query) => $query->whereNull('ticket_number'),
                     ),
                 TernaryFilter::make('has_error')
+                    ->label(__('scheduled_znuny_task_runs.filters.has_error'))
                     ->queries(
                         true: fn ($query) => $query->whereNotNull('error_summary'),
                         false: fn ($query) => $query->whereNull('error_summary'),
                     ),
                 Filter::make('created_at')
                     ->form([
-                        DatePicker::make('from'),
-                        DatePicker::make('until'),
+                        DatePicker::make('from')->label(__('scheduled_znuny_task_runs.filters.created_at_from')),
+                        DatePicker::make('until')->label(__('scheduled_znuny_task_runs.filters.created_at_until')),
                     ])
                     ->query(function (Builder $query, array $data): Builder {
                         return $query

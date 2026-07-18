@@ -21,4 +21,9 @@ class ManageScheduledZnunyTaskRuns extends ManageRecords
             // No CreateAction for read-only log
         ];
     }
+
+    public function getTitle(): string
+    {
+        return ScheduledZnunyTaskRunResource::getPluralModelLabel();
+    }
 }
