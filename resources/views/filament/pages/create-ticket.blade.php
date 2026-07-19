@@ -4,7 +4,7 @@
 
         <x-filament::actions alignment="end" class="mt-4">
             <x-filament::button type="submit">
-                Create Ticket
+                {{ __('create_ticket.actions.submit') }}
             </x-filament::button>
         </x-filament::actions>
     </form>
