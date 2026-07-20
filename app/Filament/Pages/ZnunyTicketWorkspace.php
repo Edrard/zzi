@@ -40,12 +40,12 @@ class ZnunyTicketWorkspace extends Page
 
     public static function getNavigationLabel(): string
     {
-        return __('navigation.pages.ticket_workspace');
+        return __('znuny_ticket_workspace.navigation.label');
     }
 
     public function getTitle(): string|Htmlable
     {
-        return __('navigation.pages.ticket_workspace');
+        return __('znuny_ticket_workspace.navigation.title');
     }
 
     protected static ?int $navigationSort = 10;
@@ -229,7 +229,7 @@ class ZnunyTicketWorkspace extends Page
     {
         return [
             Action::make('refresh')
-                ->label('Refresh from Znuny')
+                ->label(__('znuny_ticket_workspace.actions.refresh_from_znuny.label'))
                 ->icon('heroicon-o-arrow-path')
                 ->action('refreshFromZnuny')
                 ->visible(fn () => in_array(auth()->user()->role ?? '', ['admin', 'operator'], true) && $this->isTicketWorkspaceEnabled()),
@@ -242,8 +242,8 @@ class ZnunyTicketWorkspace extends Page
 
         if (! $this->isTicketWorkspaceEnabled()) {
             Notification::make()
-                ->title('Ticket Workspace is disabled')
-                ->body('Enable Ticket Workspace in Settings before running synchronization or refresh actions.')
+                ->title(__('znuny_ticket_workspace.actions.refresh_from_znuny.notifications.disabled_title'))
+                ->body(__('znuny_ticket_workspace.actions.refresh_from_znuny.notifications.disabled_body'))
                 ->warning()
                 ->send();
 
@@ -256,8 +256,8 @@ class ZnunyTicketWorkspace extends Page
 
             if ($exitCode !== 0) {
                 Notification::make()
-                    ->title('Failed to refresh Ticket Workspace')
-                    ->body($output !== '' ? $output : 'The cache warmer command failed.')
+                    ->title(__('znuny_ticket_workspace.actions.refresh_from_znuny.notifications.failed_title'))
+                    ->body($output !== '' ? $output : __('znuny_ticket_workspace.actions.refresh_from_znuny.notifications.failed_body_fallback'))
                     ->danger()
                     ->send();
 
@@ -274,29 +274,29 @@ class ZnunyTicketWorkspace extends Page
                 $result = $service->syncManual();
 
                 if (! empty($result['error_message'])) {
-                    $closedSyncMessage = "\nRecent closed sync failed: {$result['error_message']}";
+                    $closedSyncMessage = __('znuny_ticket_workspace.actions.refresh_from_znuny.notifications.closed_sync_failed', ['error' => $result['error_message']]);
                     $isWarning = true;
                 } elseif (($result['effective_mode'] ?? '') === 'skipped') {
-                    $closedSyncMessage = "\nRecent closed sync skipped (locked).";
+                    $closedSyncMessage = __('znuny_ticket_workspace.actions.refresh_from_znuny.notifications.closed_sync_skipped');
                     $isWarning = true;
                 } else {
-                    $closedSyncMessage = "\nRecent closed sync completed (Fetched {$result['fetched_count']}, Cached {$result['cached_count']}).";
+                    $closedSyncMessage = __('znuny_ticket_workspace.actions.refresh_from_znuny.notifications.closed_sync_completed', ['fetched' => $result['fetched_count'], 'cached' => $result['cached_count']]);
                 }
             } catch (\Throwable $e) {
-                $closedSyncMessage = "\nRecent closed sync failed: ".$e->getMessage();
+                $closedSyncMessage = __('znuny_ticket_workspace.actions.refresh_from_znuny.notifications.closed_sync_failed', ['error' => $e->getMessage()]);
                 $isWarning = true;
             }
 
             app(ZnunyTicketArticleCacheService::class)->forgetAll();
 
-            $message = 'Active refresh completed. Article cache was cleared.';
+            $message = __('znuny_ticket_workspace.actions.refresh_from_znuny.notifications.success_body_prefix');
             if ($output !== '') {
                 $message .= "\n".$output;
             }
             $message .= $closedSyncMessage;
 
             $notification = Notification::make()
-                ->title('Ticket Workspace refreshed successfully')
+                ->title(__('znuny_ticket_workspace.actions.refresh_from_znuny.notifications.success_title'))
                 ->body($message);
 
             if ($isWarning) {
@@ -308,7 +308,7 @@ class ZnunyTicketWorkspace extends Page
             $notification->send();
         } catch (\Throwable $e) {
             Notification::make()
-                ->title('An error occurred while refreshing Ticket Workspace')
+                ->title(__('znuny_ticket_workspace.actions.refresh_from_znuny.notifications.exception_title'))
                 ->body($e->getMessage())
                 ->danger()
                 ->send();

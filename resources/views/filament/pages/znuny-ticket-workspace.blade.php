@@ -304,10 +304,10 @@
     @if(! $this->isTicketWorkspaceEnabled())
         <x-filament::section>
             <x-slot name="heading">
-                Ticket Workspace is disabled
+                {{ __('znuny_ticket_workspace.actions.refresh_from_znuny.notifications.disabled_title') }}
             </x-slot>
             <x-slot name="description">
-                Enable Ticket Workspace in Settings to resume active and closed ticket synchronization, manual refresh actions, and cached ticket access. Existing cached data is retained.
+                {{ __('znuny_ticket_workspace.actions.refresh_from_znuny.notifications.disabled_page_body') }}
             </x-slot>
         </x-filament::section>
     @else
@@ -325,20 +325,20 @@
                 $endCount = min($offset + $perPage, $total);
             @endphp
 
-        <div class="zbx-legend" aria-label="Ticket Workspace legend">
+        <div class="zbx-legend" aria-label="{{ __('znuny_ticket_workspace.legend.title') }}">
             <span class="zbx-legend-item">
                 <x-filament::icon icon="heroicon-s-link" class="zbx-legend-icon zbx-icon-active" />
-                <span>Linked to active Zabbix problem</span>
+                <span>{{ __('znuny_ticket_workspace.legend.active') }}</span>
             </span>
 
             <span class="zbx-legend-item">
                 <x-filament::icon icon="heroicon-s-link-slash" class="zbx-legend-icon zbx-icon-resolved" />
-                <span>Linked to resolved Zabbix problem</span>
+                <span>{{ __('znuny_ticket_workspace.legend.resolved') }}</span>
             </span>
 
             <span class="zbx-legend-item">
                 <x-filament::icon icon="heroicon-s-exclamation-triangle" class="zbx-legend-icon zbx-icon-warning" />
-                <span>Active problem on closed/merged ticket</span>
+                <span>{{ __('znuny_ticket_workspace.legend.warning') }}</span>
             </span>
         </div>
 
@@ -347,27 +347,27 @@
                 $syncMeta = app(\App\Services\Znuny\ClosedTicketCacheService::class)->getMetadata();
             @endphp
             <div style="padding: 12px; margin-bottom: 8px; background-color: var(--zbx-table-bg); border: 1px solid var(--zbx-table-border); border-radius: 8px; font-size: 0.8125rem;">
-                <div style="font-weight: 600; margin-bottom: 4px;">Recent Closed Ticket Cache Status</div>
+                <div style="font-weight: 600; margin-bottom: 4px;">{{ __('znuny_ticket_workspace.cache_diagnostics.title') }}</div>
                 @if(Cache::has('znuny:closed_ticket:sync:lock'))
-                    <div style="color: #ea580c; font-weight: 500; margin-bottom: 8px;">Sync is currently running.</div>
+                    <div style="color: #ea580c; font-weight: 500; margin-bottom: 8px;">{{ __('znuny_ticket_workspace.cache_diagnostics.sync_is_running') }}</div>
                 @endif
                 @if(empty($syncMeta))
-                    <div style="color: var(--zbx-table-muted);">Recent closed ticket cache has not completed a full sync yet.</div>
+                    <div style="color: var(--zbx-table-muted);">{{ __('znuny_ticket_workspace.cache_diagnostics.not_completed_yet') }}</div>
                 @else
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; color: var(--zbx-table-text);">
-                        <div><span style="color: var(--zbx-table-muted);">Status:</span> {{ $syncMeta['integrity_status'] ?? 'N/A' }}</div>
-                        <div><span style="color: var(--zbx-table-muted);">Window Days:</span> {{ $syncMeta['window_days'] ?? 'N/A' }}</div>
-                        <div><span style="color: var(--zbx-table-muted);">Retention Days:</span> {{ $syncMeta['retention_days'] ?? 'N/A' }}</div>
-                        <div><span style="color: var(--zbx-table-muted);">Last Mode:</span> {{ $syncMeta['last_mode'] ?? 'N/A' }}</div>
-                        <div><span style="color: var(--zbx-table-muted);">Last Reason:</span> {{ $syncMeta['last_reason'] ?? 'N/A' }}</div>
-                        <div><span style="color: var(--zbx-table-muted);">Last Small Completed At:</span> {{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($syncMeta['last_small_completed_at'] ?? null) ?? 'N/A' }}</div>
-                        <div><span style="color: var(--zbx-table-muted);">Last Full Completed At:</span> {{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($syncMeta['last_full_completed_at'] ?? null) ?? 'N/A' }}</div>
-                        <div><span style="color: var(--zbx-table-muted);">Oldest Loaded Closed At:</span> {{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($syncMeta['oldest_loaded_closed_at'] ?? null) ?? 'N/A' }}</div>
-                        <div><span style="color: var(--zbx-table-muted);">Newest Loaded Closed At:</span> {{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($syncMeta['newest_loaded_closed_at'] ?? null) ?? 'N/A' }}</div>
-                        <div><span style="color: var(--zbx-table-muted);">Last Run Started At:</span> {{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($syncMeta['last_run_started_at'] ?? null) ?? 'N/A' }}</div>
-                        <div><span style="color: var(--zbx-table-muted);">Last Run Completed At:</span> {{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($syncMeta['last_run_completed_at'] ?? null) ?? 'N/A' }}</div>
+                        <div><span style="color: var(--zbx-table-muted);">{{ __('znuny_ticket_workspace.cache_diagnostics.status') }}:</span> {{ Lang::has('znuny_ticket_workspace.cache_diagnostics.values.' . strtolower($syncMeta['integrity_status'] ?? '')) ? __('znuny_ticket_workspace.cache_diagnostics.values.' . strtolower($syncMeta['integrity_status'])) : ($syncMeta['integrity_status'] ?? __('znuny_ticket_workspace.tooltips.zabbix.na')) }}</div>
+                        <div><span style="color: var(--zbx-table-muted);">{{ __('znuny_ticket_workspace.cache_diagnostics.window_days') }}:</span> {{ $syncMeta['window_days'] ?? __('znuny_ticket_workspace.tooltips.zabbix.na') }}</div>
+                        <div><span style="color: var(--zbx-table-muted);">{{ __('znuny_ticket_workspace.cache_diagnostics.retention_days') }}:</span> {{ $syncMeta['retention_days'] ?? __('znuny_ticket_workspace.tooltips.zabbix.na') }}</div>
+                        <div><span style="color: var(--zbx-table-muted);">{{ __('znuny_ticket_workspace.cache_diagnostics.last_mode') }}:</span> {{ Lang::has('znuny_ticket_workspace.cache_diagnostics.values.' . strtolower($syncMeta['last_mode'] ?? '')) ? __('znuny_ticket_workspace.cache_diagnostics.values.' . strtolower($syncMeta['last_mode'])) : ($syncMeta['last_mode'] ?? __('znuny_ticket_workspace.tooltips.zabbix.na')) }}</div>
+                        <div><span style="color: var(--zbx-table-muted);">{{ __('znuny_ticket_workspace.cache_diagnostics.last_reason') }}:</span> {{ Lang::has('znuny_ticket_workspace.cache_diagnostics.values.' . strtolower($syncMeta['last_reason'] ?? '')) ? __('znuny_ticket_workspace.cache_diagnostics.values.' . strtolower($syncMeta['last_reason'])) : ($syncMeta['last_reason'] ?? __('znuny_ticket_workspace.tooltips.zabbix.na')) }}</div>
+                        <div><span style="color: var(--zbx-table-muted);">{{ __('znuny_ticket_workspace.cache_diagnostics.last_small_completed_at') }}:</span> {{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($syncMeta['last_small_completed_at'] ?? null) ?? __('znuny_ticket_workspace.tooltips.zabbix.na') }}</div>
+                        <div><span style="color: var(--zbx-table-muted);">{{ __('znuny_ticket_workspace.cache_diagnostics.last_full_completed_at') }}:</span> {{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($syncMeta['last_full_completed_at'] ?? null) ?? __('znuny_ticket_workspace.tooltips.zabbix.na') }}</div>
+                        <div><span style="color: var(--zbx-table-muted);">{{ __('znuny_ticket_workspace.cache_diagnostics.oldest_loaded_closed_at') }}:</span> {{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($syncMeta['oldest_loaded_closed_at'] ?? null) ?? __('znuny_ticket_workspace.tooltips.zabbix.na') }}</div>
+                        <div><span style="color: var(--zbx-table-muted);">{{ __('znuny_ticket_workspace.cache_diagnostics.newest_loaded_closed_at') }}:</span> {{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($syncMeta['newest_loaded_closed_at'] ?? null) ?? __('znuny_ticket_workspace.tooltips.zabbix.na') }}</div>
+                        <div><span style="color: var(--zbx-table-muted);">{{ __('znuny_ticket_workspace.cache_diagnostics.last_run_started_at') }}:</span> {{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($syncMeta['last_run_started_at'] ?? null) ?? __('znuny_ticket_workspace.tooltips.zabbix.na') }}</div>
+                        <div><span style="color: var(--zbx-table-muted);">{{ __('znuny_ticket_workspace.cache_diagnostics.last_run_completed_at') }}:</span> {{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($syncMeta['last_run_completed_at'] ?? null) ?? __('znuny_ticket_workspace.tooltips.zabbix.na') }}</div>
                         @if(!empty($syncMeta['last_error']))
-                            <div style="color: #dc2626; grid-column: 1 / -1;"><span style="color: var(--zbx-table-muted);">Last Error:</span> {{ $syncMeta['last_error'] }}</div>
+                            <div style="color: #dc2626; grid-column: 1 / -1;"><span style="color: var(--zbx-table-muted);">{{ __('znuny_ticket_workspace.cache_diagnostics.last_error') }}:</span> {{ $syncMeta['last_error'] }}</div>
                         @endif
                     </div>
                 @endif
@@ -378,22 +378,22 @@
             <button type="button"
                     wire:click="applyStatePreset('open')"
                     class="zbx-preset-btn {{ $this->activeStatePreset() === 'open' ? 'active' : '' }}">
-                Open
+                {{ __('znuny_ticket_workspace.presets.open') }}
             </button>
             <button type="button"
                     wire:click="applyStatePreset('closed')"
                     class="zbx-preset-btn {{ $this->activeStatePreset() === 'closed' ? 'active' : '' }}">
-                Closed
+                {{ __('znuny_ticket_workspace.presets.closed') }}
             </button>
             <button type="button"
                     wire:click="applyStatePreset('merged')"
                     class="zbx-preset-btn {{ $this->activeStatePreset() === 'merged' ? 'active' : '' }}">
-                Merged
+                {{ __('znuny_ticket_workspace.presets.merged') }}
             </button>
             <button type="button"
                     wire:click="applyStatePreset('all')"
                     class="zbx-preset-btn {{ $this->activeStatePreset() === 'all' ? 'active' : '' }}">
-                All
+                {{ __('znuny_ticket_workspace.presets.all') }}
             </button>
         </div>
 
@@ -404,7 +404,7 @@
                         <x-filament::input
                             type="text"
                             wire:model.live.debounce.300ms="search"
-                            placeholder="Search ticket # or title..."
+                            placeholder="{{ __('znuny_ticket_workspace.search.placeholder') }}"
                         />
                     </x-filament::input.wrapper>
                 </div>
@@ -413,7 +413,7 @@
                     <x-filament::input.wrapper>
                         <x-filament::input.select wire:model.live="linkFilter">
                             @foreach($filterOptions['link_status'] as $val => $label)
-                                <option value="{{ $val }}">{{ $label }}</option>
+                                <option value="{{ $val }}">{{ __('znuny_ticket_workspace.filters.link.' . $val) }}</option>
                             @endforeach
                         </x-filament::input.select>
                     </x-filament::input.wrapper>
@@ -423,11 +423,12 @@
                     @php
                         $selectedCount = count($this->stateTypeFilter);
                         if ($selectedCount === 0) {
-                            $label = 'State Types';
+                            $label = __('znuny_ticket_workspace.filters.state_types.label', ['count' => 0]);
                         } elseif ($selectedCount === 1) {
-                            $label = $filterOptions['state_types'][reset($this->stateTypeFilter)] ?? reset($this->stateTypeFilter);
+                            $firstVal = reset($this->stateTypeFilter);
+                            $label = Lang::has("znuny_ticket_workspace.filters.state_types.options.{$firstVal}") ? __("znuny_ticket_workspace.filters.state_types.options.{$firstVal}") : ($filterOptions['state_types'][$firstVal] ?? $firstVal);
                         } else {
-                            $label = $selectedCount . ' State Types';
+                            $label = __('znuny_ticket_workspace.filters.state_types.label', ['count' => $selectedCount]);
                         }
                     @endphp
                     <x-filament::input.wrapper>
@@ -441,7 +442,7 @@
                         @foreach($filterOptions['state_types'] as $val => $typeLabel)
                             <label class="zbx-dropdown-item">
                                 <input type="checkbox" wire:model.live="stateTypeFilter" value="{{ $val }}" style="border-radius: 0.25rem; border-color: var(--zbx-table-border); background-color: var(--zbx-table-bg); color: var(--primary-600);">
-                                <span style="font-size: 0.875rem;">{{ $typeLabel }}</span>
+                                <span style="font-size: 0.875rem;">{{ Lang::has("znuny_ticket_workspace.filters.state_types.options.{$val}") ? __("znuny_ticket_workspace.filters.state_types.options.{$val}") : $typeLabel }}</span>
                             </label>
                         @endforeach
                     </div>
@@ -450,7 +451,7 @@
                 <div class="zbx-toolbar-select">
                     <x-filament::input.wrapper>
                         <x-filament::input.select wire:model.live="queueFilter">
-                            <option value="">Any Queue</option>
+                            <option value="">{{ __('znuny_ticket_workspace.filters.queue.any') }}</option>
                             @foreach($filterOptions['queues'] as $val => $label)
                                 <option value="{{ $val }}">{{ $label }}</option>
                             @endforeach
@@ -461,7 +462,7 @@
                 <div class="zbx-toolbar-select">
                     <x-filament::input.wrapper>
                         <x-filament::input.select wire:model.live="ownerFilter">
-                            <option value="">Any Owner</option>
+                            <option value="">{{ __('znuny_ticket_workspace.filters.owner.any') }}</option>
                             @foreach($filterOptions['owners'] as $val => $label)
                                 <option value="{{ $val }}">{{ $label }}</option>
                             @endforeach
@@ -471,9 +472,9 @@
             </div>
 
             <div class="zbx-toolbar-count" style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
-                <span>Showing {{ $startCount }}-{{ $endCount }} of {{ $total }} tickets</span>
+                <span>{{ __('znuny_ticket_workspace.pagination.showing', ['from' => $startCount, 'to' => $endCount, 'total' => $total]) }}</span>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <span>Per page:</span>
+                    <span>{{ __('znuny_ticket_workspace.pagination.per_page') }}:</span>
                     <x-filament::input.wrapper style="width: auto;">
                         <x-filament::input.select wire:model.live="perPage">
                             @foreach(app(\App\Support\Pagination\PaginationSettings::class)->perPageOptions() as $option)
@@ -490,12 +491,12 @@
                 <div class="zbx-empty-state">
                     @if(empty($this->search) && $this->linkFilter === 'all' && empty($this->stateTypeFilter) && empty($this->queueFilter) && empty($this->ownerFilter))
                         <x-filament::icon icon="heroicon-o-inbox" class="zbx-empty-icon" />
-                        <h3>Ticket cache is empty</h3>
-                        <p>Run the Ticket Workspace cache warmer.</p>
+                        <h3>{{ __('znuny_ticket_workspace.empty_states.no_tickets') }}</h3>
+                        <p>{{ __('znuny_ticket_workspace.empty_states.no_tickets_description') }}</p>
                     @else
                         <x-filament::icon icon="heroicon-o-magnifying-glass" class="zbx-empty-icon" />
-                        <h3>No matching tickets</h3>
-                        <p>Try adjusting your search query or filters.</p>
+                        <h3>{{ __('znuny_ticket_workspace.empty_states.no_matches') }}</h3>
+                        <p>{{ __('znuny_ticket_workspace.empty_states.no_matches_description') }}</p>
                     @endif
                 </div>
             @else
@@ -505,7 +506,7 @@
                             <th style="width: 42px;"></th>
                             <th style="width: 140px;" class="zbx-col-ticket-number">
                                 <button type="button" class="zbx-th-button" wire:click="sortBy('TicketNumber')">
-                                    Ticket#
+                                    {{ __('znuny_ticket_workspace.table.headings.ticket_number') }}
                                     @if($this->sortField === 'TicketNumber')
                                         <x-filament::icon icon="{{ $this->sortDirection === 'asc' ? 'heroicon-m-chevron-up' : 'heroicon-m-chevron-down' }}" class="zbx-sort-icon active" />
                                     @endif
@@ -513,7 +514,7 @@
                             </th>
                             <th>
                                 <button type="button" class="zbx-th-button" wire:click="sortBy('Title')">
-                                    Title
+                                    {{ __('znuny_ticket_workspace.table.headings.title') }}
                                     @if($this->sortField === 'Title')
                                         <x-filament::icon icon="{{ $this->sortDirection === 'asc' ? 'heroicon-m-chevron-up' : 'heroicon-m-chevron-down' }}" class="zbx-sort-icon active" />
                                     @endif
@@ -521,7 +522,7 @@
                             </th>
                             <th>
                                 <button type="button" class="zbx-th-button" wire:click="sortBy('Queue')">
-                                    Queue
+                                    {{ __('znuny_ticket_workspace.table.headings.queue') }}
                                     @if($this->sortField === 'Queue')
                                         <x-filament::icon icon="{{ $this->sortDirection === 'asc' ? 'heroicon-m-chevron-up' : 'heroicon-m-chevron-down' }}" class="zbx-sort-icon active" />
                                     @endif
@@ -529,7 +530,7 @@
                             </th>
                             <th class="zbx-col-owner">
                                 <button type="button" class="zbx-th-button" wire:click="sortBy('Owner')">
-                                    Owner
+                                    {{ __('znuny_ticket_workspace.table.headings.owner') }}
                                     @if($this->sortField === 'Owner')
                                         <x-filament::icon icon="{{ $this->sortDirection === 'asc' ? 'heroicon-m-chevron-up' : 'heroicon-m-chevron-down' }}" class="zbx-sort-icon active" />
                                     @endif
@@ -537,7 +538,7 @@
                             </th>
                             <th class="zbx-col-state">
                                 <button type="button" class="zbx-th-button" wire:click="sortBy('State')">
-                                    State / Type
+                                    {{ __('znuny_ticket_workspace.table.headings.state_type') }}
                                     @if($this->sortField === 'State')
                                         <x-filament::icon icon="{{ $this->sortDirection === 'asc' ? 'heroicon-m-chevron-up' : 'heroicon-m-chevron-down' }}" class="zbx-sort-icon active" />
                                     @endif
@@ -545,18 +546,18 @@
                             </th>
                             <th class="zbx-col-priority">
                                 <button type="button" class="zbx-th-button" wire:click="sortBy('Priority')">
-                                    Priority
+                                    {{ __('znuny_ticket_workspace.table.headings.priority') }}
                                     @if($this->sortField === 'Priority')
                                         <x-filament::icon icon="{{ $this->sortDirection === 'asc' ? 'heroicon-m-chevron-up' : 'heroicon-m-chevron-down' }}" class="zbx-sort-icon active" />
                                     @endif
                                 </button>
                             </th>
                             <th style="text-align: right;" class="zbx-col-articles">
-                                Articles
+                                {{ __('znuny_ticket_workspace.table.headings.articles') }}
                             </th>
                             <th style="text-align: right;" class="zbx-col-changed">
                                 <button type="button" class="zbx-th-button" style="justify-content: flex-end;" wire:click="sortBy('Changed')">
-                                    Changed
+                                    {{ __('znuny_ticket_workspace.table.headings.changed') }}
                                     @if($this->sortField === 'Changed')
                                         <x-filament::icon icon="{{ $this->sortDirection === 'asc' ? 'heroicon-m-chevron-up' : 'heroicon-m-chevron-down' }}" class="zbx-sort-icon active" />
                                     @endif
@@ -570,7 +571,7 @@
                                 <td style="text-align: center;">
                                     @if($ticket['is_linked_to_zabbix_problem'])
                                         <div class="zbx-link-icon-wrap"
-                                             title="Host: {{ $ticket['linked_problem_host'] ?? 'Unknown' }}&#10;Problem: {{ $ticket['linked_problem_summary'] ?? 'Unknown' }}&#10;State: {{ $ticket['linked_problem_is_active'] ? 'Active' : 'Resolved' }}&#10;Age: {{ $ticket['linked_problem_age_label'] ?? 'N/A' }}">
+                                             title="{{ __('znuny_ticket_workspace.tooltips.zabbix.host') }}: {{ $ticket['linked_problem_host'] ?? __('znuny_ticket_workspace.tooltips.zabbix.na') }}&#10;{{ __('znuny_ticket_workspace.tooltips.zabbix.problem') }}: {{ $ticket['linked_problem_summary'] ?? __('znuny_ticket_workspace.tooltips.zabbix.na') }}&#10;{{ __('znuny_ticket_workspace.tooltips.zabbix.state') }}: {{ $ticket['linked_problem_is_active'] ? __('znuny_ticket_workspace.tooltips.zabbix.active') : __('znuny_ticket_workspace.tooltips.zabbix.resolved') }}&#10;{{ __('znuny_ticket_workspace.tooltips.zabbix.age') }}: {{ $ticket['linked_problem_age_label'] ?? __('znuny_ticket_workspace.tooltips.zabbix.na') }}">
                                             @if($ticket['linked_problem_has_warning'])
                                                 <x-filament::icon icon="heroicon-s-exclamation-triangle" class="zbx-link-icon zbx-icon-warning" />
                                             @elseif($ticket['linked_problem_is_active'])
@@ -593,17 +594,17 @@
                                 <td class="zbx-col-owner">
                                     {{ $filterOptions['agent_name_map'][$ticket['OwnerID']] ?? $ticket['Owner'] }}
                                     @if(!empty($ticket['CustomerUserID']))
-                                        <br><span class="zbx-muted-text" style="font-size: 0.7rem;">Cust: {{ $ticket['CustomerUserID'] }}</span>
+                                        <br><span class="zbx-muted-text" style="font-size: 0.7rem;">{{ __('znuny_ticket_workspace.table.customer') }} {{ $ticket['CustomerUserID'] }}</span>
                                     @endif
                                 </td>
                                 <td class="zbx-col-state">
-                                    {{ $ticket['State'] }}
+                                    {{ Lang::has('zabbix_tickets.znuny_states.' . strtolower($ticket['State'])) ? __('zabbix_tickets.znuny_states.' . strtolower($ticket['State'])) : $ticket['State'] }}
                                     @if(!empty($ticket['StateType']))
-                                        <span class="zbx-muted-text" style="font-size: 0.7rem;">({{ $ticket['StateType'] }})</span>
+                                        <span class="zbx-muted-text" style="font-size: 0.7rem;">({{ Lang::has('znuny_ticket_workspace.filters.state_types.options.' . strtolower($ticket['StateType'])) ? __('znuny_ticket_workspace.filters.state_types.options.' . strtolower($ticket['StateType'])) : $ticket['StateType'] }})</span>
                                     @endif
                                 </td>
                                 <td class="zbx-col-priority">
-                                    {{ $ticket['Priority'] }}
+                                    {{ Lang::has('create_ticket.priorities.' . $ticket['Priority']) ? __('create_ticket.priorities.' . $ticket['Priority']) : $ticket['Priority'] }}
                                 </td>
                                 <td style="text-align: right;" class="zbx-col-articles">
                                     {{ $ticket['ArticleCount'] }}
@@ -632,7 +633,7 @@
             @if($total > 0)
                 <div style="padding: 16px; border-top: 1px solid var(--border-color, #e5e7eb); display: flex; justify-content: space-between; align-items: center; font-size: 0.875rem;">
                     <div style="color: #6b7280;">
-                        Showing {{ $startCount }} to {{ $endCount }} of {{ $total }} results
+                        {{ __('znuny_ticket_workspace.pagination.showing', ['from' => $startCount, 'to' => $endCount, 'total' => $total]) }}
                     </div>
                     <div style="display: flex; gap: 8px;">
                         <x-filament::button
@@ -640,7 +641,7 @@
                             wire:click="setPage({{ max($page - 1, 1) }})"
                             :disabled="$page <= 1"
                         >
-                            Previous
+                            {{ __('znuny_ticket_workspace.pagination.previous') }}
                         </x-filament::button>
 
                         <x-filament::button
@@ -648,7 +649,7 @@
                             wire:click="setPage({{ min($page + 1, $lastPage) }})"
                             :disabled="$page >= $lastPage"
                         >
-                            Next
+                            {{ __('znuny_ticket_workspace.pagination.next') }}
                         </x-filament::button>
                     </div>
                 </div>
