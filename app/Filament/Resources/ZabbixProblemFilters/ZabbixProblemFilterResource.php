@@ -37,19 +37,19 @@ class ZabbixProblemFilterResource extends Resource
 
     public static function getNavigationLabel(): string
     {
-        return __('navigation.resources.ignore_filters.navigation_label');
+        return __('zabbix_problem_filters.resource.plural');
     }
 
     protected static ?string $recordTitleAttribute = 'name';
 
     public static function getModelLabel(): string
     {
-        return __('navigation.resources.ignore_filters.singular');
+        return __('zabbix_problem_filters.resource.singular');
     }
 
     public static function getPluralModelLabel(): string
     {
-        return __('navigation.resources.ignore_filters.plural');
+        return __('zabbix_problem_filters.resource.plural');
     }
 
     public static function form(Schema $schema): Schema
@@ -57,40 +57,47 @@ class ZabbixProblemFilterResource extends Resource
         return $schema
             ->components([
                 TextInput::make('name')
+                    ->label(__('zabbix_problem_filters.form.name'))
                     ->required()
                     ->maxLength(255),
                 Toggle::make('enabled')
+                    ->label(__('zabbix_problem_filters.form.enabled'))
                     ->default(true),
                 Select::make('field')
+                    ->label(__('zabbix_problem_filters.form.field'))
                     ->options([
-                        'name' => 'Problem name',
-                        'host' => 'Host name',
+                        'name' => __('zabbix_problem_filters.form.field_options.name'),
+                        'host' => __('zabbix_problem_filters.form.field_options.host'),
                     ])
                     ->default('name')
                     ->required(),
                 Select::make('match_type')
+                    ->label(__('zabbix_problem_filters.form.match_type'))
                     ->options([
-                        'contains' => 'Contains',
-                        'regex' => 'Regex',
+                        'contains' => __('zabbix_problem_filters.form.match_type_options.contains'),
+                        'regex' => __('zabbix_problem_filters.form.match_type_options.regex'),
                     ])
                     ->default('regex')
                     ->required()
                     ->live(),
                 Textarea::make('pattern')
+                    ->label(__('zabbix_problem_filters.form.pattern'))
                     ->required()
-                    ->helperText(fn (Get $get) => $get('match_type') === 'regex' ? 'Example: /^Zabbix proxy.*$/ (must include delimiters)' : '')
+                    ->helperText(fn (Get $get) => $get('match_type') === 'regex' ? __('zabbix_problem_filters.form.pattern_helper') : '')
                     ->rule(function (Get $get) {
                         return function (string $attribute, $value, Closure $fail) use ($get) {
                             if ($get('match_type') === 'regex') {
                                 if (@preg_match($value, '') === false) {
-                                    $fail('Invalid regular expression. Ensure you include delimiters (e.g. /pattern/).');
+                                    $fail(__('zabbix_problem_filters.form.pattern_invalid'));
                                 }
                             }
                         };
                     }),
                 Toggle::make('case_sensitive')
+                    ->label(__('zabbix_problem_filters.form.case_sensitive'))
                     ->default(false),
                 Textarea::make('description')
+                    ->label(__('zabbix_problem_filters.form.description'))
                     ->maxLength(65535)
                     ->columnSpanFull(),
             ]);
@@ -104,14 +111,30 @@ class ZabbixProblemFilterResource extends Resource
             ->paginationPageOptions(app(PaginationSettings::class)->perPageOptions())
             ->columns([
                 IconColumn::make('enabled')
+                    ->label(__('zabbix_problem_filters.table.enabled'))
                     ->boolean(),
                 TextColumn::make('name')
+                    ->label(__('zabbix_problem_filters.table.name'))
                     ->searchable(),
-                TextColumn::make('field'),
-                TextColumn::make('match_type'),
+                TextColumn::make('field')
+                    ->label(__('zabbix_problem_filters.table.field'))
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        'name' => __('zabbix_problem_filters.form.field_options.name'),
+                        'host' => __('zabbix_problem_filters.form.field_options.host'),
+                        default => $state,
+                    }),
+                TextColumn::make('match_type')
+                    ->label(__('zabbix_problem_filters.table.match_type'))
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        'contains' => __('zabbix_problem_filters.form.match_type_options.contains'),
+                        'regex' => __('zabbix_problem_filters.form.match_type_options.regex'),
+                        default => $state,
+                    }),
                 TextColumn::make('pattern')
+                    ->label(__('zabbix_problem_filters.table.pattern'))
                     ->limit(30),
                 TextColumn::make('updated_at')
+                    ->label(__('zabbix_problem_filters.table.updated_at'))
                     ->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatDateTime($state))
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
