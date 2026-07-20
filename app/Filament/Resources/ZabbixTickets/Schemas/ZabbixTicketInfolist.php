@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ZabbixTickets\Schemas;
 
+use App\Filament\Resources\ZabbixTickets\ZabbixTicketResource;
 use App\Filament\Support\TicketDetailsPayload;
 use App\Services\Support\DateTimeDisplayService;
 use App\Services\Znuny\ZnunyTicketArticleCacheService;
@@ -28,44 +29,52 @@ class ZabbixTicketInfolist
                 Grid::make(['default' => 1, 'sm' => 2])
                     ->schema([
                         Group::make([
-                            Section::make('Ticket')
+                            Section::make(__('zabbix_tickets.details_modal.sections.ticket'))
                                 ->compact()
                                 ->schema([
-                                    TextEntry::make('znuny_ticket_number')->label(self::formatLabel('Number'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_ticket_number)->inlineLabel()->placeholder('-'),
-                                    TextEntry::make('title')->label(self::formatLabel('Title'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->title)->inlineLabel()->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->title !== null)->placeholder('-'),
-                                    TextEntry::make('created_at')->label(self::formatLabel('Created/Age'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->created_at)->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->diffForHumans($state))->inlineLabel()->placeholder('-'),
-                                    TextEntry::make('changed_at')->label(self::formatLabel('Changed'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->changed_at)->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->diffForHumans($state))->inlineLabel()->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->changed_at !== null),
-                                    TextEntry::make('manual_reopened_at')->label(self::formatLabel('Reopened at'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->manual_reopened_at)->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatDateTime($state))->inlineLabel()->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->manual_reopened_at !== null),
+                                    TextEntry::make('znuny_ticket_number')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.number')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_ticket_number)->inlineLabel()->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
+                                    TextEntry::make('title')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.title')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->title)->inlineLabel()->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->title !== null)->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
+                                    TextEntry::make('created_at')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.created_at')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->created_at)->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->diffForHumans($state))->inlineLabel()->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
+                                    TextEntry::make('changed_at')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.updated_at')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->changed_at)->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->diffForHumans($state))->inlineLabel()->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->changed_at !== null),
+                                    TextEntry::make('manual_reopened_at')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.reopened_at')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->manual_reopened_at)->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatDateTime($state))->inlineLabel()->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->manual_reopened_at !== null),
                                     TextEntry::make('resolution_context')
-                                        ->label(self::formatLabel('Context'))
-                                        ->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->resolution_context['label'] ?? null)
+                                        ->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.context')))
+                                        ->state(function ($record) {
+                                            $context = TicketDetailsPayload::fromRecord($record)->resolution_context;
+
+                                            return ZabbixTicketResource::translateZabbixStatus($context)['label'] ?? null;
+                                        })
                                         ->badge()
                                         ->color(fn ($record) => TicketDetailsPayload::fromRecord($record)->resolution_context['color'] ?? 'gray')
                                         ->icon(fn ($record) => TicketDetailsPayload::fromRecord($record)->resolution_context['icon'] ?? null)
-                                        ->tooltip(fn ($record) => TicketDetailsPayload::fromRecord($record)->resolution_context['tooltip'] ?? null)
+                                        ->tooltip(function ($record) {
+                                            $context = TicketDetailsPayload::fromRecord($record)->resolution_context;
+
+                                            return ZabbixTicketResource::translateZabbixStatus($context)['tooltip'] ?? null;
+                                        })
                                         ->inlineLabel(),
                                     TextEntry::make('zabbix_problem_resolved_at')
-                                        ->label(self::formatLabel('Resolved At'))
+                                        ->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.resolved_at')))
                                         ->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->zabbix_problem_resolved_at ? app(DateTimeDisplayService::class)->formatDateTime(TicketDetailsPayload::fromRecord($record)->zabbix_problem_resolved_at) : null)
                                         ->visible(fn ($record) => ! empty(TicketDetailsPayload::fromRecord($record)->zabbix_problem_resolved_at))
                                         ->inlineLabel(),
                                     TextEntry::make('manual_close_eligible_at')
-                                        ->label(self::formatLabel('Auto-Close At'))
+                                        ->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.auto_close_at')))
                                         ->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->manual_close_eligible_at ? app(DateTimeDisplayService::class)->formatDateTime(TicketDetailsPayload::fromRecord($record)->manual_close_eligible_at) : null)
                                         ->visible(fn ($record) => ! empty(TicketDetailsPayload::fromRecord($record)->manual_close_eligible_at))
                                         ->inlineLabel(),
                                     TextEntry::make('znuny_ticket_closed_at')
-                                        ->label(self::formatLabel('Closed At'))
+                                        ->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.closed_at')))
                                         ->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_ticket_closed_at ? app(DateTimeDisplayService::class)->formatDateTime(TicketDetailsPayload::fromRecord($record)->znuny_ticket_closed_at) : null)
                                         ->visible(fn ($record) => ! empty(TicketDetailsPayload::fromRecord($record)->znuny_ticket_closed_at))
                                         ->inlineLabel(),
                                     TextEntry::make('manual_flap_count')
-                                        ->label(self::formatLabel('Flap Count'))
+                                        ->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.flap_count')))
                                         ->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->manual_flap_count)
                                         ->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->manual_flap_count > 0)
                                         ->inlineLabel(),
                                     TextEntry::make('manual_last_flap_counted_at')
-                                        ->label(self::formatLabel('Last Flap At'))
+                                        ->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.last_flap_at')))
                                         ->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->manual_last_flap_counted_at ? app(DateTimeDisplayService::class)->formatDateTime(TicketDetailsPayload::fromRecord($record)->manual_last_flap_counted_at) : null)
                                         ->visible(fn ($record) => ! empty(TicketDetailsPayload::fromRecord($record)->manual_last_flap_counted_at))
                                         ->inlineLabel(),
@@ -73,57 +82,61 @@ class ZabbixTicketInfolist
                         ]),
 
                         Group::make([
-                            Section::make('Znuny Attributes')
+                            Section::make(__('zabbix_tickets.details_modal.sections.znuny_attributes'))
                                 ->compact()
                                 ->schema([
-                                    TextEntry::make('znuny_queue_name')->label(self::formatLabel('Queue'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_queue_name)->inlineLabel()->placeholder('-'),
-                                    TextEntry::make('znuny_owner_name')->label(self::formatLabel('Owner'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_owner_name)->inlineLabel()->placeholder('-'),
-                                    TextEntry::make('customer_user')->label(self::formatLabel('Customer'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->customer_user)->inlineLabel()->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->customer_user !== null)->placeholder('-'),
-                                    TextEntry::make('znuny_priority')->label(self::formatLabel('Priority'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_priority)->inlineLabel()->placeholder('-'),
-                                    TextEntry::make('znuny_state_name')->label(self::formatLabel('State'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_state_name)->inlineLabel()->placeholder('-'),
-                                    TextEntry::make('lock_status')->label(self::formatLabel('Lock status'))->state(function ($record) {
+                                    TextEntry::make('znuny_queue_name')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.queue')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_queue_name)->inlineLabel()->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
+                                    TextEntry::make('znuny_owner_name')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.owner')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_owner_name)->inlineLabel()->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
+                                    TextEntry::make('customer_user')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.customer')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->customer_user)->inlineLabel()->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->customer_user !== null)->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
+                                    TextEntry::make('znuny_priority')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.priority')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_priority)->inlineLabel()->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
+                                    TextEntry::make('znuny_state_name')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.state')))->state(function ($record) {
+                                        $state = TicketDetailsPayload::fromRecord($record)->znuny_state_name;
+
+                                        return ZabbixTicketResource::translateZnunyState($state);
+                                    })->inlineLabel()->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
+                                    TextEntry::make('lock_status')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.lock_status')))->state(function ($record) {
                                         $lock = TicketDetailsPayload::fromRecord($record)->lock;
                                         if ($lock === 'lock') {
-                                            return 'Locked';
+                                            return __('zabbix_tickets.details_modal.lock_statuses.locked');
                                         } elseif ($lock === 'unlock') {
-                                            return 'Unlocked';
+                                            return __('zabbix_tickets.details_modal.lock_statuses.unlocked');
                                         }
 
-                                        return 'Unknown';
+                                        return __('zabbix_tickets.details_modal.lock_statuses.unknown');
                                     })->inlineLabel(),
-                                    TextEntry::make('last_article')->label(self::formatLabel('Last Article'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->last_article)->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatDateTime($state))->inlineLabel()->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->last_article !== null)->placeholder('-'),
+                                    TextEntry::make('last_article')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.last_article')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->last_article)->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatDateTime($state))->inlineLabel()->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->last_article !== null)->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
                                 ])->columns(1),
 
-                            Section::make('Zabbix')
+                            Section::make(__('zabbix_tickets.details_modal.sections.zabbix'))
                                 ->compact()
                                 ->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->has_zabbix_link)
                                 ->schema([
-                                    TextEntry::make('zabbix_host_name')->label(self::formatLabel('Host'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->zabbix_host_name)->inlineLabel()->placeholder('-'),
-                                    TextEntry::make('zabbix_problem_name')->label(self::formatLabel('Problem'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->zabbix_problem_name)->inlineLabel()->placeholder('-'),
-                                    TextEntry::make('zabbix_event_id')->label(self::formatLabel('Event ID'))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->zabbix_event_id)->inlineLabel()->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->zabbix_event_id !== null)->placeholder('-'),
+                                    TextEntry::make('zabbix_host_name')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.host')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->zabbix_host_name)->inlineLabel()->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
+                                    TextEntry::make('zabbix_problem_name')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.problem')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->zabbix_problem_name)->inlineLabel()->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
+                                    TextEntry::make('zabbix_event_id')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.event_id')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->zabbix_event_id)->inlineLabel()->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->zabbix_event_id !== null)->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
                                 ])->columns(1),
 
-                            Section::make('Sync')
+                            Section::make(__('zabbix_tickets.details_modal.sections.sync'))
                                 ->compact()
                                 ->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->has_sync_section)
                                 ->schema([
                                     TextEntry::make('znuny_ticket_last_checked_at')
-                                        ->label(self::formatLabel('Last Checked'))
+                                        ->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.last_checked')))
                                         ->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_ticket_last_checked_at ? app(DateTimeDisplayService::class)->formatDateTime(TicketDetailsPayload::fromRecord($record)->znuny_ticket_last_checked_at) : null)
-                                        ->inlineLabel()->placeholder('-'),
+                                        ->inlineLabel()->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
                                     TextEntry::make('znuny_ticket_last_synced_at')
-                                        ->label(self::formatLabel('Last Synced'))
+                                        ->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.last_synced')))
                                         ->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_ticket_last_synced_at ? app(DateTimeDisplayService::class)->formatDateTime(TicketDetailsPayload::fromRecord($record)->znuny_ticket_last_synced_at) : null)
-                                        ->inlineLabel()->placeholder('-'),
-                                    TextEntry::make('znuny_ticket_sync_error')->label(self::formatLabel('Sync Error'))
+                                        ->inlineLabel()->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
+                                    TextEntry::make('znuny_ticket_sync_error')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.sync_error')))
                                         ->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_ticket_sync_error)
                                         ->color('danger')
                                         ->inlineLabel()
-                                        ->placeholder('-'),
+                                        ->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
                                 ])->columns(1),
                         ]),
                     ]),
-                Section::make('Articles / Notes')
+                Section::make(__('zabbix_tickets.details_modal.sections.articles_notes'))
                     ->compact()
                     ->schema([
                         ViewEntry::make('articles_notes')

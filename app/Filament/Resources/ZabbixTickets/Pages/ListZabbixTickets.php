@@ -22,7 +22,7 @@ class ListZabbixTickets extends ListRecords
     {
         return [
             Action::make('sync_tickets')
-                ->label('Sync Tickets')
+                ->label(__('zabbix_tickets.actions.sync_tickets.label'))
                 ->icon('heroicon-o-cloud-arrow-down')
                 ->action(function () {
                     try {
@@ -33,38 +33,38 @@ class ListZabbixTickets extends ListRecords
                             $evalExitCode = Artisan::call('znuny:evaluate-manual-ticket-lifecycle');
                             $evalOutput = trim(Artisan::output());
 
-                            $message = "Sync command completed.\n";
+                            $message = __('zabbix_tickets.actions.sync_tickets.notifications.success_completed')."\n";
                             if ($syncOutput) {
                                 $message .= $syncOutput."\n";
                             }
 
                             if ($evalExitCode === 0) {
-                                $message .= 'Lifecycle evaluation completed.';
+                                $message .= __('zabbix_tickets.actions.sync_tickets.notifications.lifecycle_completed');
                                 Notification::make()
-                                    ->title('Sync successful')
+                                    ->title(__('zabbix_tickets.actions.sync_tickets.notifications.success_title'))
                                     ->body($message)
                                     ->success()
                                     ->send();
                             } else {
-                                $message .= "Lifecycle evaluation failed.\n".$evalOutput;
+                                $message .= __('zabbix_tickets.actions.sync_tickets.notifications.lifecycle_failed')."\n".$evalOutput;
                                 Notification::make()
-                                    ->title('Sync completed with errors')
+                                    ->title(__('zabbix_tickets.actions.sync_tickets.notifications.errors_title'))
                                     ->body($message)
                                     ->danger()
                                     ->send();
                             }
                         } else {
-                            $message = "The sync command failed to complete.\n".$syncOutput;
+                            $message = __('zabbix_tickets.actions.sync_tickets.notifications.failed_incomplete')."\n".$syncOutput;
                             Notification::make()
-                                ->title('Sync failed')
+                                ->title(__('zabbix_tickets.actions.sync_tickets.notifications.failed_title'))
                                 ->body($message)
                                 ->danger()
                                 ->send();
                         }
                     } catch (\Exception $e) {
                         Notification::make()
-                            ->title('Sync failed')
-                            ->body('An error occurred during synchronization.')
+                            ->title(__('zabbix_tickets.actions.sync_tickets.notifications.failed_title'))
+                            ->body(__('zabbix_tickets.actions.sync_tickets.notifications.failed_error'))
                             ->danger()
                             ->send();
                     }

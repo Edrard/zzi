@@ -14,9 +14,10 @@ class ZabbixTicketDetailsAction
     public static function make(string $name = 'viewTicket'): Action
     {
         return Action::make($name)
+            ->label(__('zabbix_tickets.actions.view_ticket.label'))
             ->slideOver()
             ->modalWidth(Width::FourExtraLarge)
-            ->modalHeading(fn (array $arguments, $record = null) => TicketDetailsPayload::fromRecord($record, $arguments)->title ?? 'Ticket Details')
+            ->modalHeading(fn (array $arguments, $record = null) => TicketDetailsPayload::fromRecord($record, $arguments)->title ?? __('zabbix_tickets.actions.view_ticket.modal_heading'))
             ->modalSubmitAction(false)
             ->modalCancelAction(false)
             ->schema(fn (Schema $schema) => ZabbixTicketInfolist::configure($schema))
