@@ -59,12 +59,12 @@
                 style="display:grid;grid-template-columns:minmax(260px,1.2fr) minmax(190px,1fr) minmax(190px,1fr) minmax(160px,.7fr);gap:12px;align-items:end;"
             >
                 <x-filament::input.wrapper icon="heroicon-m-magnifying-glass">
-                    <x-filament::input type="search" wire:model.live.debounce.500ms="taskSearch" placeholder="Search tasks..." />
+                    <x-filament::input type="search" wire:model.live.debounce.500ms="taskSearch" placeholder="{{ __('scheduled_znuny_tasks.filters.search') }}" />
                 </x-filament::input.wrapper>
 
                 <x-filament::input.wrapper>
                     <x-filament::input.select wire:model.live="queueFilter">
-                        <option value="">All Queues</option>
+                        <option value="">{{ __('scheduled_znuny_tasks.filters.all_queues') }}</option>
                         @foreach($this->getQueueOptions() as $queue)
                             <option value="{{ $queue }}">{{ $queue }}</option>
                         @endforeach
@@ -73,7 +73,7 @@
 
                 <x-filament::input.wrapper>
                     <x-filament::input.select wire:model.live="ownerFilter">
-                        <option value="">All Owners</option>
+                        <option value="">{{ __('scheduled_znuny_tasks.filters.all_owners') }}</option>
                         @foreach($this->getOwnerOptions() as $id => $owner)
                             <option value="{{ $id }}">{{ $owner }}</option>
                         @endforeach
@@ -82,9 +82,9 @@
 
                 <x-filament::input.wrapper>
                     <x-filament::input.select wire:model.live="activeFilter">
-                        <option value="all">All Status</option>
-                        <option value="1">Active</option>
-                        <option value="0">Inactive</option>
+                        <option value="all">{{ __('scheduled_znuny_tasks.filters.all_statuses') }}</option>
+                        <option value="1">{{ __('scheduled_znuny_tasks.filters.active') }}</option>
+                        <option value="0">{{ __('scheduled_znuny_tasks.filters.inactive') }}</option>
                     </x-filament::input.select>
                 </x-filament::input.wrapper>
             </div>
@@ -202,7 +202,7 @@
             }
         }
 
-        if (text === 'Not resolved' || text === 'Not selected' || text === 'Not calculated' || text === '—') {
+        if (text === 'Not resolved' || text === 'Not selected' || text === 'Not calculated' || text === '{{ __("scheduled_znuny_tasks.placeholders.not_resolved") }}' || text === '{{ __("scheduled_znuny_tasks.placeholders.not_selected") }}' || text === '{{ __("scheduled_znuny_tasks.placeholders.not_calculated") }}' || text === '—') {
             text = '';
         }
 

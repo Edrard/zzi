@@ -30,17 +30,29 @@ class ScheduledZnunyTaskResource extends Resource
 
     public static function getNavigationLabel(): string
     {
-        return __('navigation.resources.scheduled_tasks.plural');
+        return __('scheduled_znuny_tasks.resource.navigation_label');
     }
 
     public static function getModelLabel(): string
     {
-        return __('navigation.resources.scheduled_tasks.singular');
+        return __('scheduled_znuny_tasks.resource.singular');
     }
 
     public static function getPluralModelLabel(): string
     {
-        return __('navigation.resources.scheduled_tasks.plural');
+        return __('scheduled_znuny_tasks.resource.plural');
+    }
+
+    public static function getStatusLabel(?string $status): ?string
+    {
+        if (empty($status)) {
+            return $status;
+        }
+
+        $key = "scheduled_znuny_tasks.status.{$status}";
+        $translated = __($key);
+
+        return $translated === $key ? $status : $translated;
     }
 
     protected static ?string $recordTitleAttribute = 'name';

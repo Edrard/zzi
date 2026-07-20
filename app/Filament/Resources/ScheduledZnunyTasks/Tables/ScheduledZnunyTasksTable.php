@@ -5,6 +5,7 @@ namespace App\Filament\Resources\ScheduledZnunyTasks\Tables;
 use App\Filament\Resources\ScheduledZnunyTasks\ScheduledZnunyTaskResource;
 use App\Models\ScheduledZnunyTask;
 use App\Services\Cron\CronService;
+use App\Services\Support\DateTimeDisplayService;
 use App\Services\Znuny\ZnunyCachedLookupService;
 use Carbon\Carbon;
 use Filament\Notifications\Notification;
@@ -79,7 +80,7 @@ class ScheduledZnunyTasksTable
             })
             ->columns([
                 ToggleColumn::make('enabled')
-                    ->label('Active')
+                    ->label(__('scheduled_znuny_tasks.table.active'))
                     ->extraCellAttributes(fn (ScheduledZnunyTask $record) => ['data-scheduled-sort-value' => $record->enabled ? '1' : '0'])
                     ->rules(function (ScheduledZnunyTask $record) {
                         return [
@@ -127,10 +128,11 @@ class ScheduledZnunyTasksTable
                         $record->save();
                     }),
                 TextColumn::make('name')
+                    ->label(__('scheduled_znuny_tasks.table.name'))
                     ->description(fn (ScheduledZnunyTask $record) => $record->subject)
                     ->extraCellAttributes(fn (ScheduledZnunyTask $record) => ['data-scheduled-sort-value' => $record->name ?? '']),
                 TextInputColumn::make('cron_expression')
-                    ->label('Cron')
+                    ->label(__('scheduled_znuny_tasks.table.cron'))
                     ->extraCellAttributes(fn (ScheduledZnunyTask $record) => ['data-scheduled-sort-value' => $record->cron_expression ?? ''])
                     ->rules([
                         function () {
@@ -162,7 +164,7 @@ class ScheduledZnunyTasksTable
                         $record->save();
                     }),
                 TextColumn::make('next_run_at')
-                    ->label('Next run at')
+                    ->label(__('scheduled_znuny_tasks.table.next_run_at'))
                     ->extraCellAttributes(function (ScheduledZnunyTask $record) {
                         $cron = $record->cron_expression;
                         $tz = $record->timezone;
@@ -187,12 +189,12 @@ class ScheduledZnunyTasksTable
                             return null;
                         }
 
-                        return Carbon::parse($next)->timezone($tz)->format('Y-m-d H:i:s');
+                        return app(DateTimeDisplayService::class)->formatDateTime($next);
                     })
-                    ->placeholder('Not calculated'),
+                    ->placeholder(__('scheduled_znuny_tasks.placeholders.not_calculated')),
                 SelectColumn::make('queue_name')
-                    ->label('Queue')
-                    ->placeholder('Not selected')
+                    ->label(__('scheduled_znuny_tasks.table.queue'))
+                    ->placeholder(__('scheduled_znuny_tasks.placeholders.not_selected'))
                     ->options(function () {
                         self::prepareOptions();
 
@@ -230,8 +232,8 @@ class ScheduledZnunyTasksTable
                         $record->save();
                     }),
                 SelectColumn::make('customer_user_login')
-                    ->label('Customer User')
-                    ->placeholder('Not resolved')
+                    ->label(__('scheduled_znuny_tasks.table.customer_user'))
+                    ->placeholder(__('scheduled_znuny_tasks.placeholders.not_resolved'))
                     ->options(function (ScheduledZnunyTask $record) {
                         $queue = $record->queue_name;
                         if (empty($queue)) {
@@ -270,8 +272,8 @@ class ScheduledZnunyTasksTable
                         $record->save();
                     }),
                 SelectColumn::make('owner_id')
-                    ->label('Owner')
-                    ->placeholder('Not selected')
+                    ->label(__('scheduled_znuny_tasks.table.owner'))
+                    ->placeholder(__('scheduled_znuny_tasks.placeholders.not_selected'))
                     ->options(function (ScheduledZnunyTask $record) {
                         $queue = $record->queue_name ?? '';
 
@@ -313,7 +315,10 @@ class ScheduledZnunyTasksTable
                         $record->save();
                     }),
                 TextColumn::make('last_status')
-                    ->label('Last result')
+                    ->label(__('scheduled_znuny_tasks.table.last_result'))
+                    ->formatStateUsing(function (?string $state) {
+                        return ScheduledZnunyTaskResource::getStatusLabel($state);
+                    })
                     ->badge()
                     ->extraCellAttributes(fn (ScheduledZnunyTask $record) => ['data-scheduled-sort-value' => $record->last_status ?? '']),
             ])

@@ -1,0 +1,71 @@
+<?php
+
+return [
+    'resource' => [
+        'navigation_label' => 'Scheduled Znuny tasks',
+        'plural' => 'Scheduled Znuny tasks',
+        'singular' => 'Scheduled Znuny task',
+        'title' => 'Scheduled Znuny tasks',
+    ],
+    'scheduler' => [
+        'heading' => 'Scheduler',
+        'enabled' => 'Enabled',
+        'disabled' => 'Disabled',
+        'paused' => 'Paused',
+        'paused_until' => 'Paused until:',
+        'disabled_reason' => 'Disabled:',
+        'last_processed' => 'Last processed:',
+        'never' => 'Never',
+        'next_due' => 'Next due:',
+        'none' => 'None',
+        'actions' => [
+            'enable' => 'Enable',
+            'disable' => 'Disable',
+            'pause' => 'Pause',
+            'resume' => 'Resume',
+        ],
+        'links' => [
+            'log' => 'Scheduler log',
+            'mail_settings' => 'Mail settings',
+        ],
+        'notifications' => [
+            'enabled' => 'Scheduler enabled',
+            'disabled' => 'Scheduler disabled',
+            'paused' => 'Scheduler paused',
+            'resumed' => 'Pause cleared',
+        ],
+    ],
+    'status' => [
+        'pending' => 'Pending',
+        'running' => 'Running',
+        'success' => 'Success',
+        'failed' => 'Failed',
+        'skipped' => 'Skipped',
+        'duplicate' => 'Duplicate',
+        'uncertain' => 'Uncertain',
+    ],
+    'filters' => [
+        'search' => 'Search tasks...',
+        'all_queues' => 'All queues',
+        'all_owners' => 'All owners',
+        'all_statuses' => 'All statuses',
+        'active' => 'Active',
+        'inactive' => 'Inactive',
+    ],
+    'table' => [
+        'active' => 'Active',
+        'name' => 'Name',
+        'cron' => 'Cron',
+        'next_run_at' => 'Next run at',
+        'queue' => 'Queue',
+        'customer_user' => 'Customer user',
+        'owner' => 'Owner',
+        'last_result' => 'Last result',
+    ],
+    'placeholders' => [
+        'not_calculated' => 'Not calculated',
+        'not_selected' => 'Not selected',
+        'not_resolved' => 'Not resolved',
+        'no_options' => 'No options available.',
+    ],
+];

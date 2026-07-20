@@ -1,0 +1,71 @@
+<?php
+
+return [
+    'resource' => [
+        'navigation_label' => 'Заплановані завдання Znuny',
+        'plural' => 'Заплановані завдання Znuny',
+        'singular' => 'Заплановане завдання Znuny',
+        'title' => 'Заплановані завдання Znuny',
+    ],
+    'scheduler' => [
+        'heading' => 'Планувальник',
+        'enabled' => 'Увімкнено',
+        'disabled' => 'Вимкнено',
+        'paused' => 'Призупинено',
+        'paused_until' => 'Призупинено до:',
+        'disabled_reason' => 'Вимкнено:',
+        'last_processed' => 'Остання обробка:',
+        'never' => 'Ніколи',
+        'next_due' => 'Наступний запуск:',
+        'none' => 'Немає',
+        'actions' => [
+            'enable' => 'Увімкнути',
+            'disable' => 'Вимкнути',
+            'pause' => 'Призупинити',
+            'resume' => 'Продовжити',
+        ],
+        'links' => [
+            'log' => 'Журнал запусків',
+            'mail_settings' => 'Налаштування пошти',
+        ],
+        'notifications' => [
+            'enabled' => 'Планувальник увімкнено',
+            'disabled' => 'Планувальник вимкнено',
+            'paused' => 'Планувальник призупинено',
+            'resumed' => 'Призупинення скасовано',
+        ],
+    ],
+    'status' => [
+        'pending' => 'Очікує',
+        'running' => 'Виконується',
+        'success' => 'Успішно',
+        'failed' => 'Помилка',
+        'skipped' => 'Пропущено',
+        'duplicate' => 'Дублікат',
+        'uncertain' => 'Невизначено',
+    ],
+    'filters' => [
+        'search' => 'Пошук завдань...',
+        'all_queues' => 'Усі черги',
+        'all_owners' => 'Усі власники',
+        'all_statuses' => 'Усі стани',
+        'active' => 'Активні',
+        'inactive' => 'Неактивні',
+    ],
+    'table' => [
+        'active' => 'Активне',
+        'name' => 'Назва',
+        'cron' => 'Cron',
+        'next_run_at' => 'Наступний запуск',
+        'queue' => 'Черга',
+        'customer_user' => 'Користувач клієнта',
+        'owner' => 'Власник',
+        'last_result' => 'Останній результат',
+    ],
+    'placeholders' => [
+        'not_calculated' => 'Не розраховано',
+        'not_selected' => 'Не вибрано',
+        'not_resolved' => 'Не визначено',
+        'no_options' => 'Немає доступних варіантів.',
+    ],
+];

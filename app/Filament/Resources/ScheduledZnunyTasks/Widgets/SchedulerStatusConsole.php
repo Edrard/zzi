@@ -24,18 +24,21 @@ class SchedulerStatusConsole extends Widget
         $pauseReason = SettingsService::string('scheduled_tasks_pause_reason');
         $disabledReason = SettingsService::string('scheduled_tasks_disabled_reason');
 
-        $status = 'Enabled';
+        $statusRaw = 'enabled';
         if (! $enabled) {
-            $status = 'Disabled';
+            $statusRaw = 'disabled';
         } elseif ($pausedUntil && Carbon::parse($pausedUntil)->isFuture()) {
-            $status = 'Paused';
+            $statusRaw = 'paused';
         }
+
+        $status = __('scheduled_znuny_tasks.scheduler.'.$statusRaw);
 
         $pendingRuns = ScheduledZnunyTaskRun::where('status', 'pending')->count();
         $runningRuns = ScheduledZnunyTaskRun::where('status', 'running')->count();
         $successRuns = ScheduledZnunyTaskRun::where('status', 'success')->count();
         $skippedRuns = ScheduledZnunyTaskRun::where('status', 'skipped')->count();
         $failedRuns = ScheduledZnunyTaskRun::where('status', 'failed')->count();
+        $duplicateRuns = ScheduledZnunyTaskRun::where('status', 'duplicate')->count();
         $uncertainRuns = ScheduledZnunyTaskRun::where('status', 'uncertain')->count();
 
         $lastProcessedRun = ScheduledZnunyTaskRun::with('task')->whereNotNull('finished_at')->orderBy('finished_at', 'desc')->first();
@@ -47,17 +50,19 @@ class SchedulerStatusConsole extends Widget
         $nextDueTz = $nextDueTask?->timezone ?? config('app.timezone');
 
         $lastActiveAlert = null;
-        if ($status !== 'Enabled') {
+        if ($statusRaw !== 'enabled') {
             $lastActiveAlert = SystemAlert::where('status', 'active')->where('source', 'scheduler')->latest()->first();
         }
 
         return [
             'schedulerStatus' => $status,
+            'schedulerStatusRaw' => $statusRaw,
             'pendingRuns' => $pendingRuns,
             'runningRuns' => $runningRuns,
             'successRuns' => $successRuns,
             'skippedRuns' => $skippedRuns,
             'failedRuns' => $failedRuns,
+            'duplicateRuns' => $duplicateRuns,
             'uncertainRuns' => $uncertainRuns,
             'lastProcessed' => $lastProcessed,
             'lastProcessedTz' => $lastProcessedTz,
@@ -73,24 +78,24 @@ class SchedulerStatusConsole extends Widget
     public function enableScheduler(): void
     {
         app(SchedulerSafetyService::class)->enableScheduler();
-        Notification::make()->title('Scheduler Enabled')->success()->send();
+        Notification::make()->title(__('scheduled_znuny_tasks.scheduler.notifications.enabled'))->success()->send();
     }
 
     public function disableScheduler(): void
     {
         app(SchedulerSafetyService::class)->disableScheduler('Manually disabled by admin');
-        Notification::make()->title('Scheduler Disabled')->warning()->send();
+        Notification::make()->title(__('scheduled_znuny_tasks.scheduler.notifications.disabled'))->warning()->send();
     }
 
     public function pauseScheduler(): void
     {
         app(SchedulerSafetyService::class)->pauseScheduler('Manually paused by admin');
-        Notification::make()->title('Scheduler Paused')->warning()->send();
+        Notification::make()->title(__('scheduled_znuny_tasks.scheduler.notifications.paused'))->warning()->send();
     }
 
     public function clearPause(): void
     {
         app(SchedulerSafetyService::class)->clearPause();
-        Notification::make()->title('Pause Cleared')->success()->send();
+        Notification::make()->title(__('scheduled_znuny_tasks.scheduler.notifications.resumed'))->success()->send();
     }
 }
