@@ -47,12 +47,12 @@ class CurrentZabbixProblems extends Page
 
     public static function getNavigationLabel(): string
     {
-        return __('navigation.pages.current_zabbix_problems.navigation_label');
+        return __('current_zabbix_problems.navigation');
     }
 
     public function getTitle(): string|Htmlable
     {
-        return __('navigation.pages.current_zabbix_problems.title');
+        return __('current_zabbix_problems.title');
     }
 
     public ?string $search = '';
@@ -130,7 +130,7 @@ class CurrentZabbixProblems extends Page
     {
         return [
             Action::make('refresh')
-                ->label('Refresh from Zabbix')
+                ->label(__('current_zabbix_problems.refresh_from_zabbix'))
                 ->icon('heroicon-o-arrow-path')
                 ->action('refreshFromZabbix')
                 ->visible(fn () => in_array(auth()->user()->role, ['admin', 'operator'], true)),

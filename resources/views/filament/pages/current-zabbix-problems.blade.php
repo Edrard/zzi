@@ -745,47 +745,47 @@
 
         @if(auth()->user()->canViewCurrentProblemsStatusPanel())
         <div class="zbx-status-section">
-            <h3 class="font-semibold text-lg mb-4 text-gray-900 dark:text-white">Polling status</h3>
+            <h3 class="font-semibold text-lg mb-4 text-gray-900 dark:text-white">{{ __('current_zabbix_problems.status.polling_status') }}</h3>
             <div class="zbx-status-grid">
                 <div class="zbx-metric">
-                    <span class="zbx-metric-label">Status</span>
+                    <span class="zbx-metric-label">{{ __('current_zabbix_problems.status.status_label') }}</span>
                     <span class="zbx-metric-value {{ $isFailed ? 'zbx-status-danger' : 'zbx-status-success' }}">
-                        {{ ucfirst($status) }}
+                        {{ $status === 'success' ? __('current_zabbix_problems.status.success') : ucfirst($status) }}
                     </span>
                 </div>
                 <div class="zbx-metric">
-                    <span class="zbx-metric-label">Current problems</span>
+                    <span class="zbx-metric-label">{{ __('current_zabbix_problems.status.current_problems') }}</span>
                     <span class="zbx-metric-value">{{ $cached }}</span>
                 </div>
                 <div class="zbx-metric">
-                    <span class="zbx-metric-label">Fetched</span>
+                    <span class="zbx-metric-label">{{ __('current_zabbix_problems.status.fetched') }}</span>
                     <span class="zbx-metric-value">{{ $fetched }}</span>
                     @if($limit !== 'N/A')
-                        <span class="zbx-limit-info">Limit: {{ $limit }}</span>
+                        <span class="zbx-limit-info">{{ __('current_zabbix_problems.status.limit', ['count' => $limit]) }}</span>
                     @endif
                 </div>
                 <div class="zbx-metric">
-                    <span class="zbx-metric-label">Excluded total</span>
+                    <span class="zbx-metric-label">{{ __('current_zabbix_problems.status.excluded_total') }}</span>
                     <span class="zbx-metric-value">{{ $totalExcluded }}</span>
                 </div>
                 <div class="zbx-metric">
-                    <span class="zbx-metric-label">Last poll</span>
+                    <span class="zbx-metric-label">{{ __('current_zabbix_problems.status.last_poll') }}</span>
                     <span class="zbx-metric-value">{{ $ageText }}</span>
                 </div>
                 <div class="zbx-metric">
-                    <span class="zbx-metric-label">Cache TTL</span>
+                    <span class="zbx-metric-label">{{ __('current_zabbix_problems.status.cache_ttl') }}</span>
                     <span class="zbx-metric-value">{{ $ttl }}s</span>
                 </div>
             </div>
 
             <div class="zbx-exclusion-breakdown">
-                <strong>Excluded Breakdown:</strong>
-                Hosts {{ $excludedHosts }} &middot;
-                Triggers {{ $excludedTriggers }} &middot;
-                Items {{ $excludedItems }} &middot;
-                Dependencies {{ $excludedDeps }} &middot;
-                Suppressed {{ $excludedSupp }} &middot;
-                Filters {{ $excludedFilters }}
+                <strong>{{ __('current_zabbix_problems.status.excluded_breakdown') }}:</strong>
+                {{ __('current_zabbix_problems.status.hosts') }} {{ $excludedHosts }} &middot;
+                {{ __('current_zabbix_problems.status.triggers') }} {{ $excludedTriggers }} &middot;
+                {{ __('current_zabbix_problems.status.items') }} {{ $excludedItems }} &middot;
+                {{ __('current_zabbix_problems.status.dependencies') }} {{ $excludedDeps }} &middot;
+                {{ __('current_zabbix_problems.status.suppressed') }} {{ $excludedSupp }} &middot;
+                {{ __('current_zabbix_problems.status.filters') }} {{ $excludedFilters }}
             </div>
 
             @if($isFailed && $error)
@@ -808,28 +808,28 @@
                     <x-filament::input
                         type="text"
                         wire:model.live.debounce.300ms="search"
-                        placeholder="Search host or problem name..."
+                        placeholder="{{ __('current_zabbix_problems.search') }}"
                     />
                 </x-filament::input.wrapper>
             </div>
 
             <div class="zbx-toolbar-presets" style="display: flex; gap: 0.375rem; flex-wrap: wrap; flex: 1;">
-                @foreach(['all' => 'All', 'high' => 'High', 'warning' => 'Warning', 'average' => 'Average', 'information' => 'Information', 'tickets' => 'Tickets', 'reopen' => 'Reopen', 'flapping' => 'Flapping'] as $preset => $label)
+                @foreach(['all', 'high', 'warning', 'average', 'information', 'tickets', 'reopen', 'flapping'] as $preset)
                     <button
                         type="button"
                         wire:click="setProblemPreset('{{ $preset }}')"
                         class="zbx-preset-btn zbx-preset-{{ $preset }} {{ $this->problemPreset === $preset ? 'active' : '' }}"
                     >
-                        {{ $label }}
+                        {{ __('current_zabbix_problems.presets.' . $preset) }}
                     </button>
                 @endforeach
             </div>
 
             <div class="zbx-toolbar-count" style="white-space: nowrap;">
                 @if(empty($this->search) && $this->problemPreset === 'all')
-                    Showing {{ $totalCount }} problems
+                    {{ trans_choice('current_zabbix_problems.count', $totalCount) }}
                 @else
-                    Showing {{ $showingCount }} of {{ $totalCount }} problems
+                    {{ trans_choice('current_zabbix_problems.count_filtered', $totalCount, ['showing' => $showingCount, 'total' => $totalCount]) }}
                 @endif
             </div>
         </div>
@@ -843,16 +843,16 @@
                 <div class="zbx-empty-state">
                     @if($status === 'N/A')
                         <x-filament::icon icon="heroicon-o-clock" class="zbx-empty-icon" />
-                        <h3>No poll data yet</h3>
-                        <p>Waiting for the first Zabbix poll to complete.</p>
-                    @elseif(!empty($this->search))
+                        <h3>{{ __('current_zabbix_problems.empty.no_poll_data_yet') }}</h3>
+                        <p>{{ __('current_zabbix_problems.empty.waiting_for_first_poll') }}</p>
+                    @elseif(!empty($this->search) || $this->problemPreset !== 'all')
                         <x-filament::icon icon="heroicon-o-magnifying-glass" class="zbx-empty-icon" />
-                        <h3>No matching problems</h3>
-                        <p>Try adjusting your search query.</p>
+                        <h3>{{ __('current_zabbix_problems.empty.no_matching_problems') }}</h3>
+                        <p>{{ __('current_zabbix_problems.empty.try_adjusting_search') }}</p>
                     @else
                         <x-filament::icon icon="heroicon-o-check-circle" class="zbx-empty-icon zbx-status-success" />
-                        <h3>All clear</h3>
-                        <p>No active Zabbix problems found in cache.</p>
+                        <h3>{{ __('current_zabbix_problems.empty.no_current_problems') }}</h3>
+                        <p>{{ __('current_zabbix_problems.empty.no_problems_found') }}</p>
                     @endif
                 </div>
             @else
@@ -862,7 +862,7 @@
                             <th style="width: 42px;"></th>
                             <th style="width: 130px;">
                                 <button type="button" class="zbx-th-button" wire:click="sortBy('severity')">
-                                    Severity
+                                    {{ __('current_zabbix_problems.table.severity') }}
                                     @if($this->sortField === 'severity')
                                         <x-filament::icon icon="{{ $this->sortDirection === 'asc' ? 'heroicon-m-chevron-up' : 'heroicon-m-chevron-down' }}" class="zbx-sort-icon active" />
                                     @endif
@@ -871,7 +871,7 @@
                             <th style="width: 24px;"></th>
                             <th>
                                 <button type="button" class="zbx-th-button" wire:click="sortBy('host')">
-                                    Host
+                                    {{ __('current_zabbix_problems.table.host') }}
                                     @if($this->sortField === 'host')
                                         <x-filament::icon icon="{{ $this->sortDirection === 'asc' ? 'heroicon-m-chevron-up' : 'heroicon-m-chevron-down' }}" class="zbx-sort-icon active" />
                                     @endif
@@ -879,7 +879,7 @@
                             </th>
                             <th>
                                 <button type="button" class="zbx-th-button" wire:click="sortBy('problem')">
-                                    Problem
+                                    {{ __('current_zabbix_problems.table.problem') }}
                                     @if($this->sortField === 'problem')
                                         <x-filament::icon icon="{{ $this->sortDirection === 'asc' ? 'heroicon-m-chevron-up' : 'heroicon-m-chevron-down' }}" class="zbx-sort-icon active" />
                                     @endif
@@ -887,7 +887,7 @@
                             </th>
                             <th style="width: 110px; text-align: right;">
                                 <button type="button" class="zbx-th-button" style="justify-content: flex-end;" wire:click="sortBy('age')">
-                                    Age
+                                    {{ __('current_zabbix_problems.table.age') }}
                                     @if($this->sortField === 'age')
                                         <x-filament::icon icon="{{ $this->sortDirection === 'asc' ? 'heroicon-m-chevron-up' : 'heroicon-m-chevron-down' }}" class="zbx-sort-icon active" />
                                     @endif
@@ -905,7 +905,16 @@
                         @php
                             $severityValue = (int) ($problem['severity'] ?? 0);
                             $severityColor = $this->getSeverityColor($severityValue);
-                            $severityLabel = $problem['severity_label'] ?? $this->getSeverityFallback($severityValue);
+                            $rawSeverityLabel = $problem['severity_label'] ?? $this->getSeverityFallback($severityValue);
+                            $severityMap = [
+                                0 => __('current_zabbix_problems.severity.not_classified'),
+                                1 => __('current_zabbix_problems.severity.information'),
+                                2 => __('current_zabbix_problems.severity.warning'),
+                                3 => __('current_zabbix_problems.severity.average'),
+                                4 => __('current_zabbix_problems.severity.high'),
+                                5 => __('current_zabbix_problems.severity.disaster'),
+                            ];
+                            $severityLabel = $severityMap[$severityValue] ?? $rawSeverityLabel;
                             $ageSeconds = $this->getProblemAgeSeconds($problem);
                             $eventId = (string) ($problem['eventid'] ?? $problem['objectid'] ?? $problem['triggerid'] ?? $loop->index);
 
@@ -938,7 +947,19 @@
                                 </td>
                                 <td>
                                     @if($indicator)
-                                        <x-filament::icon icon="{{ $indicator['icon'] }}" class="{{ $indicator['class'] ?? 'w-4 h-4' }}" title="{{ $indicator['title'] }}" />
+                                        @php
+                                            $tooltip = $indicator['title'];
+                                            if (str_starts_with($tooltip, 'Ticket already linked: ')) {
+                                                $tooltip = __('current_zabbix_problems.tooltips.ticket_already_linked', ['ticket' => substr($tooltip, 23)]);
+                                            } elseif (str_starts_with($tooltip, 'Flapping ticket. Ticket: ')) {
+                                                $tooltip = __('current_zabbix_problems.legend.flapping_detected') . '. ' . __('current_zabbix_problems.ticket.ticket') . ': ' . substr($tooltip, 25);
+                                            } elseif (str_starts_with($tooltip, 'Manual reopen candidate. Ticket: ')) {
+                                                $tooltip = __('current_zabbix_problems.legend.manual_reopen_candidate') . '. ' . __('current_zabbix_problems.ticket.ticket') . ': ' . substr($tooltip, 33);
+                                            } elseif (str_starts_with($tooltip, 'Manually reopened ticket. Ticket: ')) {
+                                                $tooltip = __('current_zabbix_problems.legend.manually_reopened') . '. ' . __('current_zabbix_problems.ticket.ticket') . ': ' . substr($tooltip, 34);
+                                            }
+                                        @endphp
+                                        <x-filament::icon icon="{{ $indicator['icon'] }}" class="{{ $indicator['class'] ?? 'w-4 h-4' }}" title="{{ $tooltip }}" />
                                     @endif
                                 </td>
                                 <td class="zbx-host-col">
@@ -974,30 +995,30 @@
                                     <div class="zbx-details">
 
                                         <div class="zbx-detail-block">
-                                            <h4>Problem</h4>
+                                            <h4>{{ __('current_zabbix_problems.details.problem') }}</h4>
                                             <ul class="zbx-detail-list">
-                                                <li><strong>Event ID:</strong> {{ $problem['eventid'] ?? 'N/A' }}</li>
-                                                <li><strong>Object ID:</strong> {{ $problem['objectid'] ?? 'N/A' }}</li>
-                                                <li><strong>Started At:</strong> {{ $this->formatDateTime($problem['started_at'] ?? null) }}</li>
-                                                <li><strong>Current Age:</strong> {{ $this->formatAge($ageSeconds) }}</li>
-                                                <li><strong>Acknowledged:</strong> {{ !empty($problem['acknowledged']) && $problem['acknowledged'] != 0 ? 'Yes' : 'No' }}</li>
-                                                <li><strong>Suppressed:</strong> {{ !empty($problem['suppressed']) && $problem['suppressed'] != 0 ? 'Yes' : 'No' }}</li>
-                                                <li><strong>Severity:</strong> <span class="zbx-severity zbx-severity-{{ $severityValue }}">{{ $severityLabel }}</span></li>
+                                                <li><strong>{{ __('current_zabbix_problems.details.event_id') }}:</strong> {{ $problem['eventid'] ?? 'N/A' }}</li>
+                                                <li><strong>{{ __('current_zabbix_problems.details.object_id') }}:</strong> {{ $problem['objectid'] ?? 'N/A' }}</li>
+                                                <li><strong>{{ __('current_zabbix_problems.details.started_at') }}:</strong> {{ $this->formatDateTime($problem['started_at'] ?? null) }}</li>
+                                                <li><strong>{{ __('current_zabbix_problems.details.current_age') }}:</strong> {{ $this->formatAge($ageSeconds) }}</li>
+                                                <li><strong>{{ __('current_zabbix_problems.details.acknowledged') }}:</strong> {{ !empty($problem['acknowledged']) && $problem['acknowledged'] != 0 ? __('current_zabbix_problems.details.yes') : __('current_zabbix_problems.details.no') }}</li>
+                                                <li><strong>{{ __('current_zabbix_problems.details.suppressed') }}:</strong> {{ !empty($problem['suppressed']) && $problem['suppressed'] != 0 ? __('current_zabbix_problems.details.yes') : __('current_zabbix_problems.details.no') }}</li>
+                                                <li><strong>{{ __('current_zabbix_problems.details.severity') }}:</strong> <span class="zbx-severity zbx-severity-{{ $severityValue }}">{{ $severityLabel }}</span></li>
                                             </ul>
                                         </div>
 
                                         <div class="zbx-detail-block">
-                                            <h4>Host</h4>
+                                            <h4>{{ __('current_zabbix_problems.details.host') }}</h4>
                                             @if(isset($problem['hosts']) && is_array($problem['hosts']) && count($problem['hosts']) > 0)
                                                 @foreach($problem['hosts'] as $host)
                                                     <ul class="zbx-detail-list" style="margin-bottom: 8px;">
-                                                        <li><strong>Display Name:</strong> {{ $host['name'] ?? 'N/A' }}</li>
-                                                        <li><strong>Technical Name:</strong> {{ $host['host'] ?? 'N/A' }}</li>
+                                                        <li><strong>{{ __('current_zabbix_problems.details.display_name') }}:</strong> {{ $host['name'] ?? 'N/A' }}</li>
+                                                        <li><strong>{{ __('current_zabbix_problems.details.technical_name') }}:</strong> {{ $host['host'] ?? 'N/A' }}</li>
                                                         @if(!empty($problem['host_ip']))
-                                                            <li><strong>IP Address:</strong> {{ $problem['host_ip'] }}</li>
+                                                            <li><strong>{{ __('current_zabbix_problems.details.ip_address') }}:</strong> {{ $problem['host_ip'] }}</li>
                                                         @endif
-                                                        <li><strong>Host ID:</strong> {{ $host['hostid'] ?? 'N/A' }}</li>
-                                                        <li><strong>Host Status:</strong> {{ isset($host['status']) ? ($host['status'] == 0 ? 'Monitored (0)' : 'Disabled (1)') : 'N/A' }}</li>
+                                                        <li><strong>{{ __('current_zabbix_problems.details.host_id') }}:</strong> {{ $host['hostid'] ?? 'N/A' }}</li>
+                                                        <li><strong>{{ __('current_zabbix_problems.details.host_status') }}:</strong> {{ isset($host['status']) ? ($host['status'] == 0 ? __('current_zabbix_problems.details.monitored') . ' (0)' : __('current_zabbix_problems.details.not_monitored') . ' (1)') : 'N/A' }}</li>
                                                     </ul>
                                                 @endforeach
                                             @else
@@ -1007,18 +1028,18 @@
 
                                         @if($linkedTicket)
                                             <div class="zbx-detail-block">
-                                                <h4>Ticket</h4>
+                                                <h4>{{ __('current_zabbix_problems.ticket.ticket') }}</h4>
                                                 <ul class="zbx-detail-list" style="margin-bottom: 12px;">
-                                                    <li><strong>Ticket Number:</strong> {{ $linkedTicket->znuny_ticket_number }}</li>
-                                                    <li><strong>Queue:</strong> {{ $linkedTicket->znuny_queue_name ?: 'N/A' }}</li>
-                                                    <li><strong>Owner:</strong> {{ $this->getTicketOwnerDisplay($linkedTicket) }}</li>
-                                                    <li><strong>Ticket Age:</strong> {{ $this->formatAge((int) $linkedTicket->created_at->diffInSeconds()) }}</li>
+                                                    <li><strong>{{ __('current_zabbix_problems.ticket.ticket_number') }}:</strong> {{ $linkedTicket->znuny_ticket_number }}</li>
+                                                    <li><strong>{{ __('current_zabbix_problems.ticket.queue') }}:</strong> {{ $linkedTicket->znuny_queue_name ?: 'N/A' }}</li>
+                                                    <li><strong>{{ __('current_zabbix_problems.ticket.owner') }}:</strong> {{ $this->getTicketOwnerDisplay($linkedTicket) }}</li>
+                                                    <li><strong>{{ __('current_zabbix_problems.ticket.ticket_age') }}:</strong> {{ $this->formatAge((int) $linkedTicket->created_at->diffInSeconds()) }}</li>
                                                     @if($linkedTicket->manual_lifecycle_status === 'flapping')
-                                                        <li><strong class="text-red-500 dark:text-red-400 inline-flex items-center gap-1">Flapping</strong></li>
+                                                        <li><strong class="text-red-500 dark:text-red-400 inline-flex items-center gap-1">{{ __('current_zabbix_problems.legend.flapping_detected') }}</strong></li>
                                                     @elseif($linkedTicket->manual_lifecycle_status === 'reopen_candidate')
-                                                        <li><strong class="text-orange-500 dark:text-orange-400 inline-flex items-center gap-1">Manual Reopen Candidate</strong></li>
+                                                        <li><strong class="text-orange-500 dark:text-orange-400 inline-flex items-center gap-1">{{ __('current_zabbix_problems.legend.manual_reopen_candidate') }}</strong></li>
                                                     @elseif($linkedTicket->manual_lifecycle_status === 'reopened' || $linkedTicket->manual_reopened_at !== null)
-                                                        <li><strong class="text-sky-500 dark:text-sky-400 inline-flex items-center gap-1">Manually reopened</strong></li>
+                                                        <li><strong class="text-sky-500 dark:text-sky-400 inline-flex items-center gap-1">{{ __('current_zabbix_problems.legend.manually_reopened') }}</strong></li>
                                                     @endif
                                                     @if($linkedTicket->manual_reopened_at)
                                                         <li><strong>Reopened at:</strong> {{ $linkedTicket->manual_reopened_at->format('Y-m-d H:i:s') }}</li>
@@ -1039,12 +1060,12 @@
                                             <div class="zbx-problem-actions" style="display: flex; gap: 0.5rem; align-items: center;">
                                                 @if($zabbixProblemUrl)
                                                     <x-filament::button tag="a" :href="$zabbixProblemUrl" target="_blank" color="gray" class="!bg-transparent !text-slate-600 dark:!text-slate-200 border border-slate-300 dark:border-slate-600 hover:!bg-slate-100 dark:hover:!bg-slate-800" size="sm" icon="heroicon-o-arrow-top-right-on-square">
-                                                        Open in Zabbix
+                                                        {{ __('current_zabbix_problems.actions.open_in_zabbix') }}
                                                     </x-filament::button>
                                                 @endif
                                                 @if($linkedTicket && strtolower($linkedTicket->znuny_ticket_state_type ?? '') !== 'closed' && !str_contains(strtolower((string) $linkedTicket->znuny_state_name), 'closed') && $linkedTicket->manual_lifecycle_status !== 'reopen_candidate')
                                                     <x-filament::button wire:click="mountAction('viewTicket', { zabbix_ticket_id: {{ $linkedTicket->id }} })" class="zbx-ticket-details-button" size="sm" icon="heroicon-o-ticket">
-                                                        Ticket details
+                                                        {{ __('current_zabbix_problems.actions.ticket_details') }}
                                                     </x-filament::button>
                                                 @endif
                                             </div>
@@ -1053,19 +1074,19 @@
                                                 @if($linkedTicket)
                                                     @if($linkedTicket->manual_lifecycle_status === 'reopen_candidate')
                                                         <x-filament::button wire:click="mountAction('reopenTicket', { zabbix_ticket_id: {{ $linkedTicket->id }} })" color="warning" size="sm" icon="heroicon-o-arrow-path">
-                                                            Reopen
+                                                            {{ __('current_zabbix_problems.presets.reopen') }}
                                                         </x-filament::button>
 
                                                         @if($canCreateTicket)
                                                             <x-filament::button wire:click="openCreateTicketModal('{{ $problem['eventid'] }}')" icon="heroicon-o-ticket" size="sm" color="gray">
-                                                                Create ticket
+                                                                {{ __('current_zabbix_problems.actions.create_ticket') }}
                                                             </x-filament::button>
                                                         @endif
                                                     @else
                                                     @endif
                                                 @elseif($canCreateTicket)
                                                     <x-filament::button wire:click="openCreateTicketModal('{{ $problem['eventid'] }}')" icon="heroicon-o-ticket" size="sm" color="primary">
-                                                        Create ticket
+                                                        {{ __('current_zabbix_problems.actions.create_ticket') }}
                                                     </x-filament::button>
                                                 @endif
                                             </div>
@@ -1082,21 +1103,32 @@
 
         <div class="zbx-icon-legend" style="margin-top: 16px; border-top: 1px solid rgba(148, 163, 184, 0.18); padding-top: 12px;">
             <div style="margin-bottom: 6px; font-size: 11px; line-height: 14px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: .04em;">
-                Icon legend
+                {{ __('current_zabbix_problems.legend.title') }}
             </div>
 
             <table style="border-collapse: collapse; font-size: 11px; line-height: 15px; color: #9ca3af;">
                 <tbody>
                     @foreach(\App\Services\Zabbix\ZabbixTicketStatusPresenter::legendItems() as $item)
+                    @php
+                        $kind = match($item['label']) {
+                            'Linked ticket' => 'linked_ticket',
+                            'Manual reopen candidate' => 'manual_reopen_candidate',
+                            'Manually reopened' => 'manually_reopened',
+                            'Flapping detected' => 'flapping_detected',
+                            default => null,
+                        };
+                        $label = $kind ? __('current_zabbix_problems.legend.' . $kind) : $item['label'];
+                        $desc = $kind ? __('current_zabbix_problems.legend.' . $kind . '_desc') : $item['description'];
+                    @endphp
                     <tr>
                         <td style="width: 18px; padding: 1px 6px 1px 0; vertical-align: middle;">
                             <x-filament::icon icon="{{ $item['icon'] }}" class="zbx-status-icon {{ $item['class'] }}" />
                         </td>
                         <td style="padding: 1px 8px 1px 0; vertical-align: middle; white-space: nowrap; font-weight: 600; color: #374151;" class="dark:!text-gray-300">
-                            {{ $item['label'] }}
+                            {{ $label }}
                         </td>
                         <td style="padding: 1px 0; vertical-align: middle; color: #6b7280;" class="dark:!text-gray-400">
-                            {{ $item['description'] }}
+                            {{ $desc }}
                         </td>
                     </tr>
                     @endforeach
