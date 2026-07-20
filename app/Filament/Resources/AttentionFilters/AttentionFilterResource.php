@@ -35,19 +35,19 @@ class AttentionFilterResource extends Resource
 
     public static function getNavigationLabel(): string
     {
-        return __('navigation.resources.attention_filters.plural');
+        return __('attention_filters.resource.plural');
     }
 
     protected static ?string $recordTitleAttribute = 'name';
 
     public static function getModelLabel(): string
     {
-        return __('navigation.resources.attention_filters.singular');
+        return __('attention_filters.resource.singular');
     }
 
     public static function getPluralModelLabel(): string
     {
-        return __('navigation.resources.attention_filters.plural');
+        return __('attention_filters.resource.plural');
     }
 
     public static function form(Schema $schema): Schema
@@ -55,21 +55,26 @@ class AttentionFilterResource extends Resource
         return $schema
             ->components([
                 TextInput::make('name')
+                    ->label(__('attention_filters.form.name'))
+                    ->helperText(__('attention_filters.form.name_helper'))
                     ->required()
                     ->maxLength(255),
                 Toggle::make('enabled')
+                    ->label(__('attention_filters.form.enabled'))
                     ->default(true),
                 Textarea::make('pattern')
+                    ->label(__('attention_filters.form.pattern'))
                     ->required()
-                    ->helperText('Example: /^Zabbix proxy.*$/ (must include delimiters)')
+                    ->helperText(__('attention_filters.form.pattern_helper'))
                     ->rule(function () {
                         return function (string $attribute, $value, Closure $fail) {
                             if (@preg_match($value, '') === false) {
-                                $fail('Invalid regular expression. Ensure you include delimiters (e.g. /pattern/).');
+                                $fail(__('attention_filters.form.pattern_invalid'));
                             }
                         };
                     }),
                 Textarea::make('description')
+                    ->label(__('attention_filters.form.description'))
                     ->maxLength(65535)
                     ->columnSpanFull(),
             ]);
@@ -83,12 +88,16 @@ class AttentionFilterResource extends Resource
             ->paginationPageOptions(app(PaginationSettings::class)->perPageOptions())
             ->columns([
                 IconColumn::make('enabled')
+                    ->label(__('attention_filters.table.enabled'))
                     ->boolean(),
                 TextColumn::make('name')
+                    ->label(__('attention_filters.table.name'))
                     ->searchable(),
                 TextColumn::make('pattern')
+                    ->label(__('attention_filters.table.pattern'))
                     ->limit(50),
                 TextColumn::make('updated_at')
+                    ->label(__('attention_filters.table.updated_at'))
                     ->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatDateTime($state))
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -98,13 +107,22 @@ class AttentionFilterResource extends Resource
             ])
             ->recordActions([
                 EditAction::make()
+                    ->modalHeading(__('attention_filters.actions.edit.heading'))
+                    ->successNotificationTitle(__('attention_filters.notifications.updated'))
+                    ->failureNotificationTitle(__('attention_filters.notifications.save_failed'))
                     ->visible(fn () => in_array(auth()->user()->role, ['admin', 'operator'], true)),
                 DeleteAction::make()
+                    ->modalHeading(__('attention_filters.actions.delete.heading'))
+                    ->modalDescription(__('attention_filters.actions.delete.description'))
+                    ->successNotificationTitle(__('attention_filters.notifications.deleted'))
+                    ->failureNotificationTitle(__('attention_filters.notifications.delete_failed'))
                     ->visible(fn () => in_array(auth()->user()->role, ['admin', 'operator'], true)),
             ])
             ->toolbarActions([
                 // No bulk delete actions
-            ]);
+            ])
+            ->emptyStateHeading(__('attention_filters.empty_states.no_records'))
+            ->emptyStateDescription(__('attention_filters.empty_states.no_records_description'));
     }
 
     public static function getPages(): array
