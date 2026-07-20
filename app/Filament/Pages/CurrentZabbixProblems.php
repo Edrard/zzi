@@ -456,7 +456,7 @@ class CurrentZabbixProblems extends Page
         $existing = $linkService->findByEventId($eventId);
         if ($existing && $existing->manual_lifecycle_status !== ZnunyManualTicketLifecycleService::STATUS_REOPEN_CANDIDATE && $existing->manual_lifecycle_status !== ZnunyManualTicketLifecycleService::STATUS_CLOSED) {
             Notification::make()
-                ->title("Ticket already linked: {$existing->znuny_ticket_number}")
+                ->title(__('current_zabbix_problems.tooltips.ticket_already_linked', ['ticket' => $existing->znuny_ticket_number]))
                 ->info()
                 ->send();
 
@@ -467,7 +467,7 @@ class CurrentZabbixProblems extends Page
         $problem = collect($problems)->firstWhere('eventid', $eventId);
 
         if (! $problem) {
-            Notification::make()->title('Problem not found')->danger()->send();
+            Notification::make()->title(__('current_zabbix_problems.notifications.problem_not_found'))->danger()->send();
 
             return;
         }
@@ -542,8 +542,8 @@ class CurrentZabbixProblems extends Page
             $this->ticketOwnerId = null;
             $this->ownerManuallyChanged = false;
             Notification::make()
-                ->title('Owner Cleared')
-                ->body('The previously selected owner is not assignable to the newly selected queue.')
+                ->title(__('current_zabbix_problems.notifications.owner_cleared'))
+                ->body(__('current_zabbix_problems.notifications.owner_cleared_body'))
                 ->warning()
                 ->send();
         }
@@ -561,8 +561,8 @@ class CurrentZabbixProblems extends Page
         if ($this->ticketQueue && ! array_key_exists($this->ticketQueue, $this->ticketQueueOptions)) {
             $this->ticketQueue = null;
             Notification::make()
-                ->title('Queue Cleared')
-                ->body('The previously selected queue is not assignable to the newly selected owner.')
+                ->title(__('current_zabbix_problems.notifications.queue_cleared'))
+                ->body(__('current_zabbix_problems.notifications.queue_cleared_body'))
                 ->warning()
                 ->send();
         }
@@ -717,7 +717,7 @@ class CurrentZabbixProblems extends Page
         }
 
         if (! $this->ticketModalProblem || ! $this->ticketModalEventId) {
-            Notification::make()->title('Missing event context')->danger()->send();
+            Notification::make()->title(__('current_zabbix_problems.notifications.missing_event_context'))->danger()->send();
 
             return;
         }
@@ -729,7 +729,7 @@ class CurrentZabbixProblems extends Page
             $this->ticketValidationWarnings = [];
 
             if (empty($this->ticketOwnerId) || empty($this->ticketQueue) || empty($this->ticketCustomerUser)) {
-                $this->ticketValidationErrors[] = 'Owner, Queue, and CustomerUser are required.';
+                $this->ticketValidationErrors[] = __('current_zabbix_problems.validation.required_fields');
                 $this->ticketValidationStatus = 'error';
 
                 return;
@@ -737,7 +737,7 @@ class CurrentZabbixProblems extends Page
 
             $dependencyService = app(ZnunyAssignmentDependencyService::class);
             if (! $dependencyService->isOwnerValidForQueue($this->ticketOwnerId, $this->ticketQueue)) {
-                $this->ticketValidationErrors[] = 'The selected owner is not assignable to the selected queue.';
+                $this->ticketValidationErrors[] = __('current_zabbix_problems.validation.owner_not_assignable');
                 $this->ticketValidationStatus = 'error';
 
                 return;
@@ -778,7 +778,7 @@ class CurrentZabbixProblems extends Page
                 $this->ticketValidationWarnings = $result['warnings'];
 
                 Notification::make()
-                    ->title("Znuny ticket created: {$result['ticket_number']}")
+                    ->title(__('current_zabbix_problems.notifications.ticket_created', ['ticket' => $result['ticket_number']]))
                     ->success()
                     ->send();
 
@@ -791,12 +791,12 @@ class CurrentZabbixProblems extends Page
 
                 if (! empty($result['orphaned'])) {
                     Notification::make()
-                        ->title("Znuny ticket was created but local link failed. Ticket: {$result['ticket_number']}. Check logs.")
+                        ->title(__('current_zabbix_problems.notifications.ticket_created_orphaned', ['ticket' => $result['ticket_number']]))
                         ->danger()
                         ->persistent()
                         ->send();
                 } else {
-                    $mainError = $result['errors'][0] ?? 'Failed to create ticket.';
+                    $mainError = $result['errors'][0] ?? __('current_zabbix_problems.notifications.failed_to_create');
                     Notification::make()
                         ->title($mainError)
                         ->danger()

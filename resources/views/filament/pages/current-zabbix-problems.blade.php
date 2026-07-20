@@ -1139,10 +1139,10 @@
 
     <x-filament::modal id="create-ticket-modal" width="2xl">
         <x-slot name="heading">
-            Create Znuny Ticket
+            {{ __('current_zabbix_problems.modals.create_ticket.heading') }}
         </x-slot>
         <x-slot name="description">
-            Preflight check and validation before creating a ticket for this Zabbix problem.
+            {{ __('current_zabbix_problems.modals.create_ticket.description') }}
         </x-slot>
 
         @if($ticketModalProblem)
@@ -1155,23 +1155,23 @@
 
                 {{-- Problem summary --}}
                 <div class="zbx-ticket-modal-section">
-                    <div class="zbx-ticket-modal-section-title">Problem summary</div>
+                    <div class="zbx-ticket-modal-section-title">{{ __('current_zabbix_problems.modals.create_ticket.problem_summary') }}</div>
                     <div class="zbx-ticket-summary-card">
                         <div class="zbx-ticket-summary-grid">
                             <div class="zbx-ticket-summary-item">
-                                <span class="zbx-ticket-summary-label">Host</span>
+                                <span class="zbx-ticket-summary-label">{{ __('current_zabbix_problems.modals.create_ticket.host') }}</span>
                                 <span class="zbx-ticket-summary-value">{{ $ticketModalProblem['host_name'] ?? 'N/A' }}</span>
                             </div>
                             <div class="zbx-ticket-summary-item">
-                                <span class="zbx-ticket-summary-label">Event ID</span>
+                                <span class="zbx-ticket-summary-label">{{ __('current_zabbix_problems.modals.create_ticket.event_id') }}</span>
                                 <span class="zbx-ticket-summary-value">{{ $ticketModalProblem['eventid'] ?? 'N/A' }}</span>
                             </div>
                             <div class="zbx-ticket-summary-item full-width">
-                                <span class="zbx-ticket-summary-label">Problem</span>
+                                <span class="zbx-ticket-summary-label">{{ __('current_zabbix_problems.modals.create_ticket.problem') }}</span>
                                 <span class="zbx-ticket-summary-value">{{ $ticketModalProblem['name'] ?? 'N/A' }}</span>
                             </div>
                             <div class="zbx-ticket-summary-item">
-                                <span class="zbx-ticket-summary-label">Severity</span>
+                                <span class="zbx-ticket-summary-label">{{ __('current_zabbix_problems.modals.create_ticket.severity') }}</span>
                                 <span class="zbx-ticket-summary-value">
                                     <x-filament::badge :color="$modalSevColor">
                                         {{ $modalSevLabel }}
@@ -1179,7 +1179,7 @@
                                 </span>
                             </div>
                             <div class="zbx-ticket-summary-item">
-                                <span class="zbx-ticket-summary-label">Started</span>
+                                <span class="zbx-ticket-summary-label">{{ __('current_zabbix_problems.modals.create_ticket.started') }}</span>
                                 <span class="zbx-ticket-summary-value">{{ $this->formatDateTime($ticketModalProblem['started_at'] ?? null) }}</span>
                             </div>
                         </div>
@@ -1200,7 +1200,7 @@
                 {{-- Default resolution --}}
                 @if(!empty($ticketDefaultWarnings))
                     <div class="zbx-ticket-modal-section">
-                        <div class="zbx-ticket-modal-section-title">Default resolution warnings</div>
+                        <div class="zbx-ticket-modal-section-title">{{ __('current_zabbix_problems.modals.create_ticket.default_resolution_warnings') }}</div>
                         <div class="bg-warning-50 dark:bg-warning-900/20 p-4 rounded-lg border border-warning-200 dark:border-warning-800 text-warning-700 dark:text-warning-400 text-sm">
                             <ul class="list-disc pl-5">
                                 @foreach($ticketDefaultWarnings as $warn)
@@ -1213,13 +1213,13 @@
 
                 {{-- Ticket fields --}}
                 <div class="zbx-ticket-modal-section">
-                    <div class="zbx-ticket-modal-section-title">Ticket fields</div>
+                    <div class="zbx-ticket-modal-section-title">{{ __('current_zabbix_problems.modals.create_ticket.ticket_fields') }}</div>
                     <div class="zbx-ticket-field-stack">
                         <div class="zbx-ticket-field">
-                            <label class="zbx-ticket-label">Owner <span class="text-danger-600">*</span></label>
+                            <label class="zbx-ticket-label">{{ __('current_zabbix_problems.modals.create_ticket.owner') }} <span class="text-danger-600">*</span></label>
                             <x-filament::input.wrapper>
                                 <x-filament::input.select wire:model.live="ticketOwnerId">
-                                    <option value="">Select an owner</option>
+                                    <option value="">{{ __('current_zabbix_problems.modals.create_ticket.select_owner') }}</option>
                                     @foreach($ticketOwnerOptions as $id => $label)
                                         <option value="{{ $id }}">{{ $label }}</option>
                                     @endforeach
@@ -1228,10 +1228,10 @@
                         </div>
 
                         <div class="zbx-ticket-field">
-                            <label class="zbx-ticket-label">Queue <span class="text-danger-600">*</span></label>
+                            <label class="zbx-ticket-label">{{ __('current_zabbix_problems.modals.create_ticket.queue') }} <span class="text-danger-600">*</span></label>
                             <x-filament::input.wrapper>
                                 <x-filament::input.select wire:model.live="ticketQueue">
-                                    <option value="">Select a queue</option>
+                                    <option value="">{{ __('current_zabbix_problems.modals.create_ticket.select_queue') }}</option>
                                     @foreach($ticketQueueOptions as $name => $label)
                                         <option value="{{ $name }}">{{ $label }}</option>
                                     @endforeach
@@ -1240,23 +1240,23 @@
                         </div>
 
                         <div class="zbx-ticket-field">
-                            <label class="zbx-ticket-label">CustomerUser <span class="text-danger-600">*</span></label>
+                            <label class="zbx-ticket-label">{{ __('current_zabbix_problems.modals.create_ticket.customer_user') }} <span class="text-danger-600">*</span></label>
 
                             <div class="zbx-ticket-search-row">
                                 <x-filament::input.wrapper class="zbx-ticket-search-input">
-                                    <x-filament::input type="text" wire:model="ticketCustomerUserSearch" placeholder="Search CustomerUser..." wire:keydown.enter="searchTicketCustomerUsers" />
+                                    <x-filament::input type="text" wire:model="ticketCustomerUserSearch" placeholder="{{ __('current_zabbix_problems.modals.create_ticket.search_customer_user_placeholder') }}" wire:keydown.enter="searchTicketCustomerUsers" />
                                 </x-filament::input.wrapper>
-                                <x-filament::button color="gray" wire:click="searchTicketCustomerUsers">Search</x-filament::button>
+                                <x-filament::button color="gray" wire:click="searchTicketCustomerUsers">{{ __('current_zabbix_problems.modals.create_ticket.search_button') }}</x-filament::button>
                             </div>
-                            <div class="text-xs text-gray-500 mt-1 mb-2">Search by login, customer ID, name, or email.</div>
+                            <div class="text-xs text-gray-500 mt-1 mb-2">{{ __('current_zabbix_problems.modals.create_ticket.search_hint') }}</div>
 
                             @if(!empty($ticketCustomerUserSearch) && empty($ticketCustomerUserOptions))
-                                <div class="text-sm text-gray-500 mb-2">No matching CustomerUser found.</div>
+                                <div class="text-sm text-gray-500 mb-2">{{ __('current_zabbix_problems.modals.create_ticket.no_matching_customer') }}</div>
                             @endif
 
                             <x-filament::input.wrapper>
                                 <x-filament::input.select wire:model="ticketCustomerUser">
-                                    <option value="">Select a customer user</option>
+                                    <option value="">{{ __('current_zabbix_problems.modals.create_ticket.select_customer') }}</option>
                                     @foreach($ticketCustomerUserOptions as $login => $label)
                                         <option value="{{ $login }}">{{ $label }}</option>
                                     @endforeach
@@ -1265,17 +1265,17 @@
                         </div>
 
                         <div class="zbx-ticket-fixed-values">
-                            <span class="text-sm font-medium text-gray-500">Fixed ticket values:</span>
+                            <span class="text-sm font-medium text-gray-500">{{ __('current_zabbix_problems.modals.create_ticket.fixed_ticket_values') }}</span>
                             <div class="zbx-ticket-chip">
-                                <span class="zbx-ticket-chip-label">State</span>
+                                <span class="zbx-ticket-chip-label">{{ __('current_zabbix_problems.modals.create_ticket.state') }}</span>
                                 <span class="zbx-ticket-chip-value">{{ $ticketDefaultState }}</span>
                             </div>
                             <div class="zbx-ticket-chip">
-                                <span class="zbx-ticket-chip-label">Lock</span>
+                                <span class="zbx-ticket-chip-label">{{ __('current_zabbix_problems.modals.create_ticket.lock') }}</span>
                                 <span class="zbx-ticket-chip-value">{{ $ticketDefaultLock }}</span>
                             </div>
                             <div class="zbx-ticket-chip">
-                                <span class="zbx-ticket-chip-label">Priority</span>
+                                <span class="zbx-ticket-chip-label">{{ __('current_zabbix_problems.modals.create_ticket.priority') }}</span>
                                 <span class="zbx-ticket-chip-value">{{ $ticketDefaultPriority }}</span>
                             </div>
                         </div>
@@ -1285,21 +1285,21 @@
                 {{-- Preflight result --}}
                 @if($ticketValidationStatus === 'success' || $ticketValidationStatus === 'error' || !empty($ticketValidationWarnings))
                     <div class="zbx-ticket-modal-section">
-                        <div class="zbx-ticket-modal-section-title">Preflight result</div>
+                        <div class="zbx-ticket-modal-section-title">{{ __('current_zabbix_problems.modals.create_ticket.preflight_result') }}</div>
 
                         @if($ticketValidationStatus === 'success')
                             <div class="bg-success-50 dark:bg-success-900/20 p-4 rounded-lg border border-success-200 dark:border-success-800 text-success-700 dark:text-success-400 text-sm">
                                 <div class="flex items-center gap-2 mb-1">
                                     <x-filament::icon icon="heroicon-o-check-circle" class="w-5 h-5" />
-                                    <strong class="font-medium text-base">Ticket data is valid</strong>
+                                    <strong class="font-medium text-base">{{ __('current_zabbix_problems.modals.create_ticket.ticket_data_is_valid') }}</strong>
                                 </div>
-                                <p class="ml-7">The selected Owner, Queue and CustomerUser passed Znuny preflight validation.</p>
+                                <p class="ml-7">{{ __('current_zabbix_problems.modals.create_ticket.ticket_data_valid_desc') }}</p>
                             </div>
                         @elseif($ticketValidationStatus === 'error')
                             <div class="bg-danger-50 dark:bg-danger-900/20 p-4 rounded-lg border border-danger-200 dark:border-danger-800 text-danger-700 dark:text-danger-400 text-sm">
                                 <div class="flex items-center gap-2 mb-2">
                                     <x-filament::icon icon="heroicon-o-x-circle" class="w-5 h-5" />
-                                    <strong class="font-medium text-base">Validation Errors</strong>
+                                    <strong class="font-medium text-base">{{ __('current_zabbix_problems.modals.create_ticket.validation_errors') }}</strong>
                                 </div>
                                 <ul class="list-disc pl-9 mt-1">
                                     @foreach($ticketValidationErrors as $err)
@@ -1313,7 +1313,7 @@
                             <div class="bg-warning-50 dark:bg-warning-900/20 p-4 rounded-lg border border-warning-200 dark:border-warning-800 text-warning-700 dark:text-warning-400 text-sm mt-3">
                                 <div class="flex items-center gap-2 mb-2">
                                     <x-filament::icon icon="heroicon-o-exclamation-triangle" class="w-5 h-5" />
-                                    <strong class="font-medium text-base">Validation Warnings</strong>
+                                    <strong class="font-medium text-base">{{ __('current_zabbix_problems.modals.create_ticket.validation_warnings') }}</strong>
                                 </div>
                                 <ul class="list-disc pl-9 mt-1">
                                     @foreach($ticketValidationWarnings as $warn)
@@ -1331,16 +1331,16 @@
         <x-slot name="footer">
             <div class="zbx-modal-footer-actions">
                 <x-filament::button color="gray" wire:click="closeCreateTicketModal" wire:loading.attr="disabled" wire:target="createZnunyTicket">
-                    Cancel
+                    {{ __('current_zabbix_problems.modals.create_ticket.cancel') }}
                 </x-filament::button>
                 <div class="zbx-modal-footer-right">
                     <x-filament::button color="gray" wire:click="openEditTicketTextModal" wire:loading.attr="disabled" wire:target="createZnunyTicket">
-                        Edit ticket text
+                        {{ __('current_zabbix_problems.modals.create_ticket.edit_text') }}
                     </x-filament::button>
                     <x-filament::button wire:click="createZnunyTicket" wire:loading.attr="disabled" wire:target="createZnunyTicket">
-                        <span wire:loading.remove wire:target="createZnunyTicket">Create ticket</span>
+                        <span wire:loading.remove wire:target="createZnunyTicket">{{ __('current_zabbix_problems.modals.create_ticket.create') }}</span>
                         <span wire:loading.flex wire:target="createZnunyTicket" class="items-center gap-2">
-                            Creating...
+                            {{ __('current_zabbix_problems.modals.create_ticket.creating') }}
                         </span>
                     </x-filament::button>
                 </div>
@@ -1350,23 +1350,23 @@
 
     <x-filament::modal id="edit-ticket-text-modal" width="3xl">
         <x-slot name="heading">
-            Edit ticket text
+            {{ __('current_zabbix_problems.modals.edit_text.heading') }}
         </x-slot>
         <x-slot name="description">
-            Edit the generated title and article body before creating the ticket.
+            {{ __('current_zabbix_problems.modals.edit_text.description') }}
         </x-slot>
 
         <div class="zbx-ticket-modal-section">
             <div class="zbx-ticket-field-stack">
                 <div class="zbx-ticket-field">
-                    <label class="zbx-ticket-label">Title <span class="text-danger-600">*</span></label>
+                    <label class="zbx-ticket-label">{{ __('current_zabbix_problems.modals.edit_text.title') }} <span class="text-danger-600">*</span></label>
                     <x-filament::input.wrapper>
                         <x-filament::input type="text" wire:model="ticketTextTitle" />
                     </x-filament::input.wrapper>
                 </div>
 
                 <div class="zbx-ticket-field">
-                    <label class="zbx-ticket-label">Article Body <span class="text-danger-600">*</span></label>
+                    <label class="zbx-ticket-label">{{ __('current_zabbix_problems.modals.edit_text.article_body') }} <span class="text-danger-600">*</span></label>
                     <x-filament::input.wrapper>
                         <textarea wire:model="ticketTextArticleBody" class="zbx-ticket-textarea" rows="18"></textarea>
                     </x-filament::input.wrapper>
@@ -1377,14 +1377,14 @@
         <x-slot name="footer">
             <div class="zbx-modal-footer-actions">
                 <x-filament::button color="gray" wire:click="closeEditTicketTextModal">
-                    Cancel
+                    {{ __('current_zabbix_problems.modals.edit_text.cancel') }}
                 </x-filament::button>
                 <div class="zbx-modal-footer-right">
                     <x-filament::button color="warning" wire:click="resetTicketText">
-                        Reset to generated text
+                        {{ __('current_zabbix_problems.modals.edit_text.reset') }}
                     </x-filament::button>
                     <x-filament::button color="primary" wire:click="saveTicketText">
-                        Save changes
+                        {{ __('current_zabbix_problems.modals.edit_text.save') }}
                     </x-filament::button>
                 </div>
             </div>
