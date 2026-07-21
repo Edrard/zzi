@@ -274,9 +274,74 @@
             font-size: 0.8125rem;
         }
 
+        .zbx-col-expand { width: 42px; }
+        .zbx-col-severity { width: 130px; }
+        .zbx-col-status { width: 24px; }
+        .zbx-col-duration { width: 110px; text-align: right; }
+
         @media (max-width: 599px) {
-            .zbx-col-severity {
-                display: none;
+            .zbx-table {
+                width: 100%;
+                min-width: 0;
+                table-layout: fixed;
+            }
+            .zbx-table th,
+            .zbx-table td {
+                min-width: 0;
+            }
+            .zbx-table th.zbx-col-severity,
+            .zbx-table td.zbx-col-severity {
+                width: 0;
+                max-width: 0;
+                padding-inline: 0;
+                overflow: hidden;
+                visibility: hidden;
+                border-inline-width: 0;
+                pointer-events: none;
+            }
+            .zbx-col-expand {
+                width: 34px;
+            }
+            .zbx-col-status {
+                width: 24px;
+            }
+            .zbx-col-duration {
+                width: 94px;
+                white-space: nowrap;
+            }
+            .zbx-col-expand,
+            .zbx-col-status {
+                padding-inline: 4px;
+            }
+            .zbx-col-duration {
+                padding-inline: 6px;
+            }
+            .zbx-col-host,
+            .zbx-col-problem {
+                width: auto;
+                white-space: normal;
+                overflow-wrap: anywhere;
+                word-break: break-word;
+            }
+            .zbx-col-host .zbx-th-button,
+            .zbx-col-problem .zbx-th-button {
+                min-width: 0;
+                white-space: normal;
+            }
+            .zbx-col-duration .zbx-th-button {
+                gap: 2px;
+                justify-content: flex-end;
+                font-size: 0.75rem;
+            }
+            .zbx-details,
+            .zbx-detail-block,
+            .zbx-detail-list,
+            .zbx-detail-list li {
+                min-width: 0;
+            }
+            .zbx-detail-list li {
+                overflow-wrap: anywhere;
+                word-break: break-word;
             }
         }
 
@@ -870,8 +935,8 @@
                 <table class="zbx-table" x-data="{ expandedEventIds: [] }">
                     <thead>
                         <tr>
-                            <th style="width: 42px;"></th>
-                            <th style="width: 130px;" class="zbx-col-severity">
+                            <th class="zbx-col-expand"></th>
+                            <th class="zbx-col-severity">
                                 <button type="button" class="zbx-th-button" wire:click="sortBy('severity')">
                                     {{ __('current_zabbix_problems.table.severity') }}
                                     @if($this->sortField === 'severity')
@@ -879,8 +944,8 @@
                                     @endif
                                 </button>
                             </th>
-                            <th style="width: 24px;"></th>
-                            <th>
+                            <th class="zbx-col-status"></th>
+                            <th class="zbx-col-host">
                                 <button type="button" class="zbx-th-button" wire:click="sortBy('host')">
                                     {{ __('current_zabbix_problems.table.host') }}
                                     @if($this->sortField === 'host')
@@ -888,7 +953,7 @@
                                     @endif
                                 </button>
                             </th>
-                            <th>
+                            <th class="zbx-col-problem">
                                 <button type="button" class="zbx-th-button" wire:click="sortBy('problem')">
                                     {{ __('current_zabbix_problems.table.problem') }}
                                     @if($this->sortField === 'problem')
@@ -896,7 +961,7 @@
                                     @endif
                                 </button>
                             </th>
-                            <th style="width: 110px; text-align: right;">
+                            <th class="zbx-col-duration">
                                 <button type="button" class="zbx-th-button" style="justify-content: flex-end;" wire:click="sortBy('age')">
                                     {{ __('current_zabbix_problems.table.age') }}
                                     @if($this->sortField === 'age')
@@ -941,7 +1006,7 @@
                                     ? expandedEventIds = expandedEventIds.filter(id => id !== '{{ $eventId }}')
                                     : expandedEventIds.push('{{ $eventId }}')
                             ">
-                                <td>
+                                <td class="zbx-col-expand">
                                     <button @click.stop="
                                         expandedEventIds.includes('{{ $eventId }}')
                                             ? expandedEventIds = expandedEventIds.filter(id => id !== '{{ $eventId }}')
@@ -956,7 +1021,7 @@
                                         {{ $severityLabel }}
                                     </span>
                                 </td>
-                                <td>
+                                <td class="zbx-col-status">
                                     @if($indicator)
                                         @php
                                             $tooltip = $indicator['title'];
@@ -973,7 +1038,7 @@
                                         <x-filament::icon icon="{{ $indicator['icon'] }}" class="{{ $indicator['class'] ?? 'w-4 h-4' }}" title="{{ $tooltip }}" />
                                     @endif
                                 </td>
-                                <td class="zbx-host-col">
+                                <td class="zbx-host-col zbx-col-host">
                                     @if(($problem['attention_matched'] ?? false) && $hasAttentionHighlights)
                                         <span style="{{ $attentionStyle }}">
                                     @endif
@@ -982,7 +1047,7 @@
                                         </span>
                                     @endif
                                 </td>
-                                <td>
+                                <td class="zbx-col-problem">
                                     @if(($problem['attention_matched'] ?? false) && $hasAttentionHighlights)
                                         <span style="{{ $attentionStyle }}">
                                     @endif
@@ -996,7 +1061,7 @@
                                         </span>
                                     @endif
                                 </td>
-                                <td style="text-align: right;">
+                                <td class="zbx-col-duration">
                                     {{ $this->formatAge($ageSeconds) }}
                                 </td>
                             </tr>
