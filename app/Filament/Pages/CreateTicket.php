@@ -22,7 +22,7 @@ class CreateTicket extends Page implements HasForms
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-plus-circle';
 
-    protected static ?int $navigationSort = 40;
+    protected static ?int $navigationSort = 9;
 
     public static function getNavigationLabel(): string
     {

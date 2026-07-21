@@ -61,3 +61,15 @@ html:not(.dark) .linked-tickets-compact-table.fi-clickable:hover .fi-ta-text-ite
         padding: 5px !important;
     }
 }
+
+@media (max-width: 1023px) {
+    .fi-sidebar-item:has(a[href*="/scheduled-znuny-tasks"]) {
+        margin-top: 0.625rem;
+        padding-top: 0.625rem;
+        border-top: 1px solid var(--gray-200, #e5e7eb);
+    }
+
+    html.dark .fi-sidebar-item:has(a[href*="/scheduled-znuny-tasks"]) {
+        border-top-color: var(--gray-800, #1f2937);
+    }
+}
