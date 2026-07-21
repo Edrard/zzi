@@ -274,6 +274,12 @@
             font-size: 0.8125rem;
         }
 
+        @media (max-width: 599px) {
+            .zbx-col-severity {
+                display: none;
+            }
+        }
+
         .zbx-table th {
             background-color: #f9fafb;
             color: #374151;
@@ -865,7 +871,7 @@
                     <thead>
                         <tr>
                             <th style="width: 42px;"></th>
-                            <th style="width: 130px;">
+                            <th style="width: 130px;" class="zbx-col-severity">
                                 <button type="button" class="zbx-th-button" wire:click="sortBy('severity')">
                                     {{ __('current_zabbix_problems.table.severity') }}
                                     @if($this->sortField === 'severity')
@@ -945,7 +951,7 @@
                                         <x-filament::icon x-show="expandedEventIds.includes('{{ $eventId }}')" icon="heroicon-m-chevron-down" class="w-5 h-5" x-cloak />
                                     </button>
                                 </td>
-                                <td>
+                                <td class="zbx-col-severity">
                                     <span class="zbx-severity zbx-severity-{{ $severityValue }}">
                                         {{ $severityLabel }}
                                     </span>
