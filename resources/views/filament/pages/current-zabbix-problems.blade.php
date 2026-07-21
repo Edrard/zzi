@@ -226,17 +226,22 @@
             flex-direction: column;
             gap: 16px;
         }
+        .zbx-toolbar-search {
+            flex: 0 1 auto;
+            width: 100%;
+            max-width: none;
+        }
         @media (min-width: 768px) {
             .zbx-toolbar {
                 flex-direction: row;
                 align-items: center;
                 justify-content: space-between;
             }
-        }
-
-        .zbx-toolbar-search {
-            flex: 1;
-            max-width: 400px;
+            .zbx-toolbar-search {
+                flex: 1 1 350px;
+                min-width: 0;
+                max-width: 400px;
+            }
         }
 
         .zbx-toolbar-count {
@@ -803,7 +808,7 @@
             $totalCount = $this->totalCachedCount;
         @endphp
         <div class="zbx-toolbar" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-            <div class="zbx-toolbar-search" style="flex: 0 1 350px;">
+            <div class="zbx-toolbar-search">
                 <x-filament::input.wrapper icon="heroicon-m-magnifying-glass">
                     <x-filament::input
                         type="text"
