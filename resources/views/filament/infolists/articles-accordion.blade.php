@@ -4,7 +4,7 @@
 
 @if (empty($articles))
     <div class="text-sm text-gray-500 dark:text-gray-400">
-        No articles found.
+        {{ __('znuny_ticket_workspace.accordion.no_articles') }}
     </div>
 @else
     <div 
@@ -92,16 +92,16 @@
                 >
                     <div class="flex items-center gap-2 truncate pr-4">
                         @if (!empty($article['is_visible_for_customer']))
-                            <div title="Article" aria-label="Article" class="inline-flex items-center text-primary-600 dark:text-primary-400 shrink-0">
+                            <div title="{{ __('znuny_ticket_workspace.accordion.article') }}" aria-label="{{ __('znuny_ticket_workspace.accordion.article') }}" class="inline-flex items-center text-primary-600 dark:text-primary-400 shrink-0">
                                 <x-heroicon-m-chat-bubble-left-ellipsis class="h-4 w-4" />
                             </div>
                         @else
-                            <div title="Internal note" aria-label="Internal note" class="inline-flex items-center text-gray-500 dark:text-gray-400 shrink-0">
+                            <div title="{{ __('znuny_ticket_workspace.accordion.internal_note') }}" aria-label="{{ __('znuny_ticket_workspace.accordion.internal_note') }}" class="inline-flex items-center text-gray-500 dark:text-gray-400 shrink-0">
                                 <x-heroicon-m-lock-closed class="h-4 w-4" />
                             </div>
                         @endif
                         <span class="text-sm font-medium text-gray-950 dark:text-white truncate">
-                            {{ !empty($article['subject']) ? $article['subject'] : 'No subject' }}
+                            {{ !empty($article['subject']) ? $article['subject'] : __('znuny_ticket_workspace.accordion.no_subject') }}
                         </span>
                     </div>
                     <span 
@@ -121,20 +121,20 @@
                         <div class="mb-2 flex flex-wrap gap-x-4 gap-y-1">
                             @if(!empty($article['created_at']))
                                 <div>
-                                    <span class="text-xs text-gray-500 dark:text-gray-400 block mb-0.5">Created</span>
+                                    <span class="text-xs text-gray-500 dark:text-gray-400 block mb-0.5">{{ __('znuny_ticket_workspace.accordion.created') }}</span>
                                     <span>{{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($article['created_at']) }}</span>
                                 </div>
                             @endif
                             @if(!empty($article['sender_type']))
                                 <div>
-                                    <span class="text-xs text-gray-500 dark:text-gray-400 block mb-0.5">Sender</span>
+                                    <span class="text-xs text-gray-500 dark:text-gray-400 block mb-0.5">{{ __('znuny_ticket_workspace.accordion.sender') }}</span>
                                     <span class="capitalize">{{ $article['sender_type'] }}</span>
                                 </div>
                             @endif
                         </div>
                         @php
                             $bodyText = trim((string) ($article['body'] ?? ''));
-                            $bodyText = $bodyText !== '' ? $bodyText : 'No body';
+                            $bodyText = $bodyText !== '' ? $bodyText : __('znuny_ticket_workspace.accordion.no_body');
                         @endphp
                         <div class="zbx-ticket-article-text whitespace-pre-wrap break-words rounded-md bg-gray-50 dark:bg-white/5 text-sm leading-snug ring-1 ring-gray-950/5 dark:ring-white/10 overflow-x-auto">{{ $bodyText }}</div>
                     </div>

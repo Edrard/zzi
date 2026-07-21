@@ -26,17 +26,17 @@ class ZnunyTicketManagementActions
     public static function closeTicketAction(string $name = 'manual_close_ticket'): Action
     {
         return Action::make($name)
-            ->label('Close Ticket')
+            ->label(__('znuny_ticket_workspace.management_actions.close_ticket'))
             ->icon('heroicon-o-check-circle')
             ->color('danger')
             ->requiresConfirmation()
-            ->modalHeading(fn ($record) => $record instanceof ZabbixTicket && $record->manual_lifecycle_status === 'close_candidate' ? 'Close Znuny Ticket' : 'Close Znuny Ticket Anyway?')
+            ->modalHeading(fn ($record) => $record instanceof ZabbixTicket && $record->manual_lifecycle_status === 'close_candidate' ? __('znuny_ticket_workspace.management_actions.close_ticket_heading_candidate') : __('znuny_ticket_workspace.management_actions.close_ticket_heading_anyway'))
             ->modalDescription(fn ($record) => $record instanceof ZabbixTicket && $record->manual_lifecycle_status === 'close_candidate'
-                ? 'Close this Znuny ticket? The linked Zabbix problem is resolved and the close delay has passed.'
-                : 'Close this Znuny ticket? Use this only if the operator has manually verified that closing is correct.')
+                ? __('znuny_ticket_workspace.management_actions.close_ticket_desc_candidate')
+                : __('znuny_ticket_workspace.management_actions.close_ticket_desc_anyway'))
             ->form([
                 Textarea::make('reason')
-                    ->label('Reason / Comment')
+                    ->label(__('znuny_ticket_workspace.management_actions.reason_comment'))
                     ->default(fn () => SettingsService::string('linked_ticket_manual_close_default_reason', 'Manual close from UI.'))
                     ->required(),
             ])
@@ -48,7 +48,7 @@ class ZnunyTicketManagementActions
             ->action(function (array $arguments, array $data, Action $action, $record = null) {
                 $payload = TicketDetailsPayload::fromRecord($record, $arguments);
                 if (! $payload->znuny_ticket_id) {
-                    Notification::make()->title('Ticket ID missing')->danger()->send();
+                    Notification::make()->title(__('znuny_ticket_workspace.management_actions.ticket_id_missing'))->danger()->send();
                     $action->halt();
 
                     return;
@@ -58,7 +58,7 @@ class ZnunyTicketManagementActions
                     $ticketId = $record instanceof ZabbixTicket ? $record->id : ($arguments['zabbix_ticket_id'] ?? null);
                     $ticket = $record instanceof ZabbixTicket ? $record : ZabbixTicket::find($ticketId);
                     if (! $ticket) {
-                        Notification::make()->title('Ticket not found')->danger()->send();
+                        Notification::make()->title(__('znuny_ticket_workspace.management_actions.ticket_not_found'))->danger()->send();
                         $action->halt();
 
                         return;
@@ -96,14 +96,14 @@ class ZnunyTicketManagementActions
                         );
                         if (! empty($result['warning'])) {
                             Notification::make()
-                                ->title('Ticket Closed with Warning')
+                                ->title(__('znuny_ticket_workspace.management_actions.close_warning'))
                                 ->body($result['warning'])
                                 ->warning()
                                 ->send();
                         } else {
                             Notification::make()
-                                ->title('Ticket Closed')
-                                ->body('Znuny ticket successfully closed.')
+                                ->title(__('znuny_ticket_workspace.management_actions.ticket_closed'))
+                                ->body(__('znuny_ticket_workspace.management_actions.close_success_body'))
                                 ->success()
                                 ->send();
                         }
@@ -127,8 +127,8 @@ class ZnunyTicketManagementActions
                             ]
                         );
                         Notification::make()
-                            ->title('Close Failed')
-                            ->body($result['reason'] ?? 'Failed to close ticket.')
+                            ->title(__('znuny_ticket_workspace.management_actions.close_failed'))
+                            ->body($result['reason'] ?? __('znuny_ticket_workspace.management_actions.close_failed_body_fallback'))
                             ->danger()
                             ->send();
 
@@ -147,7 +147,7 @@ class ZnunyTicketManagementActions
                         $response = $client->closeTicket($payload->znuny_ticket_id, $closePayload);
                         if (! $response['success']) {
                             Notification::make()
-                                ->title('Close Failed')
+                                ->title(__('znuny_ticket_workspace.management_actions.close_failed'))
                                 ->body(implode(', ', $response['errors'] ?? ['Unknown error']))
                                 ->danger()
                                 ->send();
@@ -168,14 +168,14 @@ class ZnunyTicketManagementActions
                         $refreshService->refreshTicket($payload->znuny_ticket_id);
 
                         Notification::make()
-                            ->title('Ticket Closed')
-                            ->body('Znuny ticket successfully closed.')
+                            ->title(__('znuny_ticket_workspace.management_actions.ticket_closed'))
+                            ->body(__('znuny_ticket_workspace.management_actions.close_success_body'))
                             ->success()
                             ->send();
 
                     } catch (\Throwable $e) {
                         Notification::make()
-                            ->title('Close Failed')
+                            ->title(__('znuny_ticket_workspace.management_actions.close_failed'))
                             ->body($e->getMessage())
                             ->danger()
                             ->send();
@@ -188,15 +188,15 @@ class ZnunyTicketManagementActions
     public static function reopenTicketAction(string $name = 'reopen_ticket'): Action
     {
         return Action::make($name)
-            ->label('Reopen Ticket')
+            ->label(__('znuny_ticket_workspace.management_actions.reopen_ticket'))
             ->icon('heroicon-o-arrow-path')
             ->color('warning')
             ->requiresConfirmation()
-            ->modalHeading('Reopen Znuny Ticket')
-            ->modalDescription('Reopen this Znuny ticket?')
+            ->modalHeading(__('znuny_ticket_workspace.management_actions.reopen_heading'))
+            ->modalDescription(__('znuny_ticket_workspace.management_actions.reopen_desc'))
             ->form([
                 Textarea::make('reason')
-                    ->label('Reopen Note / Article Body')
+                    ->label(__('znuny_ticket_workspace.management_actions.reopen_note_label'))
                     ->required()
                     ->default(fn () => SettingsService::string('manual_ticket_reopen_note_template', 'Reopening this ticket.')),
             ])
@@ -208,7 +208,7 @@ class ZnunyTicketManagementActions
             ->action(function (array $arguments, array $data, Action $action, $record = null) {
                 $payload = TicketDetailsPayload::fromRecord($record, $arguments);
                 if (! $payload->znuny_ticket_id) {
-                    Notification::make()->title('Ticket ID missing')->danger()->send();
+                    Notification::make()->title(__('znuny_ticket_workspace.management_actions.ticket_id_missing'))->danger()->send();
                     $action->halt();
 
                     return;
@@ -218,7 +218,7 @@ class ZnunyTicketManagementActions
                     $ticketId = $record instanceof ZabbixTicket ? $record->id : ($arguments['zabbix_ticket_id'] ?? null);
                     $ticket = $record instanceof ZabbixTicket ? $record : ZabbixTicket::find($ticketId);
                     if (! $ticket) {
-                        Notification::make()->title('Ticket not found')->danger()->send();
+                        Notification::make()->title(__('znuny_ticket_workspace.management_actions.ticket_not_found'))->danger()->send();
                         $action->halt();
 
                         return;
@@ -233,14 +233,14 @@ class ZnunyTicketManagementActions
                         $refreshService->refreshTicket($ticket->znuny_ticket_id);
 
                         Notification::make()
-                            ->title('Ticket Reopened')
-                            ->body('Znuny ticket successfully reopened.')
+                            ->title(__('znuny_ticket_workspace.management_actions.ticket_reopened'))
+                            ->body(__('znuny_ticket_workspace.management_actions.reopen_success_body'))
                             ->success()
                             ->send();
                     } else {
                         Notification::make()
-                            ->title('Reopen Failed')
-                            ->body($result['reason'] ?? 'Failed to reopen ticket.')
+                            ->title(__('znuny_ticket_workspace.management_actions.reopen_failed'))
+                            ->body($result['reason'] ?? __('znuny_ticket_workspace.management_actions.reopen_failed_body_fallback'))
                             ->danger()
                             ->send();
 
@@ -259,7 +259,7 @@ class ZnunyTicketManagementActions
                         $response = $client->reopenTicket($payload->znuny_ticket_id, $reopenPayload);
                         if (! $response['success']) {
                             Notification::make()
-                                ->title('Reopen Failed')
+                                ->title(__('znuny_ticket_workspace.management_actions.reopen_failed'))
                                 ->body(implode(', ', $response['errors'] ?? ['Unknown error']))
                                 ->danger()
                                 ->send();
@@ -273,14 +273,14 @@ class ZnunyTicketManagementActions
                         $refreshService->refreshTicket($payload->znuny_ticket_id);
 
                         Notification::make()
-                            ->title('Ticket Reopened')
-                            ->body('Znuny ticket successfully reopened.')
+                            ->title(__('znuny_ticket_workspace.management_actions.ticket_reopened'))
+                            ->body(__('znuny_ticket_workspace.management_actions.reopen_success_body'))
                             ->success()
                             ->send();
 
                     } catch (\Throwable $e) {
                         Notification::make()
-                            ->title('Reopen Failed')
+                            ->title(__('znuny_ticket_workspace.management_actions.reopen_failed'))
                             ->body($e->getMessage())
                             ->danger()
                             ->send();
@@ -293,19 +293,19 @@ class ZnunyTicketManagementActions
     public static function addNoteOrArticleAction(string $name = 'add_note_or_article'): Action
     {
         return Action::make($name)
-            ->label('Add Note / Article')
+            ->label(__('znuny_ticket_workspace.management_actions.add_note_article'))
             ->icon('heroicon-o-pencil-square')
             ->color('gray')
-            ->modalHeading('Add Note / Article')
-            ->modalDescription('Write a message to append to this ticket.')
+            ->modalHeading(__('znuny_ticket_workspace.management_actions.add_note_heading'))
+            ->modalDescription(__('znuny_ticket_workspace.management_actions.add_note_desc'))
             ->form([
                 TextInput::make('subject')
-                    ->label('Subject')
+                    ->label(__('znuny_ticket_workspace.management_actions.subject'))
                     ->required()
                     ->maxLength(255)
                     ->default(''),
                 Textarea::make('body')
-                    ->label('Body')
+                    ->label(__('znuny_ticket_workspace.management_actions.body'))
                     ->required()
                     ->maxLength(65535)
                     ->rows(6),
@@ -317,10 +317,10 @@ class ZnunyTicketManagementActions
             })
             ->extraModalFooterActions(fn (Action $action): array => [
                 $action->makeModalSubmitAction('create_note', arguments: ['visible_for_customer' => false])
-                    ->label('Create Note')
+                    ->label(__('znuny_ticket_workspace.management_actions.create_note'))
                     ->color('gray'),
                 $action->makeModalSubmitAction('create_article', arguments: ['visible_for_customer' => true])
-                    ->label('Create Article')
+                    ->label(__('znuny_ticket_workspace.management_actions.create_article'))
                     ->color('primary'),
             ])
             ->modalSubmitAction(false)
@@ -335,7 +335,7 @@ class ZnunyTicketManagementActions
         $payload = TicketDetailsPayload::fromRecord($record, $arguments);
 
         if (! $payload->znuny_ticket_id) {
-            Notification::make()->title('Ticket ID missing')->danger()->send();
+            Notification::make()->title(__('znuny_ticket_workspace.management_actions.ticket_id_missing'))->danger()->send();
             $action->halt();
 
             return;
@@ -351,13 +351,13 @@ class ZnunyTicketManagementActions
 
         if ($result['success']) {
             Notification::make()
-                ->title($visibleForCustomer ? 'Article Created' : 'Note Created')
-                ->body('Your message has been successfully added to the ticket.')
+                ->title($visibleForCustomer ? __('znuny_ticket_workspace.management_actions.article_created') : __('znuny_ticket_workspace.management_actions.note_created'))
+                ->body(__('znuny_ticket_workspace.management_actions.add_note_success_body'))
                 ->success()
                 ->send();
         } else {
             Notification::make()
-                ->title('Action Failed')
+                ->title(__('znuny_ticket_workspace.management_actions.action_failed'))
                 ->body(implode(', ', $result['errors'] ?? ['Unknown error']))
                 ->danger()
                 ->send();
@@ -369,7 +369,7 @@ class ZnunyTicketManagementActions
     public static function openInZnunyAction(string $name = 'open_ticket'): Action
     {
         return Action::make($name)
-            ->label('Open Ticket')
+            ->label(__('znuny_ticket_workspace.management_actions.open_ticket'))
             ->icon('heroicon-o-arrow-top-right-on-square')
             ->url(function (array $arguments, $record = null) {
                 $payload = TicketDetailsPayload::fromRecord($record, $arguments);
@@ -390,7 +390,7 @@ class ZnunyTicketManagementActions
             ->label(function (array $arguments, $record = null) {
                 $payload = TicketDetailsPayload::fromRecord($record, $arguments);
 
-                return $payload->lock === 'lock' ? 'Release' : 'Take';
+                return $payload->lock === 'lock' ? __('znuny_ticket_workspace.management_actions.release') : __('znuny_ticket_workspace.management_actions.take');
             })
             ->icon(function (array $arguments, $record = null) {
                 $payload = TicketDetailsPayload::fromRecord($record, $arguments);
@@ -405,7 +405,7 @@ class ZnunyTicketManagementActions
             ->tooltip(function (array $arguments, $record = null) {
                 $payload = TicketDetailsPayload::fromRecord($record, $arguments);
 
-                return $payload->lock === 'lock' ? 'Unlock this ticket' : 'Lock this ticket for work';
+                return $payload->lock === 'lock' ? __('znuny_ticket_workspace.management_actions.unlock_tooltip') : __('znuny_ticket_workspace.management_actions.lock_tooltip');
             })
             ->visible(function (array $arguments, $record = null) {
                 $payload = TicketDetailsPayload::fromRecord($record, $arguments);
@@ -417,7 +417,7 @@ class ZnunyTicketManagementActions
             ->action(function (array $arguments, Action $action, $record = null) {
                 $payload = TicketDetailsPayload::fromRecord($record, $arguments);
                 if (! $payload->znuny_ticket_id) {
-                    Notification::make()->title('Ticket ID missing')->danger()->send();
+                    Notification::make()->title(__('znuny_ticket_workspace.management_actions.ticket_id_missing'))->danger()->send();
                     $action->halt();
 
                     return;
@@ -443,7 +443,7 @@ class ZnunyTicketManagementActions
                         }
 
                         Notification::make()
-                            ->title($isLocked ? 'Release Failed' : 'Take Failed')
+                            ->title($isLocked ? __('znuny_ticket_workspace.management_actions.release_failed') : __('znuny_ticket_workspace.management_actions.take_failed'))
                             ->body(implode(', ', $messages))
                             ->danger()
                             ->send();
@@ -457,14 +457,14 @@ class ZnunyTicketManagementActions
                     $refreshService->refreshTicket($payload->znuny_ticket_id);
 
                     Notification::make()
-                        ->title($isLocked ? 'Ticket Released' : 'Ticket Taken')
+                        ->title($isLocked ? __('znuny_ticket_workspace.management_actions.ticket_released') : __('znuny_ticket_workspace.management_actions.ticket_taken'))
                         ->success()
                         ->send();
 
                     $action->cancelParentActions();
                 } catch (\Throwable $e) {
                     Notification::make()
-                        ->title($isLocked ? 'Release Failed' : 'Take Failed')
+                        ->title($isLocked ? __('znuny_ticket_workspace.management_actions.release_failed') : __('znuny_ticket_workspace.management_actions.take_failed'))
                         ->body($e->getMessage())
                         ->danger()
                         ->send();
@@ -476,10 +476,10 @@ class ZnunyTicketManagementActions
     public static function changeAssignmentAction(string $name = 'change_assignment'): Action
     {
         return Action::make($name)
-            ->label('Change')
+            ->label(__('znuny_ticket_workspace.management_actions.change_assignment_action'))
             ->icon('heroicon-o-users')
             ->color('gray')
-            ->modalHeading('Change Assignment')
+            ->modalHeading(__('znuny_ticket_workspace.management_actions.change_assignment_heading'))
             ->form(function (array $arguments, $record = null) {
                 $payload = TicketDetailsPayload::fromRecord($record, $arguments);
 
@@ -488,19 +488,19 @@ class ZnunyTicketManagementActions
                         ->hiddenLabel()
                         ->content(new HtmlString('
                             <div class="hidden lg:flex items-center gap-1.5 text-sm">
-                                <span class="text-gray-500 dark:text-gray-500">Current:</span>
-                                <span class="text-gray-500 dark:text-gray-400">Queue:</span>
+                                <span class="text-gray-500 dark:text-gray-500">'.__('znuny_ticket_workspace.management_actions.current').'</span>
+                                <span class="text-gray-500 dark:text-gray-400">'.__('znuny_ticket_workspace.management_actions.queue').'</span>
                                 <span class="font-semibold text-gray-700 dark:text-gray-300">'.htmlspecialchars((string) $payload->znuny_queue_name).'</span>
                                 <span class="text-gray-300 dark:text-gray-600">&middot;</span>
-                                <span class="text-gray-500 dark:text-gray-400">Owner:</span>
+                                <span class="text-gray-500 dark:text-gray-400">'.__('znuny_ticket_workspace.management_actions.owner').'</span>
                                 <span class="font-semibold text-gray-700 dark:text-gray-300">'.htmlspecialchars((string) $payload->znuny_owner_name).'</span>
                                 <span class="text-gray-300 dark:text-gray-600">&middot;</span>
-                                <span class="text-gray-500 dark:text-gray-400">Customer:</span>
+                                <span class="text-gray-500 dark:text-gray-400">'.__('znuny_ticket_workspace.management_actions.customer').'</span>
                                 <span class="font-semibold text-gray-700 dark:text-gray-300">'.htmlspecialchars((string) $payload->customer_user).'</span>
                             </div>
                         ')),
                     Select::make('target_queue')
-                        ->label('Target Queue')
+                        ->label(__('znuny_ticket_workspace.management_actions.target_queue'))
                         ->default($payload->znuny_queue_name)
                         ->required()
                         ->options(function ($get) {
@@ -522,7 +522,7 @@ class ZnunyTicketManagementActions
                         }),
 
                     Select::make('target_owner')
-                        ->label('Target Owner')
+                        ->label(__('znuny_ticket_workspace.management_actions.target_owner'))
                         ->default($payload->znuny_owner_name)
                         ->required()
                         ->options(function ($get) {
@@ -544,7 +544,7 @@ class ZnunyTicketManagementActions
                         }),
 
                     Select::make('target_customer')
-                        ->label('Target Customer')
+                        ->label(__('znuny_ticket_workspace.management_actions.target_customer'))
                         ->default($payload->customer_user)
                         ->searchable()
                         ->getSearchResultsUsing(function (string $search) {
@@ -562,8 +562,8 @@ class ZnunyTicketManagementActions
                             return $value;
                         }),
                     Textarea::make('note')
-                        ->label('Note')
-                        ->helperText('Optional. If filled, this text will be added as an internal note after the assignment change.'),
+                        ->label(__('znuny_ticket_workspace.management_actions.note'))
+                        ->helperText(__('znuny_ticket_workspace.management_actions.note_helper')),
                 ];
             })
             ->visible(function (array $arguments, $record = null) {
@@ -574,7 +574,7 @@ class ZnunyTicketManagementActions
             ->action(function (array $arguments, array $data, Action $action, $record = null) {
                 $payloadInfo = TicketDetailsPayload::fromRecord($record, $arguments);
                 if (! $payloadInfo->znuny_ticket_id) {
-                    Notification::make()->title('Ticket ID missing')->danger()->send();
+                    Notification::make()->title(__('znuny_ticket_workspace.management_actions.ticket_id_missing'))->danger()->send();
                     $action->halt();
 
                     return;
@@ -595,7 +595,7 @@ class ZnunyTicketManagementActions
                 if (! empty($data['target_owner']) && $data['target_owner'] !== $payloadInfo->znuny_owner_name) {
                     $agentService = app(ZnunyAgentService::class);
                     if ($agentService->isLoginExcluded($data['target_owner'])) {
-                        Notification::make()->title('Invalid owner')->danger()->send();
+                        Notification::make()->title(__('znuny_ticket_workspace.management_actions.invalid_owner'))->danger()->send();
                         $action->halt();
 
                         return;
@@ -611,7 +611,7 @@ class ZnunyTicketManagementActions
                 }
 
                 if (! $hasChange) {
-                    Notification::make()->title('No changes made')->warning()->send();
+                    Notification::make()->title(__('znuny_ticket_workspace.management_actions.no_changes_made'))->warning()->send();
                     $action->halt();
 
                     return;
@@ -631,14 +631,14 @@ class ZnunyTicketManagementActions
                         $messages = $validation['Warnings'] ?? [];
                     }
                     if (empty($messages) && ! empty($validation['RequiredNote'])) {
-                        $messages[] = 'Note is required for this assignment change.';
+                        $messages[] = __('znuny_ticket_workspace.management_actions.note_required');
                     }
                     if (empty($messages)) {
                         $messages = ['Validation failed'];
                     }
 
                     Notification::make()
-                        ->title('Validation Failed')
+                        ->title(__('znuny_ticket_workspace.management_actions.validation_failed'))
                         ->body(implode(', ', $messages))
                         ->danger()
                         ->send();
@@ -659,7 +659,7 @@ class ZnunyTicketManagementActions
                     }
 
                     Notification::make()
-                        ->title('Update Failed')
+                        ->title(__('znuny_ticket_workspace.management_actions.update_failed'))
                         ->body(implode(', ', $messages))
                         ->danger()
                         ->send();
@@ -686,7 +686,7 @@ class ZnunyTicketManagementActions
                         Log::error('Assignment changed, but note could not be added: '.$e->getMessage(), ['ticket_id' => $payloadInfo->znuny_ticket_id, 'exception' => $e]);
 
                         Notification::make()
-                            ->title('Assignment changed, but note could not be added.')
+                            ->title(__('znuny_ticket_workspace.management_actions.assignment_changed_note_failed'))
                             ->warning()
                             ->send();
                     }
@@ -697,7 +697,7 @@ class ZnunyTicketManagementActions
                     $refreshService->refreshTicket($payloadInfo->znuny_ticket_id);
 
                     Notification::make()
-                        ->title('Assignment Changed')
+                        ->title(__('znuny_ticket_workspace.management_actions.assignment_changed'))
                         ->success()
                         ->send();
 
@@ -706,7 +706,7 @@ class ZnunyTicketManagementActions
                     Log::error('Ticket workspace refresh failed after assignment change: '.$e->getMessage(), ['ticket_id' => $payloadInfo->znuny_ticket_id, 'exception' => $e]);
 
                     Notification::make()
-                        ->title('Assignment changed in Znuny, but local cache refresh failed.')
+                        ->title(__('znuny_ticket_workspace.management_actions.assignment_changed_refresh_failed'))
                         ->body($e->getMessage())
                         ->warning()
                         ->send();
