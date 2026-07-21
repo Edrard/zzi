@@ -68,6 +68,8 @@ return [
         'host_status' => 'Стан хоста',
         'monitored' => 'Моніториться',
         'not_monitored' => 'Не моніториться',
+        'error' => 'Помилка:',
+        'no_host_context' => 'Контекст хоста відсутній',
     ],
     'ticket' => [
         'ticket' => 'Звернення',
@@ -75,6 +77,7 @@ return [
         'queue' => 'Черга',
         'owner' => 'Власник',
         'ticket_age' => 'Тривалість звернення',
+        'reopened_at' => 'Повторно відкрито:',
     ],
     'actions' => [
         'open_in_zabbix' => 'Відкрити в Zabbix',
@@ -161,6 +164,11 @@ return [
         'ticket_created' => 'Звернення Znuny створено: :ticket',
         'ticket_created_orphaned' => 'Звернення Znuny було створено, але локальне посилання не вдалося. Звернення: :ticket. Перевірте журнали.',
         'failed_to_create' => 'Не вдалося створити звернення.',
+        'refresh_success' => 'Поточні проблеми Zabbix успішно оновлено',
+        'refresh_failed' => 'Не вдалося оновити поточні проблеми Zabbix',
+        'refresh_error' => 'Сталася помилка під час оновлення проблем Zabbix',
+        'refresh_success_body' => 'Оновлення та оцінка життєвого циклу успішно завершені.',
+        'refresh_partial_body' => 'Оновлення Zabbix виконано успішно, але оцінка життєвого циклу завершилася невдало.',
     ],
     'validation' => [
         'required_fields' => 'Власник, черга та клієнт є обов’язковими.',

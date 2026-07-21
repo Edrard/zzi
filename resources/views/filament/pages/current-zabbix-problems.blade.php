@@ -790,7 +790,7 @@
 
             @if($isFailed && $error)
                 <div class="mt-4 text-sm zbx-status-danger bg-red-50 dark:bg-red-900/20 p-3 rounded-md border border-red-200 dark:border-red-800">
-                    <strong>Error:</strong> {{ $error }}
+                    <strong>{{ __('current_zabbix_problems.details.error') }}</strong> {{ $error }}
                 </div>
             @endif
         </div>
@@ -1022,7 +1022,7 @@
                                                     </ul>
                                                 @endforeach
                                             @else
-                                                <div class="text-sm text-gray-500">No host context available</div>
+                                                <div class="text-sm text-gray-500">{{ __('current_zabbix_problems.details.no_host_context') }}</div>
                                             @endif
                                         </div>
 
@@ -1042,7 +1042,7 @@
                                                         <li><strong class="text-sky-500 dark:text-sky-400 inline-flex items-center gap-1">{{ __('current_zabbix_problems.legend.manually_reopened') }}</strong></li>
                                                     @endif
                                                     @if($linkedTicket->manual_reopened_at)
-                                                        <li><strong>Reopened at:</strong> {{ $linkedTicket->manual_reopened_at->format('Y-m-d H:i:s') }}</li>
+                                                        <li><strong>{{ __('current_zabbix_problems.ticket.reopened_at') }}</strong> {{ $linkedTicket->manual_reopened_at->format('Y-m-d H:i:s') }}</li>
                                                     @endif
                                                 </ul>
                                             </div>

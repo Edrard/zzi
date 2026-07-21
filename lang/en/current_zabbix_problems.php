@@ -68,6 +68,8 @@ return [
         'host_status' => 'Host status',
         'monitored' => 'Monitored',
         'not_monitored' => 'Not monitored',
+        'error' => 'Error:',
+        'no_host_context' => 'No host context available',
     ],
     'ticket' => [
         'ticket' => 'Ticket',
@@ -75,6 +77,7 @@ return [
         'queue' => 'Queue',
         'owner' => 'Owner',
         'ticket_age' => 'Ticket age',
+        'reopened_at' => 'Reopened at:',
     ],
     'actions' => [
         'open_in_zabbix' => 'Open in Zabbix',
@@ -161,6 +164,11 @@ return [
         'ticket_created' => 'Znuny ticket created: :ticket',
         'ticket_created_orphaned' => 'Znuny ticket was created but local link failed. Ticket: :ticket. Check logs.',
         'failed_to_create' => 'Failed to create ticket.',
+        'refresh_success' => 'Zabbix problems refreshed successfully',
+        'refresh_failed' => 'Failed to refresh Zabbix problems',
+        'refresh_error' => 'An error occurred while refreshing Zabbix problems',
+        'refresh_success_body' => 'Refresh and lifecycle evaluation completed successfully.',
+        'refresh_partial_body' => 'Zabbix refresh succeeded, but lifecycle evaluation failed.',
     ],
     'validation' => [
         'required_fields' => 'Owner, Queue, and CustomerUser are required.',

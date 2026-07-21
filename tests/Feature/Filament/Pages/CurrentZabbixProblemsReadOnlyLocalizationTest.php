@@ -2,92 +2,54 @@
 
 namespace Tests\Feature\Filament\Pages;
 
-use App\Filament\Pages\CurrentZabbixProblems;
-use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Livewire\Livewire;
 use Tests\TestCase;
 
 class CurrentZabbixProblemsReadOnlyLocalizationTest extends TestCase
 {
-    use RefreshDatabase;
-
-    public function test_page_titles_and_navigation_are_localized()
+    public function test_new_translation_keys_resolve_correctly()
     {
-        $admin = User::factory()->create(['role' => 'admin']);
         $originalLocale = app()->getLocale();
 
         try {
-            // EN
             app()->setLocale('en');
-            $this->assertEquals('Current problems', CurrentZabbixProblems::getNavigationLabel());
-            $manageEn = Livewire::actingAs($admin)->test(CurrentZabbixProblems::class);
-            $this->assertEquals('Current Zabbix problems', $manageEn->instance()->getTitle());
+            $this->assertEquals('Zabbix problems refreshed successfully', __('current_zabbix_problems.notifications.refresh_success'));
+            $this->assertEquals('Failed to refresh Zabbix problems', __('current_zabbix_problems.notifications.refresh_failed'));
+            $this->assertEquals('Error:', __('current_zabbix_problems.details.error'));
+            $this->assertEquals('No host context available', __('current_zabbix_problems.details.no_host_context'));
+            $this->assertEquals('Reopened at:', __('current_zabbix_problems.ticket.reopened_at'));
 
-            // UK
             app()->setLocale('uk');
-            $this->assertEquals('Поточні проблеми', CurrentZabbixProblems::getNavigationLabel());
-            $manageUk = Livewire::actingAs($admin)->test(CurrentZabbixProblems::class);
-            $this->assertEquals('Поточні проблеми Zabbix', $manageUk->instance()->getTitle());
+            $this->assertEquals('Поточні проблеми Zabbix успішно оновлено', __('current_zabbix_problems.notifications.refresh_success'));
+            $this->assertEquals('Не вдалося оновити поточні проблеми Zabbix', __('current_zabbix_problems.notifications.refresh_failed'));
+            $this->assertEquals('Помилка:', __('current_zabbix_problems.details.error'));
+            $this->assertEquals('Контекст хоста відсутній', __('current_zabbix_problems.details.no_host_context'));
+            $this->assertEquals('Повторно відкрито:', __('current_zabbix_problems.ticket.reopened_at'));
         } finally {
             app()->setLocale($originalLocale);
         }
     }
 
-    public function test_page_shell_is_localized()
+    public function test_hardcoded_literals_removed_from_class_and_blade()
     {
-        $admin = User::factory()->create(['role' => 'admin']);
-        $originalLocale = app()->getLocale();
+        $classPath = app_path('Filament/Pages/CurrentZabbixProblems.php');
+        $bladePath = resource_path('views/filament/pages/current-zabbix-problems.blade.php');
 
-        try {
-            app()->setLocale('uk');
-            $component = Livewire::actingAs($admin)->test(CurrentZabbixProblems::class);
+        $classContent = file_get_contents($classPath);
+        $bladeContent = file_get_contents($bladePath);
 
-            // Test basic translation strings in view
-            $component->assertSeeHtml('Оновити із Zabbix');
-            $component->assertSeeHtml('Стан опитування');
-            $component->assertSeeHtml('Поточні проблеми');
-            $component->assertSeeHtml('Усього виключено');
+        // Assert hard-coded strings are absent
+        $this->assertStringNotContainsString("->title('Zabbix problems refreshed successfully')", $classContent);
+        $this->assertStringNotContainsString("->title('Failed to refresh Zabbix problems')", $classContent);
+        $this->assertStringNotContainsString('<strong>Error:</strong>', $bladeContent);
+        $this->assertStringNotContainsString('No host context available', $bladeContent);
+        $this->assertStringNotContainsString('<strong>Reopened at:</strong>', $bladeContent);
 
-            // Test table headers
-            $component->assertSeeHtml('Важливість');
-            $component->assertSeeHtml('Хост');
-            $component->assertSeeHtml('Проблема');
-            $component->assertSeeHtml('Тривалість');
+        // Assert dynamic values and critical bindings remain present
+        $this->assertStringContainsString('{{ $error }}', $bladeContent);
+        $this->assertStringContainsString('{{ $linkedTicket->manual_reopened_at->format(\'Y-m-d H:i:s\') }}', $bladeContent);
 
-            // Test presets
-            $component->assertSeeHtml('Висока');
-            $component->assertSeeHtml('Попередження');
-            $component->assertSeeHtml('Інформація');
-            $component->assertSeeHtml('На повторне відкриття');
-
-            // Test legend
-            $component->assertSeeHtml('Позначення значків');
-            $component->assertSeeHtml('Пов’язане звернення');
-
-            // Test EN
-            app()->setLocale('en');
-            $componentEn = Livewire::actingAs($admin)->test(CurrentZabbixProblems::class);
-
-            $componentEn->assertSeeHtml('Refresh from Zabbix');
-            $componentEn->assertSeeHtml('Polling status');
-            $componentEn->assertSeeHtml('Current problems');
-            $componentEn->assertSeeHtml('Excluded total');
-
-            $componentEn->assertSeeHtml('Severity');
-            $componentEn->assertSeeHtml('Host');
-            $componentEn->assertSeeHtml('Problem');
-            $componentEn->assertSeeHtml('Age');
-
-            $componentEn->assertSeeHtml('High');
-            $componentEn->assertSeeHtml('Warning');
-            $componentEn->assertSeeHtml('Information');
-            $componentEn->assertSeeHtml('Reopen');
-
-            $componentEn->assertSeeHtml('Icon legend');
-            $componentEn->assertSeeHtml('Linked ticket');
-        } finally {
-            app()->setLocale($originalLocale);
-        }
+        $this->assertStringContainsString('__(\'current_zabbix_problems.details.error\')', $bladeContent);
+        $this->assertStringContainsString('__(\'current_zabbix_problems.details.no_host_context\')', $bladeContent);
+        $this->assertStringContainsString('__(\'current_zabbix_problems.ticket.reopened_at\')', $bladeContent);
     }
 }

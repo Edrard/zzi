@@ -152,26 +152,26 @@ class CurrentZabbixProblems extends Page
 
                 if ($evalExitCode === 0) {
                     Notification::make()
-                        ->title('Zabbix problems refreshed successfully')
-                        ->body('Refresh and lifecycle evaluation completed successfully.')
+                        ->title(__('current_zabbix_problems.notifications.refresh_success'))
+                        ->body(__('current_zabbix_problems.notifications.refresh_success_body'))
                         ->success()
                         ->send();
                 } else {
                     Notification::make()
-                        ->title('Zabbix problems refreshed successfully')
-                        ->body('Zabbix refresh succeeded, but lifecycle evaluation failed.')
+                        ->title(__('current_zabbix_problems.notifications.refresh_success'))
+                        ->body(__('current_zabbix_problems.notifications.refresh_partial_body'))
                         ->danger()
                         ->send();
                 }
             } else {
                 Notification::make()
-                    ->title('Failed to refresh Zabbix problems')
+                    ->title(__('current_zabbix_problems.notifications.refresh_failed'))
                     ->danger()
                     ->send();
             }
         } catch (\Throwable $e) {
             Notification::make()
-                ->title('An error occurred while refreshing Zabbix problems')
+                ->title(__('current_zabbix_problems.notifications.refresh_error'))
                 ->danger()
                 ->send();
         }
