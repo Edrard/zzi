@@ -1,6 +1,23 @@
 <?php
 
 return [
+    'ticket_template_presets' => [
+        'defaults' => [
+            'znuny_manual_ticket_footer' => 'Created manually by Zabbix Znuny Integration.',
+            'linked_ticket_manual_close_default_reason' => 'Manual close from Linked Tickets UI.',
+            'manual_ticket_reopen_note_template' => 'Reopening this ticket because the linked Zabbix problem became active again within the configured reopen window.',
+        ],
+        'action' => [
+            'label' => 'Load default templates',
+            'modal_heading' => 'Load default templates?',
+            'modal_description' => 'The current ticket-template texts will be replaced with the defaults for the active interface language and saved immediately.',
+            'confirm' => 'Load and save',
+        ],
+        'notifications' => [
+            'saved_title' => 'Default templates saved',
+            'saved_body' => 'Ticket templates for :language have been loaded and saved.',
+        ],
+    ],
     'general' => [
         'main' => [
             'ui_locale' => [

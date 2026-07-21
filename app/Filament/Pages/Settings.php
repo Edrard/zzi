@@ -36,6 +36,7 @@ use Filament\Schemas\Schema;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Lang;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
@@ -1527,6 +1528,8 @@ class Settings extends Page implements HasForms
                 $zd['znuny_queue_from_host_regex'] ?? null,
                 $zd['znuny_customer_user_from_queue_template'] ?? null,
 
+                $this->getLoadLocalizedTicketTemplatesAction(),
+
                 $zd['znuny_manual_ticket_footer'] ?? null,
                 $zd['linked_ticket_manual_close_default_reason'] ?? null,
                 $zd['manual_ticket_reopen_note_template'] ?? null,
@@ -1543,6 +1546,75 @@ class Settings extends Page implements HasForms
         return [
             Tabs::make('ZnunyTicketDefaultsTabs')->tabs($tabs),
         ];
+    }
+
+    private function getLoadLocalizedTicketTemplatesAction(): Actions
+    {
+        return Actions::make([
+            Action::make('loadLocalizedTicketTemplates')
+                ->label(__('settings.ticket_template_presets.action.label'))
+                ->color('warning')
+                ->requiresConfirmation()
+                ->modalHeading(__('settings.ticket_template_presets.action.modal_heading'))
+                ->modalDescription(__('settings.ticket_template_presets.action.modal_description'))
+                ->modalSubmitActionLabel(__('settings.ticket_template_presets.action.confirm'))
+                ->action(function () {
+                    if (auth()->user()->role !== 'admin') {
+                        abort(403, 'Only admins can modify settings.');
+                    }
+
+                    $locale = app()->getLocale();
+                    if (! in_array($locale, ['en', 'uk'], true)) {
+                        $locale = config('app.fallback_locale', 'en');
+                    }
+
+                    $keysToUpdate = [
+                        'znuny_manual_ticket_footer',
+                        'linked_ticket_manual_close_default_reason',
+                        'manual_ticket_reopen_note_template',
+                    ];
+
+                    $newValues = [];
+                    foreach ($keysToUpdate as $key) {
+                        $newValues[$key] = __("settings.ticket_template_presets.defaults.{$key}", [], $locale);
+                    }
+
+                    $changedSettings = [];
+                    $settings = Setting::whereIn('key', $keysToUpdate)->get();
+
+                    DB::transaction(function () use ($settings, $newValues, &$changedSettings) {
+                        foreach ($settings as $setting) {
+                            $newValue = $newValues[$setting->key] ?? null;
+                            if ($newValue !== null) {
+                                $currentPlaintext = SettingsService::string($setting->key);
+                                if ($currentPlaintext !== $newValue) {
+                                    $changedSettings[] = [
+                                        'key' => $setting->key,
+                                        'old_value' => $setting->value,
+                                        'new_value' => $newValue,
+                                    ];
+                                    $setting->update(['value' => $newValue]);
+                                }
+                            }
+                        }
+                    });
+
+                    if (! empty($changedSettings)) {
+                        SettingsService::clearAllCaches();
+                        app(SettingsAuditLogService::class)->logChanges($changedSettings);
+                    }
+
+                    $this->data = array_replace($this->data ?? [], $newValues);
+
+                    $languageName = __('common.'.$locale, [], $locale);
+
+                    Notification::make()
+                        ->title(__('settings.ticket_template_presets.notifications.saved_title'))
+                        ->body(__('settings.ticket_template_presets.notifications.saved_body', ['language' => $languageName]))
+                        ->success()
+                        ->send();
+                }),
+        ])->key('localized-ticket-template-presets-actions');
     }
 
     private function buildGeneralTabGroups(array $g): array

@@ -1,6 +1,23 @@
 <?php
 
 return [
+    'ticket_template_presets' => [
+        'defaults' => [
+            'znuny_manual_ticket_footer' => 'Створено вручну через Zabbix Znuny Integration.',
+            'linked_ticket_manual_close_default_reason' => 'Ручне закриття через інтерфейс пов’язаних звернень.',
+            'manual_ticket_reopen_note_template' => 'Повторно відкриваємо це звернення, оскільки пов’язана проблема Zabbix знову стала активною в межах налаштованого періоду повторного відкриття.',
+        ],
+        'action' => [
+            'label' => 'Завантажити стандартні шаблони',
+            'modal_heading' => 'Завантажити стандартні шаблони?',
+            'modal_description' => 'Поточні тексти шаблонів звернень буде замінено стандартними для активної мови інтерфейсу та одразу збережено.',
+            'confirm' => 'Завантажити й зберегти',
+        ],
+        'notifications' => [
+            'saved_title' => 'Стандартні шаблони збережено',
+            'saved_body' => 'Шаблони звернень для мови «:language» завантажено та збережено.',
+        ],
+    ],
     'general' => [
         'main' => [
             'ui_locale' => [
