@@ -139,4 +139,10 @@ return [
             'problems_poll_failed' => 'Problems Poll Failed',
         ],
     ],
+    'labels' => [
+        'no_context' => 'No context',
+        'raw_context' => 'Raw context',
+        'stats' => 'Stats',
+        'warnings' => 'Warnings:',
+    ],
 ];

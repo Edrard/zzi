@@ -216,4 +216,42 @@ class AuditLogResourceLocalizationTest extends TestCase
             app()->setLocale($originalLocale);
         }
     }
+
+    public function test_context_view_is_localized_and_structurally_sound()
+    {
+        $originalLocale = app()->getLocale();
+        try {
+            app()->setLocale('en');
+            $this->assertEquals('No context', __('audit_logs.labels.no_context'));
+            $this->assertEquals('Raw context', __('audit_logs.labels.raw_context'));
+            $this->assertEquals('Stats', __('audit_logs.labels.stats'));
+            $this->assertEquals('Warnings:', __('audit_logs.labels.warnings'));
+
+            app()->setLocale('uk');
+            $this->assertEquals('Контекст відсутній', __('audit_logs.labels.no_context'));
+            $this->assertEquals('Необроблений контекст', __('audit_logs.labels.raw_context'));
+            $this->assertEquals('Статистика', __('audit_logs.labels.stats'));
+            $this->assertEquals('Попередження:', __('audit_logs.labels.warnings'));
+
+            $bladePath = resource_path('views/filament/infolists/audit-log-context.blade.php');
+            $content = file_get_contents($bladePath);
+
+            $this->assertStringNotContainsString('>No context<', $content);
+            $this->assertStringNotContainsString('>Raw context<', $content);
+            $this->assertStringNotContainsString('Stats', $content);
+            $this->assertStringNotContainsString('Warnings:', $content);
+
+            $this->assertStringContainsString('{{ __(\'audit_logs.labels.no_context\') }}', $content);
+            $this->assertStringContainsString('{{ __(\'audit_logs.labels.raw_context\') }}', $content);
+            $this->assertStringContainsString('{{ __(\'audit_logs.labels.stats\') }}', $content);
+            $this->assertStringContainsString('{{ __(\'audit_logs.labels.warnings\') }}', $content);
+
+            $this->assertStringContainsString('@if($isEmpty)', $content);
+            $this->assertStringContainsString('@foreach($context[\'changes\'] as $change)', $content);
+            $this->assertStringContainsString('{{ json_encode($context, JSON_PRETTY_PRINT', $content);
+            $this->assertStringContainsString('{{ $formatValue($value, $key) }}', $content);
+        } finally {
+            app()->setLocale($originalLocale);
+        }
+    }
 }
