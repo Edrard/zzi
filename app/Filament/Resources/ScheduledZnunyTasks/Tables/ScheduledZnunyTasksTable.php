@@ -89,8 +89,8 @@ class ScheduledZnunyTasksTable
                                     if (! $record->isCompleteForScheduling()) {
                                         $missing = $record->missingSchedulingRequirements();
                                         Notification::make()
-                                            ->title('Cannot enable task')
-                                            ->body("Task is incomplete:\n- ".implode("\n- ", $missing))
+                                            ->title(__('scheduled_znuny_tasks.notifications.cannot_enable_task.title'))
+                                            ->body(__('scheduled_znuny_tasks.notifications.cannot_enable_task.body_incomplete')."\n- ".implode("\n- ", $missing))
                                             ->danger()
                                             ->send();
                                         $fail('Task is incomplete.');
@@ -102,8 +102,8 @@ class ScheduledZnunyTasksTable
                                     $nextRunAt = $cronService->calculateNextRun($record->cron_expression, $record->timezone);
                                     if ($nextRunAt === null) {
                                         Notification::make()
-                                            ->title('Cannot enable task')
-                                            ->body('Could not calculate next run time. Check timezone and cron expression.')
+                                            ->title(__('scheduled_znuny_tasks.notifications.cannot_enable_task.title'))
+                                            ->body(__('scheduled_znuny_tasks.notifications.cannot_enable_task.body_invalid_cron'))
                                             ->danger()
                                             ->send();
                                         $fail('Invalid cron or timezone.');
@@ -147,8 +147,8 @@ class ScheduledZnunyTasksTable
                         $cronService = app(CronService::class);
                         if (empty($state) || ! $cronService->isValid($state)) {
                             Notification::make()
-                                ->title('Validation Error')
-                                ->body('Invalid 5-field cron expression.')
+                                ->title(__('scheduled_znuny_tasks.notifications.validation_error.title'))
+                                ->body(__('scheduled_znuny_tasks.notifications.validation_error.invalid_cron'))
                                 ->danger()
                                 ->send();
 
@@ -202,7 +202,7 @@ class ScheduledZnunyTasksTable
                     })
                     ->updateStateUsing(function (ScheduledZnunyTask $record, $state) {
                         if ($record->enabled && empty($state)) {
-                            Notification::make()->title('Cannot clear Queue')->body('Active tasks require a Queue.')->danger()->send();
+                            Notification::make()->title(__('scheduled_znuny_tasks.notifications.cannot_clear_queue.title'))->body(__('scheduled_znuny_tasks.notifications.cannot_clear_queue.body'))->danger()->send();
 
                             return ['error' => 'Queue is required for active tasks.'];
                         }
@@ -263,7 +263,7 @@ class ScheduledZnunyTasksTable
                     })
                     ->updateStateUsing(function (ScheduledZnunyTask $record, $state) {
                         if ($record->enabled && empty($state)) {
-                            Notification::make()->title('Cannot clear Customer User')->body('Active tasks require a Customer User.')->danger()->send();
+                            Notification::make()->title(__('scheduled_znuny_tasks.notifications.cannot_clear_customer_user.title'))->body(__('scheduled_znuny_tasks.notifications.cannot_clear_customer_user.body'))->danger()->send();
 
                             return ['error' => 'Customer User is required for active tasks.'];
                         }
@@ -294,7 +294,7 @@ class ScheduledZnunyTasksTable
                     })
                     ->updateStateUsing(function (ScheduledZnunyTask $record, $state) {
                         if ($record->enabled && empty($state)) {
-                            Notification::make()->title('Cannot clear Owner')->body('Active tasks require an Owner.')->danger()->send();
+                            Notification::make()->title(__('scheduled_znuny_tasks.notifications.cannot_clear_owner.title'))->body(__('scheduled_znuny_tasks.notifications.cannot_clear_owner.body'))->danger()->send();
 
                             return ['error' => 'Owner is required for active tasks.'];
                         }

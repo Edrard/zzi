@@ -284,4 +284,77 @@ class ScheduledZnunyTaskListLocalizationTest extends TestCase
             App::setLocale($originalLocale);
         }
     }
+
+    public function test_edit_page_and_table_notifications_localization(): void
+    {
+        $originalLocale = App::getLocale();
+        try {
+            App::setLocale('en');
+            $this->assertEquals('Queue run', __('scheduled_znuny_tasks.actions.queue_run'));
+            $this->assertEquals('Runs', __('scheduled_znuny_tasks.actions.runs'));
+            $this->assertEquals('Run queued', __('scheduled_znuny_tasks.notifications.run_queued.title'));
+            $this->assertEquals('The run has been queued, but the scheduler is currently disabled or paused. It will remain pending.', __('scheduled_znuny_tasks.notifications.run_queued.body_paused'));
+            $this->assertEquals('The run has been queued and will be processed by the scheduler shortly.', __('scheduled_znuny_tasks.notifications.run_queued.body_active'));
+
+            $this->assertEquals('Cannot enable task', __('scheduled_znuny_tasks.notifications.cannot_enable_task.title'));
+            $this->assertEquals('Task is incomplete:', __('scheduled_znuny_tasks.notifications.cannot_enable_task.body_incomplete'));
+            $this->assertEquals('Could not calculate next run time. Check timezone and cron expression.', __('scheduled_znuny_tasks.notifications.cannot_enable_task.body_invalid_cron'));
+
+            $this->assertEquals('Validation error', __('scheduled_znuny_tasks.notifications.validation_error.title'));
+            $this->assertEquals('Invalid 5-field cron expression.', __('scheduled_znuny_tasks.notifications.validation_error.invalid_cron'));
+
+            $this->assertEquals('Cannot clear Queue', __('scheduled_znuny_tasks.notifications.cannot_clear_queue.title'));
+            $this->assertEquals('Active tasks require a Queue.', __('scheduled_znuny_tasks.notifications.cannot_clear_queue.body'));
+            $this->assertEquals('Cannot clear Customer User', __('scheduled_znuny_tasks.notifications.cannot_clear_customer_user.title'));
+            $this->assertEquals('Active tasks require a Customer User.', __('scheduled_znuny_tasks.notifications.cannot_clear_customer_user.body'));
+            $this->assertEquals('Cannot clear Owner', __('scheduled_znuny_tasks.notifications.cannot_clear_owner.title'));
+            $this->assertEquals('Active tasks require an Owner.', __('scheduled_znuny_tasks.notifications.cannot_clear_owner.body'));
+
+            App::setLocale('uk');
+            $this->assertEquals('Поставити виконання в чергу', __('scheduled_znuny_tasks.actions.queue_run'));
+            $this->assertEquals('Виконання', __('scheduled_znuny_tasks.actions.runs'));
+            $this->assertEquals('Виконання поставлено в чергу', __('scheduled_znuny_tasks.notifications.run_queued.title'));
+            $this->assertEquals('Виконання поставлено в чергу, але планувальник наразі вимкнений або призупинений. Воно залишатиметься в очікуванні.', __('scheduled_znuny_tasks.notifications.run_queued.body_paused'));
+            $this->assertEquals('Виконання поставлено в чергу та незабаром буде оброблено планувальником.', __('scheduled_znuny_tasks.notifications.run_queued.body_active'));
+
+            $this->assertEquals('Неможливо увімкнути завдання', __('scheduled_znuny_tasks.notifications.cannot_enable_task.title'));
+            $this->assertEquals('Завдання неповне:', __('scheduled_znuny_tasks.notifications.cannot_enable_task.body_incomplete'));
+            $this->assertEquals('Не вдалося обчислити час наступного виконання. Перевірте часовий пояс і cron-вираз.', __('scheduled_znuny_tasks.notifications.cannot_enable_task.body_invalid_cron'));
+
+            $this->assertEquals('Помилка перевірки', __('scheduled_znuny_tasks.notifications.validation_error.title'));
+            $this->assertEquals('Недійсний cron-вираз із п’яти полів.', __('scheduled_znuny_tasks.notifications.validation_error.invalid_cron'));
+
+            $this->assertEquals('Неможливо очистити чергу', __('scheduled_znuny_tasks.notifications.cannot_clear_queue.title'));
+            $this->assertEquals('Для активних завдань потрібно вказати чергу.', __('scheduled_znuny_tasks.notifications.cannot_clear_queue.body'));
+            $this->assertEquals('Неможливо очистити клієнта-користувача', __('scheduled_znuny_tasks.notifications.cannot_clear_customer_user.title'));
+            $this->assertEquals('Для активних завдань потрібно вказати клієнта-користувача.', __('scheduled_znuny_tasks.notifications.cannot_clear_customer_user.body'));
+            $this->assertEquals('Неможливо очистити власника', __('scheduled_znuny_tasks.notifications.cannot_clear_owner.title'));
+            $this->assertEquals('Для активних завдань потрібно вказати власника.', __('scheduled_znuny_tasks.notifications.cannot_clear_owner.body'));
+
+            $editPath = app_path('Filament/Resources/ScheduledZnunyTasks/Pages/EditScheduledZnunyTask.php');
+            $tablePath = app_path('Filament/Resources/ScheduledZnunyTasks/Tables/ScheduledZnunyTasksTable.php');
+
+            $editContent = file_get_contents($editPath);
+            $tableContent = file_get_contents($tablePath);
+
+            $this->assertStringNotContainsString("->label('Queue run')", $editContent);
+            $this->assertStringNotContainsString("->label('Runs')", $editContent);
+            $this->assertStringNotContainsString("->title('Run Queued')", $editContent);
+            $this->assertStringNotContainsString("->title('Cannot enable task')", $tableContent);
+            $this->assertStringNotContainsString("->title('Validation Error')", $tableContent);
+            $this->assertStringNotContainsString("->title('Cannot clear Queue')", $tableContent);
+
+            $this->assertStringContainsString("Action::make('enqueue_run')", $editContent);
+            $this->assertStringContainsString('Notification::make()->title(__(\'scheduled_znuny_tasks.notifications.run_queued.title\'))', $editContent);
+            $this->assertStringContainsString('$safetyService->isSchedulerEnabled()', $editContent);
+
+            $this->assertStringContainsString("ToggleColumn::make('enabled')", $tableContent);
+            $this->assertStringContainsString('$record->missingSchedulingRequirements()', $tableContent);
+            $this->assertStringContainsString('Notification::make()', $tableContent);
+            $this->assertStringContainsString('\\n- ".implode("\\n- ", $missing)', $tableContent);
+
+        } finally {
+            App::setLocale($originalLocale);
+        }
+    }
 }

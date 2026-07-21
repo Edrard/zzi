@@ -25,7 +25,7 @@ class EditScheduledZnunyTask extends EditRecord
     {
         return [
             Action::make('enqueue_run')
-                ->label('Queue run')
+                ->label(__('scheduled_znuny_tasks.actions.queue_run'))
                 ->icon('heroicon-o-play')
                 ->color('primary')
                 ->requiresConfirmation()
@@ -42,13 +42,13 @@ class EditScheduledZnunyTask extends EditRecord
 
                     $safetyService = app(SchedulerSafetyService::class);
                     if (! $safetyService->isSchedulerEnabled() || $safetyService->isSchedulerPaused()) {
-                        Notification::make()->title('Run Queued')->body('The run has been queued, but the scheduler is currently disabled or paused. It will remain pending.')->warning()->send();
+                        Notification::make()->title(__('scheduled_znuny_tasks.notifications.run_queued.title'))->body(__('scheduled_znuny_tasks.notifications.run_queued.body_paused'))->warning()->send();
                     } else {
-                        Notification::make()->title('Run Queued')->body('The run has been queued and will be processed by the scheduler shortly.')->success()->send();
+                        Notification::make()->title(__('scheduled_znuny_tasks.notifications.run_queued.title'))->body(__('scheduled_znuny_tasks.notifications.run_queued.body_active'))->success()->send();
                     }
                 }),
             Action::make('runs')
-                ->label('Runs')
+                ->label(__('scheduled_znuny_tasks.actions.runs'))
                 ->icon('heroicon-o-clipboard-document-list')
                 ->url(fn (): string => ScheduledZnunyTaskRunResource::getUrl('index', [
                     'tableFilters' => [

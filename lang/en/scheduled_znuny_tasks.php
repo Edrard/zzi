@@ -93,4 +93,36 @@ return [
         'invalid_cron' => 'Invalid 5-field cron expression.',
         'n_a' => 'N/A',
     ],
+    'actions' => [
+        'queue_run' => 'Queue run',
+        'runs' => 'Runs',
+    ],
+    'notifications' => [
+        'run_queued' => [
+            'title' => 'Run queued',
+            'body_paused' => 'The run has been queued, but the scheduler is currently disabled or paused. It will remain pending.',
+            'body_active' => 'The run has been queued and will be processed by the scheduler shortly.',
+        ],
+        'cannot_enable_task' => [
+            'title' => 'Cannot enable task',
+            'body_incomplete' => 'Task is incomplete:',
+            'body_invalid_cron' => 'Could not calculate next run time. Check timezone and cron expression.',
+        ],
+        'validation_error' => [
+            'title' => 'Validation error',
+            'invalid_cron' => 'Invalid 5-field cron expression.',
+        ],
+        'cannot_clear_queue' => [
+            'title' => 'Cannot clear Queue',
+            'body' => 'Active tasks require a Queue.',
+        ],
+        'cannot_clear_customer_user' => [
+            'title' => 'Cannot clear Customer User',
+            'body' => 'Active tasks require a Customer User.',
+        ],
+        'cannot_clear_owner' => [
+            'title' => 'Cannot clear Owner',
+            'body' => 'Active tasks require an Owner.',
+        ],
+    ],
 ];
