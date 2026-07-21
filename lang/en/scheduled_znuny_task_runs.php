@@ -49,4 +49,23 @@ return [
     'units' => [
         'sec' => 'sec',
     ],
+
+    'sections' => [
+        'run_information' => 'Run Information',
+        'ticket_details' => 'Ticket Details',
+        'errors' => 'Errors',
+        'snapshots' => 'Snapshots',
+    ],
+
+    'actions' => [
+        'requeue_run' => 'Requeue Run',
+        'run_requeued_title' => 'Run Requeued',
+        'run_requeued_body' => 'A new pending run has been created.',
+        'resolve_run' => 'Resolve Run',
+        'manual_review_note' => 'Manual Review Note',
+        'manual_review_help' => 'Explain how this uncertain run was resolved manually in Znuny.',
+        'run_resolved_title' => 'Run Resolved',
+        'open_ticket' => 'Open Ticket',
+        'open_task' => 'Open Task',
+    ],
 ];

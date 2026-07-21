@@ -153,7 +153,7 @@ class ScheduledZnunyTaskRunResource extends Resource
     {
         return $schema
             ->components([
-                Section::make('Run Information')
+                Section::make(__('scheduled_znuny_task_runs.sections.run_information'))
                     ->schema([
                         TextEntry::make('task_name_snapshot')->label(__('scheduled_znuny_task_runs.table.task_name_snapshot')),
                         TextEntry::make('run_type')
@@ -185,17 +185,17 @@ class ScheduledZnunyTaskRunResource extends Resource
                             ->label(__('scheduled_znuny_task_runs.table.duration_ms'))
                             ->formatStateUsing(fn ($state) => $state === null ? null : round(abs((int) $state) / 1000, 1).' '.__('scheduled_znuny_task_runs.units.sec')),
                     ])->columns(3),
-                Section::make('Ticket Details')
+                Section::make(__('scheduled_znuny_task_runs.sections.ticket_details'))
                     ->schema([
                         TextEntry::make('ticket_id'),
                         TextEntry::make('ticket_number')->label(__('scheduled_znuny_task_runs.table.ticket_number')),
                     ])->columns(2),
-                Section::make('Errors')
+                Section::make(__('scheduled_znuny_task_runs.sections.errors'))
                     ->schema([
                         TextEntry::make('error_summary')->label(__('scheduled_znuny_task_runs.table.error_summary')),
                         TextEntry::make('error_details')->columnSpanFull(),
                     ]),
-                Section::make('Snapshots')
+                Section::make(__('scheduled_znuny_task_runs.sections.snapshots'))
                     ->schema([
                         TextEntry::make('payload_snapshot')->columnSpanFull(),
                         TextEntry::make('response_snapshot')->columnSpanFull(),
@@ -317,7 +317,7 @@ class ScheduledZnunyTaskRunResource extends Resource
                 ViewAction::make(),
 
                 Action::make('requeue_failed_run')
-                    ->label('Requeue Run')
+                    ->label(__('scheduled_znuny_task_runs.actions.requeue_run'))
                     ->icon('heroicon-o-arrow-path-rounded-square')
                     ->color('danger')
                     ->visible(fn (ScheduledZnunyTaskRun $record) => $record->status === 'failed')
@@ -331,19 +331,19 @@ class ScheduledZnunyTaskRunResource extends Resource
                             'scheduled_for' => now('UTC')->toDateTimeString(),
                             'created_by' => auth()->id(),
                         ]);
-                        Notification::make()->title('Run Requeued')->body('A new pending run has been created.')->success()->send();
+                        Notification::make()->title(__('scheduled_znuny_task_runs.actions.run_requeued_title'))->body(__('scheduled_znuny_task_runs.actions.run_requeued_body'))->success()->send();
                     }),
 
                 Action::make('resolve_uncertain_run')
-                    ->label('Resolve Run')
+                    ->label(__('scheduled_znuny_task_runs.actions.resolve_run'))
                     ->icon('heroicon-o-check-circle')
                     ->color('warning')
                     ->visible(fn (ScheduledZnunyTaskRun $record) => $record->status === 'uncertain')
                     ->form([
                         Textarea::make('note')
-                            ->label('Manual Review Note')
+                            ->label(__('scheduled_znuny_task_runs.actions.manual_review_note'))
                             ->required()
-                            ->helperText('Explain how this uncertain run was resolved manually in Znuny.'),
+                            ->helperText(__('scheduled_znuny_task_runs.actions.manual_review_help')),
                     ])
                     ->action(function (ScheduledZnunyTaskRun $record, array $data) {
                         $record->update([
@@ -352,11 +352,11 @@ class ScheduledZnunyTaskRunResource extends Resource
                             'error_details' => "Note: {$data['note']}\nOriginal error: ".$record->error_details,
                         ]);
 
-                        Notification::make()->title('Run Resolved')->success()->send();
+                        Notification::make()->title(__('scheduled_znuny_task_runs.actions.run_resolved_title'))->success()->send();
                     }),
 
                 Action::make('open_ticket')
-                    ->label('Open Ticket')
+                    ->label(__('scheduled_znuny_task_runs.actions.open_ticket'))
                     ->icon('heroicon-o-ticket')
                     ->url(fn (ScheduledZnunyTaskRun $record): ?string => $record->ticket_id
                         ? app(ZnunyClient::class)->ticketUrl($record->ticket_id)
@@ -365,7 +365,7 @@ class ScheduledZnunyTaskRunResource extends Resource
                     ->visible(fn (ScheduledZnunyTaskRun $record) => ! empty($record->ticket_id)),
 
                 Action::make('open_task')
-                    ->label('Open Task')
+                    ->label(__('scheduled_znuny_task_runs.actions.open_task'))
                     ->icon('heroicon-o-arrow-top-right-on-square')
                     ->url(fn (ScheduledZnunyTaskRun $record): ?string => $record->scheduled_znuny_task_id && ! $record->task?->trashed()
                         ? ScheduledZnunyTaskResource::getUrl('edit', ['record' => $record->scheduled_znuny_task_id])

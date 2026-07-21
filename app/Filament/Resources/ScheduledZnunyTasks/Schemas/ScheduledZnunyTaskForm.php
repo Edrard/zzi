@@ -34,28 +34,28 @@ class ScheduledZnunyTaskForm
 
         return $schema
             ->components([
-                Section::make('Task Details')
+                Section::make(__('scheduled_znuny_tasks.form.sections.task_details'))
                     ->schema([
                         TextInput::make('name')
-                            ->label('Task Name')
+                            ->label(__('scheduled_znuny_tasks.form.task_name'))
                             ->required(),
                         Toggle::make('enabled')
-                            ->label('Enabled')
-                            ->helperText('Enable this task to run on the given schedule.')
+                            ->label(__('scheduled_znuny_tasks.form.enabled'))
+                            ->helperText(__('scheduled_znuny_tasks.form.enabled_help'))
                             ->default(false),
                     ])->columns(2),
 
-                Section::make('Schedule')
+                Section::make(__('scheduled_znuny_tasks.form.sections.schedule'))
                     ->schema([
                         TextInput::make('cron_expression')
-                            ->label('Cron Expression')
+                            ->label(__('scheduled_znuny_tasks.form.cron'))
                             ->placeholder('* * * * *')
                             ->required(fn ($get) => $get('enabled') === true)
                             ->rules([
                                 function () {
                                     return function (string $attribute, $value, \Closure $fail) {
                                         if (! empty($value) && ! app(CronService::class)->isValid($value)) {
-                                            $fail('Invalid 5-field cron expression.');
+                                            $fail(__('scheduled_znuny_tasks.form.invalid_cron'));
                                         }
                                     };
                                 },
@@ -64,7 +64,7 @@ class ScheduledZnunyTaskForm
                             ->afterStateHydrated($updateNextRun)
                             ->afterStateUpdated($updateNextRun),
                         Select::make('timezone')
-                            ->label('Timezone')
+                            ->label(__('scheduled_znuny_tasks.form.timezone'))
                             ->options(array_combine(\DateTimeZone::listIdentifiers(), \DateTimeZone::listIdentifiers()))
                             ->default(fn () => app(DateTimeDisplayService::class)->timezone())
                             ->searchable()
@@ -73,11 +73,11 @@ class ScheduledZnunyTaskForm
                             ->afterStateHydrated($updateNextRun)
                             ->afterStateUpdated($updateNextRun),
                         Placeholder::make('next_run_at_placeholder')
-                            ->label('Next Run Preview')
+                            ->label(__('scheduled_znuny_tasks.form.next_run_preview'))
                             ->content(function ($get) {
                                 $runAt = $get('next_run_at');
                                 if (! $runAt) {
-                                    return 'N/A';
+                                    return __('scheduled_znuny_tasks.form.n_a');
                                 }
                                 $tz = $get('timezone') ?: config('app.timezone');
 
@@ -86,11 +86,11 @@ class ScheduledZnunyTaskForm
                         Hidden::make('next_run_at'),
                     ])->columns(3),
 
-                Section::make('Ticket Details Overrides')
-                    ->description('These fields override the global Advanced Ticket Preset defaults when the task creates a ticket.')
+                Section::make(__('scheduled_znuny_tasks.form.sections.ticket_overrides'))
+                    ->description(__('scheduled_znuny_tasks.form.overrides_desc'))
                     ->schema([
                         Select::make('queue_name')
-                            ->label('Queue')
+                            ->label(__('scheduled_znuny_tasks.form.queue'))
                             ->required(fn ($get) => $get('enabled') === true)
                             ->searchable()
                             ->preload()
@@ -126,7 +126,7 @@ class ScheduledZnunyTaskForm
                                 }
                             }),
                         Select::make('owner_id')
-                            ->label('Owner')
+                            ->label(__('scheduled_znuny_tasks.form.owner'))
                             ->required(fn ($get) => $get('enabled') === true)
                             ->searchable()
                             ->preload()
@@ -162,7 +162,7 @@ class ScheduledZnunyTaskForm
                             }),
                         Hidden::make('owner_login'),
                         Select::make('customer_user_login')
-                            ->label('Customer User')
+                            ->label(__('scheduled_znuny_tasks.form.customer_user'))
                             ->required(fn ($get) => $get('enabled') === true)
                             ->searchable()
                             ->preload()
@@ -235,7 +235,7 @@ class ScheduledZnunyTaskForm
                                 }
                             }),
                         Select::make('priority_name')
-                            ->label('Priority')
+                            ->label(__('scheduled_znuny_tasks.form.priority'))
                             ->searchable()
                             ->preload()
                             ->default(fn () => app(ZnunyTicketAdvancedDefaultsService::class)->getDefaults()['priority'])
@@ -247,7 +247,7 @@ class ScheduledZnunyTaskForm
                                 }
                             }),
                         Select::make('state_name')
-                            ->label('State')
+                            ->label(__('scheduled_znuny_tasks.form.state'))
                             ->searchable()
                             ->preload()
                             ->default(fn () => app(ZnunyTicketAdvancedDefaultsService::class)->getDefaults()['state'])
@@ -259,7 +259,7 @@ class ScheduledZnunyTaskForm
                                 }
                             }),
                         Select::make('lock_name')
-                            ->label('Lock')
+                            ->label(__('scheduled_znuny_tasks.form.lock'))
                             ->searchable()
                             ->preload()
                             ->default(fn () => app(ZnunyTicketAdvancedDefaultsService::class)->getDefaults()['lock'])
@@ -269,13 +269,13 @@ class ScheduledZnunyTaskForm
                             ]),
                     ])->columns(2),
 
-                Section::make('Ticket Content')
+                Section::make(__('scheduled_znuny_tasks.form.sections.ticket_content'))
                     ->schema([
                         TextInput::make('subject')
-                            ->label('Subject')
+                            ->label(__('scheduled_znuny_tasks.form.subject'))
                             ->required(fn ($get) => $get('enabled') === true),
                         Textarea::make('body')
-                            ->label('Body')
+                            ->label(__('scheduled_znuny_tasks.form.body'))
                             ->rows(5)
                             ->required(fn ($get) => $get('enabled') === true),
                     ]),
