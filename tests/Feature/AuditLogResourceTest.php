@@ -218,4 +218,31 @@ class AuditLogResourceTest extends TestCase
             }
         }
     }
+
+    public function test_audit_log_access_control()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $operator = User::factory()->create(['role' => 'operator']);
+        $viewer = User::factory()->create(['role' => 'viewer']);
+
+        $auditLog = AuditLog::create(['action' => 'test', 'context' => []]);
+
+        // Admin
+        $this->actingAs($admin)->get(AuditLogResource::getUrl('index'))->assertSuccessful();
+        $this->actingAs($admin)->get(AuditLogResource::getUrl('view', ['record' => $auditLog]))->assertSuccessful();
+
+        // Operator
+        $this->actingAs($operator)->get(AuditLogResource::getUrl('index'))->assertForbidden();
+        $this->actingAs($operator)->get(AuditLogResource::getUrl('view', ['record' => $auditLog]))->assertForbidden();
+
+        // Viewer
+        $this->actingAs($viewer)->get(AuditLogResource::getUrl('index'))->assertForbidden();
+        $this->actingAs($viewer)->get(AuditLogResource::getUrl('view', ['record' => $auditLog]))->assertForbidden();
+
+        // Mutation methods
+        $this->assertFalse(AuditLogResource::canCreate());
+        $this->assertFalse(AuditLogResource::canEdit($auditLog));
+        $this->assertFalse(AuditLogResource::canDelete($auditLog));
+        $this->assertFalse(AuditLogResource::canDeleteAny());
+    }
 }

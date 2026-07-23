@@ -127,8 +127,15 @@ class CreateTicket extends Page implements HasForms
             ->statePath('data');
     }
 
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->canManageZnunyTickets() ?? false;
+    }
+
     public function create(ZnunyStandaloneTicketCreationService $creationService): void
     {
+        abort_unless(auth()->user()?->canManageZnunyTickets(), 403);
+
         $data = $this->form->getState();
 
         $result = $creationService->createTicket(

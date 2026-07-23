@@ -77,24 +77,28 @@ class SchedulerStatusConsole extends Widget
 
     public function enableScheduler(): void
     {
+        abort_unless(auth()->user()?->canAdministerApplication(), 403);
         app(SchedulerSafetyService::class)->enableScheduler();
         Notification::make()->title(__('scheduled_znuny_tasks.scheduler.notifications.enabled'))->success()->send();
     }
 
     public function disableScheduler(): void
     {
+        abort_unless(auth()->user()?->canAdministerApplication(), 403);
         app(SchedulerSafetyService::class)->disableScheduler('Manually disabled by admin');
         Notification::make()->title(__('scheduled_znuny_tasks.scheduler.notifications.disabled'))->warning()->send();
     }
 
     public function pauseScheduler(): void
     {
+        abort_unless(auth()->user()?->canAdministerApplication(), 403);
         app(SchedulerSafetyService::class)->pauseScheduler('Manually paused by admin');
         Notification::make()->title(__('scheduled_znuny_tasks.scheduler.notifications.paused'))->warning()->send();
     }
 
     public function clearPause(): void
     {
+        abort_unless(auth()->user()?->canAdministerApplication(), 403);
         app(SchedulerSafetyService::class)->clearPause();
         Notification::make()->title(__('scheduled_znuny_tasks.scheduler.notifications.resumed'))->success()->send();
     }

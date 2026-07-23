@@ -41,11 +41,15 @@ class ZnunyTicketManagementActions
                     ->required(),
             ])
             ->visible(function (array $arguments, $record = null) {
+                if (auth()->user()?->canManageZnunyTickets() !== true) {
+                    return false;
+                }
                 $payload = TicketDetailsPayload::fromRecord($record, $arguments);
 
                 return $payload->znuny_ticket_id && $payload->is_open;
             })
             ->action(function (array $arguments, array $data, Action $action, $record = null) {
+                abort_unless(auth()->user()?->canManageZnunyTickets(), 403);
                 $payload = TicketDetailsPayload::fromRecord($record, $arguments);
                 if (! $payload->znuny_ticket_id) {
                     Notification::make()->title(__('znuny_ticket_workspace.management_actions.ticket_id_missing'))->danger()->send();
@@ -201,11 +205,15 @@ class ZnunyTicketManagementActions
                     ->default(fn () => SettingsService::string('manual_ticket_reopen_note_template', 'Reopening this ticket.')),
             ])
             ->visible(function (array $arguments, $record = null) {
+                if (auth()->user()?->canManageZnunyTickets() !== true) {
+                    return false;
+                }
                 $payload = TicketDetailsPayload::fromRecord($record, $arguments);
 
                 return $payload->znuny_ticket_id && $payload->is_closed;
             })
             ->action(function (array $arguments, array $data, Action $action, $record = null) {
+                abort_unless(auth()->user()?->canManageZnunyTickets(), 403);
                 $payload = TicketDetailsPayload::fromRecord($record, $arguments);
                 if (! $payload->znuny_ticket_id) {
                     Notification::make()->title(__('znuny_ticket_workspace.management_actions.ticket_id_missing'))->danger()->send();
@@ -311,6 +319,9 @@ class ZnunyTicketManagementActions
                     ->rows(6),
             ])
             ->visible(function (array $arguments, $record = null) {
+                if (auth()->user()?->canManageZnunyTickets() !== true) {
+                    return false;
+                }
                 $payload = TicketDetailsPayload::fromRecord($record, $arguments);
 
                 return $payload->znuny_ticket_id && $payload->is_open;
@@ -325,6 +336,7 @@ class ZnunyTicketManagementActions
             ])
             ->modalSubmitAction(false)
             ->action(function (array $arguments, array $data, Action $action, $record = null) {
+                abort_unless(auth()->user()?->canManageZnunyTickets(), 403);
                 $visibleForCustomer = $arguments['visible_for_customer'] ?? false;
                 static::executeCreateTicketArticle($arguments, $data, $action, $record, $visibleForCustomer);
             });
@@ -332,6 +344,7 @@ class ZnunyTicketManagementActions
 
     protected static function executeCreateTicketArticle(array $arguments, array $data, Action $action, $record, bool $visibleForCustomer): void
     {
+        abort_unless(auth()->user()?->canManageZnunyTickets(), 403);
         $payload = TicketDetailsPayload::fromRecord($record, $arguments);
 
         if (! $payload->znuny_ticket_id) {
@@ -408,6 +421,9 @@ class ZnunyTicketManagementActions
                 return $payload->lock === 'lock' ? __('znuny_ticket_workspace.management_actions.unlock_tooltip') : __('znuny_ticket_workspace.management_actions.lock_tooltip');
             })
             ->visible(function (array $arguments, $record = null) {
+                if (auth()->user()?->canManageZnunyTickets() !== true) {
+                    return false;
+                }
                 $payload = TicketDetailsPayload::fromRecord($record, $arguments);
 
                 return (bool) $payload->znuny_ticket_id
@@ -415,6 +431,7 @@ class ZnunyTicketManagementActions
                     && in_array($payload->lock, ['lock', 'unlock'], true);
             })
             ->action(function (array $arguments, Action $action, $record = null) {
+                abort_unless(auth()->user()?->canManageZnunyTickets(), 403);
                 $payload = TicketDetailsPayload::fromRecord($record, $arguments);
                 if (! $payload->znuny_ticket_id) {
                     Notification::make()->title(__('znuny_ticket_workspace.management_actions.ticket_id_missing'))->danger()->send();
@@ -567,11 +584,15 @@ class ZnunyTicketManagementActions
                 ];
             })
             ->visible(function (array $arguments, $record = null) {
+                if (auth()->user()?->canManageZnunyTickets() !== true) {
+                    return false;
+                }
                 $payload = TicketDetailsPayload::fromRecord($record, $arguments);
 
                 return $payload->znuny_ticket_id && $payload->is_open;
             })
             ->action(function (array $arguments, array $data, Action $action, $record = null) {
+                abort_unless(auth()->user()?->canManageZnunyTickets(), 403);
                 $payloadInfo = TicketDetailsPayload::fromRecord($record, $arguments);
                 if (! $payloadInfo->znuny_ticket_id) {
                     Notification::make()->title(__('znuny_ticket_workspace.management_actions.ticket_id_missing'))->danger()->send();

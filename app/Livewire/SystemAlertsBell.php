@@ -37,6 +37,8 @@ class SystemAlertsBell extends Component
 
     public function acknowledge($id)
     {
+        abort_unless(auth()->user()?->canAdministerApplication(), 403);
+
         $alert = SystemAlert::find($id);
         if ($alert && $alert->status === 'active') {
             app(\App\Services\SystemAlertService::class)->acknowledge($alert, auth()->id());

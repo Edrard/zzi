@@ -58,6 +58,21 @@ class AuditLogResource extends Resource
         return false;
     }
 
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->canAdministerApplication() ?? false;
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return false;
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return auth()->user()?->canAdministerApplication() ?? false;
+    }
+
     public static function actionLabel(?string $action): ?string
     {
         if ($action === null) {

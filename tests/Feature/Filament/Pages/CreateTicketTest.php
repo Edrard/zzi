@@ -419,4 +419,107 @@ class CreateTicketTest extends TestCase
         $this->assertEquals('Unknown User Label', app()->call($getOptionLabel, ['value' => 'unknownuser', 'get' => $get]));
         $this->assertEquals('missinguser', app()->call($getOptionLabel, ['value' => 'missinguser', 'get' => $get]));
     }
+
+    public function test_operator_route_and_create_allowed()
+    {
+        $operator = User::factory()->create(['role' => 'operator']);
+
+        $this->actingAs($operator)
+            ->get('/admin/create-ticket')
+            ->assertSuccessful();
+
+        $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['Raw' => 'Raw']);
+            $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([1 => 'John Doe <johndoe>']);
+            $mock->shouldReceive('getCustomerUserPrimaryOptionsForQueue')->andReturn(['johndoe' => 'John Doe <johndoe>']);
+            $mock->shouldReceive('resolveTemplateCandidate')->andReturn('johndoe');
+            $mock->shouldReceive('getTicketStates')->andReturn(['open' => 'open']);
+            $mock->shouldReceive('getTicketPriorities')->andReturn(['3 normal' => '3 normal']);
+        });
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldReceive('searchCustomerUsers')->andReturn([]);
+            $mock->shouldReceive('getCustomerUser')->andReturn(['found' => true, 'login' => 'johndoe', 'label' => 'John Doe <johndoe>']);
+        });
+
+        $this->mock(ZnunyStandaloneTicketCreationService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('createTicket')->once()->andReturn([
+                'success' => true,
+                'ticket_id' => 12345,
+                'ticket_number' => '2023010112345',
+                'errors' => [],
+                'warnings' => [],
+            ]);
+        });
+
+        Livewire::actingAs($operator)
+            ->test(CreateTicket::class)
+            ->fillForm([
+                'queue' => 'Raw',
+                'owner' => 1,
+                'customer_user' => 'johndoe',
+                'title' => 'Test Subject',
+                'body' => 'Test Body',
+                'state' => 'open',
+                'priority' => '3 normal',
+                'lock' => 'unlock',
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors()
+            ->assertNotified('Ticket Created');
+    }
+
+    public function test_viewer_route_and_create_forbidden()
+    {
+        $viewer = User::factory()->create(['role' => 'viewer']);
+
+        $this->actingAs($viewer)
+            ->get('/admin/create-ticket')
+            ->assertForbidden();
+
+        $this->mock(ZnunyStandaloneTicketCreationService::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('createTicket');
+        });
+
+        Livewire::actingAs($viewer)
+            ->test(CreateTicket::class)
+            ->assertForbidden();
+    }
+
+    public function test_viewer_direct_method_create_forbidden()
+    {
+        $viewer = User::factory()->create(['role' => 'viewer']);
+        $this->actingAs($viewer);
+
+        $this->mock(ZnunyStandaloneTicketCreationService::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('createTicket');
+        });
+
+        $page = new CreateTicket();
+
+        try {
+            $page->create(app(ZnunyStandaloneTicketCreationService::class));
+            $this->fail('Expected 403 exception');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            $this->assertEquals(403, $e->getStatusCode());
+        }
+    }
+
+    public function test_inactive_admin_cannot_administer()
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => false]);
+        $this->assertFalse($admin->canAdministerApplication());
+    }
+
+    public function test_inactive_admin_cannot_manage_tickets()
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => false]);
+        $this->assertFalse($admin->canManageZnunyTickets());
+    }
+
+    public function test_inactive_operator_cannot_manage_tickets()
+    {
+        $operator = User::factory()->create(['role' => 'operator', 'is_active' => false]);
+        $this->assertFalse($operator->canManageZnunyTickets());
+    }
 }

@@ -39,6 +39,16 @@ class User extends Authenticatable implements FilamentUser
         return $this->role === 'admin' && $this->show_scheduled_tasks_status_panel;
     }
 
+    public function canManageZnunyTickets(): bool
+    {
+        return $this->is_active !== false && in_array($this->role, ['admin', 'operator'], true);
+    }
+
+    public function canAdministerApplication(): bool
+    {
+        return $this->is_active !== false && $this->role === 'admin';
+    }
+
     /**
      * Get the attributes that should be cast.
      *
