@@ -2,7 +2,10 @@
 
 namespace Tests\Feature\Scheduler;
 
+use App\Enums\ZnunyTicketCreationAttemptStatus;
+use App\Enums\ZnunyTicketCreationClassification;
 use App\Models\ScheduledZnunyTask;
+use App\Models\ZnunyTicketCreationAttempt;
 use App\Services\ScheduledZnunyTicketCreationService;
 use App\Services\Znuny\ScheduledTicketCreationOutcome;
 use App\Services\Znuny\ZnunyClient;
@@ -94,7 +97,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
         $this->assertStringContainsString('Failed to resolve CustomerUser', $result['error_summary']);
     }
 
-    public function test_validate_ticket_create_invalid_returns_failed()
+    public function test_validate_ticket_create_invalid_returns_not_sent()
     {
         $task = ScheduledZnunyTask::create([
             'name' => 'Test',
@@ -106,7 +109,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
             'body' => 'Body',
         ]);
 
-        $this->clientMock->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
+        $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
         $this->defaultsMock->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
 
         $this->clientMock->expects($this->once())
@@ -117,8 +120,10 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
 
         $result = $this->service->createTicketFromTask($task, 999);
 
-        $this->assertEquals(ScheduledTicketCreationOutcome::FAILED, $result['outcome']);
+        $this->assertEquals(ScheduledTicketCreationOutcome::NOT_SENT, $result['outcome']);
+        $this->assertEquals(ZnunyTicketCreationClassification::NotSent->value, $result['classification']);
         $this->assertStringContainsString('validation failed', $result['error_summary']);
+        $this->assertEquals(0, ZnunyTicketCreationAttempt::count());
     }
 
     public function test_validate_ticket_create_throws_returns_not_sent()
@@ -133,7 +138,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
             'body' => 'Body',
         ]);
 
-        $this->clientMock->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
+        $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
         $this->defaultsMock->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
 
         $this->clientMock->expects($this->once())
@@ -160,9 +165,9 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
             'body' => 'Body',
         ]);
 
-        $this->clientMock->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
+        $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
         $this->defaultsMock->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
-        $this->clientMock->method('validateTicketCreate')->willReturn(['valid' => true]);
+        $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
 
         $this->clientMock->expects($this->once())
             ->method('createTicket')
@@ -202,21 +207,20 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
             'body' => 'Body',
         ]);
 
-        $this->clientMock->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
+        $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
         $this->defaultsMock->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
-        $this->clientMock->method('validateTicketCreate')->willReturn(['valid' => true]);
+        $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
 
         $this->clientMock->expects($this->once())
             ->method('createTicket')
             ->willReturn([
                 'success' => false,
-                'errors' => ['Something went wrong'],
             ]);
 
         $result = $this->service->createTicketFromTask($task, 999);
 
         $this->assertEquals(ScheduledTicketCreationOutcome::UNCERTAIN, $result['outcome']);
-        $this->assertStringContainsString('missing ID/Number', $result['error_summary']);
+        $this->assertStringContainsString('ambiguous or incomplete response', $result['error_summary']);
     }
 
     public function test_create_ticket_throws_returns_uncertain()
@@ -231,9 +235,9 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
             'body' => 'Body',
         ]);
 
-        $this->clientMock->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
+        $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
         $this->defaultsMock->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
-        $this->clientMock->method('validateTicketCreate')->willReturn(['valid' => true]);
+        $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
 
         $this->clientMock->expects($this->once())
             ->method('createTicket')
@@ -258,9 +262,9 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
             'lock_name' => 'unlock',
         ]);
 
-        $this->clientMock->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
+        $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
         $this->defaultsMock->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
-        $this->clientMock->method('validateTicketCreate')->willReturn(['valid' => true]);
+        $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
 
         $this->clientMock->expects($this->once())
             ->method('createTicket')
@@ -276,5 +280,65 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
         $result = $this->service->createTicketFromTask($task, 999);
 
         $this->assertEquals(ScheduledTicketCreationOutcome::SUCCESS, $result['outcome']);
+    }
+
+    public function test_explicit_api_rejection_returns_confirmed_failed()
+    {
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Test', 'enabled' => true, 'queue_name' => 'Q1',
+            'owner_id' => 1, 'customer_user_login' => 'user1',
+            'subject' => 'Sub', 'body' => 'Body',
+        ]);
+
+        $this->clientMock->expects($this->once())
+            ->method('getCustomerUser')
+            ->willReturn(['found' => true, 'customer_id' => 'CID1']);
+
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+
+        $this->clientMock->expects($this->once())
+            ->method('validateTicketCreate')
+            ->willReturn(['valid' => true]);
+
+        $this->clientMock->expects($this->once())
+            ->method('createTicket')
+            ->willReturn(['success' => false, 'errors' => ['Queue rejected']]);
+
+        $result = $this->service->createTicketFromTask($task, 999);
+
+        $this->assertEquals(ScheduledTicketCreationOutcome::FAILED, $result['outcome']);
+        $this->assertEquals(ZnunyTicketCreationClassification::ConfirmedFailed->value, $result['classification']);
+        $attempt = ZnunyTicketCreationAttempt::first();
+        $this->assertEquals(ZnunyTicketCreationAttemptStatus::ConfirmedFailed, $attempt->status);
+    }
+
+    public function test_incomplete_success_returns_uncertain()
+    {
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Test', 'enabled' => true, 'queue_name' => 'Q1',
+            'owner_id' => 1, 'customer_user_login' => 'user1',
+            'subject' => 'Sub', 'body' => 'Body',
+        ]);
+
+        $this->clientMock->expects($this->once())
+            ->method('getCustomerUser')
+            ->willReturn(['found' => true, 'customer_id' => 'CID1']);
+
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+
+        $this->clientMock->expects($this->once())
+            ->method('validateTicketCreate')
+            ->willReturn(['valid' => true]);
+
+        $this->clientMock->expects($this->once())
+            ->method('createTicket')
+            ->willReturn(['success' => true, 'ticket_number' => 'TN123']);
+
+        $result = $this->service->createTicketFromTask($task, 999);
+
+        $this->assertEquals(ScheduledTicketCreationOutcome::UNCERTAIN, $result['outcome']);
+        $this->assertEquals(ZnunyTicketCreationClassification::Uncertain->value, $result['classification']);
+        $attempt = ZnunyTicketCreationAttempt::first();
+        $this->assertEquals(ZnunyTicketCreationAttemptStatus::Uncertain, $attempt->status);
     }
 }

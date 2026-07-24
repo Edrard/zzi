@@ -3,13 +3,15 @@
 namespace App\Services\Znuny;
 
 use App\Enums\ZnunyTicketCreationAttemptStatus;
+use App\Enums\ZnunyTicketCreationClassification;
 use App\Models\ZnunyTicketCreationAttempt;
 use Throwable;
 
 class ZnunyTicketCreationReliabilityService
 {
     public function __construct(
-        private ZnunyTicketCreationMarkerBuilder $markerBuilder
+        private ZnunyTicketCreationMarkerBuilder $markerBuilder,
+        private ZnunyTicketCreationResultClassifier $classifier
     ) {}
 
     public function applyMarkerAndCreateAttempt(
@@ -55,40 +57,72 @@ class ZnunyTicketCreationReliabilityService
         $attempt->update(['status' => ZnunyTicketCreationAttemptStatus::Sending]);
     }
 
-    public function recordApiSuccess(ZnunyTicketCreationAttempt $attempt, array $apiResult): void
+    public function recordApiResult(ZnunyTicketCreationAttempt $attempt, array $apiResult): ZnunyTicketCreationClassification
     {
-        $attempt->update([
-            'status' => ZnunyTicketCreationAttemptStatus::Success,
-            'ticket_id' => $apiResult['ticket_id'] ?? null,
-            'ticket_number' => $apiResult['ticket_number'] ?? null,
-            'response_snapshot' => $this->sanitizeResponse($apiResult),
+        $classification = $this->classifier->classify($apiResult);
+        $sanitizedResponse = $this->sanitizedResponse($apiResult);
+
+        $updateData = [
             'finished_at' => now(),
-        ]);
+            'response_snapshot' => $sanitizedResponse,
+        ];
+
+        if ($classification === ZnunyTicketCreationClassification::Success) {
+            $updateData['status'] = ZnunyTicketCreationAttemptStatus::Success;
+            $updateData['ticket_id'] = $apiResult['ticket_id'] ?? null;
+            $updateData['ticket_number'] = $apiResult['ticket_number'] ?? null;
+        } elseif ($classification === ZnunyTicketCreationClassification::ConfirmedFailed) {
+            $updateData['status'] = ZnunyTicketCreationAttemptStatus::ConfirmedFailed;
+            $updateData['error_summary'] = 'Znuny API explicitly rejected the request.';
+            $updateData['error_details'] = $this->buildSafeErrorDetails($apiResult, $classification);
+        } else {
+            $updateData['status'] = ZnunyTicketCreationAttemptStatus::Uncertain;
+
+            $successFlag = $apiResult['success'] ?? null;
+            if ($successFlag === null) {
+                $updateData['error_summary'] = 'Response missing success flag.';
+            } elseif (! is_bool($successFlag)) {
+                $updateData['error_summary'] = 'Response success flag is not a boolean.';
+            } elseif ($successFlag === true) {
+                $updateData['error_summary'] = 'Response reported success but missing or invalid TicketID/TicketNumber.';
+            } else {
+                $updateData['error_summary'] = 'Znuny API returned success false but ambiguous error state or identifiers.';
+            }
+
+            $updateData['error_details'] = $this->buildSafeErrorDetails($apiResult, $classification);
+        }
+
+        $attempt->update($updateData);
+
+        return $classification;
     }
 
-    public function recordApiUncertain(ZnunyTicketCreationAttempt $attempt, array $apiResult, ?string $errorSummary = null, ?string $errorDetails = null): void
+    public function recordApiException(ZnunyTicketCreationAttempt $attempt, Throwable $e): ZnunyTicketCreationClassification
     {
+        $sanitizedMessage = $this->sanitizeExceptionMessage($e->getMessage());
+        $boundedMessage = substr($sanitizedMessage, 0, 150);
+        $errorDetails = get_class($e).': '.$boundedMessage;
+
         $attempt->update([
             'status' => ZnunyTicketCreationAttemptStatus::Uncertain,
-            'error_summary' => $errorSummary ?? 'Znuny API returned success false or missing ID/Number.',
-            'error_details' => $errorDetails ?? json_encode($apiResult['errors'] ?? []),
-            'response_snapshot' => $this->sanitizeResponse($apiResult),
+            'error_summary' => 'Exception during ticket creation HTTP request: '.$boundedMessage,
+            'error_details' => $errorDetails,
             'finished_at' => now(),
         ]);
+
+        return ZnunyTicketCreationClassification::Uncertain;
     }
 
-    public function recordApiException(ZnunyTicketCreationAttempt $attempt, Throwable $e): void
+    public function sanitizeExceptionMessage(string $message): string
     {
-        $attempt->update([
-            'status' => ZnunyTicketCreationAttemptStatus::Uncertain,
-            'error_summary' => 'Exception during ticket creation HTTP request: '.substr($e->getMessage(), 0, 150),
-            'error_details' => $e->getMessage()."\n".$e->getTraceAsString(),
-            'finished_at' => now(),
-        ]);
+        $pattern = '/(token|password|sessionid|authorization|userlogin)\s*[:=]\s*[^\s,;&]*/i';
+
+        return preg_replace($pattern, '$1=[REDACTED]', $message);
     }
 
-    public function sanitizeResponse(array $response): array
+    public function sanitizedResponse(array $apiResult): array
     {
+        $response = $apiResult;
         array_walk_recursive($response, function (&$value, $key) {
             if (! is_string($key)) {
                 return;
@@ -100,5 +134,51 @@ class ZnunyTicketCreationReliabilityService
         });
 
         return $response;
+    }
+
+    public function normalizedSanitizedErrors(array $apiResult): array
+    {
+        return $this->normalizedSanitizedField($apiResult, 'errors');
+    }
+
+    public function normalizedSanitizedField(array $apiResult, string $field): array
+    {
+        $sanitized = $this->sanitizedResponse($apiResult);
+
+        return $this->classifier->normalizeErrors($sanitized[$field] ?? []);
+    }
+
+    public function safeJsonEncode(mixed $data): string
+    {
+        $json = json_encode(
+            $data,
+            JSON_INVALID_UTF8_SUBSTITUTE | JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_UNESCAPED_UNICODE
+        );
+
+        if ($json === false) {
+            return '["JSON encoding failed"]';
+        }
+
+        return $json;
+    }
+
+    public function buildSafeErrorDetails(array $apiResult, ZnunyTicketCreationClassification $classification): string
+    {
+        $sanitized = $this->sanitizedResponse($apiResult);
+        $errors = $this->normalizedSanitizedErrors($apiResult);
+
+        if ($classification === ZnunyTicketCreationClassification::ConfirmedFailed) {
+            return $this->safeJsonEncode($errors);
+        }
+
+        if ($classification === ZnunyTicketCreationClassification::Uncertain) {
+            if (! empty($errors)) {
+                return $this->safeJsonEncode($errors);
+            }
+
+            return $this->safeJsonEncode($sanitized);
+        }
+
+        return $this->safeJsonEncode($sanitized);
     }
 }

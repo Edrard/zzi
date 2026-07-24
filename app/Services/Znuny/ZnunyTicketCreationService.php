@@ -2,6 +2,7 @@
 
 namespace App\Services\Znuny;
 
+use App\Enums\ZnunyTicketCreationClassification;
 use App\Services\AuditLogger;
 use App\Services\OwnerSuggestion\OwnerSuggestionObservationRecorder;
 use Illuminate\Support\Facades\Cache;
@@ -161,16 +162,23 @@ class ZnunyTicketCreationService
 
         try {
             $response = $this->client->validateTicketCreate($payload);
+            $reliability = app(ZnunyTicketCreationReliabilityService::class);
 
             return [
                 'valid' => ! empty($response['valid']),
-                'errors' => $response['errors'] ?? [],
-                'warnings' => $response['warnings'] ?? [],
+                'errors' => $reliability->normalizedSanitizedField($response, 'errors'),
+                'warnings' => $reliability->normalizedSanitizedField($response, 'warnings'),
             ];
         } catch (\Throwable $e) {
+            $reliability = app(ZnunyTicketCreationReliabilityService::class);
+            $sanitizedMessage = $reliability->sanitizeExceptionMessage($e->getMessage());
+            $boundedMessage = substr($sanitizedMessage, 0, 150);
+
             return [
                 'valid' => false,
-                'errors' => [$e->getMessage()],
+                'errors' => [
+                    get_class($e).': '.$boundedMessage,
+                ],
                 'warnings' => [],
             ];
         }
@@ -192,6 +200,7 @@ class ZnunyTicketCreationService
     ): array {
         $result = [
             'success' => false,
+            'classification' => 'not_sent',
             'ticket_id' => null,
             'ticket_number' => null,
             'errors' => [],
@@ -309,36 +318,38 @@ class ZnunyTicketCreationService
                 $createResponse = $this->client->createTicket($payload);
             } catch (\Throwable $e) {
                 $reliability->recordApiException($attempt, $e);
-                $result['errors'][] = $e->getMessage();
+                $result['classification'] = ZnunyTicketCreationClassification::Uncertain->value;
+                $sanitizedMessage = $reliability->sanitizeExceptionMessage($e->getMessage());
+                $result['errors'][] = get_class($e).': '.substr($sanitizedMessage, 0, 150);
 
                 $this->auditLog('znuny.manual_ticket_create.failed', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, null, null, $result['errors'], [], false, false, false);
 
                 return $result;
             }
 
-            if (! $createResponse['success']) {
-                $reliability->recordApiUncertain($attempt, $createResponse, 'Znuny API returned success false.', json_encode($createResponse['errors'] ?? []));
-                $result['errors'] = $createResponse['errors'];
-                $result['warnings'] = $createResponse['warnings'] ?? [];
+            $classification = $reliability->recordApiResult($attempt, $createResponse);
+            $result['classification'] = $classification->value;
 
+            if ($classification === ZnunyTicketCreationClassification::Success) {
+                $result['success'] = true;
+                $result['ticket_id'] = $createResponse['ticket_id'];
+                $result['ticket_number'] = $createResponse['ticket_number'];
+                $ticketId = $result['ticket_id'];
+                $ticketNumber = $result['ticket_number'];
+            } elseif ($classification === ZnunyTicketCreationClassification::ConfirmedFailed) {
+                $result['errors'] = $reliability->normalizedSanitizedField($createResponse, 'errors');
+                $result['warnings'] = $reliability->normalizedSanitizedField($createResponse, 'warnings');
+                $this->auditLog('znuny.manual_ticket_create.failed', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, null, null, $result['errors'], $result['warnings'], false, false, false);
+
+                return $result;
+            } else {
+                $normalizedErrors = $reliability->normalizedSanitizedField($createResponse, 'errors');
+                $result['errors'] = ! empty($normalizedErrors) ? $normalizedErrors : ['Ambiguous or incomplete response from Znuny API.'];
+                $result['warnings'] = $reliability->normalizedSanitizedField($createResponse, 'warnings');
                 $this->auditLog('znuny.manual_ticket_create.failed', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, null, null, $result['errors'], $result['warnings'], false, false, false);
 
                 return $result;
             }
-
-            $ticketId = $createResponse['ticket_id'];
-            $ticketNumber = $createResponse['ticket_number'];
-
-            if (empty($ticketId) || empty($ticketNumber)) {
-                $reliability->recordApiUncertain($attempt, $createResponse, 'Ticket created but missing TicketID or TicketNumber in response.');
-                $result['errors'][] = 'Ticket created but missing TicketID or TicketNumber in response.';
-
-                $this->auditLog('znuny.manual_ticket_create.failed', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, null, null, $result['errors'], [], false, false, false);
-
-                return $result;
-            }
-
-            $reliability->recordApiSuccess($attempt, $createResponse);
 
             try {
                 $this->linkService->create([
@@ -362,6 +373,7 @@ class ZnunyTicketCreationService
                     'ticket_number' => $ticketNumber,
                     'exception' => $e->getMessage(),
                 ]);
+                $result['success'] = false;
                 $result['orphaned'] = true;
                 $result['ticket_id'] = $ticketId;
                 $result['ticket_number'] = $ticketNumber;
@@ -375,7 +387,7 @@ class ZnunyTicketCreationService
             $result['success'] = true;
             $result['ticket_id'] = $ticketId;
             $result['ticket_number'] = $ticketNumber;
-            $result['warnings'] = $createResponse['warnings'] ?? [];
+            $result['warnings'] = $reliability->normalizedSanitizedField($createResponse, 'warnings');
 
             $this->auditLog('znuny.manual_ticket_create.created', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, $ticketId, $ticketNumber, [], $result['warnings'], false, false, false);
 

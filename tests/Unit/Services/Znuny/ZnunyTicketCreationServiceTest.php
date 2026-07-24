@@ -95,7 +95,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
         $this->assertEquals([], $result['errors']);
     }
 
-    public function test_validate_ticket_payload_failure()
+    public function test_validate_ticket_payload_scalar_error()
     {
         $clientMock = $this->mock(ZnunyClient::class);
 
@@ -110,22 +110,21 @@ class ZnunyTicketCreationServiceTest extends TestCase
         $clientMock->shouldReceive('validateTicketCreate')
             ->once()
             ->andReturn([
-                'valid' => 0,
-                'errors' => ['Missing data'],
-                'warnings' => [],
+                'valid' => false,
+                'errors' => 'Queue invalid',
             ]);
 
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
         $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
 
-        $result = $service->validateTicketPayload('10', 'TestQueue', 'testuser', 'CUST123', 'Title', 'Subj', 'Body');
+        $result = $service->validateTicketPayload(10, 'TestQueue', 'testuser', 'CUST123', 'Title', 'Subj', 'Body');
 
         $this->assertFalse($result['valid']);
-        $this->assertEquals(['Missing data'], $result['errors']);
+        $this->assertEquals(['Queue invalid'], $result['errors']);
         $this->assertEquals([], $result['warnings']);
     }
 
-    public function test_validate_ticket_payload_exception()
+    public function test_validate_ticket_payload_nested_sensitive_warning()
     {
         $clientMock = $this->mock(ZnunyClient::class);
 
@@ -139,7 +138,14 @@ class ZnunyTicketCreationServiceTest extends TestCase
 
         $clientMock->shouldReceive('validateTicketCreate')
             ->once()
-            ->andThrow(new \Exception('API timeout'));
+            ->andReturn([
+                'valid' => false,
+                'errors' => ['Validation failed'],
+                'warnings' => [
+                    'Message' => 'Owner should be checked',
+                    'Token' => 'secret-value',
+                ],
+            ]);
 
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
         $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
@@ -147,7 +153,48 @@ class ZnunyTicketCreationServiceTest extends TestCase
         $result = $service->validateTicketPayload(10, 'TestQueue', 'testuser', 'CUST123', 'Title', 'Subj', 'Body');
 
         $this->assertFalse($result['valid']);
-        $this->assertEquals(['API timeout'], $result['errors']);
+        $this->assertIsArray($result['errors']);
+        $this->assertIsArray($result['warnings']);
+        $this->assertEquals(['Validation failed'], $result['errors']);
+        $this->assertContains('Owner should be checked', $result['warnings']);
+        $this->assertContains('[REDACTED]', $result['warnings']);
+        $this->assertNotContains('secret-value', $result['warnings']);
+    }
+
+    public function test_validate_ticket_payload_sensitive_exception()
+    {
+        $clientMock = $this->mock(ZnunyClient::class);
+
+        $this->mock(ZnunyTicketAdvancedDefaultsService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getDefaults')->andReturn([
+                'priority' => '3 normal',
+                'state' => 'new',
+                'lock' => 'lock',
+            ]);
+        });
+
+        $clientMock->shouldReceive('validateTicketCreate')
+            ->once()
+            ->andThrow(new \Exception('Validation failed token=secret-value'));
+
+        $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
+
+        $result = $service->validateTicketPayload(10, 'TestQueue', 'testuser', 'CUST123', 'Title', 'Subj', 'Body');
+
+        $this->assertFalse($result['valid']);
+        $this->assertIsArray($result['errors']);
+
+        $errorStr = implode(' ', $result['errors']);
+
+        $this->assertStringContainsString('Exception', $errorStr);
+        $this->assertStringContainsString('Validation failed', $errorStr);
+        $this->assertStringContainsString('[REDACTED]', $errorStr);
+        $this->assertStringNotContainsString('secret-value', $errorStr);
+        $this->assertStringNotContainsString('Stack trace:', $errorStr);
+        $this->assertStringNotContainsString('/var/www/work.vamark.com/http', $errorStr);
+        $this->assertLessThanOrEqual(150 + strlen('Exception: '), strlen($errorStr));
+
         $this->assertEquals([], $result['warnings']);
     }
 
@@ -453,7 +500,8 @@ class ZnunyTicketCreationServiceTest extends TestCase
         $result = $service->createTicketForProblem('123', 'Host', 'Prob', 10, 'Q', 'CU', 'T', 'S', 'B');
 
         $this->assertFalse($result['success']);
-        $this->assertContains('Ticket created but missing TicketID or TicketNumber in response.', $result['errors']);
+        $this->assertContains('Ambiguous or incomplete response from Znuny API.', $result['errors']);
+        $this->assertEquals('uncertain', $result['classification']);
     }
 
     public function test_create_ticket_orphaned()

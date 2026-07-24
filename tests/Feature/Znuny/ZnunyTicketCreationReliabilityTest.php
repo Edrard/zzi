@@ -3,9 +3,12 @@
 namespace Tests\Feature\Znuny;
 
 use App\Enums\ZnunyTicketCreationAttemptStatus;
+use App\Enums\ZnunyTicketCreationClassification;
 use App\Models\ScheduledZnunyTask;
 use App\Models\ScheduledZnunyTaskRun;
+use App\Models\Setting;
 use App\Models\User;
+use App\Models\ZabbixTicket;
 use App\Models\ZnunyTicketCreationAttempt;
 use App\Services\ScheduledZnunyTaskRunProcessor;
 use App\Services\ScheduledZnunyTicketCreationService;
@@ -15,6 +18,7 @@ use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyStandaloneTicketCreationService;
 use App\Services\Znuny\ZnunyTicketCreationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -40,8 +44,8 @@ class ZnunyTicketCreationReliabilityTest extends TestCase
         $this->actingAs($user);
 
         $mockClient = $this->createMock(ZnunyClient::class);
-        $mockClient->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID']);
-        $mockClient->method('validateTicketCreate')->willReturn(['valid' => true]);
+        $mockClient->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID']);
+        $mockClient->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
 
         // Expect the createTicket call with the marked subject
         $mockClient->expects($this->once())
@@ -101,8 +105,8 @@ class ZnunyTicketCreationReliabilityTest extends TestCase
     public function test_different_title_and_subject_result_in_identical_final_subject()
     {
         $mockClient = $this->createMock(ZnunyClient::class);
-        $mockClient->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID']);
-        $mockClient->method('validateTicketCreate')->willReturn(['valid' => true]);
+        $mockClient->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID']);
+        $mockClient->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
 
         $mockClient->expects($this->once())
             ->method('createTicket')
@@ -167,8 +171,8 @@ class ZnunyTicketCreationReliabilityTest extends TestCase
         ]);
 
         $mockClient = $this->createMock(ZnunyClient::class);
-        $mockClient->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID']);
-        $mockClient->method('validateTicketCreate')->willReturn(['valid' => true]);
+        $mockClient->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID']);
+        $mockClient->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
 
         // Expect the createTicket call with the marked subject using the RUN ID, not Task ID
         $mockClient->expects($this->once())
@@ -204,8 +208,8 @@ class ZnunyTicketCreationReliabilityTest extends TestCase
     public function test_standalone_manual_ticket_creation_receives_no_marker_and_creates_no_attempt()
     {
         $mockClient = $this->createMock(ZnunyClient::class);
-        $mockClient->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID']);
-        $mockClient->method('validateTicketCreate')->willReturn(['valid' => true]);
+        $mockClient->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID']);
+        $mockClient->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
 
         $mockClient->expects($this->once())
             ->method('createTicket')
@@ -233,14 +237,13 @@ class ZnunyTicketCreationReliabilityTest extends TestCase
     public function test_zabbix_creation_uncertain_response()
     {
         $mockClient = $this->createMock(ZnunyClient::class);
-        $mockClient->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID']);
-        $mockClient->method('validateTicketCreate')->willReturn(['valid' => true]);
+        $mockClient->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID']);
+        $mockClient->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
 
         $mockClient->expects($this->once())
             ->method('createTicket')
             ->willReturn([
                 'success' => false,
-                'errors' => ['timeout'],
             ]);
 
         $this->app->instance(ZnunyClient::class, $mockClient);
@@ -288,8 +291,8 @@ class ZnunyTicketCreationReliabilityTest extends TestCase
         ]);
 
         $mockClient = $this->createMock(ZnunyClient::class);
-        $mockClient->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID']);
-        $mockClient->method('validateTicketCreate')->willReturn(['valid' => true]);
+        $mockClient->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID']);
+        $mockClient->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
 
         $mockClient->expects($this->once())
             ->method('createTicket')
@@ -318,44 +321,165 @@ class ZnunyTicketCreationReliabilityTest extends TestCase
     public function test_scheduled_processor_uncertain_run_stores_marked_payload_snapshot()
     {
         $task = ScheduledZnunyTask::create([
-            'name' => 'Test Task 3',
-            'queue_name' => 'IT',
-            'owner_id' => 1,
-            'customer_user_login' => 'testuser',
-            'subject' => 'Scheduled Check 3',
-            'body' => 'Body',
-            'cron_expression' => '* * * * *',
-            'enabled' => true,
+            'name' => 'Test Task 3', 'queue_name' => 'IT', 'owner_id' => 1, 'customer_user_login' => 'testuser',
+            'subject' => 'Scheduled Check 3', 'body' => 'Body', 'cron_expression' => '* * * * *', 'enabled' => true,
         ]);
 
+        Cache::forget('scheduled_tasks_consecutive_failures');
+
         $run = ScheduledZnunyTaskRun::create([
-            'scheduled_znuny_task_id' => $task->id,
-            'task_name_snapshot' => $task->name,
-            'run_type' => 'scheduled',
-            'scheduled_for' => now(),
-            'status' => 'pending',
-            'started_at' => now(),
+            'scheduled_znuny_task_id' => $task->id, 'task_name_snapshot' => $task->name, 'run_type' => 'scheduled',
+            'scheduled_for' => now(), 'status' => 'pending', 'started_at' => now(),
         ]);
 
         $mockClient = $this->createMock(ZnunyClient::class);
-        $mockClient->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID']);
-        $mockClient->method('validateTicketCreate')->willReturn(['valid' => true]);
+        $mockClient->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID']);
+
+        $mockClient->expects($this->once())
+            ->method('validateTicketCreate')
+            ->willReturn(['valid' => true]);
 
         $mockClient->expects($this->once())
             ->method('createTicket')
             ->willReturn([
                 'success' => false,
-                'errors' => ['timeout'],
             ]);
 
         $this->app->instance(ZnunyClient::class, $mockClient);
+
+        Setting::updateOrCreate(['key' => 'scheduled_tasks_enabled'], ['value' => 'true']);
 
         $processor = app(ScheduledZnunyTaskRunProcessor::class);
         $processor->processNextBatch(1, 60);
 
         $run->refresh();
+        $task->refresh();
+
         $this->assertEquals('uncertain', $run->status);
+        $this->assertEquals('false', Setting::where('key', 'scheduled_tasks_enabled')->value('value')); // disabled immediately
+        $this->assertEquals(0, Cache::get('scheduled_tasks_consecutive_failures', 0));
+
         $this->assertNotNull($run->payload_snapshot);
         $this->assertTrue(str_ends_with($run->payload_snapshot['Ticket']['Title'], ' [SHE:'.$run->id.']'));
+
+        $attempt = ZnunyTicketCreationAttempt::first();
+        $this->assertEquals(ZnunyTicketCreationAttemptStatus::Uncertain, $attempt->status);
+    }
+
+    public function test_scheduled_processor_explicit_api_rejection_flows_through_as_failed()
+    {
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Test Task 4', 'queue_name' => 'IT', 'owner_id' => 1, 'customer_user_login' => 'testuser',
+            'subject' => 'Scheduled Check 4', 'body' => 'Body', 'cron_expression' => '* * * * *', 'enabled' => true,
+        ]);
+        Cache::forget('scheduled_tasks_consecutive_failures');
+        $run = ScheduledZnunyTaskRun::create([
+            'scheduled_znuny_task_id' => $task->id, 'task_name_snapshot' => $task->name, 'run_type' => 'scheduled',
+            'scheduled_for' => now(), 'status' => 'pending', 'started_at' => now(),
+        ]);
+
+        $mockClient = $this->createMock(ZnunyClient::class);
+        $mockClient->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID']);
+
+        $mockClient->expects($this->once())
+            ->method('validateTicketCreate')
+            ->willReturn(['valid' => true]);
+
+        $mockClient->expects($this->once())
+            ->method('createTicket')
+            ->willReturn(['success' => false, 'errors' => ['API Rejection']]);
+
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        Setting::updateOrCreate(['key' => 'scheduled_tasks_enabled'], ['value' => 'true']);
+
+        $processor = app(ScheduledZnunyTaskRunProcessor::class);
+        $processor->processNextBatch(1, 60);
+
+        $run->refresh();
+        $task->refresh();
+
+        $this->assertEquals('failed', $run->status);
+
+        $attempt = ZnunyTicketCreationAttempt::first();
+        $this->assertEquals(ZnunyTicketCreationAttemptStatus::ConfirmedFailed, $attempt->status);
+
+        $this->assertEquals(1, Cache::get('scheduled_tasks_consecutive_failures'));
+        $this->assertEquals('true', Setting::where('key', 'scheduled_tasks_enabled')->value('value')); // scheduler remains enabled
+    }
+
+    public function test_zabbix_pre_flight_failure_returns_not_sent()
+    {
+        $mockClient = $this->createMock(ZnunyClient::class);
+        $mockClient->expects($this->once())->method('getCustomerUser')->willReturn(['found' => false]);
+        $mockClient->expects($this->never())->method('validateTicketCreate');
+        $mockClient->expects($this->never())->method('createTicket');
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        $service = app(ZnunyTicketCreationService::class);
+        $result = $service->createTicketForProblem('111', 'srv1', 'Down', 1, 'IT', 'testuser', 'Title', 'Subject', 'Body');
+
+        $this->assertFalse($result['success']);
+        $this->assertEquals(ZnunyTicketCreationClassification::NotSent->value, $result['classification']);
+        $this->assertEquals(0, ZnunyTicketCreationAttempt::count());
+    }
+
+    public function test_zabbix_explicit_api_rejection_returns_confirmed_failed()
+    {
+        $mockClient = $this->createMock(ZnunyClient::class);
+        $mockClient->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID']);
+
+        $mockClient->expects($this->once())
+            ->method('validateTicketCreate')
+            ->willReturn(['valid' => true]);
+
+        $mockClient->expects($this->once())
+            ->method('createTicket')
+            ->willReturn(['success' => false, 'errors' => 'Queue is invalid']);
+
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        $service = app(ZnunyTicketCreationService::class);
+        $result = $service->createTicketForProblem('111', 'srv1', 'Down', 1, 'IT', 'testuser', 'Title', 'Subject', 'Body');
+
+        $this->assertFalse($result['success']);
+        $this->assertEquals(ZnunyTicketCreationClassification::ConfirmedFailed->value, $result['classification']);
+        $this->assertEquals(['Queue is invalid'], $result['errors']);
+        $this->assertNull($result['ticket_id']);
+
+        $this->assertSame(0, ZabbixTicket::count());
+
+        $attempt = ZnunyTicketCreationAttempt::first();
+        $this->assertEquals(ZnunyTicketCreationAttemptStatus::ConfirmedFailed, $attempt->status);
+        $this->assertStringContainsString('Queue is invalid', $attempt->error_details);
+    }
+
+    public function test_zabbix_explicit_api_rejection_with_nested_errors_sanitizes_and_normalizes()
+    {
+        $mockClient = $this->createMock(ZnunyClient::class);
+        $mockClient->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID']);
+        $mockClient->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
+        $mockClient->expects($this->once())->method('createTicket')->willReturn([
+            'success' => false,
+            'errors' => [
+                'Error' => [
+                    'Message' => 'Nested rejection',
+                    'Token' => 'my-secret',
+                ],
+            ],
+        ]);
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        $service = app(ZnunyTicketCreationService::class);
+        $result = $service->createTicketForProblem('111', 'srv1', 'Down', 1, 'IT', 'testuser', 'Title', 'Subject', 'Body');
+
+        $this->assertFalse($result['success']);
+        $this->assertEquals(ZnunyTicketCreationClassification::ConfirmedFailed->value, $result['classification']);
+        $this->assertEquals(['Nested rejection', '[REDACTED]'], $result['errors']);
+
+        $attempt = ZnunyTicketCreationAttempt::first();
+        $this->assertEquals(ZnunyTicketCreationAttemptStatus::ConfirmedFailed, $attempt->status);
+        $this->assertStringContainsString('Nested rejection', $attempt->error_details);
+        $this->assertStringNotContainsString('my-secret', $attempt->error_details);
     }
 }

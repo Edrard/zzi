@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\ZnunyTicketCreationClassification;
 use App\Models\ScheduledZnunyTask;
 use App\Services\Znuny\ScheduledTicketCreationOutcome;
 use App\Services\Znuny\ZnunyClient;
@@ -16,6 +17,7 @@ class ScheduledZnunyTicketCreationService
     public function createTicketFromTask(ScheduledZnunyTask $task, string|int $runId): array
     {
         $result = [
+            'classification' => 'not_sent',
             'outcome' => ScheduledTicketCreationOutcome::NOT_SENT,
             'ticket_id' => null,
             'ticket_number' => null,
@@ -103,17 +105,21 @@ class ScheduledZnunyTicketCreationService
 
             $validation = $this->client->validateTicketCreate($validationPayload);
             if (! $validation['valid']) {
-                $result['outcome'] = ScheduledTicketCreationOutcome::FAILED;
+                $reliability = app(ZnunyTicketCreationReliabilityService::class);
+                $result['classification'] = ZnunyTicketCreationClassification::NotSent->value;
+                $result['outcome'] = ScheduledTicketCreationOutcome::NOT_SENT;
                 $result['error_summary'] = 'Znuny ticket validation failed.';
-                $result['error_details'] = json_encode($validation['errors'] ?? []);
-                $result['response_snapshot'] = $this->sanitizeResponse($validation);
+                $result['error_details'] = $reliability->safeJsonEncode($reliability->normalizedSanitizedField($validation, 'errors'));
+                $result['response_snapshot'] = $reliability->sanitizedResponse($validation);
 
                 return $result;
             }
         } catch (Throwable $e) {
+            $reliability = app(ZnunyTicketCreationReliabilityService::class);
+            $sanitizedMessage = $reliability->sanitizeExceptionMessage($e->getMessage());
             $result['outcome'] = ScheduledTicketCreationOutcome::NOT_SENT;
-            $result['error_summary'] = 'Pre-flight check failed: '.substr($e->getMessage(), 0, 150);
-            $result['error_details'] = $e->getMessage()."\n".$e->getTraceAsString();
+            $result['error_summary'] = 'Pre-flight check failed: '.substr($sanitizedMessage, 0, 150);
+            $result['error_details'] = get_class($e).': '.substr($sanitizedMessage, 0, 150);
 
             return $result;
         }
@@ -168,41 +174,36 @@ class ScheduledZnunyTicketCreationService
         try {
             $reliability->recordApiStart($attempt);
             $apiResult = $this->client->createTicket($payload);
-            $result['response_snapshot'] = $this->sanitizeResponse($apiResult['raw'] ?? $apiResult);
-
-            if (($apiResult['success'] ?? false) === true && ! empty($apiResult['ticket_id']) && ! empty($apiResult['ticket_number'])) {
-                $reliability->recordApiSuccess($attempt, $apiResult);
-                $result['outcome'] = ScheduledTicketCreationOutcome::SUCCESS;
-                $result['ticket_id'] = $apiResult['ticket_id'];
-                $result['ticket_number'] = $apiResult['ticket_number'];
-            } else {
-                $reliability->recordApiUncertain($attempt, $apiResult, 'Znuny API returned success false or missing ID/Number.', json_encode($apiResult['errors'] ?? []));
-                $result['outcome'] = ScheduledTicketCreationOutcome::UNCERTAIN;
-                $result['error_summary'] = 'Znuny API returned success false or missing ID/Number.';
-                $result['error_details'] = json_encode($apiResult['errors'] ?? []);
-            }
         } catch (Throwable $e) {
-            $reliability->recordApiException($attempt, $e);
+            $classification = $reliability->recordApiException($attempt, $e);
+            $sanitizedMessage = $reliability->sanitizeExceptionMessage($e->getMessage());
+            $boundedMessage = substr($sanitizedMessage, 0, 150);
+            $result['classification'] = $classification->value;
             $result['outcome'] = ScheduledTicketCreationOutcome::UNCERTAIN;
-            $result['error_summary'] = 'Exception during ticket creation HTTP request: '.substr($e->getMessage(), 0, 150);
-            $result['error_details'] = $e->getMessage()."\n".$e->getTraceAsString();
+            $result['error_summary'] = 'Exception during ticket creation HTTP request: '.$boundedMessage;
+            $result['error_details'] = get_class($e).': '.$boundedMessage;
+
+            return $result;
+        }
+
+        $classification = $reliability->recordApiResult($attempt, $apiResult);
+        $result['classification'] = $classification->value;
+        $result['response_snapshot'] = $reliability->sanitizedResponse($apiResult['raw'] ?? $apiResult);
+
+        if ($classification === ZnunyTicketCreationClassification::Success) {
+            $result['outcome'] = ScheduledTicketCreationOutcome::SUCCESS;
+            $result['ticket_id'] = $apiResult['ticket_id'];
+            $result['ticket_number'] = $apiResult['ticket_number'];
+        } elseif ($classification === ZnunyTicketCreationClassification::ConfirmedFailed) {
+            $result['outcome'] = ScheduledTicketCreationOutcome::FAILED;
+            $result['error_summary'] = 'Znuny API explicitly rejected the request.';
+            $result['error_details'] = $reliability->buildSafeErrorDetails($apiResult, $classification);
+        } else {
+            $result['outcome'] = ScheduledTicketCreationOutcome::UNCERTAIN;
+            $result['error_summary'] = 'Znuny API returned an ambiguous or incomplete response.';
+            $result['error_details'] = $reliability->buildSafeErrorDetails($apiResult, $classification);
         }
 
         return $result;
-    }
-
-    private function sanitizeResponse(array $response): array
-    {
-        array_walk_recursive($response, function (&$value, $key) {
-            if (! is_string($key)) {
-                return;
-            }
-            $lowerKey = strtolower($key);
-            if (in_array($lowerKey, ['userlogin', 'password', 'token', 'sessionid', 'authorization'])) {
-                $value = '[REDACTED]';
-            }
-        });
-
-        return $response;
     }
 }
