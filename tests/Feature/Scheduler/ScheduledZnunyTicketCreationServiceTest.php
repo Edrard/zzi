@@ -45,6 +45,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
             // queue_name, owner_id, customer_user_login missing
         ]);
 
+        $this->defaultsMock->expects($this->never())->method('getDefaults');
         $this->clientMock->expects($this->never())->method('createTicket');
 
         $result = $this->service->createTicketFromTask($task, 999);
@@ -64,6 +65,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
             // subject, body missing
         ]);
 
+        $this->defaultsMock->expects($this->never())->method('getDefaults');
         $this->clientMock->expects($this->never())->method('createTicket');
 
         $result = $this->service->createTicketFromTask($task, 999);
@@ -89,6 +91,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
             ->with('user1')
             ->willReturn(['found' => false]);
 
+        $this->defaultsMock->expects($this->never())->method('getDefaults');
         $this->clientMock->expects($this->never())->method('createTicket');
 
         $result = $this->service->createTicketFromTask($task, 999);
@@ -110,7 +113,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
         ]);
 
         $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
-        $this->defaultsMock->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
 
         $this->clientMock->expects($this->once())
             ->method('validateTicketCreate')
@@ -139,7 +142,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
         ]);
 
         $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
-        $this->defaultsMock->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
 
         $this->clientMock->expects($this->once())
             ->method('validateTicketCreate')
@@ -166,7 +169,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
         ]);
 
         $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
-        $this->defaultsMock->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
         $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
 
         $this->clientMock->expects($this->once())
@@ -208,7 +211,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
         ]);
 
         $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
-        $this->defaultsMock->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
         $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
 
         $this->clientMock->expects($this->once())
@@ -236,7 +239,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
         ]);
 
         $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
-        $this->defaultsMock->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
         $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
 
         $this->clientMock->expects($this->once())
@@ -263,7 +266,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
         ]);
 
         $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
-        $this->defaultsMock->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
         $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
 
         $this->clientMock->expects($this->once())

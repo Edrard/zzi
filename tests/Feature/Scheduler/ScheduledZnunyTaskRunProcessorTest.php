@@ -71,6 +71,9 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
                 'response_snapshot' => ['raw' => 'sanitized_success'],
             ]);
 
+        $this->mailServiceMock->expects($this->never())->method('sendWarning');
+        $this->mailServiceMock->expects($this->never())->method('sendAlarm');
+
         $processor = app(ScheduledZnunyTaskRunProcessor::class);
         $processor->processNextBatch(1, 10);
 
