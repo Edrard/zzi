@@ -6,13 +6,14 @@ use App\Models\ScheduledZnunyTask;
 use App\Services\Znuny\ScheduledTicketCreationOutcome;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketAdvancedDefaultsService;
+use App\Services\Znuny\ZnunyTicketCreationReliabilityService;
 use Throwable;
 
 class ScheduledZnunyTicketCreationService
 {
     public function __construct(private ZnunyClient $client, private ZnunyTicketAdvancedDefaultsService $defaultsService) {}
 
-    public function createTicketFromTask(ScheduledZnunyTask $task): array
+    public function createTicketFromTask(ScheduledZnunyTask $task, string|int $runId): array
     {
         $result = [
             'outcome' => ScheduledTicketCreationOutcome::NOT_SENT,
@@ -151,20 +152,37 @@ class ScheduledZnunyTicketCreationService
             ],
         ];
 
+        $reliability = app(ZnunyTicketCreationReliabilityService::class);
+        $attempt = $reliability->applyMarkerAndCreateAttempt(
+            'scheduled_run',
+            $runId,
+            $title, // Original subject
+            $payload,
+            null // Created by is null for scheduler
+        );
+
+        // Update the payload from the reliability service which applied the marked subject
+        // For the result, we also need to return the modified payload so it can be saved in the run's payload_snapshot
+        $result['payload_snapshot'] = $payload;
+
         try {
+            $reliability->recordApiStart($attempt);
             $apiResult = $this->client->createTicket($payload);
             $result['response_snapshot'] = $this->sanitizeResponse($apiResult['raw'] ?? $apiResult);
 
-            if ($apiResult['success'] === true && ! empty($apiResult['ticket_id']) && ! empty($apiResult['ticket_number'])) {
+            if (($apiResult['success'] ?? false) === true && ! empty($apiResult['ticket_id']) && ! empty($apiResult['ticket_number'])) {
+                $reliability->recordApiSuccess($attempt, $apiResult);
                 $result['outcome'] = ScheduledTicketCreationOutcome::SUCCESS;
                 $result['ticket_id'] = $apiResult['ticket_id'];
                 $result['ticket_number'] = $apiResult['ticket_number'];
             } else {
-                $result['outcome'] = ScheduledTicketCreationOutcome::FAILED;
+                $reliability->recordApiUncertain($attempt, $apiResult, 'Znuny API returned success false or missing ID/Number.', json_encode($apiResult['errors'] ?? []));
+                $result['outcome'] = ScheduledTicketCreationOutcome::UNCERTAIN;
                 $result['error_summary'] = 'Znuny API returned success false or missing ID/Number.';
                 $result['error_details'] = json_encode($apiResult['errors'] ?? []);
             }
         } catch (Throwable $e) {
+            $reliability->recordApiException($attempt, $e);
             $result['outcome'] = ScheduledTicketCreationOutcome::UNCERTAIN;
             $result['error_summary'] = 'Exception during ticket creation HTTP request: '.substr($e->getMessage(), 0, 150);
             $result['error_details'] = $e->getMessage()."\n".$e->getTraceAsString();

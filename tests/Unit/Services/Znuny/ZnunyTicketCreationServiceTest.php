@@ -8,6 +8,7 @@ use App\Services\Znuny\ZabbixTicketLinkService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketAdvancedDefaultsService;
 use App\Services\Znuny\ZnunyTicketCreationService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Mockery\MockInterface;
@@ -15,6 +16,8 @@ use Tests\TestCase;
 
 class ZnunyTicketCreationServiceTest extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_validate_ticket_payload_success()
     {
         $clientMock = $this->mock(ZnunyClient::class);
@@ -341,8 +344,8 @@ class ZnunyTicketCreationServiceTest extends TestCase
                 && $payload['Ticket']['CustomerID'] === 'CUST_123'
                 && $payload['Ticket']['OwnerID'] === 10
                 && $payload['Ticket']['Queue'] === 'Q'
-                && $payload['Ticket']['Title'] === 'T'
-                && $payload['Article']['Subject'] === 'S'
+                && $payload['Ticket']['Title'] === 'T [ZBX:123]'
+                && $payload['Article']['Subject'] === 'T [ZBX:123]'
                 && $payload['Article']['Body'] === 'B'
                 && $payload['Article']['IsVisibleForCustomer'] === 1;
         }))->andReturn([
@@ -369,7 +372,6 @@ class ZnunyTicketCreationServiceTest extends TestCase
         $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $observationRecorderMock);
 
         $result = $service->createTicketForProblem('123', 'Host', 'Prob', 10, 'Q', 'CU', 'T', 'S', 'B');
-
         $this->assertTrue($result['success']);
         $this->assertEquals(55, $result['ticket_id']);
         $this->assertEquals('TN55', $result['ticket_number']);

@@ -295,9 +295,20 @@ class ZnunyTicketCreationService
 
             $payload = $this->buildCreatePayload($ownerId, $queue, $customerUser, $customerId, $title, $articleSubject, $articleBody);
 
+            $reliability = app(ZnunyTicketCreationReliabilityService::class);
+            $attempt = $reliability->applyMarkerAndCreateAttempt(
+                'zabbix_problem',
+                $eventId,
+                $title, // use $title as original subject since it's the main ticket title
+                $payload,
+                auth()->id() ?? null
+            );
+
             try {
+                $reliability->recordApiStart($attempt);
                 $createResponse = $this->client->createTicket($payload);
             } catch (\Throwable $e) {
+                $reliability->recordApiException($attempt, $e);
                 $result['errors'][] = $e->getMessage();
 
                 $this->auditLog('znuny.manual_ticket_create.failed', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, null, null, $result['errors'], [], false, false, false);
@@ -306,6 +317,7 @@ class ZnunyTicketCreationService
             }
 
             if (! $createResponse['success']) {
+                $reliability->recordApiUncertain($attempt, $createResponse, 'Znuny API returned success false.', json_encode($createResponse['errors'] ?? []));
                 $result['errors'] = $createResponse['errors'];
                 $result['warnings'] = $createResponse['warnings'] ?? [];
 
@@ -318,12 +330,15 @@ class ZnunyTicketCreationService
             $ticketNumber = $createResponse['ticket_number'];
 
             if (empty($ticketId) || empty($ticketNumber)) {
+                $reliability->recordApiUncertain($attempt, $createResponse, 'Ticket created but missing TicketID or TicketNumber in response.');
                 $result['errors'][] = 'Ticket created but missing TicketID or TicketNumber in response.';
 
                 $this->auditLog('znuny.manual_ticket_create.failed', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, null, null, $result['errors'], [], false, false, false);
 
                 return $result;
             }
+
+            $reliability->recordApiSuccess($attempt, $createResponse);
 
             try {
                 $this->linkService->create([

@@ -44,7 +44,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
 
         $this->clientMock->expects($this->never())->method('createTicket');
 
-        $result = $this->service->createTicketFromTask($task);
+        $result = $this->service->createTicketFromTask($task, 999);
 
         $this->assertEquals(ScheduledTicketCreationOutcome::NOT_SENT, $result['outcome']);
         $this->assertStringContainsString('Missing required Owner', $result['error_summary']);
@@ -63,7 +63,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
 
         $this->clientMock->expects($this->never())->method('createTicket');
 
-        $result = $this->service->createTicketFromTask($task);
+        $result = $this->service->createTicketFromTask($task, 999);
 
         $this->assertEquals(ScheduledTicketCreationOutcome::NOT_SENT, $result['outcome']);
         $this->assertStringContainsString('Ticket title and article body are required', $result['error_summary']);
@@ -88,7 +88,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
 
         $this->clientMock->expects($this->never())->method('createTicket');
 
-        $result = $this->service->createTicketFromTask($task);
+        $result = $this->service->createTicketFromTask($task, 999);
 
         $this->assertEquals(ScheduledTicketCreationOutcome::NOT_SENT, $result['outcome']);
         $this->assertStringContainsString('Failed to resolve CustomerUser', $result['error_summary']);
@@ -115,7 +115,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
 
         $this->clientMock->expects($this->never())->method('createTicket');
 
-        $result = $this->service->createTicketFromTask($task);
+        $result = $this->service->createTicketFromTask($task, 999);
 
         $this->assertEquals(ScheduledTicketCreationOutcome::FAILED, $result['outcome']);
         $this->assertStringContainsString('validation failed', $result['error_summary']);
@@ -142,7 +142,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
 
         $this->clientMock->expects($this->never())->method('createTicket');
 
-        $result = $this->service->createTicketFromTask($task);
+        $result = $this->service->createTicketFromTask($task, 999);
 
         $this->assertEquals(ScheduledTicketCreationOutcome::NOT_SENT, $result['outcome']);
         $this->assertStringContainsString('Pre-flight check failed: Network Error', $result['error_summary']);
@@ -181,7 +181,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
                 ],
             ]);
 
-        $result = $this->service->createTicketFromTask($task);
+        $result = $this->service->createTicketFromTask($task, 999);
 
         $this->assertEquals(ScheduledTicketCreationOutcome::SUCCESS, $result['outcome']);
         $this->assertEquals(42, $result['ticket_id']);
@@ -190,7 +190,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
         $this->assertEquals('safe_data', $result['response_snapshot']['Other']);
     }
 
-    public function test_create_ticket_false_returns_failed()
+    public function test_create_ticket_false_returns_uncertain()
     {
         $task = ScheduledZnunyTask::create([
             'name' => 'Test',
@@ -213,9 +213,9 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
                 'errors' => ['Something went wrong'],
             ]);
 
-        $result = $this->service->createTicketFromTask($task);
+        $result = $this->service->createTicketFromTask($task, 999);
 
-        $this->assertEquals(ScheduledTicketCreationOutcome::FAILED, $result['outcome']);
+        $this->assertEquals(ScheduledTicketCreationOutcome::UNCERTAIN, $result['outcome']);
         $this->assertStringContainsString('missing ID/Number', $result['error_summary']);
     }
 
@@ -239,7 +239,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
             ->method('createTicket')
             ->willThrowException(new Exception('Timeout Exception'));
 
-        $result = $this->service->createTicketFromTask($task);
+        $result = $this->service->createTicketFromTask($task, 999);
 
         $this->assertEquals(ScheduledTicketCreationOutcome::UNCERTAIN, $result['outcome']);
         $this->assertStringContainsString('Exception during ticket creation HTTP request: Timeout Exception', $result['error_summary']);
@@ -273,7 +273,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
                 'ticket_number' => 'TN42',
             ]);
 
-        $result = $this->service->createTicketFromTask($task);
+        $result = $this->service->createTicketFromTask($task, 999);
 
         $this->assertEquals(ScheduledTicketCreationOutcome::SUCCESS, $result['outcome']);
     }

@@ -67,7 +67,7 @@ class ScheduledZnunyTaskRunProcessor
                 throw new \Exception('Run is missing associated task.');
             }
 
-            $result = $this->ticketService->createTicketFromTask($task);
+            $result = $this->ticketService->createTicketFromTask($task, $run->id);
             $finishedAt = now('UTC');
             $durationMs = $startedAt->diffInMilliseconds($finishedAt);
 
@@ -80,6 +80,7 @@ class ScheduledZnunyTaskRunProcessor
                         'ticket_id' => $result['ticket_id'],
                         'ticket_number' => $result['ticket_number'],
                         'response_snapshot' => $result['response_snapshot'] ?? null,
+                        'payload_snapshot' => $result['payload_snapshot'] ?? null,
                         'error_summary' => null,
                         'error_details' => null,
                     ]);
@@ -105,6 +106,7 @@ class ScheduledZnunyTaskRunProcessor
                         'error_summary' => $result['error_summary'],
                         'error_details' => $result['error_details'],
                         'response_snapshot' => null,
+                        'payload_snapshot' => null,
                     ]);
 
                     $task->update([
@@ -127,6 +129,7 @@ class ScheduledZnunyTaskRunProcessor
                         'error_summary' => $result['error_summary'],
                         'error_details' => $result['error_details'],
                         'response_snapshot' => $result['response_snapshot'] ?? null,
+                        'payload_snapshot' => $result['payload_snapshot'] ?? null,
                     ]);
 
                     $task->update([
@@ -160,6 +163,7 @@ class ScheduledZnunyTaskRunProcessor
                         'error_summary' => $result['error_summary'],
                         'error_details' => $result['error_details'],
                         'response_snapshot' => $result['response_snapshot'] ?? null,
+                        'payload_snapshot' => $result['payload_snapshot'] ?? null,
                     ]);
 
                     $task->update([
