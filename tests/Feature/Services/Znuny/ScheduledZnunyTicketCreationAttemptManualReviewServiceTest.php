@@ -68,7 +68,7 @@ class ScheduledZnunyTicketCreationAttemptManualReviewServiceTest extends TestCas
         $this->cacheReaderMock = $this->createMock(ZnunyTicketWorkspaceCacheReader::class);
         $this->app->instance(ZnunyTicketWorkspaceCacheReader::class, $this->cacheReaderMock);
 
-        $this->consoleMock = $this->createMock(Kernel::class);
+        $this->consoleMock = $this->createStub(Kernel::class);
         $this->app->instance(Kernel::class, $this->consoleMock);
 
         $lookupService = new ScheduledZnunyTicketMarkerLookupService($this->cacheReaderMock);
@@ -88,6 +88,20 @@ class ScheduledZnunyTicketCreationAttemptManualReviewServiceTest extends TestCas
             'StateType' => $state,
             'Title' => $title,
         ];
+    }
+
+    private function configureActiveKernelMock(): void
+    {
+        $this->consoleMock = $this->createMock(Kernel::class);
+        $this->app->instance(Kernel::class, $this->consoleMock);
+
+        $lookupService = new ScheduledZnunyTicketMarkerLookupService($this->cacheReaderMock);
+        $refreshService = new ScheduledZnunyTicketMarkerRefreshLookupService($lookupService, $this->consoleMock);
+
+        $this->reviewService = new ScheduledZnunyTicketCreationAttemptManualReviewService(
+            $lookupService,
+            $refreshService
+        );
     }
 
     private function assertUnchangedState(): void
@@ -329,13 +343,12 @@ class ScheduledZnunyTicketCreationAttemptManualReviewServiceTest extends TestCas
             ->method('getTickets')
             ->willReturn([]);
 
-        $this->consoleMock->expects($this->never())->method('call');
-
         $result = $this->reviewService->inspect($this->attempt->id);
 
         $this->assertTrue($result['eligible']);
         $this->assertEquals(ScheduledZnunyTicketMarkerLookupStatus::NotFound, $result['lookup_status']);
         $this->assertFalse($result['refresh_attempted']);
+        $this->assertFalse($result['refresh_succeeded']);
 
         $this->assertUnchangedState();
     }
@@ -349,8 +362,6 @@ class ScheduledZnunyTicketCreationAttemptManualReviewServiceTest extends TestCas
                 $this->getTicketFixture(1, 'TN1', 'open', 'Title with marker_123 inside'),
             ]);
 
-        $this->consoleMock->expects($this->never())->method('call');
-
         $result = $this->reviewService->inspect($this->attempt->id);
 
         $this->assertTrue($result['eligible']);
@@ -359,6 +370,7 @@ class ScheduledZnunyTicketCreationAttemptManualReviewServiceTest extends TestCas
         $this->assertEquals(1, $result['matches'][0]['ticket_id']);
         $this->assertEquals('TN1', $result['matches'][0]['ticket_number']);
         $this->assertFalse($result['refresh_attempted']);
+        $this->assertFalse($result['refresh_succeeded']);
 
         $this->assertUnchangedState();
     }
@@ -373,14 +385,13 @@ class ScheduledZnunyTicketCreationAttemptManualReviewServiceTest extends TestCas
                 $this->getTicketFixture(2, 'TN2', 'open', 'Another title with marker_123 inside'),
             ]);
 
-        $this->consoleMock->expects($this->never())->method('call');
-
         $result = $this->reviewService->inspect($this->attempt->id);
 
         $this->assertTrue($result['eligible']);
         $this->assertEquals(ScheduledZnunyTicketMarkerLookupStatus::Multiple, $result['lookup_status']);
         $this->assertCount(2, $result['matches']);
         $this->assertFalse($result['refresh_attempted']);
+        $this->assertFalse($result['refresh_succeeded']);
     }
 
     // 16. local inspect() returns Unavailable
@@ -390,13 +401,12 @@ class ScheduledZnunyTicketCreationAttemptManualReviewServiceTest extends TestCas
             ->method('getTickets')
             ->willThrowException(new \Exception('Cache error'));
 
-        $this->consoleMock->expects($this->never())->method('call');
-
         $result = $this->reviewService->inspect($this->attempt->id);
 
         $this->assertTrue($result['eligible']);
         $this->assertEquals(ScheduledZnunyTicketMarkerLookupStatus::Unavailable, $result['lookup_status']);
         $this->assertFalse($result['refresh_attempted']);
+        $this->assertFalse($result['refresh_succeeded']);
     }
 
     // 17. recheck() with immediate Found does not warm
@@ -408,13 +418,12 @@ class ScheduledZnunyTicketCreationAttemptManualReviewServiceTest extends TestCas
                 $this->getTicketFixture(1, 'TN1', 'open', 'Title with marker_123 inside'),
             ]);
 
-        $this->consoleMock->expects($this->never())->method('call');
-
         $result = $this->reviewService->recheck($this->attempt->id);
 
         $this->assertTrue($result['eligible']);
         $this->assertEquals(ScheduledZnunyTicketMarkerLookupStatus::Found, $result['lookup_status']);
         $this->assertFalse($result['refresh_attempted']);
+        $this->assertFalse($result['refresh_succeeded']);
 
         $this->assertUnchangedState();
     }
@@ -422,6 +431,8 @@ class ScheduledZnunyTicketCreationAttemptManualReviewServiceTest extends TestCas
     // 18. recheck() with NotFound warms once and finds a ticket
     public function test_recheck_not_found_warms_and_finds_ticket()
     {
+        $this->configureActiveKernelMock();
+
         $this->cacheReaderMock->expects($this->exactly(2))
             ->method('getTickets')
             ->willReturnOnConsecutiveCalls(
@@ -448,6 +459,8 @@ class ScheduledZnunyTicketCreationAttemptManualReviewServiceTest extends TestCas
     // 19. recheck() with NotFound warms once and remains NotFound
     public function test_recheck_not_found_warms_and_remains_not_found()
     {
+        $this->configureActiveKernelMock();
+
         $this->cacheReaderMock->expects($this->exactly(2))
             ->method('getTickets')
             ->willReturnOnConsecutiveCalls([], []);
@@ -469,6 +482,8 @@ class ScheduledZnunyTicketCreationAttemptManualReviewServiceTest extends TestCas
     // 20. recheck() with refresh failure returns Unavailable
     public function test_recheck_with_refresh_failure_returns_unavailable()
     {
+        $this->configureActiveKernelMock();
+
         $this->cacheReaderMock->expects($this->once())
             ->method('getTickets')
             ->willReturn([]);
