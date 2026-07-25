@@ -7,13 +7,16 @@ use App\Services\Znuny\ScheduledTicketCreationOutcome;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
+use Illuminate\Support\Facades\DB;
+
 class ScheduledZnunyTaskRunProcessor
 {
     public function __construct(
         private SystemAlertService $alertService,
         private ScheduledZnunyTicketCreationService $ticketService,
         private SchedulerSafetyService $safetyService,
-        private MailNotificationService $mailService
+        private MailNotificationService $mailService,
+        private AuditLogger $auditLogger
     ) {}
 
     public function processNextBatch(int $limit, int $maxRuntimeSeconds): int
@@ -155,48 +158,114 @@ class ScheduledZnunyTaskRunProcessor
                     return true;
 
                 case ScheduledTicketCreationOutcome::UNCERTAIN:
-                    // The create request may have reached Znuny; mark uncertain and disable scheduler to prevent duplicate tickets.
-                    $runUpdate = [
-                        'status' => 'uncertain',
-                        'finished_at' => $finishedAt->toDateTimeString(),
-                        'duration_ms' => $durationMs,
-                        'error_summary' => $result['error_summary'],
-                        'error_details' => $result['error_details'],
-                        'response_snapshot' => $result['response_snapshot'] ?? null,
-                        'payload_snapshot' => $result['payload_snapshot'] ?? null,
-                    ];
+                    $postCommitContext = null;
 
-                    $taskUpdate = [
-                        'last_run_at' => $finishedAt->toDateTimeString(),
-                        'last_failure_at' => $finishedAt->toDateTimeString(),
-                        'last_status' => 'uncertain',
-                        'last_error_summary' => $result['error_summary'],
-                    ];
+                    $processorResult = DB::transaction(function () use ($run, $task, $result, $finishedAt, $durationMs, &$postCommitContext) {
+                        $lockedRun = ScheduledZnunyTaskRun::whereKey($run->id)->lockForUpdate()->first();
 
-                    if (array_key_exists('ticket_id', $result) && $result['ticket_id'] !== null) {
-                        $runUpdate['ticket_id'] = $result['ticket_id'];
-                        $taskUpdate['last_ticket_id'] = $result['ticket_id'];
+                        if (!$lockedRun || in_array($lockedRun->status, ['uncertain', 'success', 'failed'])) {
+                            return false;
+                        }
+
+                        // The create request may have reached Znuny; mark uncertain and disable scheduler to prevent duplicate tickets.
+                        $runUpdate = [
+                            'status' => 'uncertain',
+                            'finished_at' => $finishedAt->toDateTimeString(),
+                            'duration_ms' => $durationMs,
+                            'error_summary' => $result['error_summary'],
+                            'error_details' => $result['error_details'] ?? '',
+                            'response_snapshot' => $result['response_snapshot'] ?? null,
+                            'payload_snapshot' => $result['payload_snapshot'] ?? null,
+                        ];
+
+                        $taskUpdate = [
+                            'last_run_at' => $finishedAt->toDateTimeString(),
+                            'last_failure_at' => $finishedAt->toDateTimeString(),
+                            'last_status' => 'uncertain',
+                            'last_error_summary' => $result['error_summary'],
+                        ];
+
+                        if (array_key_exists('ticket_id', $result) && $result['ticket_id'] !== null) {
+                            $runUpdate['ticket_id'] = $result['ticket_id'];
+                            $taskUpdate['last_ticket_id'] = $result['ticket_id'];
+                        }
+
+                        if (array_key_exists('ticket_number', $result) && $result['ticket_number'] !== null && trim((string) $result['ticket_number']) !== '') {
+                            $runUpdate['ticket_number'] = $result['ticket_number'];
+                            $taskUpdate['last_ticket_number'] = $result['ticket_number'];
+                        }
+
+                        $lockedRun->update($runUpdate);
+                        $task->update($taskUpdate);
+
+                        $reason = 'Uncertain outcome from Znuny API: '.$result['error_summary'];
+                        $this->safetyService->disableScheduler($reason);
+
+                        $postCommitContext = [
+                            'attempt_id' => $result['attempt_id'] ?? null,
+                            'ticket_id' => $result['ticket_id'] ?? null,
+                            'ticket_number' => $result['ticket_number'] ?? null,
+                            'error_summary' => $result['error_summary'],
+                            'error_details' => $result['error_details'] ?? '',
+                        ];
+
+                        return false;
+                    });
+
+                    if ($postCommitContext !== null) {
+                        $reason = 'Uncertain outcome from Znuny API: '.$postCommitContext['error_summary'];
+
+                        try {
+                            $this->auditLogger->log(
+                                'scheduled_znuny_run_uncertain',
+                                'ScheduledZnunyTaskRun',
+                                $run->id,
+                                [
+                                    'task_id' => $run->scheduled_znuny_task_id,
+                                    'task_name' => $run->task_name_snapshot,
+                                    'attempt_id' => $postCommitContext['attempt_id'],
+                                    'ticket_id' => $postCommitContext['ticket_id'],
+                                    'ticket_number' => $postCommitContext['ticket_number'],
+                                    'reason' => mb_substr($reason, 0, 255),
+                                    'scheduler_disabled' => true,
+                                ]
+                            );
+                        } catch (\Throwable $e) {
+                            Log::error('Scheduled Znuny uncertain side effect failed: audit log; run ID ' . $run->id);
+                        }
+
+                        try {
+                            $this->alertService->danger(
+                                'scheduler',
+                                'Scheduler Disabled (Uncertain Outcome)',
+                                "Task '{$run->task_name_snapshot}' caused an uncertain outcome. To prevent duplicate tickets, the scheduler is immediately disabled. {$reason}"
+                            );
+                        } catch (\Throwable $e) {
+                            Log::error('Scheduled Znuny uncertain side effect failed: danger alert; run ID ' . $run->id);
+                        }
+
+                        try {
+                            $this->mailService->sendAlarm('Scheduler Disabled (Uncertain Outcome)', "Task '{$run->task_name_snapshot}' caused an uncertain outcome. The scheduler has been disabled immediately to prevent duplicate tickets.\nReason: {$reason}\nDetails:\n".$postCommitContext['error_details']);
+                        } catch (\Throwable $e) {
+                            Log::error('Scheduled Znuny uncertain side effect failed: mail alarm; run ID ' . $run->id);
+                        }
+
+                        try {
+                            $message = "Task '{$run->task_name_snapshot}' (Run ID: {$run->id}) requires manual review.\n";
+                            $message .= "The Znuny request outcome is uncertain.\n";
+                            $message .= "Automatic resending is blocked. The administrator must verify Znuny manually.\n";
+                            $message .= "Scheduler is currently disabled by the existing safety mechanism.\n";
+                            $message .= "Attempt ID: " . ($postCommitContext['attempt_id'] ?? 'None') . "\n";
+                            $message .= "Ticket ID: " . ($postCommitContext['ticket_id'] ?? 'None') . "\n";
+                            $message .= "Ticket Number: " . ($postCommitContext['ticket_number'] ?? 'None');
+
+                            $this->alertService->warning('scheduler', 'Scheduled Znuny ticket creation requires review', $message);
+                        } catch (\Throwable $e) {
+                            Log::error('Scheduled Znuny uncertain side effect failed: review warning; run ID ' . $run->id);
+                        }
                     }
 
-                    if (array_key_exists('ticket_number', $result) && $result['ticket_number'] !== null && trim((string) $result['ticket_number']) !== '') {
-                        $runUpdate['ticket_number'] = $result['ticket_number'];
-                        $taskUpdate['last_ticket_number'] = $result['ticket_number'];
-                    }
-
-                    $run->update($runUpdate);
-                    $task->update($taskUpdate);
-
-                    $reason = 'Uncertain outcome from Znuny API: '.$result['error_summary'];
-                    $this->safetyService->disableScheduler($reason);
-
-                    $this->alertService->danger(
-                        'scheduler',
-                        'Scheduler Disabled (Uncertain Outcome)',
-                        "Task '{$run->task_name_snapshot}' caused an uncertain outcome. To prevent duplicate tickets, the scheduler is immediately disabled. {$reason}"
-                    );
-                    $this->mailService->sendAlarm('Scheduler Disabled (Uncertain Outcome)', "Task '{$run->task_name_snapshot}' caused an uncertain outcome. The scheduler has been disabled immediately to prevent duplicate tickets.\nReason: {$reason}\nDetails:\n".($result['error_details'] ?? ''));
-
-                    return false;
+                    return $processorResult;
             }
         } catch (\Throwable $e) {
             $finishedAt = now('UTC');

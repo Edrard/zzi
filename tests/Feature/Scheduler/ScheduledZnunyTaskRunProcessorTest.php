@@ -24,8 +24,6 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
 
     private ScheduledZnunyTicketCreationService $ticketServiceMock;
 
-    private MailNotificationService $mailServiceMock;
-
     protected function setUp(): void
     {
         parent::setUp();
@@ -49,11 +47,15 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
         $this->ticketServiceMock = $this->createMock(ScheduledZnunyTicketCreationService::class);
         $this->app->instance(ScheduledZnunyTicketCreationService::class, $this->ticketServiceMock);
 
-        $this->mailServiceMock = $this->createMock(MailNotificationService::class);
-        $this->app->instance(MailNotificationService::class, $this->mailServiceMock);
+        $mailServiceStub = $this->createStub(MailNotificationService::class);
+        $this->app->instance(MailNotificationService::class, $mailServiceStub);
+
+        $this->alertServiceStub = $this->createStub(\App\Services\SystemAlertService::class);
+        $this->app->instance(\App\Services\SystemAlertService::class, $this->alertServiceStub);
 
         Cache::forget('scheduled_tasks_consecutive_failures');
         app(SchedulerSafetyService::class)->enableScheduler();
+        \App\Services\SettingsService::clearAllCaches();
     }
 
     public function test_success_outcome_marks_run_and_task_as_success()
@@ -71,8 +73,7 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
                 'response_snapshot' => ['raw' => 'sanitized_success'],
             ]);
 
-        $this->mailServiceMock->expects($this->never())->method('sendWarning');
-        $this->mailServiceMock->expects($this->never())->method('sendAlarm');
+
 
         $processor = app(ScheduledZnunyTaskRunProcessor::class);
         $processor->processNextBatch(1, 10);
@@ -101,8 +102,7 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
                 'error_details' => 'Missing Queue',
             ]);
 
-        $this->mailServiceMock->expects($this->never())->method('sendWarning');
-        $this->mailServiceMock->expects($this->never())->method('sendAlarm');
+
 
         $processor = app(ScheduledZnunyTaskRunProcessor::class);
         $processor->processNextBatch(1, 10);
@@ -127,12 +127,14 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
                 'response_snapshot' => ['raw' => 'sanitized_error'],
             ]);
 
-        $this->mailServiceMock->expects($this->once())
+        $mailServiceMock = $this->createMock(MailNotificationService::class);
+        $mailServiceMock->expects($this->once())
             ->method('sendAlarm')
             ->with(
                 'Scheduler Disabled (Failure Threshold)',
                 $this->stringContains('API Error')
             );
+        $this->app->instance(MailNotificationService::class, $mailServiceMock);
 
         Cache::put('scheduled_tasks_consecutive_failures', 2);
         $processor = app(ScheduledZnunyTaskRunProcessor::class);
@@ -160,12 +162,14 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
                 'response_snapshot' => ['raw' => 'sanitized_uncertain'],
             ]);
 
-        $this->mailServiceMock->expects($this->once())
+        $mailServiceMock = $this->createMock(MailNotificationService::class);
+        $mailServiceMock->expects($this->once())
             ->method('sendAlarm')
             ->with(
                 'Scheduler Disabled (Uncertain Outcome)',
                 $this->stringContains('Connection dropped after payload sent')
             );
+        $this->app->instance(MailNotificationService::class, $mailServiceMock);
 
         $processor = app(ScheduledZnunyTaskRunProcessor::class);
         $processor->processNextBatch(1, 10);
@@ -195,7 +199,7 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
                 'error_details' => null,
             ]);
 
-        $this->mailServiceMock->expects($this->never())->method('sendAlarm');
+
 
         $processor = app(ScheduledZnunyTaskRunProcessor::class);
         $processor->processNextBatch(1, 10);
@@ -218,7 +222,7 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
                 'ticket_number' => 'TN124',
             ]);
 
-        $this->mailServiceMock->expects($this->never())->method('sendAlarm');
+
 
         $processor = app(ScheduledZnunyTaskRunProcessor::class);
         $processor->processNextBatch(1, 10);
@@ -243,7 +247,7 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
                 'ticket_number' => 'TN125',
             ]);
 
-        $this->mailServiceMock->expects($this->never())->method('sendAlarm');
+
 
         $processor = app(ScheduledZnunyTaskRunProcessor::class);
         $processor->processNextBatch(1, 10);
@@ -270,12 +274,14 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
                 'error_details' => 'Blocked reason',
             ]);
 
-        $this->mailServiceMock->expects($this->once())
+        $mailServiceMock = $this->createMock(MailNotificationService::class);
+        $mailServiceMock->expects($this->once())
             ->method('sendAlarm')
             ->with(
                 'Scheduler Disabled (Uncertain Outcome)',
                 $this->stringContains('Duplicate blocked')
             );
+        $this->app->instance(MailNotificationService::class, $mailServiceMock);
 
         $processor = app(ScheduledZnunyTaskRunProcessor::class);
         $processor->processNextBatch(1, 10);
@@ -306,7 +312,7 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
                 // duplicate, recovered, attempt_id omitted
             ]);
 
-        $this->mailServiceMock->expects($this->never())->method('sendAlarm');
+
 
         $processor = app(ScheduledZnunyTaskRunProcessor::class);
         $processor->processNextBatch(1, 10);
@@ -314,5 +320,311 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
         $this->run->refresh();
         $this->assertEquals('success', $this->run->status);
         $this->assertEquals(127, $this->run->ticket_id);
+    }
+
+    public function test_newly_unresolved_uncertain_run()
+    {
+        $this->ticketServiceMock->expects($this->once())
+            ->method("createTicketFromTask")
+            ->willReturn([
+                "outcome" => ScheduledTicketCreationOutcome::UNCERTAIN,
+                "error_summary" => "Uncertain error",
+                "error_details" => "Uncertain details",
+            ]);
+
+        $alertServiceMock = $this->createMock(\App\Services\SystemAlertService::class);
+        $alertServiceMock->expects($this->once())->method("danger");
+        $alertServiceMock->expects($this->once())
+            ->method("warning")
+            ->with("scheduler", "Scheduled Znuny ticket creation requires review", $this->callback(function ($msg) {
+                return str_contains($msg, "requires manual review") && str_contains($msg, $this->task->name);
+            }));
+        $this->app->instance(\App\Services\SystemAlertService::class, $alertServiceMock);
+
+        $processor = app(ScheduledZnunyTaskRunProcessor::class);
+        $result = $processor->processNextBatch(1, 10);
+
+        $this->assertEquals(1, $result);
+
+        $this->run->refresh();
+        $this->assertEquals("uncertain", $this->run->status);
+        $this->assertEquals("Uncertain error", $this->run->error_summary);
+
+        $this->assertFalse(app(SchedulerSafetyService::class)->isSchedulerEnabled());
+        $this->assertDatabaseHas("audit_logs", ["action" => "scheduled_znuny_run_uncertain", "entity_id" => $this->run->id]);
+    }
+
+    public function test_uncertain_with_available_identifiers()
+    {
+        $this->ticketServiceMock->expects($this->once())
+            ->method("createTicketFromTask")
+            ->willReturn([
+                "outcome" => ScheduledTicketCreationOutcome::UNCERTAIN,
+                "error_summary" => "Uncertain error",
+                "ticket_id" => 999,
+                "ticket_number" => "TN999",
+            ]);
+
+        $alertServiceMock = $this->createMock(\App\Services\SystemAlertService::class);
+        $alertServiceMock->expects($this->once())->method("danger");
+        $alertServiceMock->expects($this->once())->method("warning")
+            ->with($this->anything(), $this->anything(), $this->callback(function ($msg) {
+                return str_contains($msg, "999") && str_contains($msg, "TN999");
+            }));
+        $this->app->instance(\App\Services\SystemAlertService::class, $alertServiceMock);
+
+        app(ScheduledZnunyTaskRunProcessor::class)->processNextBatch(1, 10);
+
+        $this->run->refresh();
+        $this->assertEquals(999, $this->run->ticket_id);
+        $this->assertEquals("TN999", $this->run->ticket_number);
+        $this->task->refresh();
+        $this->assertEquals(999, $this->task->last_ticket_id);
+        $this->assertDatabaseHas("audit_logs", ["action" => "scheduled_znuny_run_uncertain", "entity_id" => $this->run->id]);
+    }
+
+    public function test_uncertain_with_missing_identifiers_preserves_task_identifiers()
+    {
+        $this->task->update([
+            "last_ticket_id" => 111,
+            "last_ticket_number" => "TN111",
+        ]);
+
+        $this->ticketServiceMock->expects($this->once())
+            ->method("createTicketFromTask")
+            ->willReturn([
+                "outcome" => ScheduledTicketCreationOutcome::UNCERTAIN,
+                "error_summary" => "Uncertain error",
+                "ticket_id" => null,
+                "ticket_number" => "",
+            ]);
+
+        $alertServiceMock = $this->createMock(\App\Services\SystemAlertService::class);
+        $alertServiceMock->expects($this->once())->method("danger");
+        $alertServiceMock->expects($this->once())->method("warning")
+            ->with($this->anything(), $this->anything(), $this->callback(function ($msg) {
+                return str_contains($msg, "None");
+            }));
+        $this->app->instance(\App\Services\SystemAlertService::class, $alertServiceMock);
+
+        app(ScheduledZnunyTaskRunProcessor::class)->processNextBatch(1, 10);
+
+        $this->task->refresh();
+        $this->assertEquals(111, $this->task->last_ticket_id);
+        $this->assertEquals("TN111", $this->task->last_ticket_number);
+        $this->assertDatabaseHas("audit_logs", ["action" => "scheduled_znuny_run_uncertain", "entity_id" => $this->run->id]);
+    }
+
+    public function test_already_uncertain_run_does_not_emit_side_effects()
+    {
+        $this->run->update(["status" => "uncertain"]);
+
+        $this->ticketServiceMock->expects($this->never())->method("createTicketFromTask");
+
+        $processor = app(ScheduledZnunyTaskRunProcessor::class);
+        $result = $processor->processNextBatch(1, 10);
+
+        $this->assertEquals(0, $result);
+
+        $this->run->refresh();
+        $this->assertEquals("uncertain", $this->run->status);
+        $this->assertDatabaseMissing("audit_logs", ["action" => "scheduled_znuny_run_uncertain", "entity_id" => $this->run->id]);
+    }
+
+    public function test_recovered_success_does_not_emit_uncertain_events()
+    {
+        $this->ticketServiceMock->expects($this->once())
+            ->method("createTicketFromTask")
+            ->willReturn([
+                "outcome" => ScheduledTicketCreationOutcome::SUCCESS,
+                "recovered" => true,
+                "ticket_id" => 777,
+                "ticket_number" => "TN777",
+            ]);
+
+        $alertServiceMock = $this->createMock(\App\Services\SystemAlertService::class);
+        $alertServiceMock->expects($this->never())->method("warning");
+        $this->app->instance(\App\Services\SystemAlertService::class, $alertServiceMock);
+
+        app(ScheduledZnunyTaskRunProcessor::class)->processNextBatch(1, 10);
+
+        $this->run->refresh();
+        $this->assertEquals("success", $this->run->status);
+        $this->assertEquals(777, $this->run->ticket_id);
+        $this->assertDatabaseMissing("audit_logs", ["action" => "scheduled_znuny_run_uncertain", "entity_id" => $this->run->id]);
+    }
+
+    public function test_confirmed_failure_does_not_emit_uncertain_events()
+    {
+        $this->ticketServiceMock->expects($this->once())
+            ->method("createTicketFromTask")
+            ->willReturn([
+                "outcome" => ScheduledTicketCreationOutcome::FAILED,
+                "error_summary" => "failed",
+            ]);
+
+        $alertServiceMock = $this->createMock(\App\Services\SystemAlertService::class);
+        $alertServiceMock->expects($this->never())->method("warning");
+        $this->app->instance(\App\Services\SystemAlertService::class, $alertServiceMock);
+
+        app(ScheduledZnunyTaskRunProcessor::class)->processNextBatch(1, 10);
+
+        $this->run->refresh();
+        $this->assertEquals("failed", $this->run->status);
+        $this->assertDatabaseMissing("audit_logs", ["action" => "scheduled_znuny_run_uncertain", "entity_id" => $this->run->id]);
+    }
+
+    public function test_audit_log_failure_does_not_prevent_notification_or_change_status()
+    {
+        $this->ticketServiceMock->expects($this->once())
+            ->method("createTicketFromTask")
+            ->willReturn([
+                "outcome" => ScheduledTicketCreationOutcome::UNCERTAIN,
+                "error_summary" => "error",
+            ]);
+
+        \App\Models\AuditLog::creating(function () {
+            throw new \Exception("postgres://admin:secret@example.internal token=abc123");
+        });
+
+        $alertServiceMock = $this->createMock(\App\Services\SystemAlertService::class);
+        $alertServiceMock->expects($this->once())->method("danger");
+        $alertServiceMock->expects($this->once())->method("warning");
+        $this->app->instance(\App\Services\SystemAlertService::class, $alertServiceMock);
+
+        $mailServiceMock = $this->createMock(MailNotificationService::class);
+        $mailServiceMock->expects($this->once())->method('sendAlarm');
+        $this->app->instance(MailNotificationService::class, $mailServiceMock);
+
+        app(ScheduledZnunyTaskRunProcessor::class)->processNextBatch(1, 10);
+
+        $this->run->refresh();
+        $this->assertEquals("uncertain", $this->run->status);
+        $this->assertEquals("error", $this->run->error_summary);
+        $this->assertStringNotContainsString("postgres", $this->run->error_details ?? "");
+        $this->assertStringNotContainsString("abc123", $this->run->error_details ?? "");
+    }
+
+    public function test_danger_alert_failure_does_not_prevent_other_side_effects()
+    {
+        $this->ticketServiceMock->expects($this->once())
+            ->method("createTicketFromTask")
+            ->willReturn([
+                "outcome" => ScheduledTicketCreationOutcome::UNCERTAIN,
+                "error_summary" => "error",
+            ]);
+
+        $alertServiceMock = $this->createMock(\App\Services\SystemAlertService::class);
+        $alertServiceMock->expects($this->once())
+            ->method("danger")
+            ->willThrowException(new \Exception("postgres://admin:secret@example.internal token=abc123"));
+        $alertServiceMock->expects($this->once())->method("warning");
+        $this->app->instance(\App\Services\SystemAlertService::class, $alertServiceMock);
+
+        $mailServiceMock = $this->createMock(MailNotificationService::class);
+        $mailServiceMock->expects($this->once())->method('sendAlarm');
+        $this->app->instance(MailNotificationService::class, $mailServiceMock);
+
+        app(ScheduledZnunyTaskRunProcessor::class)->processNextBatch(1, 10);
+
+        $this->run->refresh();
+        $this->assertEquals("uncertain", $this->run->status);
+        $this->assertStringNotContainsString("postgres", $this->run->error_details ?? "");
+        $this->assertDatabaseHas("audit_logs", ["action" => "scheduled_znuny_run_uncertain", "entity_id" => $this->run->id]);
+    }
+
+    public function test_mail_alarm_failure_does_not_prevent_other_side_effects()
+    {
+        $this->ticketServiceMock->expects($this->once())
+            ->method("createTicketFromTask")
+            ->willReturn([
+                "outcome" => ScheduledTicketCreationOutcome::UNCERTAIN,
+                "error_summary" => "error",
+            ]);
+
+        $alertServiceMock = $this->createMock(\App\Services\SystemAlertService::class);
+        $alertServiceMock->expects($this->once())->method("danger");
+        $alertServiceMock->expects($this->once())->method("warning");
+        $this->app->instance(\App\Services\SystemAlertService::class, $alertServiceMock);
+
+        $mailServiceMock = $this->createMock(MailNotificationService::class);
+        $mailServiceMock->expects($this->once())
+            ->method('sendAlarm')
+            ->willThrowException(new \Exception("postgres://admin:secret@example.internal token=abc123"));
+        $this->app->instance(MailNotificationService::class, $mailServiceMock);
+
+        app(ScheduledZnunyTaskRunProcessor::class)->processNextBatch(1, 10);
+
+        $this->run->refresh();
+        $this->assertEquals("uncertain", $this->run->status);
+        $this->assertStringNotContainsString("postgres", $this->run->error_details ?? "");
+        $this->assertDatabaseHas("audit_logs", ["action" => "scheduled_znuny_run_uncertain", "entity_id" => $this->run->id]);
+    }
+
+    public function test_notification_failure_does_not_prevent_audit_log_or_change_status()
+    {
+        $this->ticketServiceMock->expects($this->once())
+            ->method("createTicketFromTask")
+            ->willReturn([
+                "outcome" => ScheduledTicketCreationOutcome::UNCERTAIN,
+                "error_summary" => "error",
+            ]);
+
+        $alertServiceMock = $this->createMock(\App\Services\SystemAlertService::class);
+        $alertServiceMock->expects($this->once())->method("danger");
+        $alertServiceMock->expects($this->once())
+            ->method("warning")
+            ->willThrowException(new \Exception("postgres://admin:secret@example.internal token=abc123"));
+        $this->app->instance(\App\Services\SystemAlertService::class, $alertServiceMock);
+
+        $mailServiceMock = $this->createMock(MailNotificationService::class);
+        $mailServiceMock->expects($this->once())->method('sendAlarm');
+        $this->app->instance(MailNotificationService::class, $mailServiceMock);
+
+        app(ScheduledZnunyTaskRunProcessor::class)->processNextBatch(1, 10);
+
+        $this->run->refresh();
+        $this->assertEquals("uncertain", $this->run->status);
+        $this->assertStringNotContainsString("postgres", $this->run->error_details ?? "");
+        $this->assertDatabaseHas("audit_logs", ["action" => "scheduled_znuny_run_uncertain", "entity_id" => $this->run->id]);
+    }
+
+    public function test_repeat_invocation_maintains_status_without_duplicate_events()
+    {
+        $this->ticketServiceMock->expects($this->once())
+            ->method("createTicketFromTask")
+            ->willReturn([
+                "outcome" => ScheduledTicketCreationOutcome::UNCERTAIN,
+                "error_summary" => "error",
+            ]);
+
+        $alertServiceMock = $this->createMock(\App\Services\SystemAlertService::class);
+        $alertServiceMock->expects($this->once())->method("danger");
+        $alertServiceMock->expects($this->once())->method("warning");
+        $this->app->instance(\App\Services\SystemAlertService::class, $alertServiceMock);
+
+        $mailServiceMock = $this->createMock(MailNotificationService::class);
+        $mailServiceMock->expects($this->once())->method('sendAlarm');
+        $this->app->instance(MailNotificationService::class, $mailServiceMock);
+
+        $processor = app(ScheduledZnunyTaskRunProcessor::class);
+        $processor->processNextBatch(1, 10);
+
+        $this->run->refresh();
+        $this->assertEquals("uncertain", $this->run->status);
+
+        // Assert exactly one log exists
+        $this->assertEquals(1, \App\Models\AuditLog::where("action", "scheduled_znuny_run_uncertain")->where("entity_id", $this->run->id)->count());
+
+        app(SchedulerSafetyService::class)->enableScheduler();
+        \App\Services\SettingsService::clearAllCaches();
+
+        $result = $processor->processNextBatch(1, 10);
+
+        $this->assertEquals(0, $result);
+        $this->run->refresh();
+        $this->assertEquals("uncertain", $this->run->status);
+
+        $this->assertEquals(1, \App\Models\AuditLog::where("action", "scheduled_znuny_run_uncertain")->where("entity_id", $this->run->id)->count());
     }
 }
