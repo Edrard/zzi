@@ -13,6 +13,7 @@ use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketAdvancedDefaultsService;
 use App\Services\Znuny\ZnunyTicketCreationReliabilityService;
 use Illuminate\Support\Facades\DB;
+use App\Services\Znuny\ScheduledZnunyTicketCreationAttemptReconciliationService;
 use Throwable;
 
 class ScheduledZnunyTicketCreationService
@@ -20,7 +21,8 @@ class ScheduledZnunyTicketCreationService
     public function __construct(
         private ZnunyClient $client,
         private ZnunyTicketAdvancedDefaultsService $defaultsService,
-        private ScheduledZnunyTicketCreationDuplicateGuard $duplicateGuard
+        private ScheduledZnunyTicketCreationDuplicateGuard $duplicateGuard,
+        private ScheduledZnunyTicketCreationAttemptReconciliationService $attemptReconciliation
     ) {}
 
 
@@ -287,6 +289,10 @@ class ScheduledZnunyTicketCreationService
             $result['error_summary'] = 'Exception during ticket creation HTTP request: '.$boundedMessage;
             $result['error_details'] = get_class($e).': '.$boundedMessage;
 
+            if ($classification === ZnunyTicketCreationClassification::Uncertain) {
+                return $this->reconcileUncertainAttempt($result, $attempt->id);
+            }
+
             return $result;
         }
 
@@ -306,6 +312,38 @@ class ScheduledZnunyTicketCreationService
             $result['outcome'] = ScheduledTicketCreationOutcome::UNCERTAIN;
             $result['error_summary'] = 'Znuny API returned an ambiguous or incomplete response.';
             $result['error_details'] = $reliability->buildSafeErrorDetails($apiResult, $classification);
+            return $this->reconcileUncertainAttempt($result, $attempt->id);
+        }
+
+        return $result;
+    }
+
+    private function reconcileUncertainAttempt(array $result, int $attemptId): array
+    {
+        try {
+            $reconciliation = $this->attemptReconciliation->reconcile($attemptId);
+
+            if ($reconciliation['resolved']) {
+                $result['classification'] = 'success';
+                $result['outcome'] = ScheduledTicketCreationOutcome::SUCCESS;
+                $result['duplicate'] = false;
+                $result['recovered'] = true;
+                $result['ticket_id'] = $reconciliation['ticket_id'];
+                $result['ticket_number'] = $reconciliation['ticket_number'];
+                return $result;
+            }
+
+            if (!empty($reconciliation['reason'])) {
+                $result['error_summary'] = $reconciliation['reason'];
+            }
+            if (isset($reconciliation['ticket_id'])) {
+                $result['ticket_id'] = $reconciliation['ticket_id'];
+            }
+            if (isset($reconciliation['ticket_number'])) {
+                $result['ticket_number'] = $reconciliation['ticket_number'];
+            }
+        } catch (Throwable $e) {
+            $result['error_summary'] = 'Automatic reconciliation failed after an uncertain Znuny response.';
         }
 
         return $result;

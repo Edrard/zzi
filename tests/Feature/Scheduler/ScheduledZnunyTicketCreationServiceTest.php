@@ -31,12 +31,25 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
 
         $this->clientMock = $this->createMock(ZnunyClient::class);
         $this->defaultsMock = $this->createMock(ZnunyTicketAdvancedDefaultsService::class);
-        $duplicateGuard = new ScheduledZnunyTicketCreationDuplicateGuard();
 
-        $this->service = new ScheduledZnunyTicketCreationService(
+        $this->service = $this->buildService();
+    }
+
+    private function buildService($cacheReaderMock = null, $consoleMock = null): ScheduledZnunyTicketCreationService
+    {
+        $duplicateGuard = new ScheduledZnunyTicketCreationDuplicateGuard();
+        $reader = $cacheReaderMock ?? $this->createStub(\App\Services\Znuny\ZnunyTicketWorkspaceCacheReader::class);
+        $console = $consoleMock ?? $this->createStub(\Illuminate\Contracts\Console\Kernel::class);
+
+        $lookupService = new \App\Services\Znuny\ScheduledZnunyTicketMarkerLookupService($reader);
+        $refreshLookupService = new \App\Services\Znuny\ScheduledZnunyTicketMarkerRefreshLookupService($lookupService, $console);
+        $reconciliationService = new \App\Services\Znuny\ScheduledZnunyTicketCreationAttemptReconciliationService($refreshLookupService);
+
+        return new ScheduledZnunyTicketCreationService(
             $this->clientMock,
             $this->defaultsMock,
-            $duplicateGuard
+            $duplicateGuard,
+            $reconciliationService
         );
     }
 
@@ -226,7 +239,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
         $result = $this->service->createTicketFromTask($task, 999);
 
         $this->assertEquals(ScheduledTicketCreationOutcome::UNCERTAIN, $result['outcome']);
-        $this->assertStringContainsString('ambiguous or incomplete response', $result['error_summary']);
+        $this->assertStringContainsString('Failed to refresh the active Znuny Ticket Workspace cache.', $result['error_summary']);
     }
 
     public function test_create_ticket_throws_returns_uncertain()
@@ -252,7 +265,7 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
         $result = $this->service->createTicketFromTask($task, 999);
 
         $this->assertEquals(ScheduledTicketCreationOutcome::UNCERTAIN, $result['outcome']);
-        $this->assertStringContainsString('Exception during ticket creation HTTP request: Timeout Exception', $result['error_summary']);
+        $this->assertStringContainsString('Failed to refresh the active Znuny Ticket Workspace cache.', $result['error_summary']);
     }
 
     public function test_create_ticket_uses_task_lock_override()
@@ -617,5 +630,130 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
         $this->assertEquals(ScheduledTicketCreationOutcome::SUCCESS, $result['outcome']);
         $this->assertFalse($result['duplicate']);
         $this->assertEquals(2, ZnunyTicketCreationAttempt::count());
+    }
+
+    public function test_create_ticket_throws_reconciles_and_recovers_if_found()
+    {
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Test', 'enabled' => true, 'queue_name' => 'Q1',
+            'owner_id' => 1, 'customer_user_login' => 'user1',
+            'subject' => 'Sub', 'body' => 'Body',
+        ]);
+
+        $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+        $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
+
+        $this->clientMock->expects($this->once())
+            ->method('createTicket')
+            ->willThrowException(new Exception('Network Timeout'));
+
+        $cacheReaderMock = $this->createMock(\App\Services\Znuny\ZnunyTicketWorkspaceCacheReader::class);
+        $cacheReaderMock->expects($this->once())
+            ->method('getTickets')
+            ->willReturnCallback(function () {
+                $attempt = ZnunyTicketCreationAttempt::first();
+                return [
+                    [
+                        'TicketID' => 88,
+                        'TicketNumber' => 'TN88',
+                        'Title' => 'Notification [' . $attempt->marker . ']',
+                        'StateType' => 'open',
+                    ]
+                ];
+            });
+
+        $this->service = $this->buildService($cacheReaderMock);
+
+        $result = $this->service->createTicketFromTask($task, 999);
+
+        $this->assertEquals(ScheduledTicketCreationOutcome::SUCCESS, $result['outcome']);
+        $this->assertTrue($result['recovered']);
+        $this->assertFalse($result['duplicate']);
+        $this->assertEquals(88, $result['ticket_id']);
+        $this->assertEquals('TN88', $result['ticket_number']);
+
+        $attempt = ZnunyTicketCreationAttempt::first();
+        $this->assertEquals(ZnunyTicketCreationAttemptStatus::Recovered, $attempt->status);
+    }
+
+    public function test_create_ticket_ambiguous_reconciles_remains_uncertain_if_not_found()
+    {
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Test', 'enabled' => true, 'queue_name' => 'Q1',
+            'owner_id' => 1, 'customer_user_login' => 'user1',
+            'subject' => 'Sub', 'body' => 'Body',
+        ]);
+
+        $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+        $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
+
+        $this->clientMock->expects($this->once())
+            ->method('createTicket')
+            ->willReturn(['success' => false]);
+
+        $cacheReaderMock = $this->createMock(\App\Services\Znuny\ZnunyTicketWorkspaceCacheReader::class);
+        $cacheReaderMock->expects($this->exactly(2))
+            ->method('getTickets')
+            ->willReturnOnConsecutiveCalls([], []);
+
+        $consoleMock = $this->createMock(\Illuminate\Contracts\Console\Kernel::class);
+        $consoleMock->expects($this->once())
+            ->method('call')
+            ->with('znuny:warm-ticket-workspace-cache', ['--manual' => true])
+            ->willReturn(0);
+
+        $this->service = $this->buildService($cacheReaderMock, $consoleMock);
+
+        $result = $this->service->createTicketFromTask($task, 999);
+
+        $this->assertEquals(ScheduledTicketCreationOutcome::UNCERTAIN, $result['outcome']);
+        $this->assertStringContainsString('No open Znuny ticket was found for the scheduled marker after refresh', $result['error_summary']);
+
+        $attempt = ZnunyTicketCreationAttempt::first();
+        $this->assertEquals(ZnunyTicketCreationAttemptStatus::Uncertain, $attempt->status);
+        $this->assertEquals(1, $attempt->check_attempts);
+        $this->assertNotNull($attempt->last_checked_at);
+    }
+
+    public function test_create_ticket_throws_refresh_fails_remains_uncertain()
+    {
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Test', 'enabled' => true, 'queue_name' => 'Q1',
+            'owner_id' => 1, 'customer_user_login' => 'user1',
+            'subject' => 'Sub', 'body' => 'Body',
+        ]);
+
+        $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+        $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
+
+        $this->clientMock->expects($this->once())
+            ->method('createTicket')
+            ->willThrowException(new Exception('Network Timeout'));
+
+        $cacheReaderMock = $this->createMock(\App\Services\Znuny\ZnunyTicketWorkspaceCacheReader::class);
+        $cacheReaderMock->expects($this->once())
+            ->method('getTickets')
+            ->willReturn([]);
+
+        $consoleMock = $this->createMock(\Illuminate\Contracts\Console\Kernel::class);
+        $consoleMock->expects($this->once())
+            ->method('call')
+            ->with('znuny:warm-ticket-workspace-cache', ['--manual' => true])
+            ->willReturn(1);
+
+        $this->service = $this->buildService($cacheReaderMock, $consoleMock);
+
+        $result = $this->service->createTicketFromTask($task, 999);
+
+        $this->assertEquals(ScheduledTicketCreationOutcome::UNCERTAIN, $result['outcome']);
+        $this->assertStringContainsString('Failed to refresh the active Znuny Ticket Workspace cache.', $result['error_summary']);
+
+        $attempt = ZnunyTicketCreationAttempt::first();
+        $this->assertEquals(ZnunyTicketCreationAttemptStatus::Uncertain, $attempt->status);
+        $this->assertEquals(1, $attempt->check_attempts);
+        $this->assertNotNull($attempt->last_checked_at);
     }
 }
