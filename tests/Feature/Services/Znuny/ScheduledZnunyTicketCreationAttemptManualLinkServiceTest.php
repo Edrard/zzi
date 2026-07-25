@@ -106,7 +106,7 @@ final class ScheduledZnunyTicketCreationAttemptManualLinkServiceTest extends Tes
         $this->assertSame('TN10', $run->ticket_number);
         $this->assertSame(10, (int) $task->last_ticket_id);
         $this->assertSame('TN10', $task->last_ticket_number);
-        
+
         $this->assertSame('uncertain', $run->status);
 
         $this->assertDatabaseHas('audit_logs', [
@@ -239,6 +239,231 @@ final class ScheduledZnunyTicketCreationAttemptManualLinkServiceTest extends Tes
 
         $run->refresh();
         $task->refresh();
+        $this->assertNull($run->ticket_id);
+        $this->assertNull($run->ticket_number);
+        $this->assertNull($task->last_ticket_id);
+        $this->assertNull($task->last_ticket_number);
+
+        $this->assertDatabaseMissing('audit_logs', [
+            'action' => 'scheduled_znuny_attempt_manually_linked',
+            'entity_type' => 'ZnunyTicketCreationAttempt',
+            'entity_id' => $attempt->id,
+        ]);
+    }
+    public function test_ticket_not_present_in_lookup_is_rejected_without_mutation(): void
+    {
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Ticket absent test',
+            'enabled' => true,
+            'cron_expression' => '0 0 * * *',
+            'timezone' => 'UTC',
+        ]);
+
+        $run = ScheduledZnunyTaskRun::create([
+            'scheduled_znuny_task_id' => $task->id,
+            'task_name_snapshot' => $task->name,
+            'run_type' => 'scheduled',
+            'status' => 'uncertain',
+            'scheduled_for' => now(),
+        ]);
+
+        $attempt = ZnunyTicketCreationAttempt::create([
+            'source_type' => 'scheduled_run',
+            'source_id' => $run->id,
+            'status' => ZnunyTicketCreationAttemptStatus::Uncertain,
+            'marker' => 'MARKER123',
+            'subject_original' => 'Original subject',
+            'subject_sent' => 'Original subject [MARKER123]',
+            'started_at' => now(),
+        ]);
+
+        $reader = $this->createMock(ZnunyTicketWorkspaceCacheReader::class);
+        $reader->expects($this->once())
+            ->method('getTickets')
+            ->willReturn([[
+                'TicketID' => 10,
+                'TicketNumber' => 'TN10',
+                'Title' => 'Notification for [MARKER123] issue',
+                'StateType' => 'open',
+            ]]);
+
+        $linkService = $this->registerDependenciesAndGetService($reader);
+
+        $result = $linkService->link($attempt->id, 20, 'TN20');
+
+        $this->assertFalse($result['linked']);
+        $this->assertFalse($result['transitioned']);
+        $this->assertSame($attempt->id, $result['attempt_id']);
+        $this->assertSame($run->id, $result['run_id']);
+        $this->assertSame($task->id, $result['task_id']);
+        $this->assertNull($result['ticket_id']);
+        $this->assertNull($result['ticket_number']);
+        $this->assertSame('The selected Znuny ticket is not present in the current marker lookup result.', $result['reason']);
+
+        $attempt->refresh();
+        $run->refresh();
+        $task->refresh();
+
+        $this->assertSame(ZnunyTicketCreationAttemptStatus::Uncertain, $attempt->status);
+        $this->assertNull($attempt->ticket_id);
+        $this->assertNull($attempt->ticket_number);
+
+        $this->assertNull($run->ticket_id);
+        $this->assertNull($run->ticket_number);
+
+        $this->assertNull($task->last_ticket_id);
+        $this->assertNull($task->last_ticket_number);
+
+        $this->assertDatabaseMissing('audit_logs', [
+            'action' => 'scheduled_znuny_attempt_manually_linked',
+            'entity_type' => 'ZnunyTicketCreationAttempt',
+            'entity_id' => $attempt->id,
+        ]);
+    }
+
+    public function test_exact_ticket_can_be_selected_from_multiple_marker_matches(): void
+    {
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Multiple matches test',
+            'enabled' => true,
+            'cron_expression' => '0 0 * * *',
+            'timezone' => 'UTC',
+        ]);
+
+        $run = ScheduledZnunyTaskRun::create([
+            'scheduled_znuny_task_id' => $task->id,
+            'task_name_snapshot' => $task->name,
+            'run_type' => 'scheduled',
+            'status' => 'uncertain',
+            'scheduled_for' => now(),
+        ]);
+
+        $attempt = ZnunyTicketCreationAttempt::create([
+            'source_type' => 'scheduled_run',
+            'source_id' => $run->id,
+            'status' => ZnunyTicketCreationAttemptStatus::Uncertain,
+            'marker' => 'MARKER123',
+            'subject_original' => 'Original subject',
+            'subject_sent' => 'Original subject [MARKER123]',
+            'started_at' => now(),
+        ]);
+
+        $reader = $this->createMock(ZnunyTicketWorkspaceCacheReader::class);
+        $reader->expects($this->once())
+            ->method('getTickets')
+            ->willReturn([
+                [
+                    'TicketID' => 10,
+                    'TicketNumber' => 'TN10',
+                    'Title' => 'First for [MARKER123] issue',
+                    'StateType' => 'open',
+                ],
+                [
+                    'TicketID' => 20,
+                    'TicketNumber' => 'TN20',
+                    'Title' => 'Second for [MARKER123] issue',
+                    'StateType' => 'new',
+                ]
+            ]);
+
+        $linkService = $this->registerDependenciesAndGetService($reader);
+
+        $result = $linkService->link($attempt->id, 20, 'TN20');
+
+        $this->assertSame('Multiple', $result['lookup_status']->name ?? null);
+        $this->assertTrue($result['linked']);
+        $this->assertTrue($result['transitioned']);
+        $this->assertSame('manually_linked', $result['attempt_status'] ?? null);
+        $this->assertSame(20, (int) $result['ticket_id']);
+        $this->assertSame('TN20', $result['ticket_number']);
+
+        $attempt->refresh();
+        $run->refresh();
+        $task->refresh();
+
+        $this->assertSame(ZnunyTicketCreationAttemptStatus::ManuallyLinked, $attempt->status);
+        $this->assertSame(20, (int) $attempt->ticket_id);
+        $this->assertSame('TN20', $attempt->ticket_number);
+
+        $this->assertSame(20, (int) $run->ticket_id);
+        $this->assertSame('TN20', $run->ticket_number);
+
+        $this->assertSame(20, (int) $task->last_ticket_id);
+        $this->assertSame('TN20', $task->last_ticket_number);
+
+        $this->assertSame('uncertain', $run->status);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'scheduled_znuny_attempt_manually_linked',
+            'entity_type' => 'ZnunyTicketCreationAttempt',
+            'entity_id' => $attempt->id,
+        ]);
+
+        $this->assertSame(1, \App\Models\AuditLog::where('action', 'scheduled_znuny_attempt_manually_linked')
+            ->where('entity_id', $attempt->id)->count());
+    }
+
+    public function test_attempt_changed_after_lookup_is_not_overwritten(): void
+    {
+        $task = ScheduledZnunyTask::create([
+            'name' => 'State conflict test',
+            'enabled' => true,
+            'cron_expression' => '0 0 * * *',
+            'timezone' => 'UTC',
+        ]);
+
+        $run = ScheduledZnunyTaskRun::create([
+            'scheduled_znuny_task_id' => $task->id,
+            'task_name_snapshot' => $task->name,
+            'run_type' => 'scheduled',
+            'status' => 'uncertain',
+            'scheduled_for' => now(),
+        ]);
+
+        $attempt = ZnunyTicketCreationAttempt::create([
+            'source_type' => 'scheduled_run',
+            'source_id' => $run->id,
+            'status' => ZnunyTicketCreationAttemptStatus::Uncertain,
+            'marker' => 'MARKER123',
+            'subject_original' => 'Original subject',
+            'subject_sent' => 'Original subject [MARKER123]',
+            'started_at' => now(),
+        ]);
+
+        $reader = $this->createMock(ZnunyTicketWorkspaceCacheReader::class);
+        $reader->expects($this->once())
+            ->method('getTickets')
+            ->willReturnCallback(function () use ($attempt) {
+                $attempt->update([
+                    'status' => ZnunyTicketCreationAttemptStatus::Recovered,
+                    'ticket_id' => 30,
+                    'ticket_number' => 'TN30',
+                ]);
+
+                return [[
+                    'TicketID' => 20,
+                    'TicketNumber' => 'TN20',
+                    'Title' => 'Notification for [MARKER123] issue',
+                    'StateType' => 'open',
+                ]];
+            });
+
+        $linkService = $this->registerDependenciesAndGetService($reader);
+
+        $result = $linkService->link($attempt->id, 20, 'TN20');
+
+        $this->assertFalse($result['linked']);
+        $this->assertFalse($result['transitioned']);
+        $this->assertSame('The Scheduled Znuny ticket creation attempt changed during manual linking.', $result['reason']);
+
+        $attempt->refresh();
+        $run->refresh();
+        $task->refresh();
+
+        $this->assertSame(ZnunyTicketCreationAttemptStatus::Recovered, $attempt->status);
+        $this->assertSame(30, (int) $attempt->ticket_id);
+        $this->assertSame('TN30', $attempt->ticket_number);
+
         $this->assertNull($run->ticket_id);
         $this->assertNull($run->ticket_number);
         $this->assertNull($task->last_ticket_id);
