@@ -149,6 +149,8 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
 
     public function test_uncertain_outcome_disables_scheduler()
     {
+        $this->task->update(['last_ticket_id' => 777, 'last_ticket_number' => 'TN777']);
+
         $this->ticketServiceMock->expects($this->once())
             ->method('createTicketFromTask')
             ->willReturn([
@@ -173,7 +175,144 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
 
         $this->assertEquals('uncertain', $this->run->status);
         $this->assertNull($this->run->ticket_id);
+        $this->assertEquals(777, $this->task->last_ticket_id);
+        $this->assertEquals('TN777', $this->task->last_ticket_number);
         $this->assertEquals(['raw' => 'sanitized_uncertain'], $this->run->response_snapshot);
         $this->assertFalse(app(SchedulerSafetyService::class)->isSchedulerEnabled());
+    }
+    public function test_normal_successful_result_remains_successful()
+    {
+        $this->ticketServiceMock->expects($this->once())
+            ->method('createTicketFromTask')
+            ->willReturn([
+                'outcome' => ScheduledTicketCreationOutcome::SUCCESS,
+                'duplicate' => false,
+                'recovered' => false,
+                'attempt_id' => 99,
+                'ticket_id' => 123,
+                'ticket_number' => 'TN123',
+                'error_summary' => null,
+                'error_details' => null,
+            ]);
+
+        $this->mailServiceMock->expects($this->never())->method('sendAlarm');
+
+        $processor = app(ScheduledZnunyTaskRunProcessor::class);
+        $processor->processNextBatch(1, 10);
+
+        $this->run->refresh();
+        $this->assertEquals('success', $this->run->status);
+        $this->assertEquals(123, $this->run->ticket_id);
+    }
+
+    public function test_confirmed_duplicate_finishes_run_successfully_and_does_not_pause()
+    {
+        $this->ticketServiceMock->expects($this->once())
+            ->method('createTicketFromTask')
+            ->willReturn([
+                'outcome' => ScheduledTicketCreationOutcome::SUCCESS,
+                'duplicate' => true,
+                'recovered' => false,
+                'attempt_id' => 100,
+                'ticket_id' => 124,
+                'ticket_number' => 'TN124',
+            ]);
+
+        $this->mailServiceMock->expects($this->never())->method('sendAlarm');
+
+        $processor = app(ScheduledZnunyTaskRunProcessor::class);
+        $processor->processNextBatch(1, 10);
+
+        $this->run->refresh();
+        $this->assertEquals('success', $this->run->status);
+        $this->assertEquals(124, $this->run->ticket_id);
+        $this->assertEquals('TN124', $this->run->ticket_number);
+        $this->assertTrue(app(SchedulerSafetyService::class)->isSchedulerEnabled());
+    }
+
+    public function test_recovered_duplicate_finishes_run_successfully_and_does_not_become_uncertain()
+    {
+        $this->ticketServiceMock->expects($this->once())
+            ->method('createTicketFromTask')
+            ->willReturn([
+                'outcome' => ScheduledTicketCreationOutcome::SUCCESS,
+                'duplicate' => true,
+                'recovered' => true,
+                'attempt_id' => 101,
+                'ticket_id' => 125,
+                'ticket_number' => 'TN125',
+            ]);
+
+        $this->mailServiceMock->expects($this->never())->method('sendAlarm');
+
+        $processor = app(ScheduledZnunyTaskRunProcessor::class);
+        $processor->processNextBatch(1, 10);
+
+        $this->run->refresh();
+        $this->assertEquals('success', $this->run->status);
+        $this->assertEquals(125, $this->run->ticket_id);
+        $this->assertEquals('TN125', $this->run->ticket_number);
+        $this->assertTrue(app(SchedulerSafetyService::class)->isSchedulerEnabled());
+    }
+
+    public function test_duplicate_blocked_uncertain_marks_run_uncertain_and_preserves_identifiers()
+    {
+        $this->ticketServiceMock->expects($this->once())
+            ->method('createTicketFromTask')
+            ->willReturn([
+                'outcome' => ScheduledTicketCreationOutcome::UNCERTAIN,
+                'duplicate' => true,
+                'recovered' => false,
+                'attempt_id' => 102,
+                'ticket_id' => 126,
+                'ticket_number' => 'TN126',
+                'error_summary' => 'Duplicate blocked',
+                'error_details' => 'Blocked reason',
+            ]);
+
+        $this->mailServiceMock->expects($this->once())
+            ->method('sendAlarm')
+            ->with(
+                'Scheduler Disabled (Uncertain Outcome)',
+                $this->stringContains('Duplicate blocked')
+            );
+
+        $processor = app(ScheduledZnunyTaskRunProcessor::class);
+        $processor->processNextBatch(1, 10);
+
+        $this->run->refresh();
+        $this->task->refresh();
+        $this->assertEquals('uncertain', $this->run->status);
+        $this->assertEquals(126, $this->run->ticket_id);
+        $this->assertEquals('TN126', $this->run->ticket_number);
+        $this->assertEquals(126, $this->task->last_ticket_id);
+        $this->assertEquals('TN126', $this->task->last_ticket_number);
+        $this->assertEquals('Duplicate blocked', $this->run->error_summary);
+        $this->assertEquals('Blocked reason', $this->run->error_details);
+        $this->assertFalse(app(SchedulerSafetyService::class)->isSchedulerEnabled());
+
+        // Ensure no replacement run is created
+        $this->assertEquals(1, ScheduledZnunyTaskRun::count());
+    }
+
+    public function test_backward_compatibility_with_missing_keys()
+    {
+        $this->ticketServiceMock->expects($this->once())
+            ->method('createTicketFromTask')
+            ->willReturn([
+                'outcome' => ScheduledTicketCreationOutcome::SUCCESS,
+                'ticket_id' => 127,
+                'ticket_number' => 'TN127',
+                // duplicate, recovered, attempt_id omitted
+            ]);
+
+        $this->mailServiceMock->expects($this->never())->method('sendAlarm');
+
+        $processor = app(ScheduledZnunyTaskRunProcessor::class);
+        $processor->processNextBatch(1, 10);
+
+        $this->run->refresh();
+        $this->assertEquals('success', $this->run->status);
+        $this->assertEquals(127, $this->run->ticket_id);
     }
 }

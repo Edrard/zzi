@@ -156,7 +156,7 @@ class ScheduledZnunyTaskRunProcessor
 
                 case ScheduledTicketCreationOutcome::UNCERTAIN:
                     // The create request may have reached Znuny; mark uncertain and disable scheduler to prevent duplicate tickets.
-                    $run->update([
+                    $runUpdate = [
                         'status' => 'uncertain',
                         'finished_at' => $finishedAt->toDateTimeString(),
                         'duration_ms' => $durationMs,
@@ -164,14 +164,27 @@ class ScheduledZnunyTaskRunProcessor
                         'error_details' => $result['error_details'],
                         'response_snapshot' => $result['response_snapshot'] ?? null,
                         'payload_snapshot' => $result['payload_snapshot'] ?? null,
-                    ]);
+                    ];
 
-                    $task->update([
+                    $taskUpdate = [
                         'last_run_at' => $finishedAt->toDateTimeString(),
                         'last_failure_at' => $finishedAt->toDateTimeString(),
                         'last_status' => 'uncertain',
                         'last_error_summary' => $result['error_summary'],
-                    ]);
+                    ];
+
+                    if (array_key_exists('ticket_id', $result) && $result['ticket_id'] !== null) {
+                        $runUpdate['ticket_id'] = $result['ticket_id'];
+                        $taskUpdate['last_ticket_id'] = $result['ticket_id'];
+                    }
+
+                    if (array_key_exists('ticket_number', $result) && $result['ticket_number'] !== null && trim((string) $result['ticket_number']) !== '') {
+                        $runUpdate['ticket_number'] = $result['ticket_number'];
+                        $taskUpdate['last_ticket_number'] = $result['ticket_number'];
+                    }
+
+                    $run->update($runUpdate);
+                    $task->update($taskUpdate);
 
                     $reason = 'Uncertain outcome from Znuny API: '.$result['error_summary'];
                     $this->safetyService->disableScheduler($reason);
