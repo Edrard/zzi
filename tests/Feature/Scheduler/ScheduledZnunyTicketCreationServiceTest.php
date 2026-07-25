@@ -8,6 +8,7 @@ use App\Models\ScheduledZnunyTask;
 use App\Models\ZnunyTicketCreationAttempt;
 use App\Services\ScheduledZnunyTicketCreationService;
 use App\Services\Znuny\ScheduledTicketCreationOutcome;
+use App\Services\Znuny\ScheduledZnunyTicketCreationDuplicateGuard;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketAdvancedDefaultsService;
 use Exception;
@@ -30,10 +31,12 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
 
         $this->clientMock = $this->createMock(ZnunyClient::class);
         $this->defaultsMock = $this->createMock(ZnunyTicketAdvancedDefaultsService::class);
+        $duplicateGuard = new ScheduledZnunyTicketCreationDuplicateGuard();
 
         $this->service = new ScheduledZnunyTicketCreationService(
             $this->clientMock,
-            $this->defaultsMock
+            $this->defaultsMock,
+            $duplicateGuard
         );
     }
 
@@ -343,5 +346,276 @@ class ScheduledZnunyTicketCreationServiceTest extends TestCase
         $this->assertEquals(ZnunyTicketCreationClassification::Uncertain->value, $result['classification']);
         $attempt = ZnunyTicketCreationAttempt::first();
         $this->assertEquals(ZnunyTicketCreationAttemptStatus::Uncertain, $attempt->status);
+    }
+
+    private function createAttempt(string|int $runId, ZnunyTicketCreationAttemptStatus $status, ?int $ticketId = null, ?string $ticketNumber = null, string $sourceType = 'scheduled_run', ?string $createdAt = null): ZnunyTicketCreationAttempt
+    {
+        $data = [
+            'source_type' => $sourceType,
+            'source_id' => (string) $runId,
+            'marker' => 'test-marker',
+            'subject_original' => 'Subject',
+            'subject_sent' => 'Subject',
+            'status' => $status,
+            'ticket_id' => $ticketId,
+            'ticket_number' => $ticketNumber,
+        ];
+        if ($createdAt) {
+            $data['created_at'] = $createdAt;
+            $data['updated_at'] = $createdAt;
+        }
+
+        return ZnunyTicketCreationAttempt::create($data);
+    }
+
+    public function test_proceed_creates_exactly_one_new_attempt_and_calls_api_and_returns_fields()
+    {
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Test', 'enabled' => true, 'queue_name' => 'Q1',
+            'owner_id' => 1, 'customer_user_login' => 'user1',
+            'subject' => 'Sub', 'body' => 'Body',
+        ]);
+
+        $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+        $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
+        $this->clientMock->expects($this->once())->method('createTicket')->willReturn(['success' => true, 'ticket_id' => 42, 'ticket_number' => 'TN42']);
+
+        $result = $this->service->createTicketFromTask($task, 999);
+
+        $this->assertEquals(1, ZnunyTicketCreationAttempt::count());
+        $attempt = ZnunyTicketCreationAttempt::first();
+        $this->assertEquals($attempt->id, $result['attempt_id']);
+        $this->assertFalse($result['duplicate']);
+        $this->assertFalse($result['recovered']);
+    }
+
+    public function test_prior_success_returns_success_without_api_call_and_returns_fields()
+    {
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Test', 'enabled' => true, 'queue_name' => 'Q1',
+            'owner_id' => 1, 'customer_user_login' => 'user1',
+            'subject' => 'Sub', 'body' => 'Body',
+        ]);
+
+        $attempt = $this->createAttempt(999, ZnunyTicketCreationAttemptStatus::Success, 42, 'TN42');
+
+        $this->clientMock->expects($this->never())->method('createTicket');
+        $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+        $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
+
+        $result = $this->service->createTicketFromTask($task, 999);
+
+        $this->assertEquals(ScheduledTicketCreationOutcome::SUCCESS, $result['outcome']);
+        $this->assertTrue($result['duplicate']);
+        $this->assertFalse($result['recovered']);
+        $this->assertEquals($attempt->id, $result['attempt_id']);
+        $this->assertEquals(42, $result['ticket_id']);
+        $this->assertEquals('TN42', $result['ticket_number']);
+        $this->assertEquals(1, ZnunyTicketCreationAttempt::count());
+        $this->assertEquals(ZnunyTicketCreationAttemptStatus::Success, $attempt->fresh()->status);
+    }
+
+    public function test_prior_recovered_is_reused_without_mutation()
+    {
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Test', 'enabled' => true, 'queue_name' => 'Q1',
+            'owner_id' => 1, 'customer_user_login' => 'user1',
+            'subject' => 'Sub', 'body' => 'Body',
+        ]);
+
+        $attempt = $this->createAttempt(999, ZnunyTicketCreationAttemptStatus::Recovered, 42, 'TN42');
+
+        $this->clientMock->expects($this->never())->method('createTicket');
+        $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+        $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
+
+        $result = $this->service->createTicketFromTask($task, 999);
+
+        $this->assertEquals(ScheduledTicketCreationOutcome::SUCCESS, $result['outcome']);
+        $this->assertTrue($result['duplicate']);
+        $this->assertFalse($result['recovered']);
+        $this->assertEquals($attempt->id, $result['attempt_id']);
+        $this->assertEquals(42, $result['ticket_id']);
+        $this->assertEquals('TN42', $result['ticket_number']);
+        $this->assertEquals(1, ZnunyTicketCreationAttempt::count());
+        $this->assertEquals(ZnunyTicketCreationAttemptStatus::Recovered, $attempt->fresh()->status);
+    }
+
+    public function test_prior_manually_linked_is_reused_without_mutation()
+    {
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Test', 'enabled' => true, 'queue_name' => 'Q1',
+            'owner_id' => 1, 'customer_user_login' => 'user1',
+            'subject' => 'Sub', 'body' => 'Body',
+        ]);
+
+        $attempt = $this->createAttempt(999, ZnunyTicketCreationAttemptStatus::ManuallyLinked, 42, 'TN42');
+
+        $this->clientMock->expects($this->never())->method('createTicket');
+        $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+        $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
+
+        $result = $this->service->createTicketFromTask($task, 999);
+
+        $this->assertEquals(ScheduledTicketCreationOutcome::SUCCESS, $result['outcome']);
+        $this->assertTrue($result['duplicate']);
+        $this->assertFalse($result['recovered']);
+        $this->assertEquals($attempt->id, $result['attempt_id']);
+        $this->assertEquals(42, $result['ticket_id']);
+        $this->assertEquals('TN42', $result['ticket_number']);
+        $this->assertEquals(1, ZnunyTicketCreationAttempt::count());
+        $this->assertEquals(ZnunyTicketCreationAttemptStatus::ManuallyLinked, $attempt->fresh()->status);
+    }
+
+    public function test_prior_orphaned_becomes_recovered_without_api_call_and_returns_fields()
+    {
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Test', 'enabled' => true, 'queue_name' => 'Q1',
+            'owner_id' => 1, 'customer_user_login' => 'user1',
+            'subject' => 'Sub', 'body' => 'Body',
+        ]);
+
+        $attempt = $this->createAttempt(999, ZnunyTicketCreationAttemptStatus::Orphaned, 42, 'TN42');
+
+        $this->clientMock->expects($this->never())->method('createTicket');
+        $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+        $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
+
+        $result = $this->service->createTicketFromTask($task, 999);
+
+        $freshAttempt = $attempt->fresh();
+
+        $this->assertEquals(ScheduledTicketCreationOutcome::SUCCESS, $result['outcome']);
+        $this->assertTrue($result['duplicate']);
+        $this->assertTrue($result['recovered']);
+        $this->assertEquals($freshAttempt->id, $result['attempt_id']);
+        $this->assertEquals($freshAttempt->ticket_id, $result['ticket_id']);
+        $this->assertEquals($freshAttempt->ticket_number, $result['ticket_number']);
+        $this->assertEquals(1, ZnunyTicketCreationAttempt::count());
+        $this->assertEquals(ZnunyTicketCreationAttemptStatus::Recovered, $freshAttempt->status);
+    }
+
+    public function test_prior_sending_returns_uncertain_without_api_call()
+    {
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Test', 'enabled' => true, 'queue_name' => 'Q1',
+            'owner_id' => 1, 'customer_user_login' => 'user1',
+            'subject' => 'Sub', 'body' => 'Body',
+        ]);
+
+        $attempt = $this->createAttempt(999, ZnunyTicketCreationAttemptStatus::Sending, 99, 'TN99');
+
+        $this->clientMock->expects($this->never())->method('createTicket');
+        $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+        $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
+
+        $result = $this->service->createTicketFromTask($task, 999);
+
+        $this->assertEquals(ScheduledTicketCreationOutcome::UNCERTAIN, $result['outcome']);
+        $this->assertTrue($result['duplicate']);
+        $this->assertFalse($result['recovered']);
+        $this->assertEquals($attempt->id, $result['attempt_id']);
+        $this->assertEquals(99, $result['ticket_id']);
+        $this->assertEquals('TN99', $result['ticket_number']);
+        $this->assertStringContainsString('Automatic duplicate creation was blocked', $result['error_summary']);
+    }
+
+    public function test_prior_uncertain_returns_uncertain_without_api_call()
+    {
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Test', 'enabled' => true, 'queue_name' => 'Q1',
+            'owner_id' => 1, 'customer_user_login' => 'user1',
+            'subject' => 'Sub', 'body' => 'Body',
+        ]);
+
+        $attempt = $this->createAttempt(999, ZnunyTicketCreationAttemptStatus::Uncertain);
+
+        $this->clientMock->expects($this->never())->method('createTicket');
+        $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+        $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
+
+        $result = $this->service->createTicketFromTask($task, 999);
+
+        $this->assertEquals(ScheduledTicketCreationOutcome::UNCERTAIN, $result['outcome']);
+        $this->assertTrue($result['duplicate']);
+        $this->assertEquals($attempt->id, $result['attempt_id']);
+    }
+
+    public function test_invalid_confirmed_identifiers_return_uncertain_without_api_call()
+    {
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Test', 'enabled' => true, 'queue_name' => 'Q1',
+            'owner_id' => 1, 'customer_user_login' => 'user1',
+            'subject' => 'Sub', 'body' => 'Body',
+        ]);
+
+        $attempt = $this->createAttempt(999, ZnunyTicketCreationAttemptStatus::Success, null, 'TN42');
+
+        $this->clientMock->expects($this->never())->method('createTicket');
+        $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+        $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
+
+        $result = $this->service->createTicketFromTask($task, 999);
+
+        $this->assertEquals(ScheduledTicketCreationOutcome::UNCERTAIN, $result['outcome']);
+        $this->assertTrue($result['duplicate']);
+        $this->assertFalse($result['recovered']);
+        $this->assertEquals($attempt->id, $result['attempt_id']);
+        $this->assertNull($result['ticket_id']);
+        $this->assertEquals('TN42', $result['ticket_number']);
+    }
+
+    public function test_confirmed_failed_permits_a_new_attempt()
+    {
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Test', 'enabled' => true, 'queue_name' => 'Q1',
+            'owner_id' => 1, 'customer_user_login' => 'user1',
+            'subject' => 'Sub', 'body' => 'Body',
+        ]);
+
+        $this->createAttempt(999, ZnunyTicketCreationAttemptStatus::ConfirmedFailed);
+
+        $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+        $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
+
+        $this->clientMock->expects($this->once())->method('createTicket')->willReturn(['success' => true, 'ticket_id' => 43, 'ticket_number' => 'TN43']);
+
+        $result = $this->service->createTicketFromTask($task, 999);
+
+        $this->assertEquals(ScheduledTicketCreationOutcome::SUCCESS, $result['outcome']);
+        $this->assertFalse($result['duplicate']);
+        $this->assertEquals(2, ZnunyTicketCreationAttempt::count());
+    }
+
+    public function test_an_attempt_for_another_run_does_not_block_creation()
+    {
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Test', 'enabled' => true, 'queue_name' => 'Q1',
+            'owner_id' => 1, 'customer_user_login' => 'user1',
+            'subject' => 'Sub', 'body' => 'Body',
+        ]);
+
+        $this->createAttempt(888, ZnunyTicketCreationAttemptStatus::Sending);
+
+        $this->clientMock->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID1']);
+        $this->defaultsMock->expects($this->once())->method('getDefaults')->willReturn(['state' => 'new', 'priority' => '3 normal', 'lock' => 'lock']);
+        $this->clientMock->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
+
+        $this->clientMock->expects($this->once())->method('createTicket')->willReturn(['success' => true, 'ticket_id' => 43, 'ticket_number' => 'TN43']);
+
+        $result = $this->service->createTicketFromTask($task, 999);
+
+        $this->assertEquals(ScheduledTicketCreationOutcome::SUCCESS, $result['outcome']);
+        $this->assertFalse($result['duplicate']);
+        $this->assertEquals(2, ZnunyTicketCreationAttempt::count());
     }
 }

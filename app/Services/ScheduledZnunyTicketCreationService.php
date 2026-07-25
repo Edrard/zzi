@@ -4,25 +4,39 @@ namespace App\Services;
 
 use App\Enums\ZnunyTicketCreationClassification;
 use App\Models\ScheduledZnunyTask;
+use App\Enums\ScheduledZnunyTicketCreationDispatchDecision;
+use App\Enums\ZnunyTicketCreationAttemptStatus;
+use App\Models\ZnunyTicketCreationAttempt;
 use App\Services\Znuny\ScheduledTicketCreationOutcome;
+use App\Services\Znuny\ScheduledZnunyTicketCreationDuplicateGuard;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketAdvancedDefaultsService;
 use App\Services\Znuny\ZnunyTicketCreationReliabilityService;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class ScheduledZnunyTicketCreationService
 {
-    public function __construct(private ZnunyClient $client, private ZnunyTicketAdvancedDefaultsService $defaultsService) {}
+    public function __construct(
+        private ZnunyClient $client,
+        private ZnunyTicketAdvancedDefaultsService $defaultsService,
+        private ScheduledZnunyTicketCreationDuplicateGuard $duplicateGuard
+    ) {}
+
 
     public function createTicketFromTask(ScheduledZnunyTask $task, string|int $runId): array
     {
         $result = [
             'classification' => 'not_sent',
             'outcome' => ScheduledTicketCreationOutcome::NOT_SENT,
+            'duplicate' => false,
+            'recovered' => false,
+            'attempt_id' => null,
             'ticket_id' => null,
             'ticket_number' => null,
             'error_summary' => null,
             'error_details' => null,
+
             'response_snapshot' => null,
         ];
 
@@ -124,7 +138,96 @@ class ScheduledZnunyTicketCreationService
             return $result;
         }
 
-        // 3. Create Ticket
+        // 3. Duplicate Guard
+        $guardResult = $this->duplicateGuard->determineDispatchDecision($runId);
+        $decision = $guardResult['decision'];
+
+        if ($decision === ScheduledZnunyTicketCreationDispatchDecision::ReuseConfirmed) {
+            $existingAttempt = $guardResult['attempt'];
+            $result['duplicate'] = true;
+            $result['classification'] = 'success';
+            $result['outcome'] = ScheduledTicketCreationOutcome::SUCCESS;
+            $result['attempt_id'] = $existingAttempt->id;
+            $result['ticket_id'] = $guardResult['ticket_id'];
+            $result['ticket_number'] = $guardResult['ticket_number'];
+
+            if ($existingAttempt->status === ZnunyTicketCreationAttemptStatus::Orphaned) {
+                $wasChangedByUs = false;
+                $concurrentlySafe = false;
+                $lockedIdentifiers = null;
+
+                DB::transaction(function () use ($existingAttempt, &$wasChangedByUs, &$concurrentlySafe, &$lockedIdentifiers) {
+                    $locked = ZnunyTicketCreationAttempt::where('id', $existingAttempt->id)->lockForUpdate()->first();
+                    if (! $locked) {
+                        return;
+                    }
+
+                    $lockedIdentifiers = [
+                        'attempt_id' => $locked->id,
+                        'ticket_id' => $locked->ticket_id,
+                        'ticket_number' => $locked->ticket_number,
+                    ];
+
+                    if ($locked->status === ZnunyTicketCreationAttemptStatus::Orphaned) {
+                        $locked->status = ZnunyTicketCreationAttemptStatus::Recovered;
+                        $locked->save();
+                        $wasChangedByUs = true;
+                        $concurrentlySafe = true;
+                    } else {
+                        $safeStatuses = [
+                            ZnunyTicketCreationAttemptStatus::Success,
+                            ZnunyTicketCreationAttemptStatus::Recovered,
+                            ZnunyTicketCreationAttemptStatus::ManuallyLinked,
+                        ];
+
+                        $valid = false;
+                        $ticketId = $locked->ticket_id;
+                        $ticketNumber = $locked->ticket_number;
+                        if ($ticketId !== null && is_numeric($ticketId) && $ticketId > 0 && $ticketNumber !== null && trim((string) $ticketNumber) !== '') {
+                            $valid = true;
+                        }
+
+                        if (in_array($locked->status, $safeStatuses, true) && $valid) {
+                            $concurrentlySafe = true;
+                        }
+                    }
+                });
+
+                if ($lockedIdentifiers !== null) {
+                    $result['attempt_id'] = $lockedIdentifiers['attempt_id'];
+                    $result['ticket_id'] = $lockedIdentifiers['ticket_id'];
+                    $result['ticket_number'] = $lockedIdentifiers['ticket_number'];
+                }
+
+                if ($concurrentlySafe) {
+                    $result['recovered'] = $wasChangedByUs;
+                } else {
+                    $result['classification'] = 'uncertain';
+                    $result['outcome'] = ScheduledTicketCreationOutcome::UNCERTAIN;
+                    $result['recovered'] = false;
+                    $result['error_summary'] = 'Attempt state changed concurrently to an unsafe state.';
+                    $result['error_details'] = 'Attempt state changed concurrently to an unsafe state.';
+                }
+            }
+
+            return $result;
+        }
+
+        if ($decision === ScheduledZnunyTicketCreationDispatchDecision::BlockUncertain) {
+            $existingAttempt = $guardResult['attempt'];
+            $result['duplicate'] = true;
+            $result['classification'] = 'uncertain';
+            $result['outcome'] = ScheduledTicketCreationOutcome::UNCERTAIN;
+            $result['attempt_id'] = $existingAttempt?->id;
+            $result['ticket_id'] = $guardResult['ticket_id'];
+            $result['ticket_number'] = $guardResult['ticket_number'];
+            $result['error_summary'] = $guardResult['reason'];
+            $result['error_details'] = $guardResult['reason'];
+
+            return $result;
+        }
+
+        // 4. Create Ticket
         // Exceptions during/after createTicket call => UNCERTAIN,
         // because the create request may have reached Znuny and we didn't get a clear response.
         $ticketPayload = [
@@ -170,6 +273,7 @@ class ScheduledZnunyTicketCreationService
         // Update the payload from the reliability service which applied the marked subject
         // For the result, we also need to return the modified payload so it can be saved in the run's payload_snapshot
         $result['payload_snapshot'] = $payload;
+        $result['attempt_id'] = $attempt->id;
 
         try {
             $reliability->recordApiStart($attempt);
