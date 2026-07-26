@@ -123,18 +123,27 @@
                 <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.lookup_status') }}</span>
                 @php
                     $statusMap = [
-                        'Found' => __('scheduled_znuny_task_runs.review.lookup_statuses.found'),
-                        'Multiple' => __('scheduled_znuny_task_runs.review.lookup_statuses.multiple'),
-                        'NotFound' => __('scheduled_znuny_task_runs.review.lookup_statuses.not_found'),
-                        'Unavailable' => __('scheduled_znuny_task_runs.review.lookup_statuses.unavailable'),
+                        \App\Enums\ScheduledZnunyTicketMarkerLookupStatus::Found->value => __('scheduled_znuny_task_runs.review.lookup_statuses.found'),
+                        \App\Enums\ScheduledZnunyTicketMarkerLookupStatus::Multiple->value => __('scheduled_znuny_task_runs.review.lookup_statuses.multiple'),
+                        \App\Enums\ScheduledZnunyTicketMarkerLookupStatus::NotFound->value => __('scheduled_znuny_task_runs.review.lookup_statuses.not_found'),
+                        \App\Enums\ScheduledZnunyTicketMarkerLookupStatus::Unavailable->value => __('scheduled_znuny_task_runs.review.lookup_statuses.unavailable'),
                     ];
-                    $displayStatus = $statusMap[$lookupStatus ?? ''] ?? ($lookupStatus ?? '-');
+                    $displayStatus = $statusMap[$lookupStatus ?? ''] ?? __('scheduled_znuny_task_runs.review.empty.not_available');
                 @endphp
                 <p class="mt-1 font-bold">{{ $displayStatus }}</p>
             </div>
             <div class="col-span-full">
                 <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.lookup_reason') }}</span>
-                <p class="mt-1">{{ $lookupReason ?? '-' }}</p>
+                @php
+                    $reasonMap = [
+                        \App\Enums\ScheduledZnunyTicketMarkerLookupStatus::Found->value => __('scheduled_znuny_task_runs.review.notifications.found.body'),
+                        \App\Enums\ScheduledZnunyTicketMarkerLookupStatus::Multiple->value => __('scheduled_znuny_task_runs.review.notifications.multiple.body'),
+                        \App\Enums\ScheduledZnunyTicketMarkerLookupStatus::NotFound->value => __('scheduled_znuny_task_runs.review.notifications.not_found.body'),
+                        \App\Enums\ScheduledZnunyTicketMarkerLookupStatus::Unavailable->value => __('scheduled_znuny_task_runs.review.notifications.unavailable.body'),
+                    ];
+                    $displayReason = $reasonMap[$lookupStatus ?? ''] ?? __('scheduled_znuny_task_runs.review.empty.reason');
+                @endphp
+                <p class="mt-1">{{ $displayReason }}</p>
             </div>
             @if(isset($reviewContext['refresh_attempted']))
             <div>

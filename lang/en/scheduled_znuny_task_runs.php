@@ -82,6 +82,20 @@ return [
         'actions' => [
             'review_attempt' => 'Review Attempt',
             'recheck' => 'Fresh Recheck',
+            'manual_link' => [
+                'label' => 'Manual Link',
+                'modal_heading' => 'Link Znuny Ticket manually',
+                'modal_description_found' => 'The system will associate the existing Znuny ticket #:ticket_number (ID: :ticket_id) with this scheduled attempt. No new ticket will be created.',
+                'modal_description_multiple' => 'Please select the correct Znuny ticket. The system will associate it with this scheduled attempt. No new ticket will be created.',
+                'select_ticket_label' => 'Select Ticket',
+                'submit' => 'Link Ticket',
+            ],
+            'manual_retry' => [
+                'label' => 'Manual Retry',
+                'modal_heading' => 'Queue Manual Retry',
+                'modal_description' => 'This will queue a new pending run for this scheduled task. The original attempt will remain unchanged. Processing will occur normally through the scheduler. If the scheduler is currently paused or disabled, this run will wait until processing resumes.',
+                'submit' => 'Queue Retry',
+            ],
         ],
         'fields' => [
             'task_id' => 'Task ID',
@@ -145,6 +159,33 @@ return [
             'changed' => [
                 'title' => 'Attempt State Changed',
                 'body' => 'The attempt changed while the operation was being performed. The current state has been reloaded.',
+            ],
+            'manual_link_success' => [
+                'title' => 'Ticket linked successfully',
+            ],
+            'manual_link_idempotent' => [
+                'title' => 'Ticket already linked',
+                'body' => 'The attempt is already linked to the specified ticket.',
+            ],
+            'manual_link_conflict' => [
+                'title' => 'Link Conflict',
+                'body' => 'The ticket could not be linked.',
+            ],
+            'manual_retry_success' => [
+                'title' => 'Retry queued successfully',
+                'body' => 'A new pending run (ID: :run_id) has been queued.',
+            ],
+            'manual_retry_idempotent' => [
+                'title' => 'Retry already queued',
+                'body' => 'An existing pending retry run (ID: :run_id) was found.',
+            ],
+            'manual_retry_conflict' => [
+                'title' => 'Retry Conflict',
+                'body' => 'A manual retry could not be queued.',
+            ],
+            'unexpected_error' => [
+                'title' => 'Unexpected Error',
+                'body' => 'An unexpected error occurred during the operation.',
             ],
         ],
         'empty' => [
