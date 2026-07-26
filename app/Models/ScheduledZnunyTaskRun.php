@@ -34,4 +34,11 @@ class ScheduledZnunyTaskRun extends Model
             'manual_retry_of_attempt_id'
         );
     }
+
+    public function latestZnunyTicketCreationAttempt(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(ZnunyTicketCreationAttempt::class, 'source_id')
+            ->where('source_type', 'scheduled_run')
+            ->ofMany(['created_at' => 'max', 'id' => 'max']);
+    }
 }

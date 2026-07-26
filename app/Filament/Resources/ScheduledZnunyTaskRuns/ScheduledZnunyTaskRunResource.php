@@ -206,6 +206,7 @@ class ScheduledZnunyTaskRunResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query) => $query->with('latestZnunyTicketCreationAttempt'))
             ->recordTitleAttribute('task_name_snapshot')
             ->defaultSort('created_at', 'desc')
             ->emptyStateHeading(__('scheduled_znuny_task_runs.empty_state'))
@@ -355,6 +356,16 @@ class ScheduledZnunyTaskRunResource extends Resource
                         Notification::make()->title(__('scheduled_znuny_task_runs.actions.run_resolved_title'))->success()->send();
                     }),
 
+                Action::make('review_attempt')
+                    ->label(__('scheduled_znuny_task_runs.actions.review_attempt'))
+                    ->icon('heroicon-o-magnifying-glass')
+                    ->url(fn (ScheduledZnunyTaskRun $record): string => static::getUrl('review', ['record' => $record]))
+                    ->visible(function (ScheduledZnunyTaskRun $record) {
+                        return $record->status === 'uncertain'
+                            && $record->latestZnunyTicketCreationAttempt !== null
+                            && $record->latestZnunyTicketCreationAttempt->status === \App\Enums\ZnunyTicketCreationAttemptStatus::Uncertain;
+                    }),
+
                 Action::make('open_ticket')
                     ->label(__('scheduled_znuny_task_runs.actions.open_ticket'))
                     ->icon('heroicon-o-ticket')
@@ -379,6 +390,7 @@ class ScheduledZnunyTaskRunResource extends Resource
     {
         return [
             'index' => ManageScheduledZnunyTaskRuns::route('/'),
+            'review' => Pages\ReviewScheduledZnunyTaskRunAttempt::route('/{record}/review'),
         ];
     }
 }
