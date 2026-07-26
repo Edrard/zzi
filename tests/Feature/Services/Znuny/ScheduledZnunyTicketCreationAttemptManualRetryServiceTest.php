@@ -16,18 +16,23 @@ use App\Services\Znuny\ScheduledZnunyTicketMarkerLookupService;
 use App\Services\Znuny\ScheduledZnunyTicketMarkerRefreshLookupService;
 use App\Services\Znuny\ZnunyTicketWorkspaceCacheReader;
 use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
+use PDOException;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ReflectionMethod;
+use RuntimeException;
 use Tests\TestCase;
 
 final class ScheduledZnunyTicketCreationAttemptManualRetryServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function registerDependenciesAndGetService(ZnunyTicketWorkspaceCacheReader $reader, ?Kernel $kernel = null): ScheduledZnunyTicketCreationAttemptManualRetryService
+    private function registerDependenciesAndGetService(ZnunyTicketWorkspaceCacheReader $reader, ?Kernel $kernel = null, ?AuditLogger $auditLogger = null): ScheduledZnunyTicketCreationAttemptManualRetryService
     {
-        $audit = new AuditLogger();
+        $audit = $auditLogger ?? new AuditLogger();
 
         $this->app->instance(ZnunyTicketWorkspaceCacheReader::class, $reader);
         $this->app->instance(Kernel::class, $kernel ?? $this->createStub(Kernel::class));
@@ -156,7 +161,7 @@ final class ScheduledZnunyTicketCreationAttemptManualRetryServiceTest extends Te
         $this->assertTrue($result1['created']);
 
         $result2 = $retryService->retry($attempt->id, $user);
-        
+
         $this->assertFalse($result2['created']);
         $this->assertTrue($result2['existing']);
         $this->assertEquals($result1['retry_run_id'], $result2['retry_run_id']);
@@ -387,5 +392,107 @@ final class ScheduledZnunyTicketCreationAttemptManualRetryServiceTest extends Te
         } finally {
             Carbon::setTestNow();
         }
+    }
+
+    public static function duplicateExceptionProvider(): array
+    {
+        return [
+            'Accepted' => [
+                'driverCode' => 1062,
+                'message' => 'Duplicate entry for key szt_runs_manual_retry_attempt_unique',
+                'expected' => true,
+            ],
+            'Rejected: another duplicate index' => [
+                'driverCode' => 1062,
+                'message' => 'Duplicate entry for key szt_runs_task_id_scheduled_for_unique',
+                'expected' => false,
+            ],
+            'Rejected: NOT NULL violation' => [
+                'driverCode' => 1048,
+                'message' => 'Column manual_retry_of_attempt_id cannot be null szt_runs_manual_retry_attempt_unique',
+                'expected' => false,
+            ],
+            'Rejected: generic integrity violation' => [
+                'driverCode' => 1452,
+                'message' => 'Cannot add or update a child row szt_runs_manual_retry_attempt_unique',
+                'expected' => false,
+            ],
+        ];
+    }
+
+    #[DataProvider('duplicateExceptionProvider')]
+    public function test_only_manual_retry_unique_violation_is_classified_as_idempotent_duplicate(int $driverCode, string $message, bool $expected): void
+    {
+        $pdoException = new PDOException('SQLSTATE[23000]: Integrity constraint violation: ' . $message);
+        $pdoException->errorInfo = ['23000', $driverCode, $message];
+        $queryException = new QueryException('', '', [], $pdoException);
+
+        $method = new ReflectionMethod(ScheduledZnunyTicketCreationAttemptManualRetryService::class, 'isDuplicateManualRetryException');
+
+        $audit = new AuditLogger();
+        $retryService = new ScheduledZnunyTicketCreationAttemptManualRetryService(
+            $this->createStub(ScheduledZnunyTicketCreationAttemptManualReviewService::class),
+            $audit
+        );
+
+        $result = $method->invoke($retryService, $queryException);
+
+        $this->assertSame($expected, $result);
+    }
+
+    public function test_audit_failure_does_not_roll_back_created_retry(): void
+    {
+        $marker = 'MARKER123';
+        [$task, $run, $attempt] = $this->createFixture($marker);
+        $user = User::factory()->create();
+
+        $reader = $this->createMock(ZnunyTicketWorkspaceCacheReader::class);
+        $reader->expects($this->exactly(2))
+            ->method('getTickets')
+            ->willReturn([]);
+
+        $kernel = $this->createMock(Kernel::class);
+        $kernel->expects($this->once())->method('call')->willReturn(0);
+
+        $failingLogger = new class extends AuditLogger {
+            public static function log(string $action, ?string $entityType = null, int|string|null $entityId = null, array $context = [], ?User $user = null): AuditLog
+            {
+                throw new RuntimeException('Forced audit failure');
+            }
+        };
+
+        Log::spy();
+
+        $retryService = $this->registerDependenciesAndGetService($reader, $kernel, $failingLogger);
+
+        $result = $retryService->retry($attempt->id, $user);
+
+        $this->assertTrue($result['created']);
+        $this->assertFalse($result['existing']);
+        $this->assertNotNull($result['retry_run_id']);
+
+        $retryRun = ScheduledZnunyTaskRun::find($result['retry_run_id']);
+        $this->assertNotNull($retryRun);
+        $this->assertEquals('manual_retry', $retryRun->run_type);
+        $this->assertEquals('pending', $retryRun->status);
+        $this->assertEquals($attempt->id, $retryRun->manual_retry_of_attempt_id);
+
+        $attempt->refresh();
+        $this->assertEquals(ZnunyTicketCreationAttemptStatus::Uncertain, $attempt->status);
+
+        $run->refresh();
+        $this->assertEquals('uncertain', $run->status);
+
+        $logCount = AuditLog::where('action', 'scheduled_znuny_attempt_manual_retry_created')
+            ->where('entity_id', $attempt->id)
+            ->count();
+        $this->assertEquals(0, $logCount);
+
+        Log::shouldHaveReceived('error')
+            ->once()
+            ->with('Audit log creation failed after manual retry creation.', \Mockery::on(function ($context) use ($attempt) {
+                return ($context['attempt ID'] ?? null) === $attempt->id
+                    && str_contains($context['error'] ?? '', 'Forced audit failure');
+            }));
     }
 }
