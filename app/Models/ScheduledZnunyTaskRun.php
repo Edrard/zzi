@@ -26,4 +26,12 @@ class ScheduledZnunyTaskRun extends Model
     {
         return $this->belongsTo(User::class, 'created_by');
     }
+
+    public function manualRetryOfAttempt(): BelongsTo
+    {
+        return $this->belongsTo(
+            ZnunyTicketCreationAttempt::class,
+            'manual_retry_of_attempt_id'
+        );
+    }
 }
