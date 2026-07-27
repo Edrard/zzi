@@ -193,12 +193,12 @@
                     <tbody>
                         @foreach($lookupMatches as $match)
                             <tr class="border-b bg-white dark:border-gray-700 dark:bg-gray-900">
-                                <td class="px-6 py-4">{{ $match['TicketID'] ?? '-' }}</td>
-                                <td class="px-6 py-4">{{ $match['TicketNumber'] ?? '-' }}</td>
-                                <td class="px-6 py-4">{{ $match['Title'] ?? '-' }}</td>
-                                <td class="px-6 py-4">{{ $match['State'] ?? '-' }}</td>
-                                <td class="px-6 py-4">{{ $match['StateType'] ?? '-' }}</td>
-                                <td class="px-6 py-4">{{ $match['Queue'] ?? '-' }}</td>
+                                <td class="px-6 py-4">{{ $match['ticket_id'] ?? $match['TicketID'] ?? '-' }}</td>
+                                <td class="px-6 py-4">{{ $match['ticket_number'] ?? $match['TicketNumber'] ?? '-' }}</td>
+                                <td class="px-6 py-4">{{ $match['title'] ?? $match['Title'] ?? '-' }}</td>
+                                <td class="px-6 py-4">{{ $match['state'] ?? $match['State'] ?? '-' }}</td>
+                                <td class="px-6 py-4">{{ $match['state_type'] ?? $match['StateType'] ?? '-' }}</td>
+                                <td class="px-6 py-4">{{ $match['queue'] ?? $match['Queue'] ?? '-' }}</td>
                             </tr>
                         @endforeach
                     </tbody>

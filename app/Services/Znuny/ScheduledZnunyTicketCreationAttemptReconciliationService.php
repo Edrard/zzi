@@ -119,7 +119,7 @@ final class ScheduledZnunyTicketCreationAttemptReconciliationService
             );
         }
 
-        $lookupResult = $this->markerLookup->findExactMarkerWithRefresh($marker);
+        $lookupResult = $this->markerLookup->findExactMarkerWithRefresh($attempt);
 
         $lookupStatus = $lookupResult['status'];
         $refreshAttempted = $lookupResult['refresh_attempted'] ?? false;
@@ -190,6 +190,7 @@ final class ScheduledZnunyTicketCreationAttemptReconciliationService
 
                 if ($lockedAttempt->status !== ZnunyTicketCreationAttemptStatus::Uncertain) {
                     $lockedAttempt->save();
+
                     return $this->buildResult(
                         resolved: false,
                         transitioned: false,
@@ -248,7 +249,7 @@ final class ScheduledZnunyTicketCreationAttemptReconciliationService
                 ticketId: $attempt->ticket_id,
                 ticketNumber: $attempt->ticket_number,
                 lookupStatus: ScheduledZnunyTicketMarkerLookupStatus::NotFound,
-                reason: 'No open Znuny ticket was found for the scheduled marker after refresh.',
+                reason: 'No Znuny ticket was found for the scheduled marker in the direct recovery search.',
                 refreshAttempted: $refreshAttempted,
                 refreshSucceeded: $refreshSucceeded,
                 refreshExitCode: $refreshExitCode
@@ -274,7 +275,7 @@ final class ScheduledZnunyTicketCreationAttemptReconciliationService
         bool $transitioned,
         int|string|null $attemptId,
         int|string|null $ticketId,
-        string|null $ticketNumber,
+        ?string $ticketNumber,
         ScheduledZnunyTicketMarkerLookupStatus $lookupStatus,
         ?string $reason,
         bool $refreshAttempted,

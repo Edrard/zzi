@@ -486,7 +486,8 @@ class ZnunyClient
         }
 
         $validFilters = [
-            'TicketNumber', 'Queue', 'State', 'StateType', 'Owner',
+            'TicketNumber', 'Title', 'Queue', 'State', 'StateType', 'Owner',
+            'CreatedFrom', 'CreatedTo',
             'Limit', 'Offset', 'Page', 'SortBy', 'SortDirection',
         ];
 
@@ -542,7 +543,8 @@ class ZnunyClient
         }
 
         $validFilters = [
-            'TicketNumber', 'Queue', 'State', 'StateType', 'Owner',
+            'TicketNumber', 'Title', 'Queue', 'State', 'StateType', 'Owner',
+            'CreatedFrom', 'CreatedTo',
             'Limit', 'Offset', 'Page', 'SortBy', 'SortDirection', 'CountOnly',
         ];
 

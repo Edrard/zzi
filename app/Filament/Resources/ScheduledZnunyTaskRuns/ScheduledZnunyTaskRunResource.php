@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ScheduledZnunyTaskRuns;
 
+use App\Enums\ZnunyTicketCreationAttemptStatus;
 use App\Filament\Resources\ScheduledZnunyTaskRuns\Pages\ManageScheduledZnunyTaskRuns;
 use App\Filament\Resources\ScheduledZnunyTasks\ScheduledZnunyTaskResource;
 use App\Models\ScheduledZnunyTaskRun;
@@ -151,6 +152,35 @@ class ScheduledZnunyTaskRunResource extends Resource
 
     public static function infolist(Schema $schema): Schema
     {
+        $snapshotFormatter = function (mixed $state): string {
+            if ($state === null || $state === '' || $state === []) {
+                return '—';
+            }
+
+            if (is_string($state)) {
+                $decoded = json_decode($state, true);
+
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $state = $decoded;
+                } else {
+                    return $state;
+                }
+            }
+
+            if (is_array($state) || is_object($state)) {
+                $encoded = json_encode(
+                    $state,
+                    JSON_PRETTY_PRINT
+                    | JSON_UNESCAPED_UNICODE
+                    | JSON_UNESCAPED_SLASHES
+                );
+
+                return $encoded !== false ? $encoded : '—';
+            }
+
+            return (string) $state;
+        };
+
         return $schema
             ->components([
                 Section::make(__('scheduled_znuny_task_runs.sections.run_information'))
@@ -197,8 +227,14 @@ class ScheduledZnunyTaskRunResource extends Resource
                     ]),
                 Section::make(__('scheduled_znuny_task_runs.sections.snapshots'))
                     ->schema([
-                        TextEntry::make('payload_snapshot')->columnSpanFull(),
-                        TextEntry::make('response_snapshot')->columnSpanFull(),
+                        TextEntry::make('payload_snapshot')
+                            ->columnSpanFull()
+                            ->fontFamily('mono')
+                            ->formatStateUsing($snapshotFormatter),
+                        TextEntry::make('response_snapshot')
+                            ->columnSpanFull()
+                            ->fontFamily('mono')
+                            ->formatStateUsing($snapshotFormatter),
                     ])->collapsed(),
             ]);
     }
@@ -363,7 +399,7 @@ class ScheduledZnunyTaskRunResource extends Resource
                     ->visible(function (ScheduledZnunyTaskRun $record) {
                         return $record->status === 'uncertain'
                             && $record->latestZnunyTicketCreationAttempt !== null
-                            && $record->latestZnunyTicketCreationAttempt->status === \App\Enums\ZnunyTicketCreationAttemptStatus::Uncertain;
+                            && $record->latestZnunyTicketCreationAttempt->status === ZnunyTicketCreationAttemptStatus::Uncertain;
                     }),
 
                 Action::make('open_ticket')

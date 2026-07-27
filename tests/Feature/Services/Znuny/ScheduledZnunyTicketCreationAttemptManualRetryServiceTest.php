@@ -14,8 +14,8 @@ use App\Services\Znuny\ScheduledZnunyTicketCreationAttemptManualRetryService;
 use App\Services\Znuny\ScheduledZnunyTicketCreationAttemptManualReviewService;
 use App\Services\Znuny\ScheduledZnunyTicketMarkerLookupService;
 use App\Services\Znuny\ScheduledZnunyTicketMarkerRefreshLookupService;
+use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketWorkspaceCacheReader;
-use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -30,12 +30,12 @@ final class ScheduledZnunyTicketCreationAttemptManualRetryServiceTest extends Te
 {
     use RefreshDatabase;
 
-    private function registerDependenciesAndGetService(ZnunyTicketWorkspaceCacheReader $reader, ?Kernel $kernel = null, ?AuditLogger $auditLogger = null): ScheduledZnunyTicketCreationAttemptManualRetryService
+    private function registerDependenciesAndGetService(ZnunyTicketWorkspaceCacheReader $reader, ?ZnunyClient $client = null, ?AuditLogger $auditLogger = null): ScheduledZnunyTicketCreationAttemptManualRetryService
     {
-        $audit = $auditLogger ?? new AuditLogger();
+        $audit = $auditLogger ?? new AuditLogger;
 
         $this->app->instance(ZnunyTicketWorkspaceCacheReader::class, $reader);
-        $this->app->instance(Kernel::class, $kernel ?? $this->createStub(Kernel::class));
+        $this->app->instance(ZnunyClient::class, $client ?? $this->createStub(ZnunyClient::class));
         $this->app->instance(AuditLogger::class, $audit);
 
         foreach ([
@@ -81,7 +81,7 @@ final class ScheduledZnunyTicketCreationAttemptManualRetryServiceTest extends Te
             'status' => $status,
             'marker' => $marker,
             'subject_original' => 'Original subject',
-            'subject_sent' => 'Original subject [' . $marker . ']',
+            'subject_sent' => 'Original subject ['.$marker.']',
             'started_at' => now(),
             'check_attempts' => 1,
             'created_by' => null,
@@ -97,14 +97,16 @@ final class ScheduledZnunyTicketCreationAttemptManualRetryServiceTest extends Te
         $user = User::factory()->create();
 
         $reader = $this->createMock(ZnunyTicketWorkspaceCacheReader::class);
-        $reader->expects($this->exactly(2))
+        $reader->expects($this->once())
             ->method('getTickets')
             ->willReturn([]);
 
-        $kernel = $this->createMock(Kernel::class);
-        $kernel->expects($this->once())->method('call')->willReturn(0);
+        $client = $this->createMock(ZnunyClient::class);
+        $client->expects($this->once())
+            ->method('searchTicketsWithMetadata')
+            ->willReturn(['tickets' => []]);
 
-        $retryService = $this->registerDependenciesAndGetService($reader, $kernel);
+        $retryService = $this->registerDependenciesAndGetService($reader, $client);
 
         $result = $retryService->retry($attempt->id, $user);
 
@@ -148,14 +150,16 @@ final class ScheduledZnunyTicketCreationAttemptManualRetryServiceTest extends Te
         $user = User::factory()->create();
 
         $reader = $this->createMock(ZnunyTicketWorkspaceCacheReader::class);
-        $reader->expects($this->exactly(4))
+        $reader->expects($this->exactly(2))
             ->method('getTickets')
             ->willReturn([]);
 
-        $kernel = $this->createMock(Kernel::class);
-        $kernel->expects($this->exactly(2))->method('call')->willReturn(0);
+        $client = $this->createMock(ZnunyClient::class);
+        $client->expects($this->exactly(2))
+            ->method('searchTicketsWithMetadata')
+            ->willReturn(['tickets' => []]);
 
-        $retryService = $this->registerDependenciesAndGetService($reader, $kernel);
+        $retryService = $this->registerDependenciesAndGetService($reader, $client);
 
         $result1 = $retryService->retry($attempt->id, $user);
         $this->assertTrue($result1['created']);
@@ -182,7 +186,7 @@ final class ScheduledZnunyTicketCreationAttemptManualRetryServiceTest extends Te
         $user = User::factory()->create();
 
         $reader = $this->createMock(ZnunyTicketWorkspaceCacheReader::class);
-        $reader->expects($this->exactly(2))
+        $reader->expects($this->once())
             ->method('getTickets')
             ->willReturnCallback(function () use ($attempt) {
                 $attempt->update([
@@ -190,13 +194,16 @@ final class ScheduledZnunyTicketCreationAttemptManualRetryServiceTest extends Te
                     'ticket_id' => 999,
                     'ticket_number' => 'TN999',
                 ]);
+
                 return [];
             });
 
-        $kernel = $this->createMock(Kernel::class);
-        $kernel->expects($this->once())->method('call')->willReturn(0);
+        $client = $this->createMock(ZnunyClient::class);
+        $client->expects($this->once())
+            ->method('searchTicketsWithMetadata')
+            ->willReturn(['tickets' => []]);
 
-        $retryService = $this->registerDependenciesAndGetService($reader, $kernel);
+        $retryService = $this->registerDependenciesAndGetService($reader, $client);
 
         $result = $retryService->retry($attempt->id, $user);
 
@@ -242,7 +249,7 @@ final class ScheduledZnunyTicketCreationAttemptManualRetryServiceTest extends Te
                         'TicketNumber' => 'TN21',
                         'Title' => 'Notification for [MARKER] issue',
                         'StateType' => 'open',
-                    ]
+                    ],
                 ],
                 'throws' => false,
             ],
@@ -273,10 +280,16 @@ final class ScheduledZnunyTicketCreationAttemptManualRetryServiceTest extends Te
                 ->willReturn($tickets);
         }
 
-        $kernel = $this->createMock(Kernel::class);
-        $kernel->expects($this->never())->method('call');
+        $client = $this->createMock(ZnunyClient::class);
+        if ($throws) {
+            $client->expects($this->once())
+                ->method('searchTicketsWithMetadata')
+                ->willThrowException(new \Exception('API Error'));
+        } else {
+            $client->expects($this->never())->method('searchTicketsWithMetadata');
+        }
 
-        $retryService = $this->registerDependenciesAndGetService($reader, $kernel);
+        $retryService = $this->registerDependenciesAndGetService($reader, $client);
 
         $result = $retryService->retry($attempt->id, $user);
 
@@ -348,14 +361,16 @@ final class ScheduledZnunyTicketCreationAttemptManualRetryServiceTest extends Te
             $user = User::factory()->create();
 
             $reader = $this->createMock(ZnunyTicketWorkspaceCacheReader::class);
-            $reader->expects($this->exactly(4))
+            $reader->expects($this->exactly(2))
                 ->method('getTickets')
                 ->willReturn([]);
 
-            $kernel = $this->createMock(Kernel::class);
-            $kernel->expects($this->exactly(2))->method('call')->willReturn(0);
+            $client = $this->createMock(ZnunyClient::class);
+            $client->expects($this->exactly(2))
+                ->method('searchTicketsWithMetadata')
+                ->willReturn(['tickets' => []]);
 
-            $retryService = $this->registerDependenciesAndGetService($reader, $kernel);
+            $retryService = $this->registerDependenciesAndGetService($reader, $client);
 
             $result1 = $retryService->retry($attempt1->id, $user);
             $result2 = $retryService->retry($attempt2->id, $user);
@@ -423,13 +438,13 @@ final class ScheduledZnunyTicketCreationAttemptManualRetryServiceTest extends Te
     #[DataProvider('duplicateExceptionProvider')]
     public function test_only_manual_retry_unique_violation_is_classified_as_idempotent_duplicate(int $driverCode, string $message, bool $expected): void
     {
-        $pdoException = new PDOException('SQLSTATE[23000]: Integrity constraint violation: ' . $message);
+        $pdoException = new PDOException('SQLSTATE[23000]: Integrity constraint violation: '.$message);
         $pdoException->errorInfo = ['23000', $driverCode, $message];
         $queryException = new QueryException('', '', [], $pdoException);
 
         $method = new ReflectionMethod(ScheduledZnunyTicketCreationAttemptManualRetryService::class, 'isDuplicateManualRetryException');
 
-        $audit = new AuditLogger();
+        $audit = new AuditLogger;
         $retryService = new ScheduledZnunyTicketCreationAttemptManualRetryService(
             $this->createStub(ScheduledZnunyTicketCreationAttemptManualReviewService::class),
             $audit
@@ -447,14 +462,17 @@ final class ScheduledZnunyTicketCreationAttemptManualRetryServiceTest extends Te
         $user = User::factory()->create();
 
         $reader = $this->createMock(ZnunyTicketWorkspaceCacheReader::class);
-        $reader->expects($this->exactly(2))
+        $reader->expects($this->once())
             ->method('getTickets')
             ->willReturn([]);
 
-        $kernel = $this->createMock(Kernel::class);
-        $kernel->expects($this->once())->method('call')->willReturn(0);
+        $client = $this->createMock(ZnunyClient::class);
+        $client->expects($this->once())
+            ->method('searchTicketsWithMetadata')
+            ->willReturn(['tickets' => []]);
 
-        $failingLogger = new class extends AuditLogger {
+        $failingLogger = new class extends AuditLogger
+        {
             public static function log(string $action, ?string $entityType = null, int|string|null $entityId = null, array $context = [], ?User $user = null): AuditLog
             {
                 throw new RuntimeException('Forced audit failure');
@@ -463,7 +481,7 @@ final class ScheduledZnunyTicketCreationAttemptManualRetryServiceTest extends Te
 
         Log::spy();
 
-        $retryService = $this->registerDependenciesAndGetService($reader, $kernel, $failingLogger);
+        $retryService = $this->registerDependenciesAndGetService($reader, $client, $failingLogger);
 
         $result = $retryService->retry($attempt->id, $user);
 

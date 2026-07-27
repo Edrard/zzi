@@ -2,15 +2,15 @@
 
 namespace App\Services\Znuny;
 
-use App\Enums\ZnunyTicketCreationAttemptStatus;
 use App\Enums\ScheduledZnunyTicketMarkerLookupStatus;
+use App\Enums\ZnunyTicketCreationAttemptStatus;
 use App\Models\ScheduledZnunyTask;
 use App\Models\ScheduledZnunyTaskRun;
 use App\Models\ZnunyTicketCreationAttempt;
 
 class ScheduledZnunyTicketCreationAttemptManualReviewService
 {
-    function __construct(
+    public function __construct(
         private readonly ScheduledZnunyTicketMarkerLookupService $markerLookup,
         private readonly ScheduledZnunyTicketMarkerRefreshLookupService $refreshLookup
     ) {}
@@ -21,6 +21,7 @@ class ScheduledZnunyTicketCreationAttemptManualReviewService
 
         if (! $context['eligible']) {
             unset($context['attempt_model']);
+
             return $context;
         }
 
@@ -43,6 +44,7 @@ class ScheduledZnunyTicketCreationAttemptManualReviewService
 
         if (! $context['eligible']) {
             unset($context['attempt_model']);
+
             return $context;
         }
 
@@ -50,8 +52,32 @@ class ScheduledZnunyTicketCreationAttemptManualReviewService
         $attempt = $context['attempt_model'];
         unset($context['attempt_model']);
 
-        $lookupResult = $this->refreshLookup->findExactMarkerWithRefresh($attempt->marker);
+        $lookupResult = $this->refreshLookup->findExactMarkerWithRefresh($attempt);
 
+        return $this->mergeLookupResult($context, $lookupResult);
+    }
+
+    public function forceRecheck(string|int $attemptId): array
+    {
+        $context = $this->buildContext($attemptId);
+
+        if (! $context['eligible']) {
+            unset($context['attempt_model']);
+
+            return $context;
+        }
+
+        /** @var ZnunyTicketCreationAttempt $attempt */
+        $attempt = $context['attempt_model'];
+        unset($context['attempt_model']);
+
+        $lookupResult = $this->refreshLookup->refreshAndFindExactMarker($attempt);
+
+        return $this->mergeLookupResult($context, $lookupResult);
+    }
+
+    private function mergeLookupResult(array $context, array $lookupResult): array
+    {
         $context['lookup_status'] = $lookupResult['status'];
         $context['matches'] = $lookupResult['matches'];
         $context['reason'] = $lookupResult['reason'];
@@ -107,6 +133,7 @@ class ScheduledZnunyTicketCreationAttemptManualReviewService
         if ($attempt->source_type !== 'scheduled_run') {
             $base['resolved'] = $this->isResolvedStatus($attempt->status);
             $base['reason'] = 'Only scheduled-run ticket creation attempts support manual resolution.';
+
             return $base;
         }
 
@@ -128,23 +155,27 @@ class ScheduledZnunyTicketCreationAttemptManualReviewService
                 $base['resolved'] = false;
                 $base['reason'] = 'Attempt status is resolved but it lacks valid ticket identifiers.';
             }
+
             return $base;
         }
 
         if ($attempt->status !== ZnunyTicketCreationAttemptStatus::Uncertain) {
             $base['resolved'] = ($attempt->status === ZnunyTicketCreationAttemptStatus::ResolvedWithoutTicket);
             $base['reason'] = 'Attempt status is not eligible for manual resolution.';
+
             return $base;
         }
 
         if ($attempt->marker === null || trim($attempt->marker) === '') {
             $base['reason'] = 'The scheduled ticket creation attempt has no marker.';
+
             return $base;
         }
 
         $run = ScheduledZnunyTaskRun::find($attempt->source_id);
         if (! $run) {
             $base['reason'] = 'The Scheduled Znuny task run linked to this attempt was not found.';
+
             return $base;
         }
 
@@ -154,6 +185,7 @@ class ScheduledZnunyTicketCreationAttemptManualReviewService
         $task = ScheduledZnunyTask::find($run->scheduled_znuny_task_id);
         if (! $task) {
             $base['reason'] = 'The Scheduled Znuny task linked to this attempt was not found.';
+
             return $base;
         }
 

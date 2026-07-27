@@ -80,6 +80,10 @@ final class ScheduledZnunyTicketMarkerLookupService
                     $openMatches[] = [
                         'ticket_id' => $ticketId,
                         'ticket_number' => $ticketNumber,
+                        'title' => $title,
+                        'state' => isset($ticket['State']) ? (string) $ticket['State'] : null,
+                        'state_type' => isset($ticket['StateType']) ? (string) $ticket['StateType'] : null,
+                        'queue' => isset($ticket['Queue']) ? (string) $ticket['Queue'] : null,
                     ];
                 } else {
                     $invalidOpenMatches++;

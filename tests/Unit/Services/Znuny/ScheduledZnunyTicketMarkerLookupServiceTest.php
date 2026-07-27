@@ -10,6 +10,7 @@ use PHPUnit\Framework\TestCase;
 class ScheduledZnunyTicketMarkerLookupServiceTest extends TestCase
 {
     private ZnunyTicketWorkspaceCacheReader $cacheReaderMock;
+
     private ScheduledZnunyTicketMarkerLookupService $service;
 
     protected function setUp(): void
@@ -100,7 +101,7 @@ class ScheduledZnunyTicketMarkerLookupServiceTest extends TestCase
                 'TicketNumber' => 'TN1',
                 'Title' => 'Something else entirely',
                 'StateType' => 'open',
-            ]
+            ],
         ]);
 
         $result = $this->service->findExactMarker('MARKER123');
@@ -122,7 +123,7 @@ class ScheduledZnunyTicketMarkerLookupServiceTest extends TestCase
                 'TicketNumber' => 'TN3',
                 'Title' => 'Another closed MARKER123',
                 'StateType' => 'merged', // ignored defensively
-            ]
+            ],
         ]);
 
         $result = $this->service->findExactMarker('MARKER123');
@@ -138,7 +139,7 @@ class ScheduledZnunyTicketMarkerLookupServiceTest extends TestCase
                 'TicketNumber' => 'TN10',
                 'Title' => 'Notification for [MARKER123] issue',
                 'StateType' => 'open',
-            ]
+            ],
         ]);
 
         $result = $this->service->findExactMarker('MARKER123');
@@ -147,7 +148,7 @@ class ScheduledZnunyTicketMarkerLookupServiceTest extends TestCase
         $this->assertEquals(1, $result['match_count']);
         $this->assertEquals(10, $result['ticket_id']);
         $this->assertEquals('TN10', $result['ticket_number']);
-        $this->assertEquals([['ticket_id' => 10, 'ticket_number' => 'TN10']], $result['matches']);
+        $this->assertEquals([['ticket_id' => 10, 'ticket_number' => 'TN10', 'title' => 'Notification for [MARKER123] issue', 'state' => null, 'state_type' => 'open', 'queue' => null]], $result['matches']);
         $this->assertNull($result['reason']);
     }
 
@@ -165,7 +166,7 @@ class ScheduledZnunyTicketMarkerLookupServiceTest extends TestCase
                 'TicketNumber' => 'TN20',
                 'Title' => 'Notification for [MARKER123] issue',
                 'StateType' => 'closed',
-            ]
+            ],
         ]);
 
         $result = $this->service->findExactMarker('MARKER123');
@@ -174,7 +175,9 @@ class ScheduledZnunyTicketMarkerLookupServiceTest extends TestCase
         $this->assertEquals(1, $result['match_count']);
         $this->assertEquals(10, $result['ticket_id']);
         $this->assertEquals('TN10', $result['ticket_number']);
-        $this->assertEquals([['ticket_id' => 10, 'ticket_number' => 'TN10']], $result['matches']);
+        $this->assertEquals([
+            ['ticket_id' => 10, 'ticket_number' => 'TN10', 'title' => 'Notification for [MARKER123] issue', 'state' => null, 'state_type' => 'open', 'queue' => null],
+        ], $result['matches']);
     }
 
     public function test_ticket_number_trimming()
@@ -185,7 +188,7 @@ class ScheduledZnunyTicketMarkerLookupServiceTest extends TestCase
                 'TicketNumber' => '  TN10  ',
                 'Title' => 'Notification for [MARKER123] issue',
                 'StateType' => 'open',
-            ]
+            ],
         ]);
 
         $result = $this->service->findExactMarker('MARKER123');
@@ -203,7 +206,7 @@ class ScheduledZnunyTicketMarkerLookupServiceTest extends TestCase
                 'TicketNumber' => 'TN10',
                 'Title' => 'Notification for [MARKER1234] issue', // 1234 != 123
                 'StateType' => 'open',
-            ]
+            ],
         ]);
 
         $result = $this->service->findExactMarker('[MARKER123]');
@@ -219,7 +222,7 @@ class ScheduledZnunyTicketMarkerLookupServiceTest extends TestCase
                 'TicketNumber' => 'TN10',
                 'Title' => 'Subject marker123',
                 'StateType' => 'open',
-            ]
+            ],
         ]);
 
         $result = $this->service->findExactMarker('MARKER123');
@@ -253,7 +256,7 @@ class ScheduledZnunyTicketMarkerLookupServiceTest extends TestCase
                 'TicketNumber' => 'TN15A',
                 'Title' => 'Tie breaker MARKER123',
                 'StateType' => 'open',
-            ]
+            ],
         ]);
 
         $result = $this->service->findExactMarker('MARKER123');
@@ -286,7 +289,7 @@ class ScheduledZnunyTicketMarkerLookupServiceTest extends TestCase
                 'TicketNumber' => 'TN10',
                 'Title' => 'Subject MARKER123',
                 'StateType' => 'open',
-            ]
+            ],
         ]);
 
         $result = $this->service->findExactMarker('MARKER123');
@@ -307,7 +310,7 @@ class ScheduledZnunyTicketMarkerLookupServiceTest extends TestCase
                 'TicketNumber' => '   ', // Invalid (empty after trim)
                 'Title' => 'Subject MARKER123',
                 'StateType' => 'open',
-            ]
+            ],
         ]);
 
         $result = $this->service->findExactMarker('MARKER123');
@@ -340,7 +343,7 @@ class ScheduledZnunyTicketMarkerLookupServiceTest extends TestCase
                 'TicketNumber' => 'TN10', // Valid
                 'Title' => 'Yet another MARKER123',
                 'StateType' => 'open',
-            ]
+            ],
         ]);
 
         $result = $this->service->findExactMarker('MARKER123');

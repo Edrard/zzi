@@ -681,4 +681,30 @@ class ZnunyClientTest extends TestCase
 
         $this->assertEquals(1, $response['Success']);
     }
+
+    public function test_search_tickets_preserves_title_and_created_dates()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/ZnunyAgentListTicketSearch*' => function (Request $request) {
+                if (isset($request['Title']) && $request['Title'] === '*MARKER*' &&
+                    isset($request['CreatedFrom']) && $request['CreatedFrom'] === '2026-07-27 09:00:00' &&
+                    isset($request['CreatedTo']) && $request['CreatedTo'] === '2026-07-27 11:00:00') {
+                    return Http::response(['Tickets' => []], 200);
+                }
+
+                return Http::response(['Errors' => ['Filter mismatch']], 400);
+            },
+        ]);
+
+        $client = new ZnunyClient;
+        $response = $client->searchTicketsWithMetadata([
+            'Title' => '*MARKER*',
+            'CreatedFrom' => '2026-07-27 09:00:00',
+            'CreatedTo' => '2026-07-27 11:00:00',
+        ]);
+
+        $this->assertArrayHasKey('tickets', $response);
+        $this->assertArrayNotHasKey('errors', $response);
+    }
 }

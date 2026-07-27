@@ -26,8 +26,11 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
     protected string $view = 'filament.resources.scheduled-znuny-task-runs.pages.review-scheduled-znuny-task-run-attempt';
 
     public array $reviewContext = [];
+
     public ?string $lookupStatus = null;
+
     public array $lookupMatches = [];
+
     public ?string $lastRecheckedAt = null;
 
     public function getTitle(): string|Htmlable
@@ -49,8 +52,7 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                 ->label(__('scheduled_znuny_task_runs.review.actions.manual_link.label'))
                 ->icon('heroicon-o-link')
                 ->color('primary')
-                ->visible(fn () =>
-                    ($this->reviewContext['eligible'] ?? false) === true
+                ->visible(fn () => ($this->reviewContext['eligible'] ?? false) === true
                     && ($this->reviewContext['attempt_status'] ?? null) === ZnunyTicketCreationAttemptStatus::Uncertain->value
                     && in_array($this->lookupStatus, [ScheduledZnunyTicketMarkerLookupStatus::Found->value, ScheduledZnunyTicketMarkerLookupStatus::Multiple->value], true)
                     && count($this->lookupMatches) > 0
@@ -64,6 +66,7 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                             'ticket_id' => $this->lookupMatches[0]['ticket_id'],
                         ]);
                     }
+
                     return __('scheduled_znuny_task_runs.review.actions.manual_link.modal_description_multiple');
                 })
                 ->modalSubmitActionLabel(__('scheduled_znuny_task_runs.review.actions.manual_link.submit'))
@@ -74,7 +77,7 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
 
                     $options = [];
                     foreach ($this->lookupMatches as $index => $match) {
-                        $options[$index] = $match['ticket_number'] . ' (ID: ' . $match['ticket_id'] . ')';
+                        $options[$index] = $match['ticket_number'].' (ID: '.$match['ticket_id'].')';
                     }
 
                     return [
@@ -93,6 +96,7 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                             ->body(__('scheduled_znuny_task_runs.review.notifications.changed.body'))
                             ->warning()
                             ->send();
+
                         return;
                     }
 
@@ -109,6 +113,7 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                                 ->body(__('scheduled_znuny_task_runs.review.notifications.changed.body'))
                                 ->warning()
                                 ->send();
+
                             return;
                         }
                         $ticketId = $match['ticket_id'];
@@ -124,6 +129,7 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                             ->body(__('scheduled_znuny_task_runs.review.notifications.unexpected_error.body'))
                             ->danger()
                             ->send();
+
                         return;
                     }
 
@@ -153,8 +159,7 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                 ->label(__('scheduled_znuny_task_runs.review.actions.manual_retry.label'))
                 ->icon('heroicon-o-arrow-path-rounded-square')
                 ->color('danger')
-                ->visible(fn () =>
-                    ($this->reviewContext['eligible'] ?? false) === true
+                ->visible(fn () => ($this->reviewContext['eligible'] ?? false) === true
                     && ($this->reviewContext['attempt_status'] ?? null) === ZnunyTicketCreationAttemptStatus::Uncertain->value
                     && $this->lookupStatus === ScheduledZnunyTicketMarkerLookupStatus::NotFound->value
                 )
@@ -171,6 +176,7 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                             ->body(__('scheduled_znuny_task_runs.review.notifications.changed.body'))
                             ->warning()
                             ->send();
+
                         return;
                     }
 
@@ -183,6 +189,7 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                             ->body(__('scheduled_znuny_task_runs.review.notifications.unexpected_error.body'))
                             ->danger()
                             ->send();
+
                         return;
                     }
 
@@ -213,10 +220,9 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                 ->label(__('scheduled_znuny_task_runs.review.actions.recheck'))
                 ->icon('heroicon-o-arrow-path')
                 ->action('recheck')
-                ->visible(fn () =>
-                    ($this->reviewContext['eligible'] ?? false) === true
+                ->visible(fn () => ($this->reviewContext['eligible'] ?? false) === true
                     && ($this->reviewContext['attempt_status'] ?? null) === ZnunyTicketCreationAttemptStatus::Uncertain->value
-                    && !empty($this->reviewContext['attempt_id'])
+                    && ! empty($this->reviewContext['attempt_id'])
                 ),
         ];
     }
@@ -232,9 +238,10 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                 ->body(__('scheduled_znuny_task_runs.review.notifications.changed.body'))
                 ->warning()
                 ->send();
+
             return;
         }
-        $rawContext = $reviewService->recheck($attemptId);
+        $rawContext = $reviewService->forceRecheck($attemptId);
         $normalized = $this->normalizeServiceContext($rawContext);
 
         $this->record->refresh();
@@ -249,6 +256,7 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                 ->body(__('scheduled_znuny_task_runs.review.notifications.changed.body'))
                 ->warning()
                 ->send();
+
             return;
         }
 
@@ -315,6 +323,7 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
 
             if (! $attempt) {
                 $this->clearReviewState();
+
                 return false;
             }
 

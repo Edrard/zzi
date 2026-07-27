@@ -2,16 +2,16 @@
 
 namespace Tests\Feature\Services\Znuny;
 
-use App\Enums\ZnunyTicketCreationAttemptStatus;
 use App\Enums\ScheduledZnunyTicketMarkerLookupStatus;
+use App\Enums\ZnunyTicketCreationAttemptStatus;
 use App\Models\ScheduledZnunyTask;
 use App\Models\ScheduledZnunyTaskRun;
 use App\Models\ZnunyTicketCreationAttempt;
 use App\Services\Znuny\ScheduledZnunyTicketCreationAttemptManualReviewService;
 use App\Services\Znuny\ScheduledZnunyTicketMarkerLookupService;
 use App\Services\Znuny\ScheduledZnunyTicketMarkerRefreshLookupService;
+use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketWorkspaceCacheReader;
-use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -20,11 +20,16 @@ class ScheduledZnunyTicketCreationAttemptManualReviewServiceTest extends TestCas
     use RefreshDatabase;
 
     private ScheduledZnunyTask $task;
+
     private ScheduledZnunyTaskRun $run;
+
     private ZnunyTicketCreationAttempt $attempt;
+
     private ScheduledZnunyTicketCreationAttemptManualReviewService $reviewService;
+
     private ZnunyTicketWorkspaceCacheReader $cacheReaderMock;
-    private Kernel $consoleMock;
+
+    private ZnunyClient $clientMock;
 
     protected function setUp(): void
     {
@@ -68,11 +73,11 @@ class ScheduledZnunyTicketCreationAttemptManualReviewServiceTest extends TestCas
         $this->cacheReaderMock = $this->createMock(ZnunyTicketWorkspaceCacheReader::class);
         $this->app->instance(ZnunyTicketWorkspaceCacheReader::class, $this->cacheReaderMock);
 
-        $this->consoleMock = $this->createStub(Kernel::class);
-        $this->app->instance(Kernel::class, $this->consoleMock);
+        $this->clientMock = $this->createStub(ZnunyClient::class);
+        $this->app->instance(ZnunyClient::class, $this->clientMock);
 
         $lookupService = new ScheduledZnunyTicketMarkerLookupService($this->cacheReaderMock);
-        $refreshService = new ScheduledZnunyTicketMarkerRefreshLookupService($lookupService, $this->consoleMock);
+        $refreshService = new ScheduledZnunyTicketMarkerRefreshLookupService($lookupService, $this->clientMock);
 
         $this->reviewService = new ScheduledZnunyTicketCreationAttemptManualReviewService(
             $lookupService,
@@ -90,13 +95,13 @@ class ScheduledZnunyTicketCreationAttemptManualReviewServiceTest extends TestCas
         ];
     }
 
-    private function configureActiveKernelMock(): void
+    private function configureActiveClientMock(): void
     {
-        $this->consoleMock = $this->createMock(Kernel::class);
-        $this->app->instance(Kernel::class, $this->consoleMock);
+        $this->clientMock = $this->createMock(ZnunyClient::class);
+        $this->app->instance(ZnunyClient::class, $this->clientMock);
 
         $lookupService = new ScheduledZnunyTicketMarkerLookupService($this->cacheReaderMock);
-        $refreshService = new ScheduledZnunyTicketMarkerRefreshLookupService($lookupService, $this->consoleMock);
+        $refreshService = new ScheduledZnunyTicketMarkerRefreshLookupService($lookupService, $this->clientMock);
 
         $this->reviewService = new ScheduledZnunyTicketCreationAttemptManualReviewService(
             $lookupService,
@@ -336,8 +341,8 @@ class ScheduledZnunyTicketCreationAttemptManualReviewServiceTest extends TestCas
         $this->assertEquals('Attempt status is not eligible for manual resolution.', $result['reason']);
     }
 
-    // 13. local inspect() returns NotFound without cache warming
-    public function test_local_inspect_not_found_without_warming()
+    // 13. local inspect() returns NotFound without calling API fallback
+    public function test_local_inspect_not_found_without_api_call()
     {
         $this->cacheReaderMock->expects($this->once())
             ->method('getTickets')
@@ -409,8 +414,8 @@ class ScheduledZnunyTicketCreationAttemptManualReviewServiceTest extends TestCas
         $this->assertFalse($result['refresh_succeeded']);
     }
 
-    // 17. recheck() with immediate Found does not warm
-    public function test_recheck_immediate_found_does_not_warm()
+    // 17. recheck() with immediate Found does not call API fallback
+    public function test_recheck_immediate_found_does_not_call_api()
     {
         $this->cacheReaderMock->expects($this->once())
             ->method('getTickets')
@@ -428,22 +433,18 @@ class ScheduledZnunyTicketCreationAttemptManualReviewServiceTest extends TestCas
         $this->assertUnchangedState();
     }
 
-    // 18. recheck() with NotFound warms once and finds a ticket
-    public function test_recheck_not_found_warms_and_finds_ticket()
+    // 18. recheck() with NotFound calls API fallback and finds a ticket
+    public function test_recheck_not_found_calls_api_fallback_and_finds_ticket()
     {
-        $this->configureActiveKernelMock();
+        $this->configureActiveClientMock();
 
-        $this->cacheReaderMock->expects($this->exactly(2))
+        $this->cacheReaderMock->expects($this->once())
             ->method('getTickets')
-            ->willReturnOnConsecutiveCalls(
-                [], // first call: not found
-                [$this->getTicketFixture(2, 'TN2', 'new', 'Has marker_123 yes')] // second call: found
-            );
+            ->willReturn([]);
 
-        $this->consoleMock->expects($this->once())
-            ->method('call')
-            ->with('znuny:warm-ticket-workspace-cache', ['--manual' => true])
-            ->willReturn(0);
+        $this->clientMock->expects($this->once())
+            ->method('searchTicketsWithMetadata')
+            ->willReturn(['tickets' => [$this->getTicketFixture(2, 'TN2', 'new', 'Has marker_123 yes')]]);
 
         $result = $this->reviewService->recheck($this->attempt->id);
 
@@ -451,24 +452,23 @@ class ScheduledZnunyTicketCreationAttemptManualReviewServiceTest extends TestCas
         $this->assertEquals(ScheduledZnunyTicketMarkerLookupStatus::Found, $result['lookup_status']);
         $this->assertTrue($result['refresh_attempted']);
         $this->assertTrue($result['refresh_succeeded']);
-        $this->assertEquals(0, $result['refresh_exit_code']);
+        $this->assertNull($result['refresh_exit_code']);
 
         $this->assertUnchangedState();
     }
 
-    // 19. recheck() with NotFound warms once and remains NotFound
-    public function test_recheck_not_found_warms_and_remains_not_found()
+    // 19. recheck() with NotFound calls API fallback and remains NotFound
+    public function test_recheck_not_found_calls_api_fallback_and_remains_not_found()
     {
-        $this->configureActiveKernelMock();
+        $this->configureActiveClientMock();
 
-        $this->cacheReaderMock->expects($this->exactly(2))
+        $this->cacheReaderMock->expects($this->once())
             ->method('getTickets')
-            ->willReturnOnConsecutiveCalls([], []);
+            ->willReturn([]);
 
-        $this->consoleMock->expects($this->once())
-            ->method('call')
-            ->with('znuny:warm-ticket-workspace-cache', ['--manual' => true])
-            ->willReturn(0);
+        $this->clientMock->expects($this->once())
+            ->method('searchTicketsWithMetadata')
+            ->willReturn(['tickets' => []]);
 
         $result = $this->reviewService->recheck($this->attempt->id);
 
@@ -476,22 +476,21 @@ class ScheduledZnunyTicketCreationAttemptManualReviewServiceTest extends TestCas
         $this->assertEquals(ScheduledZnunyTicketMarkerLookupStatus::NotFound, $result['lookup_status']);
         $this->assertTrue($result['refresh_attempted']);
         $this->assertTrue($result['refresh_succeeded']);
-        $this->assertEquals(0, $result['refresh_exit_code']);
+        $this->assertNull($result['refresh_exit_code']);
     }
 
-    // 20. recheck() with refresh failure returns Unavailable
-    public function test_recheck_with_refresh_failure_returns_unavailable()
+    // 20. recheck() with api fallback failure returns Unavailable
+    public function test_recheck_with_api_fallback_failure_returns_unavailable()
     {
-        $this->configureActiveKernelMock();
+        $this->configureActiveClientMock();
 
         $this->cacheReaderMock->expects($this->once())
             ->method('getTickets')
             ->willReturn([]);
 
-        $this->consoleMock->expects($this->once())
-            ->method('call')
-            ->with('znuny:warm-ticket-workspace-cache', ['--manual' => true])
-            ->willReturn(1); // non-zero exit code
+        $this->clientMock->expects($this->once())
+            ->method('searchTicketsWithMetadata')
+            ->willThrowException(new \Exception('Timeout'));
 
         $result = $this->reviewService->recheck($this->attempt->id);
 
@@ -499,7 +498,7 @@ class ScheduledZnunyTicketCreationAttemptManualReviewServiceTest extends TestCas
         $this->assertEquals(ScheduledZnunyTicketMarkerLookupStatus::Unavailable, $result['lookup_status']);
         $this->assertTrue($result['refresh_attempted']);
         $this->assertFalse($result['refresh_succeeded']);
-        $this->assertEquals(1, $result['refresh_exit_code']);
+        $this->assertNull($result['refresh_exit_code']);
     }
 
     // 21 & 22 are verified via assertUnchangedState in various tests above.

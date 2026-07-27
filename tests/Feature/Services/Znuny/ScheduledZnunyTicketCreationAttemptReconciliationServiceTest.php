@@ -8,8 +8,8 @@ use App\Models\ZnunyTicketCreationAttempt;
 use App\Services\Znuny\ScheduledZnunyTicketCreationAttemptReconciliationService;
 use App\Services\Znuny\ScheduledZnunyTicketMarkerLookupService;
 use App\Services\Znuny\ScheduledZnunyTicketMarkerRefreshLookupService;
+use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketWorkspaceCacheReader;
-use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -25,20 +25,21 @@ class ScheduledZnunyTicketCreationAttemptReconciliationServiceTest extends TestC
         $this->cacheReaderMock = $this->createMock(ZnunyTicketWorkspaceCacheReader::class);
     }
 
-    private function buildService(bool $needsConsoleMock = false, int $consoleReturn = 0): ScheduledZnunyTicketCreationAttemptReconciliationService
+    private function buildService(?ZnunyClient $clientMock = null, bool $needsClientMock = false, ?array $clientReturn = null): ScheduledZnunyTicketCreationAttemptReconciliationService
     {
-        if ($needsConsoleMock) {
-            $console = $this->createMock(Kernel::class);
-            $console->expects($this->once())
-                ->method('call')
-                ->with('znuny:warm-ticket-workspace-cache', ['--manual' => true])
-                ->willReturn($consoleReturn);
+        if ($clientMock !== null) {
+            $client = $clientMock;
+        } elseif ($needsClientMock) {
+            $client = $this->createMock(ZnunyClient::class);
+            $client->expects($this->once())
+                ->method('searchTicketsWithMetadata')
+                ->willReturn($clientReturn ?? ['tickets' => []]);
         } else {
-            $console = $this->createStub(Kernel::class);
+            $client = $this->createStub(ZnunyClient::class);
         }
 
         $lookupService = new ScheduledZnunyTicketMarkerLookupService($this->cacheReaderMock);
-        $refreshService = new ScheduledZnunyTicketMarkerRefreshLookupService($lookupService, $console);
+        $refreshService = new ScheduledZnunyTicketMarkerRefreshLookupService($lookupService, $client);
 
         return new ScheduledZnunyTicketCreationAttemptReconciliationService($refreshService);
     }
@@ -56,21 +57,6 @@ class ScheduledZnunyTicketCreationAttemptReconciliationServiceTest extends TestC
                 ],
             ])
             ->willReturn($tickets);
-    }
-
-    private function expectReaderToReturnInSequence(array $firstTickets, array $secondTickets): void
-    {
-        $this->cacheReaderMock->expects($this->exactly(2))
-            ->method('getTickets')
-            ->with([
-                'state_types' => [
-                    'new',
-                    'open',
-                    'pending reminder',
-                    'pending auto',
-                ],
-            ])
-            ->willReturnOnConsecutiveCalls($firstTickets, $secondTickets);
     }
 
     public function test_missing_attempt_returns_unavailable()
@@ -260,13 +246,18 @@ class ScheduledZnunyTicketCreationAttemptReconciliationServiceTest extends TestC
             ->method('getTickets')
             ->willThrowException(new \Exception('Redis failed'));
 
-        $result = $this->buildService()->reconcile($attempt->id);
+        $clientMock = $this->createMock(ZnunyClient::class);
+        $clientMock->expects($this->once())
+            ->method('searchTicketsWithMetadata')
+            ->willThrowException(new \Exception('API failed'));
+
+        $result = $this->buildService($clientMock)->reconcile($attempt->id);
 
         $this->assertFalse($result['resolved']);
         $this->assertFalse($result['transitioned']);
         $this->assertEquals(ScheduledZnunyTicketMarkerLookupStatus::Unavailable, $result['lookup_status']);
-        $this->assertEquals('Failed to read Ticket Workspace cache.', $result['reason']);
-        $this->assertFalse($result['refresh_attempted']);
+        $this->assertEquals('Direct API fallback threw an exception.', $result['reason']);
+        $this->assertTrue($result['refresh_attempted']);
 
         $attempt->refresh();
         $this->assertEquals(ZnunyTicketCreationAttemptStatus::Uncertain, $attempt->status);
@@ -294,14 +285,14 @@ class ScheduledZnunyTicketCreationAttemptReconciliationServiceTest extends TestC
             'error_details' => 'Details',
         ]);
 
-        $this->expectReaderToReturnInSequence([], []);
+        $this->expectReaderToReturn([]);
 
-        $result = $this->buildService(needsConsoleMock: true, consoleReturn: 0)->reconcile($attempt->id);
+        $result = $this->buildService(needsClientMock: true, clientReturn: ['tickets' => []])->reconcile($attempt->id);
 
         $this->assertFalse($result['resolved']);
         $this->assertFalse($result['transitioned']);
         $this->assertEquals(ScheduledZnunyTicketMarkerLookupStatus::NotFound, $result['lookup_status']);
-        $this->assertEquals('No open Znuny ticket was found for the scheduled marker after refresh.', $result['reason']);
+        $this->assertEquals('No Znuny ticket was found for the scheduled marker in the direct recovery search.', $result['reason']);
         $this->assertTrue($result['refresh_attempted']);
 
         $attempt->refresh();
@@ -341,7 +332,7 @@ class ScheduledZnunyTicketCreationAttemptReconciliationServiceTest extends TestC
                 'TicketNumber' => 'TN10   ', // Untrimmed
                 'Title' => 'Notification for [MARKER123] issue',
                 'StateType' => 'open',
-            ]
+            ],
         ]);
 
         $result = $this->buildService()->reconcile($attempt->id);
@@ -394,7 +385,7 @@ class ScheduledZnunyTicketCreationAttemptReconciliationServiceTest extends TestC
                 'TicketNumber' => 'TN11',
                 'Title' => 'Notification for [MARKER123] issue',
                 'StateType' => 'open',
-            ]
+            ],
         ]);
 
         $result = $this->buildService()->reconcile($attempt->id);
@@ -442,7 +433,7 @@ class ScheduledZnunyTicketCreationAttemptReconciliationServiceTest extends TestC
                         'TicketNumber' => 'TN10',
                         'Title' => 'Notification for [MARKER123]',
                         'StateType' => 'open',
-                    ]
+                    ],
                 ];
             });
 
@@ -490,7 +481,7 @@ class ScheduledZnunyTicketCreationAttemptReconciliationServiceTest extends TestC
                         'TicketNumber' => 'TN10',
                         'Title' => 'Notification for [MARKER123]',
                         'StateType' => 'open',
-                    ]
+                    ],
                 ];
             });
 
