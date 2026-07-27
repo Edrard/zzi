@@ -7,9 +7,9 @@ use App\Models\User;
 
 class AuditLogger
 {
-    public static function log(string $action, ?string $entityType = null, int|string|null $entityId = null, array $context = [], ?User $user = null): AuditLog
+    public static function log(string $action, ?string $entityType = null, int|string|null $entityId = null, array $context = [], ?User $user = null, bool $useAuthenticatedUserFallback = true): AuditLog
     {
-        if ($user === null && auth()->check()) {
+        if ($user === null && $useAuthenticatedUserFallback && auth()->check()) {
             /** @var User $user */
             $user = auth()->user();
         }
