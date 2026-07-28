@@ -205,9 +205,97 @@
                 </table>
             </div>
         @else
-            <p class="text-sm text-gray-500 dark:text-gray-400">
-                {{ __('scheduled_znuny_task_runs.review.empty.matches') }}
-            </p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.empty.matches') }}</p>
+        @endif
+    </x-filament::section>
+
+    <x-filament::section>
+        <x-slot name="heading">
+            {{ __('scheduled_znuny_task_runs.review.sections.retry_chain') }}
+        </x-slot>
+
+        @if($isMalformedLineage)
+            <div class="rounded-md bg-red-50 p-4 dark:bg-red-900/50">
+                <p class="text-sm text-red-700 dark:text-red-400">{{ __('scheduled_znuny_task_runs.review.notifications.malformed_lineage.body') }}</p>
+            </div>
+        @elseif($retryChain->isEmpty())
+            <p class="text-sm text-gray-500 dark:text-gray-400">-</p>
+        @else
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm text-gray-500 dark:text-gray-400">
+                    <thead class="bg-gray-50 text-xs uppercase text-gray-700 dark:bg-gray-800 dark:text-gray-400">
+                        <tr>
+                            <th scope="col" class="px-4 py-3">{{ __('scheduled_znuny_task_runs.review.fields.run_id') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ __('scheduled_znuny_task_runs.review.fields.retry_sequence') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ __('scheduled_znuny_task_runs.review.fields.run_type') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ __('scheduled_znuny_task_runs.review.fields.run_status') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ __('scheduled_znuny_task_runs.review.fields.scheduled_time') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ __('scheduled_znuny_task_runs.review.fields.start_time') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ __('scheduled_znuny_task_runs.review.fields.finish_time') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ __('scheduled_znuny_task_runs.review.fields.created_by') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ __('scheduled_znuny_task_runs.review.fields.resolved_at') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ __('scheduled_znuny_task_runs.review.fields.resolution_type') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($retryChain as $chainRun)
+                            @php
+                                $isResolved = $chainRun->resolved_at !== null;
+                                $rowClass = $isResolved ? 'bg-gray-100 dark:bg-gray-800/70' : 'bg-white dark:bg-gray-900';
+                                $isLeaf = $currentLeafId === $chainRun->id;
+                            @endphp
+                            <tr class="border-b dark:border-gray-700 {{ $rowClass }}"
+                                data-run-id="{{ $chainRun->id }}"
+                                data-retry-sequence="{{ $chainRun->retry_sequence }}"
+                                data-current-leaf="{{ $isLeaf ? 'true' : 'false' }}"
+                                data-resolved="{{ $isResolved ? 'true' : 'false' }}"
+                                data-technical-status="{{ $chainRun->status }}">
+                                <td class="px-4 py-3 font-medium text-gray-900 dark:text-white">
+                                    {{ $chainRun->id }}
+                                    @if($isLeaf)
+                                        <span class="ml-2 inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                                            {{ __('scheduled_znuny_task_runs.review.fields.current_leaf') }}
+                                        </span>
+                                    @endif
+                                </td>
+                                <td class="px-4 py-3">{{ $chainRun->retry_sequence }}</td>
+                                <td class="px-4 py-3">{{ $chainRun->run_type }}</td>
+                                <td class="px-4 py-3">
+                                    <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300">
+                                        {{ $chainRun->status }}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3">{{ $chainRun->scheduled_for?->toDateTimeString() ?? '-' }}</td>
+                                <td class="px-4 py-3">{{ $chainRun->started_at?->toDateTimeString() ?? '-' }}</td>
+                                <td class="px-4 py-3">{{ $chainRun->finished_at?->toDateTimeString() ?? '-' }}</td>
+                                <td class="px-4 py-3">{{ $chainRun->createdBy?->name ?? '-' }}</td>
+                                <td class="px-4 py-3">
+                                    @if($isResolved)
+                                        {{ $chainRun->resolved_at?->toDateTimeString() ?? '-' }}
+                                    @else
+                                        -
+                                    @endif
+                                </td>
+                                <td class="px-4 py-3">
+                                    @if($isResolved)
+                                        @php
+                                            $resolutionKey = 'scheduled_znuny_task_runs.resolution_types.' . $chainRun->resolution_type;
+                                            $displayResolution = \Illuminate\Support\Facades\Lang::has($resolutionKey)
+                                                ? __($resolutionKey)
+                                                : ($chainRun->resolution_type ?? '-');
+                                        @endphp
+                                        <span class="text-xs font-medium text-gray-700 dark:text-gray-300">
+                                            {{ $displayResolution }}
+                                        </span>
+                                    @else
+                                        -
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
         @endif
     </x-filament::section>
 </x-filament-panels::page>

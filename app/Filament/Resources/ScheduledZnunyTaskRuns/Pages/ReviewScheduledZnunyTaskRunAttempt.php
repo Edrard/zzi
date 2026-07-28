@@ -5,8 +5,10 @@ namespace App\Filament\Resources\ScheduledZnunyTaskRuns\Pages;
 use App\Enums\ScheduledZnunyTicketMarkerLookupStatus;
 use App\Enums\ZnunyTicketCreationAttemptStatus;
 use App\Filament\Resources\ScheduledZnunyTaskRuns\ScheduledZnunyTaskRunResource;
+use App\Models\ScheduledZnunyTaskRun;
+use App\Models\User;
+use App\Services\Znuny\ScheduledZnunyTaskRunRetryService;
 use App\Services\Znuny\ScheduledZnunyTicketCreationAttemptManualLinkService;
-use App\Services\Znuny\ScheduledZnunyTicketCreationAttemptManualRetryService;
 use App\Services\Znuny\ScheduledZnunyTicketCreationAttemptManualReviewService;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -38,11 +40,159 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
         return __('scheduled_znuny_task_runs.review.title');
     }
 
+    public ?int $effectiveRootId = null;
+
+    public ?int $currentLeafId = null;
+
+    public bool $isMalformedLineage = false;
+
     public function mount(int|string $record): void
     {
         $this->record = $this->resolveRecord($record);
+
+        $this->reloadRetryChainState(true);
+
         $reviewService = app(ScheduledZnunyTicketCreationAttemptManualReviewService::class);
         $this->reloadPersistentContext($reviewService);
+    }
+
+    private function reloadRetryChainState(bool $notifyMalformed = true): bool
+    {
+        $this->record->refresh();
+
+        try {
+            $root = $this->record->effectiveRoot();
+            $this->validateAndLoadChain($root->id, $this->record->id, $notifyMalformed);
+
+            return true;
+        } catch (\LogicException $e) {
+            $this->effectiveRootId = null;
+            $this->currentLeafId = null;
+            $this->isMalformedLineage = true;
+
+            if ($notifyMalformed) {
+                Notification::make()
+                    ->title(__('scheduled_znuny_task_runs.review.notifications.malformed_lineage.title'))
+                    ->danger()
+                    ->send();
+            }
+
+            return false;
+        }
+    }
+
+    private function validateAndLoadChain(int $rootId, int $selectedId, bool $notifyMalformed = true): void
+    {
+        $retryChain = ScheduledZnunyTaskRun::with('createdBy')
+            ->where(function ($query) use ($rootId) {
+                $query->whereKey($rootId)
+                    ->orWhere('root_run_id', $rootId);
+            })
+            ->orderBy('retry_sequence', 'asc')
+            ->orderBy('id', 'asc')
+            ->get();
+
+        if ($retryChain->isEmpty()) {
+            throw new \LogicException('Retry chain is empty.');
+        }
+
+        $root = $retryChain->first();
+        if ($root->id !== $rootId || $root->root_run_id !== null || $root->parent_run_id !== null || $root->retry_sequence !== 0) {
+            throw new \LogicException('Retry chain root is invalid.');
+        }
+
+        $hasSelected = false;
+        $previousId = $root->id;
+        $previousSequence = 0;
+        $taskId = $root->scheduled_znuny_task_id;
+
+        $ids = [];
+        $sequences = [];
+
+        foreach ($retryChain as $index => $run) {
+            if (isset($ids[$run->id]) || isset($sequences[$run->retry_sequence])) {
+                throw new \LogicException('Duplicate ID or retry sequence detected in retry chain.');
+            }
+            $ids[$run->id] = true;
+            $sequences[$run->retry_sequence] = true;
+
+            if ($run->scheduled_znuny_task_id !== $taskId) {
+                throw new \LogicException('Task ID mismatch in retry chain.');
+            }
+
+            if ($run->id === $selectedId) {
+                $hasSelected = true;
+            }
+
+            if ($index > 0) {
+                if ($run->root_run_id !== $rootId || $run->parent_run_id !== $previousId || $run->retry_sequence !== $previousSequence + 1) {
+                    throw new \LogicException('Invalid lineage structure detected.');
+                }
+                $previousId = $run->id;
+                $previousSequence = $run->retry_sequence;
+            }
+        }
+
+        if (! $hasSelected) {
+            throw new \LogicException('Selected run is not part of the valid lineage.');
+        }
+
+        $this->effectiveRootId = $rootId;
+        $this->currentLeafId = $retryChain->last()->id;
+        $this->isMalformedLineage = false;
+    }
+
+    protected function getViewData(): array
+    {
+        $retryChain = collect();
+        if (! $this->isMalformedLineage && $this->effectiveRootId) {
+            $retryChain = ScheduledZnunyTaskRun::with('createdBy')
+                ->where(function ($query) {
+                    $query->whereKey($this->effectiveRootId)
+                        ->orWhere('root_run_id', $this->effectiveRootId);
+                })
+                ->orderBy('retry_sequence', 'asc')
+                ->orderBy('id', 'asc')
+                ->get();
+        }
+
+        return [
+            'retryChain' => $retryChain,
+            'effectiveRootId' => $this->effectiveRootId,
+            'currentLeafId' => $this->currentLeafId,
+            'isMalformedLineage' => $this->isMalformedLineage,
+        ];
+    }
+
+    public function getChainLeaf(): ?ScheduledZnunyTaskRun
+    {
+        if ($this->isMalformedLineage || ! $this->currentLeafId) {
+            return null;
+        }
+
+        return ScheduledZnunyTaskRun::find($this->currentLeafId);
+    }
+
+    public function isChainRetryEligible(): bool
+    {
+        $leaf = $this->getChainLeaf();
+        if (! $leaf) {
+            return false;
+        }
+        if ($leaf->isResolved() || $leaf->status === 'success') {
+            return false;
+        }
+
+        return in_array($leaf->status, ['failed', 'uncertain'], true);
+    }
+
+    private function isManualRetryAvailable(): bool
+    {
+        return $this->isChainRetryEligible()
+            && ($this->reviewContext['eligible'] ?? false) === true
+            && ($this->reviewContext['attempt_status'] ?? null) === ZnunyTicketCreationAttemptStatus::Uncertain->value
+            && $this->lookupStatus === ScheduledZnunyTicketMarkerLookupStatus::NotFound->value
+            && ! empty($this->reviewContext['attempt_id']);
     }
 
     protected function getHeaderActions(): array
@@ -159,18 +309,19 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                 ->label(__('scheduled_znuny_task_runs.review.actions.manual_retry.label'))
                 ->icon('heroicon-o-arrow-path-rounded-square')
                 ->color('danger')
-                ->visible(fn () => ($this->reviewContext['eligible'] ?? false) === true
-                    && ($this->reviewContext['attempt_status'] ?? null) === ZnunyTicketCreationAttemptStatus::Uncertain->value
-                    && $this->lookupStatus === ScheduledZnunyTicketMarkerLookupStatus::NotFound->value
-                )
+                ->visible(fn () => $this->isManualRetryAvailable())
                 ->requiresConfirmation()
                 ->modalHeading(__('scheduled_znuny_task_runs.review.actions.manual_retry.modal_heading'))
                 ->modalDescription(__('scheduled_znuny_task_runs.review.actions.manual_retry.modal_description'))
                 ->modalSubmitActionLabel(__('scheduled_znuny_task_runs.review.actions.manual_retry.submit'))
-                ->action(function (ScheduledZnunyTicketCreationAttemptManualRetryService $retryService, ScheduledZnunyTicketCreationAttemptManualReviewService $reviewService) {
-                    $attemptId = $this->reviewContext['attempt_id'] ?? null;
-                    if (! $attemptId) {
-                        $this->safelyReloadPersistentContext($reviewService);
+                ->action(function (ScheduledZnunyTaskRunRetryService $retryService, ScheduledZnunyTicketCreationAttemptManualReviewService $reviewService) {
+                    if ($this->isMalformedLineage) {
+                        return;
+                    }
+
+                    $this->safelyReloadPersistentContext($reviewService);
+
+                    if (! $this->isManualRetryAvailable()) {
                         Notification::make()
                             ->title(__('scheduled_znuny_task_runs.review.notifications.changed.title'))
                             ->body(__('scheduled_znuny_task_runs.review.notifications.changed.body'))
@@ -180,10 +331,8 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                         return;
                     }
 
-                    try {
-                        $result = $retryService->retry($attemptId);
-                    } catch (\Throwable $e) {
-                        $this->safelyReloadPersistentContext($reviewService);
+                    $actor = auth()->user();
+                    if (! $actor instanceof User) {
                         Notification::make()
                             ->title(__('scheduled_znuny_task_runs.review.notifications.unexpected_error.title'))
                             ->body(__('scheduled_znuny_task_runs.review.notifications.unexpected_error.body'))
@@ -193,6 +342,22 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                         return;
                     }
 
+                    try {
+                        $result = $retryService->retry($this->record->id, $actor);
+                    } catch (\Throwable $e) {
+                        $this->reloadRetryChainState(false);
+                        $this->safelyReloadPersistentContext($reviewService);
+
+                        Notification::make()
+                            ->title(__('scheduled_znuny_task_runs.review.notifications.unexpected_error.title'))
+                            ->body(__('scheduled_znuny_task_runs.review.notifications.unexpected_error.body'))
+                            ->danger()
+                            ->send();
+
+                        return;
+                    }
+
+                    $this->reloadRetryChainState(false);
                     $this->safelyReloadPersistentContext($reviewService);
 
                     if ($result['created']) {
@@ -205,13 +370,19 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                         Notification::make()
                             ->title(__('scheduled_znuny_task_runs.review.notifications.manual_retry_idempotent.title'))
                             ->body(__('scheduled_znuny_task_runs.review.notifications.manual_retry_idempotent.body', ['run_id' => $result['retry_run_id']]))
-                            ->success()
+                            ->info()
+                            ->send();
+                    } elseif ($result['closed']) {
+                        Notification::make()
+                            ->title(__('scheduled_znuny_task_runs.review.notifications.chain_closed.title'))
+                            ->body(__('scheduled_znuny_task_runs.review.notifications.chain_closed.body'))
+                            ->warning()
                             ->send();
                     } else {
                         Notification::make()
                             ->title(__('scheduled_znuny_task_runs.review.notifications.manual_retry_conflict.title'))
                             ->body(__('scheduled_znuny_task_runs.review.notifications.manual_retry_conflict.body'))
-                            ->warning()
+                            ->danger()
                             ->send();
                     }
                 }),
@@ -224,6 +395,7 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                     && ($this->reviewContext['attempt_status'] ?? null) === ZnunyTicketCreationAttemptStatus::Uncertain->value
                     && ! empty($this->reviewContext['attempt_id'])
                 ),
+
         ];
     }
 
