@@ -1081,4 +1081,76 @@ final class ScheduledZnunyTicketCreationAttemptManualLinkServiceTest extends Tes
 
         $this->assertSame(0, AuditLog::where('action', 'scheduled_znuny_attempt_manually_linked')->count());
     }
+
+    public function test_chain_member_with_wrong_scheduled_task_is_rejected(): void
+    {
+        $taskA = ScheduledZnunyTask::create(['name' => 'T1', 'enabled' => true, 'cron_expression' => '* * * * *', 'timezone' => 'UTC']);
+        $taskB = ScheduledZnunyTask::create(['name' => 'T2', 'enabled' => true, 'cron_expression' => '* * * * *', 'timezone' => 'UTC']);
+
+        $root = $this->createChainRun($taskA, ['status' => 'failed']);
+        $leaf = $this->createChainRun($taskB, ['status' => 'uncertain', 'root_run_id' => $root->id, 'parent_run_id' => $root->id, 'retry_sequence' => 1]);
+
+        $attempt = $this->createChainAttempt($leaf, 'uncertain');
+
+        $result = $this->prepareChainSuccess($attempt)->link($attempt->id, 99, 'TN99');
+
+        $this->assertFalse($result['linked']);
+        $this->assertFalse($result['transitioned'] ?? false);
+
+        $rootUpdatedAt = $root->updated_at->toDateTimeString();
+        $leafUpdatedAt = $leaf->updated_at->toDateTimeString();
+        $attemptUpdatedAt = $attempt->updated_at->toDateTimeString();
+        $taskAUpdatedAt = $taskA->updated_at->toDateTimeString();
+        $taskBUpdatedAt = $taskB->updated_at->toDateTimeString();
+
+        $root->refresh();
+        $leaf->refresh();
+        $attempt->refresh();
+        $taskA->refresh();
+        $taskB->refresh();
+
+        $this->assertSame($rootUpdatedAt, $root->updated_at->toDateTimeString());
+        $this->assertSame($leafUpdatedAt, $leaf->updated_at->toDateTimeString());
+        $this->assertSame($attemptUpdatedAt, $attempt->updated_at->toDateTimeString());
+        $this->assertSame($taskAUpdatedAt, $taskA->updated_at->toDateTimeString());
+        $this->assertSame($taskBUpdatedAt, $taskB->updated_at->toDateTimeString());
+        $this->assertSame('uncertain', $attempt->status->value);
+
+        $this->assertSame(0, AuditLog::where('action', 'scheduled_znuny_attempt_manually_linked')->count());
+    }
+
+    public function test_parent_outside_declared_chain_is_rejected(): void
+    {
+        $task = ScheduledZnunyTask::create(['name' => 'T1', 'enabled' => true, 'cron_expression' => '* * * * *', 'timezone' => 'UTC']);
+        $root = $this->createChainRun($task, ['status' => 'failed']);
+        $otherRun = $this->createChainRun($task, ['status' => 'failed']);
+        $leaf = $this->createChainRun($task, ['status' => 'uncertain', 'root_run_id' => $root->id, 'parent_run_id' => $otherRun->id, 'retry_sequence' => 1]);
+
+        $attempt = $this->createChainAttempt($leaf, 'uncertain');
+
+        $result = $this->prepareChainSuccess($attempt)->link($attempt->id, 99, 'TN99');
+
+        $this->assertFalse($result['linked']);
+        $this->assertFalse($result['transitioned'] ?? false);
+
+        $rootUpdatedAt = $root->updated_at->toDateTimeString();
+        $otherRunUpdatedAt = $otherRun->updated_at->toDateTimeString();
+        $leafUpdatedAt = $leaf->updated_at->toDateTimeString();
+        $attemptUpdatedAt = $attempt->updated_at->toDateTimeString();
+        $taskUpdatedAt = $task->updated_at->toDateTimeString();
+
+        $root->refresh();
+        $otherRun->refresh();
+        $leaf->refresh();
+        $attempt->refresh();
+        $task->refresh();
+
+        $this->assertSame($rootUpdatedAt, $root->updated_at->toDateTimeString());
+        $this->assertSame($otherRunUpdatedAt, $otherRun->updated_at->toDateTimeString());
+        $this->assertSame($leafUpdatedAt, $leaf->updated_at->toDateTimeString());
+        $this->assertSame($attemptUpdatedAt, $attempt->updated_at->toDateTimeString());
+        $this->assertSame($taskUpdatedAt, $task->updated_at->toDateTimeString());
+
+        $this->assertSame(0, AuditLog::where('action', 'scheduled_znuny_attempt_manually_linked')->count());
+    }
 }
