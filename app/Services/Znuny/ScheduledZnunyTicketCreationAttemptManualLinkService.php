@@ -37,7 +37,7 @@ final class ScheduledZnunyTicketCreationAttemptManualLinkService
                 ticketId: null,
                 ticketNumber: null,
                 lookupStatus: ScheduledZnunyTicketMarkerLookupStatus::Unavailable,
-                reason: 'The selected Znuny TicketID is invalid.'
+                reason: __('scheduled_znuny_task_runs.review.actions.manual_link.errors.invalid_id')
             );
         }
 
@@ -53,7 +53,125 @@ final class ScheduledZnunyTicketCreationAttemptManualLinkService
                 ticketId: null,
                 ticketNumber: null,
                 lookupStatus: ScheduledZnunyTicketMarkerLookupStatus::Unavailable,
-                reason: 'The selected Znuny TicketNumber is invalid.'
+                reason: __('scheduled_znuny_task_runs.review.actions.manual_link.errors.invalid_number')
+            );
+        }
+
+        $normalizedAttemptId = filter_var($attemptId, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if ($normalizedAttemptId === false) {
+            return $this->buildResult(
+                linked: false,
+                transitioned: false,
+                attemptId: $attemptId,
+                attemptStatus: null,
+                runId: null,
+                taskId: null,
+                ticketId: null,
+                ticketNumber: null,
+                lookupStatus: ScheduledZnunyTicketMarkerLookupStatus::Unavailable,
+                reason: __('scheduled_znuny_task_runs.review.actions.manual_link.errors.not_found')
+            );
+        }
+
+        $attempt = ZnunyTicketCreationAttempt::find($normalizedAttemptId);
+        if (! $attempt) {
+            return $this->buildResult(
+                linked: false,
+                transitioned: false,
+                attemptId: $normalizedAttemptId,
+                attemptStatus: null,
+                runId: null,
+                taskId: null,
+                ticketId: null,
+                ticketNumber: null,
+                lookupStatus: ScheduledZnunyTicketMarkerLookupStatus::Unavailable,
+                reason: __('scheduled_znuny_task_runs.review.actions.manual_link.errors.not_found')
+            );
+        }
+
+        if ($attempt->source_type !== 'scheduled_run') {
+            return $this->buildResult(
+                linked: false,
+                transitioned: false,
+                attemptId: $normalizedAttemptId,
+                attemptStatus: $attempt->status->value ?? null,
+                runId: $attempt->source_id,
+                taskId: null,
+                ticketId: null,
+                ticketNumber: null,
+                lookupStatus: ScheduledZnunyTicketMarkerLookupStatus::Unavailable,
+                reason: __('scheduled_znuny_task_runs.review.actions.manual_link.errors.not_scheduled')
+            );
+        }
+
+        $run = ScheduledZnunyTaskRun::find($attempt->source_id);
+        $taskId = $run ? $run->scheduled_znuny_task_id : null;
+
+        if ($attempt->status === ZnunyTicketCreationAttemptStatus::ManuallyLinked) {
+            $existingId = filter_var($attempt->ticket_id, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            $existingNumber = trim((string) $attempt->ticket_number);
+
+            if ($existingId === $normalizedTicketId && $existingNumber === $trimmedTicketNumber) {
+                return $this->buildResult(
+                    linked: true,
+                    transitioned: false,
+                    attemptId: $normalizedAttemptId,
+                    attemptStatus: $attempt->status->value,
+                    runId: $attempt->source_id,
+                    taskId: $taskId,
+                    ticketId: $normalizedTicketId,
+                    ticketNumber: $trimmedTicketNumber,
+                    lookupStatus: ScheduledZnunyTicketMarkerLookupStatus::Unavailable,
+                    reason: null
+                );
+            }
+
+            return $this->buildResult(
+                linked: false,
+                transitioned: false,
+                attemptId: $normalizedAttemptId,
+                attemptStatus: $attempt->status->value,
+                runId: $attempt->source_id,
+                taskId: $taskId,
+                ticketId: null,
+                ticketNumber: null,
+                lookupStatus: ScheduledZnunyTicketMarkerLookupStatus::Unavailable,
+                reason: __('scheduled_znuny_task_runs.review.actions.manual_link.errors.already_linked_different')
+            );
+        }
+
+        if (in_array($attempt->status, [
+            ZnunyTicketCreationAttemptStatus::Success,
+            ZnunyTicketCreationAttemptStatus::Recovered,
+            ZnunyTicketCreationAttemptStatus::ResolvedWithoutTicket,
+            ZnunyTicketCreationAttemptStatus::ConfirmedFailed,
+        ], true)) {
+            return $this->buildResult(
+                linked: false,
+                transitioned: false,
+                attemptId: $normalizedAttemptId,
+                attemptStatus: $attempt->status->value,
+                runId: $attempt->source_id,
+                taskId: $taskId,
+                ticketId: null,
+                ticketNumber: null,
+                lookupStatus: ScheduledZnunyTicketMarkerLookupStatus::Unavailable,
+                reason: __('scheduled_znuny_task_runs.review.actions.manual_link.errors.terminal_state')
+            );
+        }
+
+        if ($attempt->status !== ZnunyTicketCreationAttemptStatus::Uncertain) {
+            return $this->buildResult(
+                linked: false,
+                transitioned: false,
+                attemptId: $normalizedAttemptId,
+                attemptStatus: $attempt->status->value ?? null,
+                runId: $attempt->source_id,
+                taskId: $taskId,
+                ticketId: null,
+                ticketNumber: null,
+                lookupStatus: ScheduledZnunyTicketMarkerLookupStatus::Unavailable,
+                reason: __('scheduled_znuny_task_runs.review.actions.manual_link.errors.not_uncertain')
             );
         }
 
@@ -106,27 +224,36 @@ final class ScheduledZnunyTicketCreationAttemptManualLinkService
                 ticketId: null,
                 ticketNumber: null,
                 lookupStatus: $lookupStatus,
-                reason: 'The selected Znuny ticket is not present in the current marker lookup result.'
+                reason: __('scheduled_znuny_task_runs.review.actions.manual_link.errors.not_in_lookup')
             );
         }
 
-        $transitioned = false;
-        $finalStatus = null;
-        $conflictReason = null;
+        $transactionResult = null;
 
-        DB::transaction(function () use (
+        try {
+            $transactionResult = DB::transaction(function () use (
                 $attemptId,
                 $normalizedTicketId,
                 $trimmedTicketNumber,
-                $review,
-                &$transitioned,
-                &$finalStatus,
-                &$conflictReason
+                $review
             ) {
+                $lockedRun = ScheduledZnunyTaskRun::lockForUpdate()->find($review['run_id']);
+                if (! $lockedRun) {
+                    return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.run_not_found')];
+                }
+
+                $lockedTask = ScheduledZnunyTask::lockForUpdate()->find($review['task_id']);
+                if (! $lockedTask) {
+                    return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.task_not_found')];
+                }
+
                 $lockedAttempt = ZnunyTicketCreationAttempt::lockForUpdate()->find($attemptId);
                 if (! $lockedAttempt) {
-                    $conflictReason = 'The Scheduled Znuny ticket creation attempt changed during manual linking.';
-                    return;
+                    return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
+                }
+
+                if ((string) $lockedRun->scheduled_znuny_task_id !== (string) $review['task_id']) {
+                    return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
                 }
 
                 if ($lockedAttempt->status === ZnunyTicketCreationAttemptStatus::ManuallyLinked) {
@@ -134,28 +261,25 @@ final class ScheduledZnunyTicketCreationAttemptManualLinkService
                     $existingNumber = trim((string) $lockedAttempt->ticket_number);
 
                     if ($existingId === $normalizedTicketId && $existingNumber === $trimmedTicketNumber) {
-                        $transitioned = false;
-                        $finalStatus = $lockedAttempt->status->value;
-                        return;
+                        return [
+                            'transitioned' => false,
+                            'finalStatus' => $lockedAttempt->status->value,
+                        ];
                     }
 
-                    $conflictReason = 'The attempt has already been manually linked to a different Znuny ticket.';
-                    return;
+                    return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.already_linked_different')];
                 }
 
                 if ($lockedAttempt->status !== ZnunyTicketCreationAttemptStatus::Uncertain) {
-                    $conflictReason = 'The Scheduled Znuny ticket creation attempt changed during manual linking.';
-                    return;
+                    return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
                 }
 
                 if ($lockedAttempt->source_type !== 'scheduled_run') {
-                    $conflictReason = 'The Scheduled Znuny ticket creation attempt changed during manual linking.';
-                    return;
+                    return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
                 }
 
                 if ((string) $lockedAttempt->source_id !== (string) $review['run_id']) {
-                    $conflictReason = 'The Scheduled Znuny ticket creation attempt changed during manual linking.';
-                    return;
+                    return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
                 }
 
                 $lockedMarker = (string) $lockedAttempt->marker;
@@ -166,25 +290,11 @@ final class ScheduledZnunyTicketCreationAttemptManualLinkService
                     || trim($reviewMarker) === ''
                     || $lockedMarker !== $reviewMarker
                 ) {
-                    $conflictReason = 'The Scheduled Znuny ticket creation attempt changed during manual linking.';
-                    return;
+                    return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
                 }
 
-                $lockedRun = ScheduledZnunyTaskRun::lockForUpdate()->find($review['run_id']);
-                if (! $lockedRun) {
-                    $conflictReason = 'The Scheduled Znuny task run linked to this attempt was not found.';
-                    return;
-                }
-
-                if ((string) $lockedRun->scheduled_znuny_task_id !== (string) $review['task_id']) {
-                    $conflictReason = 'The Scheduled Znuny ticket creation attempt changed during manual linking.';
-                    return;
-                }
-
-                $lockedTask = ScheduledZnunyTask::lockForUpdate()->find($review['task_id']);
-                if (! $lockedTask) {
-                    $conflictReason = 'The Scheduled Znuny task linked to this attempt was not found.';
-                    return;
+                if ($lockedRun->resolved_at !== null) {
+                    return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
                 }
 
                 $lockedAttempt->status = ZnunyTicketCreationAttemptStatus::ManuallyLinked;
@@ -199,17 +309,29 @@ final class ScheduledZnunyTicketCreationAttemptManualLinkService
 
                 $lockedRun->ticket_id = $normalizedTicketId;
                 $lockedRun->ticket_number = $trimmedTicketNumber;
+                $lockedRun->resolved_at = Carbon::now('UTC');
+                $lockedRun->resolution_type = 'manual_link';
                 $lockedRun->save();
 
+                $lockedTask->last_status = 'success';
+                $lockedTask->last_error_summary = null;
                 $lockedTask->last_ticket_id = $normalizedTicketId;
                 $lockedTask->last_ticket_number = $trimmedTicketNumber;
                 $lockedTask->save();
 
-                $transitioned = true;
-                $finalStatus = $lockedAttempt->status->value;
+                return [
+                    'transitioned' => true,
+                    'finalStatus' => $lockedAttempt->status->value,
+                ];
             });
+        } catch (Throwable) {
+            Log::error('Transaction error during scheduled Znuny manual link.', [
+                'attempt_id' => $attemptId,
+            ]);
+            $transactionResult = ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.transaction_error')];
+        }
 
-        if ($conflictReason !== null) {
+        if (isset($transactionResult['conflictReason'])) {
             return $this->buildResult(
                 linked: false,
                 transitioned: false,
@@ -220,9 +342,12 @@ final class ScheduledZnunyTicketCreationAttemptManualLinkService
                 ticketId: null,
                 ticketNumber: null,
                 lookupStatus: $lookupStatus,
-                reason: $conflictReason
+                reason: $transactionResult['conflictReason']
             );
         }
+
+        $transitioned = $transactionResult['transitioned'] ?? false;
+        $finalStatus = $transactionResult['finalStatus'] ?? null;
 
         if ($transitioned) {
             try {
@@ -239,6 +364,7 @@ final class ScheduledZnunyTicketCreationAttemptManualLinkService
                         'marker' => $review['marker'] ?? null,
                         'previous_status' => ZnunyTicketCreationAttemptStatus::Uncertain->value,
                         'new_status' => ZnunyTicketCreationAttemptStatus::ManuallyLinked->value,
+                        'resolution_type' => 'manual_link',
                     ]
                 );
             } catch (Throwable) {
@@ -267,11 +393,11 @@ final class ScheduledZnunyTicketCreationAttemptManualLinkService
         bool $linked,
         bool $transitioned,
         int|string|null $attemptId,
-        string|null $attemptStatus,
+        ?string $attemptStatus,
         int|string|null $runId,
         int|string|null $taskId,
         int|string|null $ticketId,
-        string|null $ticketNumber,
+        ?string $ticketNumber,
         ScheduledZnunyTicketMarkerLookupStatus $lookupStatus,
         ?string $reason
     ): array {
