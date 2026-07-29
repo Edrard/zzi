@@ -237,10 +237,120 @@ final class ScheduledZnunyTicketCreationAttemptManualLinkService
                 $trimmedTicketNumber,
                 $review
             ) {
-                $lockedRun = ScheduledZnunyTaskRun::lockForUpdate()->find($review['run_id']);
-                if (! $lockedRun) {
+                $selectedRun = ScheduledZnunyTaskRun::find($review['run_id']);
+                if (! $selectedRun) {
                     return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.run_not_found')];
                 }
+
+                $expectedRootId = $selectedRun->root_run_id ?? $selectedRun->id;
+
+                $lockedMembers = ScheduledZnunyTaskRun::where(function ($query) use ($expectedRootId) {
+                    $query->where('id', $expectedRootId)
+                        ->orWhere('root_run_id', $expectedRootId);
+                })
+                    ->lockForUpdate()
+                    ->orderBy('retry_sequence')
+                    ->orderBy('id')
+                    ->get();
+
+                $lockedMemberIds = $lockedMembers->pluck('id')->toArray();
+
+                $rogueChildren = ScheduledZnunyTaskRun::whereIn('parent_run_id', $lockedMemberIds)
+                    ->whereNotIn('id', $lockedMemberIds)
+                    ->lockForUpdate()
+                    ->get();
+
+                if ($rogueChildren->isNotEmpty()) {
+                    return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
+                }
+
+                $root = $lockedMembers->firstWhere('id', $expectedRootId);
+                if (! $root) {
+                    return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
+                }
+                if ($root->root_run_id !== null || $root->parent_run_id !== null || $root->retry_sequence !== 0) {
+                    return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
+                }
+
+                $parentMap = [];
+                $childrenCountMap = [];
+                $taskId = $root->scheduled_znuny_task_id;
+
+                foreach ($lockedMembers as $member) {
+                    if ($member->scheduled_znuny_task_id !== $taskId) {
+                        return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
+                    }
+
+                    if ($member->id !== $root->id) {
+                        if ($member->root_run_id !== $root->id) {
+                            return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
+                        }
+                        if ($member->parent_run_id === null) {
+                            return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
+                        }
+                        if (! in_array($member->parent_run_id, $lockedMemberIds, true)) {
+                            return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
+                        }
+
+                        $parent = $lockedMembers->firstWhere('id', $member->parent_run_id);
+                        if ($member->retry_sequence !== $parent->retry_sequence + 1) {
+                            return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
+                        }
+
+                        $parentMap[$member->id] = $member->parent_run_id;
+                        $childrenCountMap[$member->parent_run_id] = ($childrenCountMap[$member->parent_run_id] ?? 0) + 1;
+
+                        if ($childrenCountMap[$member->parent_run_id] > 1) {
+                            return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
+                        }
+                    }
+                }
+
+                $visited = [$root->id => true];
+                $current = $root;
+                $depth = 0;
+
+                while (true) {
+                    $childId = null;
+                    foreach ($parentMap as $cId => $pId) {
+                        if ($pId === $current->id) {
+                            $childId = $cId;
+                            break;
+                        }
+                    }
+
+                    if (! $childId) {
+                        break;
+                    }
+
+                    if (isset($visited[$childId])) {
+                        return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
+                    }
+
+                    $visited[$childId] = true;
+                    $current = $lockedMembers->firstWhere('id', $childId);
+                    $depth++;
+
+                    if ($depth > ScheduledZnunyTaskRun::MAX_RETRY_CHAIN_DEPTH) {
+                        return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
+                    }
+                }
+
+                if (count($visited) !== count($lockedMembers)) {
+                    return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
+                }
+
+                $leafRunId = $current->id;
+
+                if (! isset($visited[$review['run_id']])) {
+                    return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
+                }
+
+                if ((int) $review['run_id'] !== $leafRunId) {
+                    return ['conflictReason' => __('scheduled_znuny_task_runs.review.actions.manual_link.errors.attempt_changed')];
+                }
+
+                $lockedRun = $current;
 
                 $lockedTask = ScheduledZnunyTask::lockForUpdate()->find($review['task_id']);
                 if (! $lockedTask) {
