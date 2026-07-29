@@ -1153,4 +1153,80 @@ final class ScheduledZnunyTicketCreationAttemptManualLinkServiceTest extends Tes
 
         $this->assertSame(0, AuditLog::where('action', 'scheduled_znuny_attempt_manually_linked')->count());
     }
+
+    public function test_rogue_child_pointing_into_chain_is_rejected(): void
+    {
+        $taskA = ScheduledZnunyTask::create(['name' => 'T1', 'enabled' => true, 'cron_expression' => '* * * * *', 'timezone' => 'UTC']);
+        $root = $this->createChainRun($taskA, ['status' => 'failed']);
+        $leaf = $this->createChainRun($taskA, ['status' => 'uncertain', 'root_run_id' => $root->id, 'parent_run_id' => $root->id, 'retry_sequence' => 1]);
+
+        $taskB = ScheduledZnunyTask::create(['name' => 'T2', 'enabled' => true, 'cron_expression' => '* * * * *', 'timezone' => 'UTC']);
+        $rogue = $this->createChainRun($taskB, ['status' => 'failed', 'root_run_id' => null, 'parent_run_id' => $leaf->id, 'retry_sequence' => 2]);
+
+        $attempt = $this->createChainAttempt($leaf, 'uncertain');
+
+        $result = $this->prepareChainSuccess($attempt)->link($attempt->id, 99, 'TN99');
+
+        $this->assertFalse($result['linked']);
+        $this->assertFalse($result['transitioned'] ?? false);
+
+        $rootUpdatedAt = $root->updated_at->toDateTimeString();
+        $leafUpdatedAt = $leaf->updated_at->toDateTimeString();
+        $rogueUpdatedAt = $rogue->updated_at->toDateTimeString();
+        $attemptUpdatedAt = $attempt->updated_at->toDateTimeString();
+        $taskAUpdatedAt = $taskA->updated_at->toDateTimeString();
+        $taskBUpdatedAt = $taskB->updated_at->toDateTimeString();
+
+        $root->refresh();
+        $leaf->refresh();
+        $rogue->refresh();
+        $attempt->refresh();
+        $taskA->refresh();
+        $taskB->refresh();
+
+        $this->assertSame($rootUpdatedAt, $root->updated_at->toDateTimeString());
+        $this->assertSame($leafUpdatedAt, $leaf->updated_at->toDateTimeString());
+        $this->assertSame($rogueUpdatedAt, $rogue->updated_at->toDateTimeString());
+        $this->assertSame($attemptUpdatedAt, $attempt->updated_at->toDateTimeString());
+        $this->assertSame($taskAUpdatedAt, $taskA->updated_at->toDateTimeString());
+        $this->assertSame($taskBUpdatedAt, $taskB->updated_at->toDateTimeString());
+        $this->assertSame('uncertain', $attempt->status->value);
+
+        $this->assertSame(0, AuditLog::where('action', 'scheduled_znuny_attempt_manually_linked')->count());
+    }
+
+    public function test_excessive_retry_chain_depth_is_rejected(): void
+    {
+        $task = ScheduledZnunyTask::create(['name' => 'T1', 'enabled' => true, 'cron_expression' => '* * * * *', 'timezone' => 'UTC']);
+        $current = $this->createChainRun($task, ['status' => 'failed']);
+        $rootId = $current->id;
+
+        for ($i = 1; $i <= ScheduledZnunyTaskRun::MAX_RETRY_CHAIN_DEPTH + 1; $i++) {
+            $next = $this->createChainRun($task, ['status' => 'failed', 'root_run_id' => $rootId, 'parent_run_id' => $current->id, 'retry_sequence' => $i]);
+            $current = $next;
+        }
+
+        $current->update(['status' => 'uncertain']);
+        $attempt = $this->createChainAttempt($current, 'uncertain');
+
+        $result = $this->prepareChainSuccess($attempt)->link($attempt->id, 99, 'TN99');
+
+        $this->assertFalse($result['linked']);
+        $this->assertFalse($result['transitioned'] ?? false);
+
+        $attemptUpdatedAt = $attempt->updated_at->toDateTimeString();
+        $taskUpdatedAt = $task->updated_at->toDateTimeString();
+
+        $attempt->refresh();
+        $current->refresh();
+        $task->refresh();
+
+        $this->assertSame('uncertain', $attempt->status->value);
+        $this->assertSame($attemptUpdatedAt, $attempt->updated_at->toDateTimeString());
+        $this->assertSame('uncertain', $current->status);
+        $this->assertNull($current->ticket_id);
+        $this->assertSame($taskUpdatedAt, $task->updated_at->toDateTimeString());
+
+        $this->assertSame(0, AuditLog::where('action', 'scheduled_znuny_attempt_manually_linked')->count());
+    }
 }
