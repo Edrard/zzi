@@ -16,7 +16,6 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
-use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -352,45 +351,6 @@ class ScheduledZnunyTaskRunResource extends Resource
             ])
             ->recordActions([
                 ViewAction::make(),
-
-                Action::make('requeue_failed_run')
-                    ->label(__('scheduled_znuny_task_runs.actions.requeue_run'))
-                    ->icon('heroicon-o-arrow-path-rounded-square')
-                    ->color('danger')
-                    ->visible(fn (ScheduledZnunyTaskRun $record) => $record->status === 'failed')
-                    ->requiresConfirmation()
-                    ->action(function (ScheduledZnunyTaskRun $record) {
-                        ScheduledZnunyTaskRun::create([
-                            'scheduled_znuny_task_id' => $record->scheduled_znuny_task_id,
-                            'task_name_snapshot' => $record->task_name_snapshot,
-                            'run_type' => 'manual_retry',
-                            'status' => 'pending',
-                            'scheduled_for' => now('UTC')->toDateTimeString(),
-                            'created_by' => auth()->id(),
-                        ]);
-                        Notification::make()->title(__('scheduled_znuny_task_runs.actions.run_requeued_title'))->body(__('scheduled_znuny_task_runs.actions.run_requeued_body'))->success()->send();
-                    }),
-
-                Action::make('resolve_uncertain_run')
-                    ->label(__('scheduled_znuny_task_runs.actions.resolve_run'))
-                    ->icon('heroicon-o-check-circle')
-                    ->color('warning')
-                    ->visible(fn (ScheduledZnunyTaskRun $record) => $record->status === 'uncertain')
-                    ->form([
-                        Textarea::make('note')
-                            ->label(__('scheduled_znuny_task_runs.actions.manual_review_note'))
-                            ->required()
-                            ->helperText(__('scheduled_znuny_task_runs.actions.manual_review_help')),
-                    ])
-                    ->action(function (ScheduledZnunyTaskRun $record, array $data) {
-                        $record->update([
-                            'status' => 'skipped',
-                            'error_summary' => 'Uncertain run manually reviewed; no automatic retry performed.',
-                            'error_details' => "Note: {$data['note']}\nOriginal error: ".$record->error_details,
-                        ]);
-
-                        Notification::make()->title(__('scheduled_znuny_task_runs.actions.run_resolved_title'))->success()->send();
-                    }),
 
                 Action::make('review_attempt')
                     ->label(__('scheduled_znuny_task_runs.actions.review_attempt'))
