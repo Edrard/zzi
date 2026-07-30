@@ -277,16 +277,37 @@ class ScheduledZnunyTaskRunResource extends Resource
                     ->sortable(),
                 TextColumn::make('status')
                     ->label(__('scheduled_znuny_task_runs.table.status'))
-                    ->formatStateUsing(fn (?string $state): ?string => static::statusLabel($state))
+                    ->formatStateUsing(function (?string $state, ScheduledZnunyTaskRun $record): ?string {
+                        if ($record->resolution_type === 'manual_closed') {
+                            return __('scheduled_znuny_task_runs.resolution_types.manual_closed');
+                        }
+                        if ($record->resolution_type === 'manual_link') {
+                            return __('scheduled_znuny_task_runs.resolution_types.manual_link');
+                        }
+                        if ($record->resolution_type === 'retry_created') {
+                            return __('scheduled_znuny_task_runs.resolution_types.retry_created');
+                        }
+
+                        return static::statusLabel($state);
+                    })
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        'success' => 'success',
-                        'pending' => 'warning',
-                        'running' => 'info',
-                        'failed' => 'danger',
-                        'uncertain' => 'warning',
-                        'skipped' => 'gray',
-                        default => 'gray',
+                    ->color(function (string $state, ScheduledZnunyTaskRun $record): string {
+                        if (in_array($record->resolution_type, ['manual_closed', 'manual_link'], true)) {
+                            return 'success';
+                        }
+                        if ($record->resolution_type === 'retry_created') {
+                            return 'gray';
+                        }
+
+                        return match ($state) {
+                            'success' => 'success',
+                            'pending' => 'warning',
+                            'running' => 'info',
+                            'failed' => 'danger',
+                            'uncertain' => 'warning',
+                            'skipped' => 'gray',
+                            default => 'gray',
+                        };
                     })
                     ->searchable(),
                 TextColumn::make('ticket_number')
