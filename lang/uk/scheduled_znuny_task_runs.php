@@ -17,6 +17,14 @@ return [
         'status' => 'Статус',
         'ticket_number' => 'Номер заявки',
         'error_summary' => 'Опис помилки',
+        'chain_state' => 'Ланцюг повторів',
+    ],
+
+    'chain_states' => [
+        'current_leaf' => 'Поточна спроба',
+        'historical_member' => 'Історична спроба',
+        'malformed_chain' => 'Пошкоджений ланцюг',
+        'detached_or_orphan' => 'Запис поза ланцюгом',
     ],
 
     'filters' => [

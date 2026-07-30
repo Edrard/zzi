@@ -17,6 +17,14 @@ return [
         'status' => 'Status',
         'ticket_number' => 'Ticket number',
         'error_summary' => 'Error summary',
+        'chain_state' => 'Retry chain',
+    ],
+
+    'chain_states' => [
+        'current_leaf' => 'Current attempt',
+        'historical_member' => 'Historical attempt',
+        'malformed_chain' => 'Malformed chain',
+        'detached_or_orphan' => 'Detached or orphaned',
     ],
 
     'filters' => [

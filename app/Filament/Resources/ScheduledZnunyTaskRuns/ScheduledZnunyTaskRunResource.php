@@ -6,7 +6,9 @@ use App\Enums\ZnunyTicketCreationAttemptStatus;
 use App\Filament\Resources\ScheduledZnunyTaskRuns\Pages\ManageScheduledZnunyTaskRuns;
 use App\Filament\Resources\ScheduledZnunyTasks\ScheduledZnunyTaskResource;
 use App\Models\ScheduledZnunyTaskRun;
+use App\Models\User;
 use App\Services\Support\DateTimeDisplayService;
+use App\Services\Znuny\ScheduledZnunyTaskRunCloseService;
 use App\Services\Znuny\ZnunyClient;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -16,6 +18,7 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -27,6 +30,8 @@ use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Livewire\Component;
+use Throwable;
 
 class ScheduledZnunyTaskRunResource extends Resource
 {
@@ -310,6 +315,55 @@ class ScheduledZnunyTaskRunResource extends Resource
                         };
                     })
                     ->searchable(),
+                TextColumn::make('chain_state')
+                    ->label(__('scheduled_znuny_task_runs.table.chain_state'))
+                    ->badge()
+                    ->formatStateUsing(function (?string $state, ScheduledZnunyTaskRun $record, Component $livewire): string {
+                        if (($livewire instanceof ManageScheduledZnunyTaskRuns) === false) {
+                            return __('scheduled_znuny_task_runs.chain_states.malformed_chain');
+                        }
+
+                        $chainState = $livewire->getRunChainState((int) $record->id);
+
+                        if ($chainState['detached_or_orphan'] === true) {
+                            return __('scheduled_znuny_task_runs.chain_states.detached_or_orphan');
+                        }
+                        if ($chainState['malformed_chain'] === true) {
+                            return __('scheduled_znuny_task_runs.chain_states.malformed_chain');
+                        }
+                        if ($chainState['current_leaf'] === true) {
+                            return __('scheduled_znuny_task_runs.chain_states.current_leaf');
+                        }
+                        if ($chainState['historical_member'] === true) {
+                            return __('scheduled_znuny_task_runs.chain_states.historical_member');
+                        }
+
+                        return __('scheduled_znuny_task_runs.chain_states.malformed_chain');
+                    })
+                    ->color(function (?string $state, ScheduledZnunyTaskRun $record, Component $livewire): string {
+                        if (($livewire instanceof ManageScheduledZnunyTaskRuns) === false) {
+                            return 'danger';
+                        }
+
+                        $chainState = $livewire->getRunChainState((int) $record->id);
+
+                        if ($chainState['detached_or_orphan'] === true) {
+                            return 'danger';
+                        }
+                        if ($chainState['malformed_chain'] === true) {
+                            return 'danger';
+                        }
+                        if ($chainState['current_leaf'] === true) {
+                            return 'info';
+                        }
+                        if ($chainState['historical_member'] === true) {
+                            return 'gray';
+                        }
+
+                        return 'danger';
+                    })
+                    ->searchable(false)
+                    ->sortable(false),
                 TextColumn::make('ticket_number')
                     ->label(__('scheduled_znuny_task_runs.table.ticket_number'))
                     ->searchable(),
@@ -377,10 +431,101 @@ class ScheduledZnunyTaskRunResource extends Resource
                     ->label(__('scheduled_znuny_task_runs.actions.review_attempt'))
                     ->icon('heroicon-o-magnifying-glass')
                     ->url(fn (ScheduledZnunyTaskRun $record): string => static::getUrl('review', ['record' => $record]))
-                    ->visible(function (ScheduledZnunyTaskRun $record) {
-                        return $record->status === 'uncertain'
-                            && $record->latestZnunyTicketCreationAttempt !== null
-                            && $record->latestZnunyTicketCreationAttempt->status === ZnunyTicketCreationAttemptStatus::Uncertain;
+                    ->visible(function (ScheduledZnunyTaskRun $record, Component $livewire) {
+                        if (($livewire instanceof ManageScheduledZnunyTaskRuns) === false) {
+                            return false;
+                        }
+
+                        if ($record->status !== 'uncertain') {
+                            return false;
+                        }
+
+                        if ($record->resolved_at !== null) {
+                            return false;
+                        }
+
+                        if ($record->latestZnunyTicketCreationAttempt === null) {
+                            return false;
+                        }
+
+                        if ($record->latestZnunyTicketCreationAttempt->status !== ZnunyTicketCreationAttemptStatus::Uncertain) {
+                            return false;
+                        }
+
+                        $chainState = $livewire->getRunChainState((int) $record->id);
+
+                        return $chainState['valid_chain'] === true
+                            && $chainState['current_leaf'] === true
+                            && $chainState['malformed_chain'] === false
+                            && $chainState['detached_or_orphan'] === false;
+                    }),
+
+                Action::make('manual_close')
+                    ->label(__('scheduled_znuny_task_runs.review.actions.manual_close.label'))
+                    ->icon('heroicon-o-x-circle')
+                    ->color('gray')
+                    ->requiresConfirmation()
+                    ->modalHeading(__('scheduled_znuny_task_runs.review.actions.manual_close.modal_heading'))
+                    ->modalDescription(__('scheduled_znuny_task_runs.review.actions.manual_close.modal_description'))
+                    ->modalSubmitActionLabel(__('scheduled_znuny_task_runs.review.actions.manual_close.submit'))
+                    ->visible(function (ScheduledZnunyTaskRun $record, Component $livewire) {
+                        if (($livewire instanceof ManageScheduledZnunyTaskRuns) === false) {
+                            return false;
+                        }
+
+                        if ($record->resolved_at !== null) {
+                            return false;
+                        }
+
+                        if (in_array($record->status, ['failed', 'uncertain'], true) === false) {
+                            return false;
+                        }
+
+                        $chainState = $livewire->getRunChainState((int) $record->id);
+
+                        return $chainState['valid_chain'] === true
+                            && $chainState['current_leaf'] === true
+                            && $chainState['malformed_chain'] === false
+                            && $chainState['detached_or_orphan'] === false;
+                    })
+                    ->action(function (ScheduledZnunyTaskRun $record, ScheduledZnunyTaskRunCloseService $closeService) {
+                        $actor = auth()->user();
+                        if (($actor instanceof User) === false) {
+                            Notification::make()
+                                ->title(__('scheduled_znuny_task_runs.review.notifications.unexpected_error.title'))
+                                ->body(__('scheduled_znuny_task_runs.review.notifications.unexpected_error.body'))
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
+                        try {
+                            $result = $closeService->close($record->id, $actor);
+                        } catch (Throwable) {
+                            Notification::make()
+                                ->title(__('scheduled_znuny_task_runs.review.notifications.unexpected_error.title'))
+                                ->body(__('scheduled_znuny_task_runs.review.notifications.unexpected_error.body'))
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->refresh();
+
+                        if ($result['closed'] ?? false) {
+                            Notification::make()
+                                ->title(__('scheduled_znuny_task_runs.review.notifications.manual_close_success.title'))
+                                ->success()
+                                ->send();
+                        } else {
+                            Notification::make()
+                                ->title(__('scheduled_znuny_task_runs.review.notifications.manual_close_failed.title'))
+                                ->body(__('scheduled_znuny_task_runs.review.notifications.manual_close_failed.body'))
+                                ->warning()
+                                ->send();
+                        }
                     }),
 
                 Action::make('open_ticket')
