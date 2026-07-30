@@ -7,6 +7,7 @@ use App\Enums\ZnunyTicketCreationAttemptStatus;
 use App\Filament\Resources\ScheduledZnunyTaskRuns\ScheduledZnunyTaskRunResource;
 use App\Models\ScheduledZnunyTaskRun;
 use App\Models\User;
+use App\Services\Znuny\ScheduledZnunyTaskRunCloseService;
 use App\Services\Znuny\ScheduledZnunyTaskRunRetryService;
 use App\Services\Znuny\ScheduledZnunyTicketCreationAttemptManualLinkService;
 use App\Services\Znuny\ScheduledZnunyTicketCreationAttemptManualReviewService;
@@ -186,9 +187,31 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
         return in_array($leaf->status, ['failed', 'uncertain'], true);
     }
 
+    private function isSelectedRunUnresolvedLeaf(): bool
+    {
+        if ($this->isMalformedLineage || ! $this->currentLeafId) {
+            return false;
+        }
+
+        if ($this->record->id !== $this->currentLeafId) {
+            return false;
+        }
+
+        if ($this->record->isResolved() || $this->record->status === 'success') {
+            return false;
+        }
+
+        return in_array($this->record->status, ['failed', 'uncertain'], true);
+    }
+
+    private function isManualCloseAvailable(): bool
+    {
+        return $this->isSelectedRunUnresolvedLeaf();
+    }
+
     private function isManualRetryAvailable(): bool
     {
-        return $this->isChainRetryEligible()
+        return $this->isSelectedRunUnresolvedLeaf()
             && ($this->reviewContext['eligible'] ?? false) === true
             && ($this->reviewContext['attempt_status'] ?? null) === ZnunyTicketCreationAttemptStatus::Uncertain->value
             && $this->lookupStatus === ScheduledZnunyTicketMarkerLookupStatus::NotFound->value
@@ -202,7 +225,8 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                 ->label(__('scheduled_znuny_task_runs.review.actions.manual_link.label'))
                 ->icon('heroicon-o-link')
                 ->color('primary')
-                ->visible(fn () => ($this->reviewContext['eligible'] ?? false) === true
+                ->visible(fn () => $this->isSelectedRunUnresolvedLeaf()
+                    && ($this->reviewContext['eligible'] ?? false) === true
                     && ($this->reviewContext['attempt_status'] ?? null) === ZnunyTicketCreationAttemptStatus::Uncertain->value
                     && in_array($this->lookupStatus, [ScheduledZnunyTicketMarkerLookupStatus::Found->value, ScheduledZnunyTicketMarkerLookupStatus::Multiple->value], true)
                     && count($this->lookupMatches) > 0
@@ -387,11 +411,82 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                     }
                 }),
 
+            Action::make('manual_close')
+                ->label(__('scheduled_znuny_task_runs.review.actions.manual_close.label'))
+                ->icon('heroicon-o-x-circle')
+                ->color('gray')
+                ->visible(fn () => $this->isManualCloseAvailable())
+                ->requiresConfirmation()
+                ->modalHeading(__('scheduled_znuny_task_runs.review.actions.manual_close.modal_heading'))
+                ->modalDescription(__('scheduled_znuny_task_runs.review.actions.manual_close.modal_description'))
+                ->modalSubmitActionLabel(__('scheduled_znuny_task_runs.review.actions.manual_close.submit'))
+                ->action(function (ScheduledZnunyTaskRunCloseService $closeService, ScheduledZnunyTicketCreationAttemptManualReviewService $reviewService) {
+                    if ($this->isMalformedLineage) {
+                        return;
+                    }
+
+                    $this->safelyReloadPersistentContext($reviewService);
+
+                    if (! $this->isManualCloseAvailable()) {
+                        Notification::make()
+                            ->title(__('scheduled_znuny_task_runs.review.notifications.changed.title'))
+                            ->body(__('scheduled_znuny_task_runs.review.notifications.changed.body'))
+                            ->warning()
+                            ->send();
+
+                        return;
+                    }
+
+                    $actor = auth()->user();
+                    if (! $actor instanceof User) {
+                        Notification::make()
+                            ->title(__('scheduled_znuny_task_runs.review.notifications.unexpected_error.title'))
+                            ->body(__('scheduled_znuny_task_runs.review.notifications.unexpected_error.body'))
+                            ->danger()
+                            ->send();
+
+                        return;
+                    }
+
+                    try {
+                        $result = $closeService->close($this->record->id, $actor);
+                    } catch (\Throwable $e) {
+                        $this->reloadRetryChainState(false);
+                        $this->safelyReloadPersistentContext($reviewService);
+
+                        Notification::make()
+                            ->title(__('scheduled_znuny_task_runs.review.notifications.unexpected_error.title'))
+                            ->body(__('scheduled_znuny_task_runs.review.notifications.unexpected_error.body'))
+                            ->danger()
+                            ->send();
+
+                        return;
+                    }
+
+                    $this->reloadRetryChainState(false);
+                    $this->safelyReloadPersistentContext($reviewService);
+
+                    if ($result['closed'] ?? false) {
+                        Notification::make()
+                            ->title(__('scheduled_znuny_task_runs.review.notifications.manual_close_success.title'))
+                            ->success()
+                            ->send();
+                    } else {
+                        Notification::make()
+                            ->title(__('scheduled_znuny_task_runs.review.notifications.manual_close_failed.title'))
+                            ->body(__('scheduled_znuny_task_runs.review.notifications.manual_close_failed.body'))
+                            ->warning()
+                            ->send();
+                    }
+                }),
+
             Action::make('recheck')
                 ->label(__('scheduled_znuny_task_runs.review.actions.recheck'))
                 ->icon('heroicon-o-arrow-path')
                 ->action('recheck')
-                ->visible(fn () => ($this->reviewContext['eligible'] ?? false) === true
+                ->visible(fn () => $this->isSelectedRunUnresolvedLeaf()
+                    && ! $this->record->isResolved()
+                    && ($this->reviewContext['eligible'] ?? false) === true
                     && ($this->reviewContext['attempt_status'] ?? null) === ZnunyTicketCreationAttemptStatus::Uncertain->value
                     && ! empty($this->reviewContext['attempt_id'])
                 ),

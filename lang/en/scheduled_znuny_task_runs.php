@@ -82,6 +82,12 @@ return [
         'actions' => [
             'review_attempt' => 'Review Attempt',
             'recheck' => 'Fresh Recheck',
+            'manual_close' => [
+                'label' => 'Close',
+                'modal_heading' => 'Close run',
+                'modal_description' => 'Close this run without linking a Znuny ticket',
+                'submit' => 'Close',
+            ],
             'manual_link' => [
                 'label' => 'Manual Link',
                 'modal_heading' => 'Link Znuny Ticket manually',
@@ -184,6 +190,13 @@ return [
             'manual_link_conflict' => [
                 'title' => 'Link Conflict',
                 'body' => 'The ticket could not be linked.',
+            ],
+            'manual_close_success' => [
+                'title' => 'Run closed',
+            ],
+            'manual_close_failed' => [
+                'title' => 'Run could not be closed',
+                'body' => 'The run state changed or this run is no longer available for manual closing.',
             ],
             'manual_retry_success' => [
                 'title' => 'Retry queued successfully',

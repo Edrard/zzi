@@ -83,6 +83,12 @@ return [
         'actions' => [
             'review_attempt' => 'Переглянути спробу',
             'recheck' => 'Повторна перевірка',
+            'manual_close' => [
+                'label' => 'Закрити',
+                'modal_heading' => 'Закрити запуск',
+                'modal_description' => 'Закрити цей запуск без прив’язування звернення Znuny',
+                'submit' => 'Закрити',
+            ],
             'manual_link' => [
                 'label' => 'Прив\'язати вручну',
                 'modal_heading' => 'Прив\'язати квиток Znuny вручну',
@@ -190,6 +196,13 @@ return [
             'manual_link_conflict' => [
                 'title' => 'Конфлікт прив\'язування',
                 'body' => 'Не вдалося прив\'язати квиток.',
+            ],
+            'manual_close_success' => [
+                'title' => 'Запуск закрито',
+            ],
+            'manual_close_failed' => [
+                'title' => 'Не вдалося закрити запуск',
+                'body' => 'Стан запуску змінився або цей запуск більше не доступний для ручного закриття.',
             ],
             'manual_retry_success' => [
                 'title' => 'Повтор успішно додано в чергу',
