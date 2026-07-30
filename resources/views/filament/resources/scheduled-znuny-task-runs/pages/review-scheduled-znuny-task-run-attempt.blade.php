@@ -1,4 +1,34 @@
 <x-filament-panels::page>
+    @php
+        $getEffectiveStatusInfo = function ($run) {
+            if ($run->resolution_type === 'manual_closed') {
+                return [
+                    'label' => __('scheduled_znuny_task_runs.resolution_types.manual_closed'),
+                    'class' => 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+                    'is_badge' => true,
+                ];
+            }
+            if ($run->resolution_type === 'manual_link') {
+                return [
+                    'label' => __('scheduled_znuny_task_runs.resolution_types.manual_link'),
+                    'class' => 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+                    'is_badge' => true,
+                ];
+            }
+            if ($run->resolution_type === 'retry_created') {
+                return [
+                    'label' => __('scheduled_znuny_task_runs.resolution_types.retry_created'),
+                    'class' => 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
+                    'is_badge' => true,
+                ];
+            }
+            return [
+                'label' => $run->status,
+                'class' => 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
+                'is_badge' => false,
+            ];
+        };
+    @endphp
     <x-filament::section>
         <x-slot name="heading">
             {{ __('scheduled_znuny_task_runs.review.sections.task') }}
@@ -36,7 +66,16 @@
             </div>
             <div>
                 <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.run_status') }}</span>
-                <p class="mt-1">{{ $record->status }}</p>
+                <p class="mt-1">
+                    @php $eff = $getEffectiveStatusInfo($record); @endphp
+                    @if($eff['is_badge'])
+                        <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {{ $eff['class'] }}">
+                            {{ $eff['label'] }}
+                        </span>
+                    @else
+                        {{ $eff['label'] }}
+                    @endif
+                </p>
             </div>
             <div>
                 <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.scheduled_time') }}</span>
@@ -261,8 +300,9 @@
                                 <td class="px-4 py-3">{{ $chainRun->retry_sequence }}</td>
                                 <td class="px-4 py-3">{{ $chainRun->run_type }}</td>
                                 <td class="px-4 py-3">
-                                    <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300">
-                                        {{ $chainRun->status }}
+                                    @php $eff = $getEffectiveStatusInfo($chainRun); @endphp
+                                    <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {{ $eff['class'] }}">
+                                        {{ $eff['label'] }}
                                     </span>
                                 </td>
                                 <td class="px-4 py-3">{{ $chainRun->scheduled_for?->toDateTimeString() ?? '-' }}</td>
