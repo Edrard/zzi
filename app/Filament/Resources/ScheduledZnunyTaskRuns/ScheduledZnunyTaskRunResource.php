@@ -436,7 +436,7 @@ class ScheduledZnunyTaskRunResource extends Resource
                 Action::make('review_attempt')
                     ->label(__('scheduled_znuny_task_runs.actions.review_attempt'))
                     ->icon('heroicon-o-magnifying-glass')
-                    ->url(fn (ScheduledZnunyTaskRun $record): string => static::getUrl('review', ['record' => $record]))
+                    ->url(fn (ScheduledZnunyTaskRun $record): string => static::getUrl('review', ['record' => $record->root_run_id ?? $record->id]))
                     ->visible(function (ScheduledZnunyTaskRun $record, Component $livewire) {
                         if (($livewire instanceof ManageScheduledZnunyTaskRuns) === false) {
                             return false;

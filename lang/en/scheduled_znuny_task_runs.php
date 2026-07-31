@@ -233,6 +233,7 @@ return [
             'matches' => 'No matching tickets found.',
             'reason' => 'No reason provided.',
             'not_available' => 'Not available.',
+            'no_attempt' => 'No ticket creation attempt was created for this run.',
         ],
     ],
 ];

@@ -37,15 +37,15 @@
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             <div>
                 <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.task_id') }}</span>
-                <p class="mt-1">{{ $record->task->id ?? '-' }}</p>
+                <p class="mt-1">{{ $activeRun->task->id ?? '-' }}</p>
             </div>
             <div>
                 <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.task_name') }}</span>
-                <p class="mt-1">{{ $record->task->name ?? '-' }}</p>
+                <p class="mt-1">{{ $activeRun->task->name ?? '-' }}</p>
             </div>
             <div>
                 <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.task_enabled') }}</span>
-                <p class="mt-1">{{ ($record->task->enabled ?? false) ? __('scheduled_znuny_task_runs.review.fields.yes') : __('scheduled_znuny_task_runs.review.fields.no') }}</p>
+                <p class="mt-1">{{ ($activeRun->task->enabled ?? false) ? __('scheduled_znuny_task_runs.review.fields.yes') : __('scheduled_znuny_task_runs.review.fields.no') }}</p>
             </div>
         </div>
     </x-filament::section>
@@ -58,16 +58,16 @@
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             <div>
                 <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.run_id') }}</span>
-                <p class="mt-1">{{ $record->id }}</p>
+                <p class="mt-1">{{ $activeRun->id }}</p>
             </div>
             <div>
                 <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.run_type') }}</span>
-                <p class="mt-1">{{ $record->run_type }}</p>
+                <p class="mt-1">{{ $activeRun->run_type }}</p>
             </div>
             <div>
                 <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.run_status') }}</span>
                 <p class="mt-1">
-                    @php $eff = $getEffectiveStatusInfo($record); @endphp
+                    @php $eff = $getEffectiveStatusInfo($activeRun); @endphp
                     @if($eff['is_badge'])
                         <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {{ $eff['class'] }}">
                             {{ $eff['label'] }}
@@ -79,19 +79,20 @@
             </div>
             <div>
                 <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.scheduled_time') }}</span>
-                <p class="mt-1">{{ $record->scheduled_for?->toDateTimeString() ?? '-' }}</p>
+                <p class="mt-1">{{ $activeRun->scheduled_for?->toDateTimeString() ?? '-' }}</p>
             </div>
             <div>
                 <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.start_time') }}</span>
-                <p class="mt-1">{{ $record->started_at?->toDateTimeString() ?? '-' }}</p>
+                <p class="mt-1">{{ $activeRun->started_at?->toDateTimeString() ?? '-' }}</p>
             </div>
             <div>
                 <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.finish_time') }}</span>
-                <p class="mt-1">{{ $record->finished_at?->toDateTimeString() ?? '-' }}</p>
+                <p class="mt-1">{{ $activeRun->finished_at?->toDateTimeString() ?? '-' }}</p>
             </div>
         </div>
     </x-filament::section>
 
+    @if($activeRun->latestZnunyTicketCreationAttempt)
     <x-filament::section>
         <x-slot name="heading">
             {{ __('scheduled_znuny_task_runs.review.sections.attempt') }}
@@ -119,28 +120,26 @@
                 <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.marker') }}</span>
                 <p class="mt-1">{{ $reviewContext['marker'] ?? '-' }}</p>
             </div>
-            @if($record->latestZnunyTicketCreationAttempt)
-                <div class="col-span-full">
-                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.subject_original') }}</span>
-                    <p class="mt-1">{{ $record->latestZnunyTicketCreationAttempt->subject_original ?? '-' }}</p>
-                </div>
-                <div class="col-span-full">
-                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.subject_sent') }}</span>
-                    <p class="mt-1">{{ $record->latestZnunyTicketCreationAttempt->subject_sent ?? '-' }}</p>
-                </div>
-                <div>
-                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.check_count') }}</span>
-                    <p class="mt-1">{{ $record->latestZnunyTicketCreationAttempt->check_attempts ?? '-' }}</p>
-                </div>
-                <div>
-                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.started_time') }}</span>
-                    <p class="mt-1">{{ $record->latestZnunyTicketCreationAttempt->started_at?->toDateTimeString() ?? '-' }}</p>
-                </div>
-                <div>
-                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.last_checked_time') }}</span>
-                    <p class="mt-1">{{ $record->latestZnunyTicketCreationAttempt->last_checked_at?->toDateTimeString() ?? '-' }}</p>
-                </div>
-            @endif
+            <div class="col-span-full">
+                <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.subject_original') }}</span>
+                <p class="mt-1">{{ $activeRun->latestZnunyTicketCreationAttempt->subject_original ?? '-' }}</p>
+            </div>
+            <div class="col-span-full">
+                <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.subject_sent') }}</span>
+                <p class="mt-1">{{ $activeRun->latestZnunyTicketCreationAttempt->subject_sent ?? '-' }}</p>
+            </div>
+            <div>
+                <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.check_count') }}</span>
+                <p class="mt-1">{{ $activeRun->latestZnunyTicketCreationAttempt->check_attempts ?? '-' }}</p>
+            </div>
+            <div>
+                <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.started_time') }}</span>
+                <p class="mt-1">{{ $activeRun->latestZnunyTicketCreationAttempt->started_at?->toDateTimeString() ?? '-' }}</p>
+            </div>
+            <div>
+                <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.last_checked_time') }}</span>
+                <p class="mt-1">{{ $activeRun->latestZnunyTicketCreationAttempt->last_checked_at?->toDateTimeString() ?? '-' }}</p>
+            </div>
             <div>
                 <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.fields.stored_ticket_id') }}</span>
                 <p class="mt-1">{{ $reviewContext['stored_ticket_id'] ?? '-' }}</p>
@@ -247,6 +246,14 @@
             <p class="text-sm text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.empty.matches') }}</p>
         @endif
     </x-filament::section>
+    @else
+    <x-filament::section>
+        <x-slot name="heading">
+            {{ __('scheduled_znuny_task_runs.review.sections.attempt') }}
+        </x-slot>
+        <p class="text-sm text-gray-500 dark:text-gray-400">{{ __('scheduled_znuny_task_runs.review.empty.no_attempt') }}</p>
+    </x-filament::section>
+    @endif
 
     <x-filament::section>
         <x-slot name="heading">
@@ -277,41 +284,49 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach($retryChain as $chainRun)
+                        @foreach($retryChain as $run)
                             @php
-                                $isResolved = $chainRun->resolved_at !== null;
-                                $rowClass = $isResolved ? 'bg-gray-100 dark:bg-gray-800/70' : 'bg-white dark:bg-gray-900';
-                                $isLeaf = $currentLeafId === $chainRun->id;
+                                $isRoot = $run->id === $effectiveRootId;
+                                $isLeaf = $run->id === $currentLeafId;
+                                $isTargetLeaf = $run->id === $activeRun->id;
+                                $isHistorical = ! $isLeaf;
+                                $bgClass = 'bg-white dark:bg-gray-900';
+                                if ($isHistorical) {
+                                    $bgClass = 'bg-gray-50 dark:bg-gray-800/50';
+                                } elseif ($isTargetLeaf) {
+                                    $bgClass = 'bg-blue-50 dark:bg-blue-900/20';
+                                }
+                                $isResolved = $run->resolved_at !== null;
                             @endphp
-                            <tr class="border-b dark:border-gray-700 {{ $rowClass }}"
-                                data-run-id="{{ $chainRun->id }}"
-                                data-retry-sequence="{{ $chainRun->retry_sequence }}"
+                            <tr class="border-b dark:border-gray-700 {{ $bgClass }}"
+                                data-run-id="{{ $run->id }}"
+                                data-retry-sequence="{{ $run->retry_sequence }}"
                                 data-current-leaf="{{ $isLeaf ? 'true' : 'false' }}"
                                 data-resolved="{{ $isResolved ? 'true' : 'false' }}"
-                                data-technical-status="{{ $chainRun->status }}">
+                                data-technical-status="{{ $run->status }}">
                                 <td class="px-4 py-3 font-medium text-gray-900 dark:text-white">
-                                    {{ $chainRun->id }}
+                                    {{ $run->id }}
                                     @if($isLeaf)
                                         <span class="ml-2 inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-300">
                                             {{ __('scheduled_znuny_task_runs.review.fields.current_leaf') }}
                                         </span>
                                     @endif
                                 </td>
-                                <td class="px-4 py-3">{{ $chainRun->retry_sequence }}</td>
-                                <td class="px-4 py-3">{{ $chainRun->run_type }}</td>
+                                <td class="px-4 py-3">{{ $run->retry_sequence }}</td>
+                                <td class="px-4 py-3">{{ $run->run_type }}</td>
                                 <td class="px-4 py-3">
-                                    @php $eff = $getEffectiveStatusInfo($chainRun); @endphp
+                                    @php $eff = $getEffectiveStatusInfo($run); @endphp
                                     <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {{ $eff['class'] }}">
                                         {{ $eff['label'] }}
                                     </span>
                                 </td>
-                                <td class="px-4 py-3">{{ $chainRun->scheduled_for?->toDateTimeString() ?? '-' }}</td>
-                                <td class="px-4 py-3">{{ $chainRun->started_at?->toDateTimeString() ?? '-' }}</td>
-                                <td class="px-4 py-3">{{ $chainRun->finished_at?->toDateTimeString() ?? '-' }}</td>
-                                <td class="px-4 py-3">{{ $chainRun->createdBy?->name ?? '-' }}</td>
+                                <td class="px-4 py-3">{{ $run->scheduled_for?->toDateTimeString() ?? '-' }}</td>
+                                <td class="px-4 py-3">{{ $run->started_at?->toDateTimeString() ?? '-' }}</td>
+                                <td class="px-4 py-3">{{ $run->finished_at?->toDateTimeString() ?? '-' }}</td>
+                                <td class="px-4 py-3">{{ $run->createdBy?->name ?? '-' }}</td>
                                 <td class="px-4 py-3">
                                     @if($isResolved)
-                                        {{ $chainRun->resolved_at?->toDateTimeString() ?? '-' }}
+                                        {{ $run->resolved_at?->toDateTimeString() ?? '-' }}
                                     @else
                                         -
                                     @endif
@@ -319,10 +334,10 @@
                                 <td class="px-4 py-3">
                                     @if($isResolved)
                                         @php
-                                            $resolutionKey = 'scheduled_znuny_task_runs.resolution_types.' . $chainRun->resolution_type;
+                                            $resolutionKey = 'scheduled_znuny_task_runs.resolution_types.' . $run->resolution_type;
                                             $displayResolution = \Illuminate\Support\Facades\Lang::has($resolutionKey)
                                                 ? __($resolutionKey)
-                                                : ($chainRun->resolution_type ?? '-');
+                                                : ($run->resolution_type ?? '-');
                                         @endphp
                                         <span class="text-xs font-medium text-gray-700 dark:text-gray-300">
                                             {{ $displayResolution }}

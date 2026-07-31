@@ -18,7 +18,6 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Concerns\InteractsWithRecord;
 use Filament\Resources\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class ReviewScheduledZnunyTaskRunAttempt extends Page
 {
@@ -50,6 +49,18 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
     public function mount(int|string $record): void
     {
         $this->record = $this->resolveRecord($record);
+
+        if ($this->record->root_run_id !== null) {
+            $root = $this->record->effectiveRoot();
+            try {
+                $this->validateAndLoadChain($root->id, $this->record->id, false);
+                $this->redirect(ScheduledZnunyTaskRunResource::getUrl('review', ['record' => $root->id]));
+
+                return;
+            } catch (\LogicException $e) {
+                // Do not redirect; let the normal mount flow handle malformed lineage
+            }
+        }
 
         $this->reloadRetryChainState(true);
 
@@ -162,6 +173,7 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
             'effectiveRootId' => $this->effectiveRootId,
             'currentLeafId' => $this->currentLeafId,
             'isMalformedLineage' => $this->isMalformedLineage,
+            'activeRun' => $this->getChainLeaf() ?? $this->record,
         ];
     }
 
@@ -189,19 +201,16 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
 
     private function isSelectedRunUnresolvedLeaf(): bool
     {
-        if ($this->isMalformedLineage || ! $this->currentLeafId) {
+        $leaf = $this->getChainLeaf();
+        if (! $leaf || $this->isMalformedLineage) {
             return false;
         }
 
-        if ($this->record->id !== $this->currentLeafId) {
+        if ($leaf->isResolved() || $leaf->status === 'success') {
             return false;
         }
 
-        if ($this->record->isResolved() || $this->record->status === 'success') {
-            return false;
-        }
-
-        return in_array($this->record->status, ['failed', 'uncertain'], true);
+        return in_array($leaf->status, ['failed', 'uncertain'], true);
     }
 
     private function isManualCloseAvailable(): bool
@@ -211,8 +220,17 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
 
     private function isManualRetryAvailable(): bool
     {
-        return $this->isSelectedRunUnresolvedLeaf()
-            && ($this->reviewContext['eligible'] ?? false) === true
+        if (! $this->isSelectedRunUnresolvedLeaf()) {
+            return false;
+        }
+
+        $leaf = $this->getChainLeaf() ?? $this->record;
+
+        if ($leaf->status === 'failed' && ! $leaf->latestZnunyTicketCreationAttempt) {
+            return true;
+        }
+
+        return ($this->reviewContext['eligible'] ?? false) === true
             && ($this->reviewContext['attempt_status'] ?? null) === ZnunyTicketCreationAttemptStatus::Uncertain->value
             && $this->lookupStatus === ScheduledZnunyTicketMarkerLookupStatus::NotFound->value
             && ! empty($this->reviewContext['attempt_id']);
@@ -264,6 +282,7 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                 ->action(function (array $data, ScheduledZnunyTicketCreationAttemptManualLinkService $linkService, ScheduledZnunyTicketCreationAttemptManualReviewService $reviewService) {
                     $attemptId = $this->reviewContext['attempt_id'] ?? null;
                     if (! $attemptId) {
+                        $this->reloadRetryChainState(false);
                         $this->safelyReloadPersistentContext($reviewService);
                         Notification::make()
                             ->title(__('scheduled_znuny_task_runs.review.notifications.changed.title'))
@@ -281,6 +300,7 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                         $matchIndex = $data['selected_ticket'] ?? null;
                         $match = $matchIndex !== null && $matchIndex !== '' ? ($this->lookupMatches[$matchIndex] ?? null) : null;
                         if (! $match) {
+                            $this->reloadRetryChainState(false);
                             $this->safelyReloadPersistentContext($reviewService);
                             Notification::make()
                                 ->title(__('scheduled_znuny_task_runs.review.notifications.changed.title'))
@@ -297,6 +317,7 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                     try {
                         $result = $linkService->link($attemptId, $ticketId, $ticketNumber);
                     } catch (\Throwable $e) {
+                        $this->reloadRetryChainState(false);
                         $this->safelyReloadPersistentContext($reviewService);
                         Notification::make()
                             ->title(__('scheduled_znuny_task_runs.review.notifications.unexpected_error.title'))
@@ -307,6 +328,7 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                         return;
                     }
 
+                    $this->reloadRetryChainState(false);
                     $this->safelyReloadPersistentContext($reviewService);
 
                     if ($result['linked'] && $result['transitioned']) {
@@ -367,7 +389,8 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                     }
 
                     try {
-                        $result = $retryService->retry($this->record->id, $actor);
+                        $activeRun = $this->getChainLeaf() ?? $this->record;
+                        $result = $retryService->retry($activeRun->id, $actor);
                     } catch (\Throwable $e) {
                         $this->reloadRetryChainState(false);
                         $this->safelyReloadPersistentContext($reviewService);
@@ -449,7 +472,8 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                     }
 
                     try {
-                        $result = $closeService->close($this->record->id, $actor);
+                        $activeRun = $this->getChainLeaf() ?? $this->record;
+                        $result = $closeService->close($activeRun->id, $actor);
                     } catch (\Throwable $e) {
                         $this->reloadRetryChainState(false);
                         $this->safelyReloadPersistentContext($reviewService);
@@ -485,7 +509,6 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
                 ->icon('heroicon-o-arrow-path')
                 ->action('recheck')
                 ->visible(fn () => $this->isSelectedRunUnresolvedLeaf()
-                    && ! $this->record->isResolved()
                     && ($this->reviewContext['eligible'] ?? false) === true
                     && ($this->reviewContext['attempt_status'] ?? null) === ZnunyTicketCreationAttemptStatus::Uncertain->value
                     && ! empty($this->reviewContext['attempt_id'])
@@ -511,9 +534,10 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
         $rawContext = $reviewService->forceRecheck($attemptId);
         $normalized = $this->normalizeServiceContext($rawContext);
 
-        $this->record->refresh();
-        $this->record->load(['task', 'latestZnunyTicketCreationAttempt']);
-        $currentAttempt = $this->record->latestZnunyTicketCreationAttempt;
+        $activeRun = $this->getChainLeaf() ?? $this->record;
+        $activeRun->refresh();
+        $activeRun->load(['task', 'latestZnunyTicketCreationAttempt']);
+        $currentAttempt = $activeRun->latestZnunyTicketCreationAttempt;
 
         if ($this->hasConcurrentStateChange($normalized, $attemptId, $currentAttempt)) {
             $this->safelyReloadPersistentContext($reviewService);
@@ -537,7 +561,9 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
             return true;
         }
 
-        if (! $this->record->task) {
+        $activeRun = $this->getChainLeaf() ?? $this->record;
+
+        if (! $activeRun->task) {
             return true;
         }
 
@@ -561,11 +587,11 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
             return true;
         }
 
-        if ((string) ($normalized['run_id'] ?? '') !== (string) $this->record->id) {
+        if ((string) ($normalized['run_id'] ?? '') !== (string) $activeRun->id) {
             return true;
         }
 
-        if ((string) ($normalized['task_id'] ?? '') !== (string) $this->record->task->id) {
+        if ((string) ($normalized['task_id'] ?? '') !== (string) $activeRun->task->id) {
             return true;
         }
 
@@ -583,10 +609,11 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
     private function safelyReloadPersistentContext(ScheduledZnunyTicketCreationAttemptManualReviewService $reviewService): bool
     {
         try {
-            $this->record->refresh();
-            $this->record->load(['task', 'latestZnunyTicketCreationAttempt']);
+            $activeRun = $this->getChainLeaf() ?? $this->record;
+            $activeRun->refresh();
+            $activeRun->load(['task', 'latestZnunyTicketCreationAttempt']);
 
-            $attempt = $this->record->latestZnunyTicketCreationAttempt;
+            $attempt = $activeRun->latestZnunyTicketCreationAttempt;
 
             if (! $attempt) {
                 $this->clearReviewState();
@@ -608,13 +635,23 @@ class ReviewScheduledZnunyTaskRunAttempt extends Page
 
     private function reloadPersistentContext(ScheduledZnunyTicketCreationAttemptManualReviewService $reviewService): void
     {
-        $this->record->refresh();
-        $this->record->load(['task', 'latestZnunyTicketCreationAttempt']);
+        $activeRun = $this->getChainLeaf() ?? $this->record;
+        $activeRun->refresh();
+        $activeRun->load(['task', 'latestZnunyTicketCreationAttempt']);
 
-        $attempt = $this->record->latestZnunyTicketCreationAttempt;
+        $attempt = $activeRun->latestZnunyTicketCreationAttempt;
 
         if (! $attempt) {
-            throw new NotFoundHttpException('No scheduled run attempt found for this task run.');
+            $this->applyReviewContext([
+                'lookup_status' => null,
+                'matches' => [],
+                'found' => false,
+                'eligible' => false,
+                'resolved' => false,
+                'attempt_status' => null,
+            ], false);
+
+            return;
         }
 
         $rawContext = $reviewService->inspect($attempt->id);
