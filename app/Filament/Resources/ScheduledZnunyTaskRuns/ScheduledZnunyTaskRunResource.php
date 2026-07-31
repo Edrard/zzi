@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\ScheduledZnunyTaskRuns;
 
-use App\Enums\ZnunyTicketCreationAttemptStatus;
 use App\Filament\Resources\ScheduledZnunyTaskRuns\Pages\ManageScheduledZnunyTaskRuns;
 use App\Filament\Resources\ScheduledZnunyTasks\ScheduledZnunyTaskResource;
 use App\Models\ScheduledZnunyTaskRun;
@@ -248,7 +247,14 @@ class ScheduledZnunyTaskRunResource extends Resource
         return $table
             ->modifyQueryUsing(fn (Builder $query) => $query->with('latestZnunyTicketCreationAttempt'))
             ->recordTitleAttribute('task_name_snapshot')
-            ->defaultSort('created_at', 'desc')
+            ->defaultSort(fn (Builder $query) => $query->orderByRaw(
+                "CASE
+                    WHEN resolved_at IS NULL AND resolution_type IS NULL AND status = 'uncertain' THEN 0
+                    WHEN resolved_at IS NULL AND resolution_type IS NULL AND status = 'failed' THEN 1
+                    WHEN resolution_type IN ('manual_closed', 'manual_link') OR status = 'success' THEN 3
+                    ELSE 2
+                END ASC"
+            )->orderBy('scheduled_for', 'desc')->orderBy('id', 'desc'))
             ->emptyStateHeading(__('scheduled_znuny_task_runs.empty_state'))
             ->columns([
                 TextColumn::make('created_at')
@@ -436,19 +442,11 @@ class ScheduledZnunyTaskRunResource extends Resource
                             return false;
                         }
 
-                        if ($record->status !== 'uncertain') {
-                            return false;
-                        }
-
                         if ($record->resolved_at !== null) {
                             return false;
                         }
 
-                        if ($record->latestZnunyTicketCreationAttempt === null) {
-                            return false;
-                        }
-
-                        if ($record->latestZnunyTicketCreationAttempt->status !== ZnunyTicketCreationAttemptStatus::Uncertain) {
+                        if (in_array($record->status, ['failed', 'uncertain'], true) === false) {
                             return false;
                         }
 

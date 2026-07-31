@@ -58,6 +58,12 @@ return [
         'sec' => 'sec',
     ],
 
+    'resolution_types' => [
+        'manual_closed' => 'Closed',
+        'retry_created' => 'Replaced by retry',
+        'manual_link' => 'Manually linked',
+    ],
+
     'sections' => [
         'run_information' => 'Run Information',
         'ticket_details' => 'Ticket Details',

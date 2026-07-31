@@ -245,6 +245,7 @@ return [
     ],
 
     'resolution_types' => [
+        'manual_closed' => 'Закрито',
         'retry_created' => 'Замінено повтором',
         'manual_link' => 'Прив\'язано вручну',
     ],
