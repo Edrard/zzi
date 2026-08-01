@@ -17,7 +17,7 @@ return [
         'status' => 'Статус',
         'ticket_number' => 'Номер заявки',
         'error_summary' => 'Опис помилки',
-        'chain_state' => 'Ланцюг повторів',
+        'retries' => 'Повтори',
     ],
 
     'chain_states' => [
@@ -25,6 +25,9 @@ return [
         'historical_member' => 'Історична спроба',
         'malformed_chain' => 'Пошкоджений ланцюг',
         'detached_or_orphan' => 'Запис поза ланцюгом',
+        'root_with_retries' => '{1} Основний · 1 повтор|[2,4] Основний · :total повтори|[5,*] Основний · :total повторів',
+        'retry_position' => ':position з :total',
+        'current' => 'Поточний',
     ],
 
     'filters' => [

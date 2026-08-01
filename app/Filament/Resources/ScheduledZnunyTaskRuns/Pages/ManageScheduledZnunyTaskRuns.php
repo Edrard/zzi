@@ -8,7 +8,9 @@ use Filament\Resources\Pages\ManageRecords;
 use Filament\Support\Enums\Width;
 use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Contracts\Pagination\Paginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Collection as SupportCollection;
 
 class ManageScheduledZnunyTaskRuns extends ManageRecords
 {
@@ -26,6 +28,8 @@ class ManageScheduledZnunyTaskRuns extends ManageRecords
             'historical_member' => false,
             'detached_or_orphan' => false,
             'malformed_chain' => true,
+            'total_retries' => 0,
+            'position' => 0,
         ];
     }
 
@@ -59,23 +63,60 @@ class ManageScheduledZnunyTaskRuns extends ManageRecords
         }
         $rootIds = array_unique($rootIds);
 
-        $allRuns = ScheduledZnunyTaskRun::select(
-            'id',
-            'scheduled_znuny_task_id',
-            'root_run_id',
-            'parent_run_id',
-            'retry_sequence'
-        )->get();
+        if (empty($rootIds)) {
+            $allMembers = collect();
+            $referencingRuns = collect();
+        } else {
+            $allMembers = ScheduledZnunyTaskRun::select(
+                'id',
+                'scheduled_znuny_task_id',
+                'root_run_id',
+                'parent_run_id',
+                'retry_sequence'
+            )->where(function (Builder $query) use ($rootIds) {
+                $query->whereIn('id', $rootIds)
+                    ->orWhereIn('root_run_id', $rootIds);
+            })->get();
+
+            $memberIds = $allMembers->pluck('id')->all();
+
+            $referencingRuns = empty($memberIds)
+                ? collect()
+                : ScheduledZnunyTaskRun::select(
+                    'id',
+                    'scheduled_znuny_task_id',
+                    'root_run_id',
+                    'parent_run_id',
+                    'retry_sequence'
+                )
+                    ->whereIn('parent_run_id', $memberIds)
+                    ->get();
+        }
 
         $membersByRoot = [];
-        foreach ($allRuns as $run) {
+        foreach ($allMembers as $run) {
             $rId = $run->root_run_id ?? $run->id;
             $membersByRoot[$rId][] = $run;
         }
 
+        $referencingRunsByParent = [];
+        foreach ($referencingRuns as $run) {
+            $referencingRunsByParent[$run->parent_run_id][] = $run;
+        }
+
         foreach ($rootIds as $rootId) {
             $chainMembers = $membersByRoot[$rootId] ?? [];
-            $this->evaluateChainContext($rootId, $chainMembers, $allRuns);
+
+            $chainReferencingRuns = [];
+            foreach ($chainMembers as $member) {
+                if (isset($referencingRunsByParent[$member->id])) {
+                    foreach ($referencingRunsByParent[$member->id] as $childRun) {
+                        $chainReferencingRuns[] = $childRun;
+                    }
+                }
+            }
+
+            $this->evaluateChainContext($rootId, $chainMembers, collect($chainReferencingRuns));
         }
 
         foreach ($records as $record) {
@@ -86,6 +127,8 @@ class ManageScheduledZnunyTaskRuns extends ManageRecords
                     'historical_member' => false,
                     'detached_or_orphan' => true,
                     'malformed_chain' => true,
+                    'total_retries' => 0,
+                    'position' => 0,
                 ];
             }
         }
@@ -93,8 +136,11 @@ class ManageScheduledZnunyTaskRuns extends ManageRecords
         return $result;
     }
 
-    private function evaluateChainContext(int $rootId, array $chainMembers, Collection $allRuns): void
-    {
+    private function evaluateChainContext(
+        int $rootId,
+        array $chainMembers,
+        SupportCollection $referencingRuns
+    ): void {
         $isMalformed = false;
         $root = null;
         $membersById = [];
@@ -146,7 +192,7 @@ class ManageScheduledZnunyTaskRuns extends ManageRecords
             }
         }
 
-        foreach ($allRuns as $run) {
+        foreach ($referencingRuns as $run) {
             if (isset($membersById[$run->parent_run_id]) && isset($membersById[$run->id]) === false) {
                 $isMalformed = true;
             }
@@ -233,6 +279,8 @@ class ManageScheduledZnunyTaskRuns extends ManageRecords
                 'historical_member' => ($isMalformed === false && $m->id !== $currentLeafId),
                 'detached_or_orphan' => $isDetached,
                 'malformed_chain' => $isMalformed,
+                'total_retries' => $isMalformed === false ? count($chainMembers) - 1 : 0,
+                'position' => $isMalformed === false ? $m->retry_sequence : 0,
             ];
         }
     }

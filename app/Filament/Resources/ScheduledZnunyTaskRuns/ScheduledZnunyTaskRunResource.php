@@ -29,6 +29,7 @@ use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Blade;
 use Livewire\Component;
 use Throwable;
 
@@ -257,34 +258,13 @@ class ScheduledZnunyTaskRunResource extends Resource
             )->orderBy('scheduled_for', 'desc')->orderBy('id', 'desc'))
             ->emptyStateHeading(__('scheduled_znuny_task_runs.empty_state'))
             ->columns([
-                TextColumn::make('created_at')
-                    ->label(__('scheduled_znuny_task_runs.table.created_at'))
-                    ->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatLocalizedDateTime($state))
-                    ->sortable(),
                 TextColumn::make('task_name_snapshot')
                     ->label(__('scheduled_znuny_task_runs.table.task_name_snapshot'))
-                    ->searchable(),
-                TextColumn::make('run_type')
-                    ->label(__('scheduled_znuny_task_runs.table.run_type'))
-                    ->formatStateUsing(fn (?string $state): ?string => static::runTypeLabel($state))
-                    ->searchable(),
+                    ->searchable()
+                    ->wrap(),
                 TextColumn::make('scheduled_for')
                     ->label(__('scheduled_znuny_task_runs.table.scheduled_for'))
                     ->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatLocalizedDateTime($state))
-                    ->sortable(),
-                TextColumn::make('started_at')
-                    ->label(__('scheduled_znuny_task_runs.table.started_at'))
-                    ->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatLocalizedDateTime($state))
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('finished_at')
-                    ->label(__('scheduled_znuny_task_runs.table.finished_at'))
-                    ->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatLocalizedDateTime($state))
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('duration_ms')
-                    ->label(__('scheduled_znuny_task_runs.table.duration_ms'))
-                    ->formatStateUsing(fn ($state) => $state === null ? null : round(abs((int) $state) / 1000, 1).' '.__('scheduled_znuny_task_runs.units.sec'))
                     ->sortable(),
                 TextColumn::make('status')
                     ->label(__('scheduled_znuny_task_runs.table.status'))
@@ -321,58 +301,60 @@ class ScheduledZnunyTaskRunResource extends Resource
                         };
                     })
                     ->searchable(),
-                TextColumn::make('chain_state')
-                    ->label(__('scheduled_znuny_task_runs.table.chain_state'))
-                    ->badge()
-                    ->formatStateUsing(function (?string $state, ScheduledZnunyTaskRun $record, Component $livewire): string {
+                TextColumn::make('retries')
+                    ->label(__('scheduled_znuny_task_runs.table.retries'))
+                    ->state(fn (ScheduledZnunyTaskRun $record): string => (string) $record->getKey())
+                    ->html()
+                    ->formatStateUsing(function (ScheduledZnunyTaskRun $record, Component $livewire): string {
                         if (($livewire instanceof ManageScheduledZnunyTaskRuns) === false) {
-                            return __('scheduled_znuny_task_runs.chain_states.malformed_chain');
+                            return Blade::render('<x-filament::badge color="danger">'.e(__('scheduled_znuny_task_runs.chain_states.malformed_chain')).'</x-filament::badge>');
                         }
 
                         $chainState = $livewire->getRunChainState((int) $record->id);
 
                         if ($chainState['detached_or_orphan'] === true) {
-                            return __('scheduled_znuny_task_runs.chain_states.detached_or_orphan');
+                            return Blade::render('<x-filament::badge color="danger">'.e(__('scheduled_znuny_task_runs.chain_states.detached_or_orphan')).'</x-filament::badge>');
                         }
                         if ($chainState['malformed_chain'] === true) {
-                            return __('scheduled_znuny_task_runs.chain_states.malformed_chain');
+                            return Blade::render('<x-filament::badge color="danger">'.e(__('scheduled_znuny_task_runs.chain_states.malformed_chain')).'</x-filament::badge>');
                         }
+
+                        $total = $chainState['total_retries'] ?? 0;
+                        $pos = $chainState['position'] ?? 0;
+
+                        if ($total === 0) {
+                            return '&mdash;';
+                        }
+
+                        if ($pos === 0) {
+                            return e(trans_choice('scheduled_znuny_task_runs.chain_states.root_with_retries', $total, ['total' => $total]));
+                        }
+
+                        $text = e(__('scheduled_znuny_task_runs.chain_states.retry_position', ['position' => $pos, 'total' => $total]));
+
                         if ($chainState['current_leaf'] === true) {
-                            return __('scheduled_znuny_task_runs.chain_states.current_leaf');
-                        }
-                        if ($chainState['historical_member'] === true) {
-                            return __('scheduled_znuny_task_runs.chain_states.historical_member');
+                            $badge = Blade::render('<x-filament::badge color="info" size="sm" class="ml-2 inline-flex">'.e(__('scheduled_znuny_task_runs.chain_states.current')).'</x-filament::badge>');
+
+                            return $text.$badge;
                         }
 
-                        return __('scheduled_znuny_task_runs.chain_states.malformed_chain');
-                    })
-                    ->color(function (?string $state, ScheduledZnunyTaskRun $record, Component $livewire): string {
-                        if (($livewire instanceof ManageScheduledZnunyTaskRuns) === false) {
-                            return 'danger';
-                        }
-
-                        $chainState = $livewire->getRunChainState((int) $record->id);
-
-                        if ($chainState['detached_or_orphan'] === true) {
-                            return 'danger';
-                        }
-                        if ($chainState['malformed_chain'] === true) {
-                            return 'danger';
-                        }
-                        if ($chainState['current_leaf'] === true) {
-                            return 'info';
-                        }
-                        if ($chainState['historical_member'] === true) {
-                            return 'gray';
-                        }
-
-                        return 'danger';
+                        return $text;
                     })
                     ->searchable(false)
                     ->sortable(false),
                 TextColumn::make('ticket_number')
                     ->label(__('scheduled_znuny_task_runs.table.ticket_number'))
                     ->searchable(),
+                TextColumn::make('started_at')
+                    ->label(__('scheduled_znuny_task_runs.table.started_at'))
+                    ->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatLocalizedDateTime($state))
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('finished_at')
+                    ->label(__('scheduled_znuny_task_runs.table.finished_at'))
+                    ->formatStateUsing(fn ($state) => app(DateTimeDisplayService::class)->formatLocalizedDateTime($state))
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('error_summary')
                     ->label(__('scheduled_znuny_task_runs.table.error_summary'))
                     ->searchable()
@@ -430,8 +412,12 @@ class ScheduledZnunyTaskRunResource extends Resource
                             );
                     }),
             ])
+            ->recordAction('view')
             ->recordActions([
-                ViewAction::make(),
+                ViewAction::make()
+                    ->visible(
+                        fn (ManageScheduledZnunyTaskRuns $livewire): bool => $livewire->getMountedAction()?->getName() === 'view',
+                    ),
 
                 Action::make('review_attempt')
                     ->label(__('scheduled_znuny_task_runs.actions.review_attempt'))
@@ -528,6 +514,8 @@ class ScheduledZnunyTaskRunResource extends Resource
 
                 Action::make('open_ticket')
                     ->label(__('scheduled_znuny_task_runs.actions.open_ticket'))
+                    ->iconButton()
+                    ->tooltip(__('scheduled_znuny_task_runs.actions.open_ticket'))
                     ->icon('heroicon-o-ticket')
                     ->url(fn (ScheduledZnunyTaskRun $record): ?string => $record->ticket_id
                         ? app(ZnunyClient::class)->ticketUrl($record->ticket_id)
@@ -537,6 +525,8 @@ class ScheduledZnunyTaskRunResource extends Resource
 
                 Action::make('open_task')
                     ->label(__('scheduled_znuny_task_runs.actions.open_task'))
+                    ->iconButton()
+                    ->tooltip(__('scheduled_znuny_task_runs.actions.open_task'))
                     ->icon('heroicon-o-arrow-top-right-on-square')
                     ->url(fn (ScheduledZnunyTaskRun $record): ?string => $record->scheduled_znuny_task_id && ! $record->task?->trashed()
                         ? ScheduledZnunyTaskResource::getUrl('edit', ['record' => $record->scheduled_znuny_task_id])

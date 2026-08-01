@@ -17,7 +17,7 @@ return [
         'status' => 'Status',
         'ticket_number' => 'Ticket number',
         'error_summary' => 'Error summary',
-        'chain_state' => 'Retry chain',
+        'retries' => 'Retries',
     ],
 
     'chain_states' => [
@@ -25,6 +25,9 @@ return [
         'historical_member' => 'Historical attempt',
         'malformed_chain' => 'Malformed chain',
         'detached_or_orphan' => 'Detached or orphaned',
+        'root_with_retries' => '{1} Original · 1 retry|[2,*] Original · :total retries',
+        'retry_position' => ':position of :total',
+        'current' => 'Current',
     ],
 
     'filters' => [
