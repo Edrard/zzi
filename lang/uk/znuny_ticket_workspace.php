@@ -173,6 +173,8 @@ return [
         'queue' => 'Черга:',
         'owner' => 'Власник:',
         'customer' => 'Клієнт:',
+        'queues_load_failed_title' => 'Не вдалося завантажити черги',
+        'queues_load_failed_body' => 'Не вдалося отримати доступні черги зі Znuny. Спробуйте ще раз пізніше.',
         'target_queue' => 'Цільова черга',
         'target_owner' => 'Цільовий власник',
         'target_customer' => 'Цільовий клієнт',

@@ -173,6 +173,8 @@ return [
         'queue' => 'Queue:',
         'owner' => 'Owner:',
         'customer' => 'Customer:',
+        'queues_load_failed_title' => 'Failed to load queues',
+        'queues_load_failed_body' => 'Could not retrieve assignable queues from Znuny. Please try again later.',
         'target_queue' => 'Target Queue',
         'target_owner' => 'Target Owner',
         'target_customer' => 'Target Customer',

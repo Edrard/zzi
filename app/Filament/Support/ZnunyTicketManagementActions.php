@@ -520,10 +520,52 @@ class ZnunyTicketManagementActions
                         ->label(__('znuny_ticket_workspace.management_actions.target_queue'))
                         ->default($payload->znuny_queue_name)
                         ->required()
-                        ->options(function ($get) {
+                        ->options(function (array $arguments, $record, $get) {
                             $service = app(ZnunyAssignmentDependencyService::class);
+                            try {
+                                return $service->getQueueOptionsForOwnerLogin($get('target_owner'));
+                            } catch (\Illuminate\Http\Client\ConnectionException $e) {
+                                static $notifiedQueue = false;
+                                if (! $notifiedQueue) {
+                                    $notifiedQueue = true;
+                                    $payload = \App\Filament\Support\TicketDetailsPayload::fromRecord($record, $arguments);
 
-                            return $service->getQueueOptionsForOwnerLogin($get('target_owner'));
+                                    $curlCode = null;
+                                    if ($e->getCode() > 0) {
+                                        $curlCode = (int) $e->getCode();
+                                    } elseif (preg_match('/^cURL error (\d+):/', $e->getMessage(), $matches)) {
+                                        $curlCode = (int) $matches[1];
+                                    }
+
+                                    $context = [
+                                        'operation' => 'agent_assignable_queues',
+                                        'context' => 'change_assignment',
+                                        'ticket_id' => $payload->znuny_ticket_id,
+                                        'local_record_id' => $record?->getKey(),
+                                        'agent_login' => $get('target_owner'),
+                                        'exception' => class_basename($e),
+                                        'category' => 'connection_timeout',
+                                        'path' => '/Agent/{AgentID}/AssignableQueues',
+                                    ];
+
+                                    if ($curlCode > 0) {
+                                        $context['curl_code'] = $curlCode;
+                                    }
+
+                                    \App\Services\AuditLogger::log(
+                                        action: 'znuny.connection_failed',
+                                        entityType: 'ZnunyTicket',
+                                        entityId: $payload->znuny_ticket_id,
+                                        context: $context
+                                    );
+                                    \Filament\Notifications\Notification::make()
+                                        ->title(__('znuny_ticket_workspace.management_actions.queues_load_failed_title'))
+                                        ->body(__('znuny_ticket_workspace.management_actions.queues_load_failed_body'))
+                                        ->danger()
+                                        ->send();
+                                }
+                                return [];
+                            }
                         })
                         ->searchable()
                         ->live()
