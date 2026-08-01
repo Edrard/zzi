@@ -18,6 +18,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\HtmlString;
 
@@ -520,15 +521,15 @@ class ZnunyTicketManagementActions
                         ->label(__('znuny_ticket_workspace.management_actions.target_queue'))
                         ->default($payload->znuny_queue_name)
                         ->required()
-                        ->options(function (array $arguments, $record, $get) {
+                        ->options(function ($get) use ($arguments, $record) {
                             $service = app(ZnunyAssignmentDependencyService::class);
                             try {
                                 return $service->getQueueOptionsForOwnerLogin($get('target_owner'));
-                            } catch (\Illuminate\Http\Client\ConnectionException $e) {
+                            } catch (ConnectionException $e) {
                                 static $notifiedQueue = false;
                                 if (! $notifiedQueue) {
                                     $notifiedQueue = true;
-                                    $payload = \App\Filament\Support\TicketDetailsPayload::fromRecord($record, $arguments);
+                                    $payload = TicketDetailsPayload::fromRecord($record, $arguments);
 
                                     $curlCode = null;
                                     if ($e->getCode() > 0) {
@@ -552,18 +553,19 @@ class ZnunyTicketManagementActions
                                         $context['curl_code'] = $curlCode;
                                     }
 
-                                    \App\Services\AuditLogger::log(
+                                    AuditLogger::log(
                                         action: 'znuny.connection_failed',
                                         entityType: 'ZnunyTicket',
                                         entityId: $payload->znuny_ticket_id,
                                         context: $context
                                     );
-                                    \Filament\Notifications\Notification::make()
+                                    Notification::make()
                                         ->title(__('znuny_ticket_workspace.management_actions.queues_load_failed_title'))
                                         ->body(__('znuny_ticket_workspace.management_actions.queues_load_failed_body'))
                                         ->danger()
                                         ->send();
                                 }
+
                                 return [];
                             }
                         })

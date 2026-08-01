@@ -9,12 +9,43 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Mockery\MockInterface;
 use ReflectionClass;
+use ReflectionFunction;
 use RuntimeException;
 use Tests\TestCase;
 
 class ZnunyTicketManagementActionsAssignableQueuesFailureTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_target_queue_options_are_evaluable_by_filament_without_an_unresolvable_arguments_dependency()
+    {
+        $this->mock(ZnunyAssignmentDependencyService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getQueueOptionsForOwnerLogin')
+                ->once()
+                ->with('some_owner')
+                ->andReturn(['q1' => 'Queue 1']);
+        });
+
+        [$component, $closure] = $this->extractTargetQueueOptionsComponentAndClosure(123);
+
+        $reflection = new ReflectionFunction($closure);
+        $parameters = collect($reflection->getParameters())->map->getName()->toArray();
+        $this->assertNotContains('arguments', $parameters, 'Closure should not request $arguments via injection');
+        $this->assertNotContains('record', $parameters, 'Closure should not request $record via injection');
+
+        $get = new class
+        {
+            public function __invoke($field)
+            {
+                return 'some_owner';
+            }
+        };
+
+        // This will throw BindingResolutionException if $arguments is requested in the closure signature
+        $result = $component->evaluate($closure, ['get' => $get]);
+
+        $this->assertEquals(['q1' => 'Queue 1'], $result);
+    }
 
     public function test_it_returns_options_on_success()
     {
@@ -27,17 +58,17 @@ class ZnunyTicketManagementActionsAssignableQueuesFailureTest extends TestCase
 
         session()->forget('filament.notifications');
 
-        $closure = $this->extractTargetQueueOptionsClosure();
+        [$component, $closure] = $this->extractTargetQueueOptionsComponentAndClosure(123);
 
-        $get = function ($field) {
-            if ($field === 'target_owner') {
+        $get = new class
+        {
+            public function __invoke($field)
+            {
                 return 'some_owner';
             }
-
-            return null;
         };
 
-        $result = app()->call($closure, ['arguments' => [], 'record' => null, 'get' => $get]);
+        $result = $component->evaluate($closure, ['get' => $get]);
 
         $this->assertEquals(['q1' => 'Queue 1', 'q2' => 'Queue 2'], $result);
         $this->assertEmpty(session()->get('filament.notifications'));
@@ -62,16 +93,20 @@ class ZnunyTicketManagementActionsAssignableQueuesFailureTest extends TestCase
 
         session()->forget('filament.notifications');
 
-        $closure = $this->extractTargetQueueOptionsClosure();
+        [$component, $closure] = $this->extractTargetQueueOptionsComponentAndClosure(123);
 
-        $get = function ($field) {
-            return 'some_owner';
+        $get = new class
+        {
+            public function __invoke($field)
+            {
+                return 'some_owner';
+            }
         };
 
-        $result1 = app()->call($closure, ['arguments' => ['znuny_ticket_id' => 123], 'record' => null, 'get' => $get]);
+        $result1 = $component->evaluate($closure, ['get' => $get]);
         $this->assertEquals([], $result1);
 
-        $result2 = app()->call($closure, ['arguments' => ['znuny_ticket_id' => 123], 'record' => null, 'get' => $get]);
+        $result2 = $component->evaluate($closure, ['get' => $get]);
         $this->assertEquals([], $result2);
 
         $notifications = session()->get('filament.notifications');
@@ -131,13 +166,17 @@ class ZnunyTicketManagementActionsAssignableQueuesFailureTest extends TestCase
 
         session()->forget('filament.notifications');
 
-        $closure = $this->extractTargetQueueOptionsClosure();
+        [$component, $closure] = $this->extractTargetQueueOptionsComponentAndClosure(124);
 
-        $get = function ($field) {
-            return 'some_owner';
+        $get = new class
+        {
+            public function __invoke($field)
+            {
+                return 'some_owner';
+            }
         };
 
-        $result = app()->call($closure, ['arguments' => ['znuny_ticket_id' => 124], 'record' => null, 'get' => $get]);
+        $result = $component->evaluate($closure, ['get' => $get]);
         $this->assertEquals([], $result);
 
         $logs = AuditLog::where('action', 'znuny.connection_failed')->get();
@@ -158,14 +197,18 @@ class ZnunyTicketManagementActionsAssignableQueuesFailureTest extends TestCase
 
         session()->forget('filament.notifications');
 
-        $closure = $this->extractTargetQueueOptionsClosure();
+        [$component, $closure] = $this->extractTargetQueueOptionsComponentAndClosure(123);
 
-        $get = function ($field) {
-            return 'some_owner';
+        $get = new class
+        {
+            public function __invoke($field)
+            {
+                return 'some_owner';
+            }
         };
 
         try {
-            app()->call($closure, ['arguments' => [], 'record' => null, 'get' => $get]);
+            $component->evaluate($closure, ['get' => $get]);
             $this->fail('Expected RuntimeException was not thrown.');
         } catch (RuntimeException $e) {
             $this->assertEquals('Something else broke', $e->getMessage());
@@ -195,7 +238,7 @@ class ZnunyTicketManagementActionsAssignableQueuesFailureTest extends TestCase
         }
     }
 
-    private function extractTargetQueueOptionsClosure(): \Closure
+    private function extractTargetQueueOptionsComponentAndClosure(int $ticketId): array
     {
         $action = ZnunyTicketManagementActions::changeAssignmentAction('change_assignment');
 
@@ -204,7 +247,7 @@ class ZnunyTicketManagementActionsAssignableQueuesFailureTest extends TestCase
         $property->setAccessible(true);
         $formValue = $property->getValue($action);
 
-        $components = app()->call($formValue, ['arguments' => [], 'record' => null]);
+        $components = app()->call($formValue, ['arguments' => ['znuny_ticket_id' => $ticketId], 'record' => null]);
 
         $targetQueueComponent = collect($components)->first(fn ($c) => $c->getName() === 'target_queue');
         $this->assertNotNull($targetQueueComponent);
@@ -215,7 +258,7 @@ class ZnunyTicketManagementActionsAssignableQueuesFailureTest extends TestCase
                 $optionsProperty = $reflectionComponent->getProperty('options');
                 $optionsProperty->setAccessible(true);
 
-                return $optionsProperty->getValue($targetQueueComponent);
+                return [$targetQueueComponent, $optionsProperty->getValue($targetQueueComponent)];
             }
             $reflectionComponent = $reflectionComponent->getParentClass();
         }
