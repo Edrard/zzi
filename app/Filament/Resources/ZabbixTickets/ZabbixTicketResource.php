@@ -24,6 +24,11 @@ class ZabbixTicketResource extends Resource
         return __('navigation.groups.znuny');
     }
 
+    public static function getBreadcrumb(): string
+    {
+        return __('zabbix_tickets.navigation.plural');
+    }
+
     protected static ?int $navigationSort = 20;
 
     public static function getNavigationLabel(): string

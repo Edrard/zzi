@@ -133,6 +133,12 @@ return [
         'placeholders' => [
             'not_synced' => 'Не синхронізовано',
             'sync_error' => 'Помилка синхронізації',
+            'empty' => 'Немає даних',
         ],
+    ],
+    'sender_types' => [
+        'system' => 'Система',
+        'agent' => 'Агент',
+        'customer' => 'Клієнт',
     ],
 ];

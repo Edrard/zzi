@@ -122,13 +122,22 @@
                             @if(!empty($article['created_at']))
                                 <div>
                                     <span class="text-xs text-gray-500 dark:text-gray-400 block mb-0.5">{{ __('znuny_ticket_workspace.accordion.created') }}</span>
-                                    <span>{{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($article['created_at']) }}</span>
+                                    <span>{{ app(\App\Services\Support\DateTimeDisplayService::class)->formatLocalizedDateTime($article['created_at']) }}</span>
                                 </div>
                             @endif
                             @if(!empty($article['sender_type']))
                                 <div>
                                     <span class="text-xs text-gray-500 dark:text-gray-400 block mb-0.5">{{ __('znuny_ticket_workspace.accordion.sender') }}</span>
-                                    <span class="capitalize">{{ $article['sender_type'] }}</span>
+                                    @php
+                                        $rawSenderType = (string) $article['sender_type'];
+                                        $senderTypeKey = strtolower($rawSenderType);
+                                        $translationKey = "zabbix_tickets.sender_types.{$senderTypeKey}";
+                                        $localizedSender = __($translationKey);
+                                        if ($localizedSender === $translationKey) {
+                                            $localizedSender = $rawSenderType;
+                                        }
+                                    @endphp
+                                    <span>{{ $localizedSender }}</span>
                                 </div>
                             @endif
                         </div>

@@ -133,6 +133,12 @@ return [
         'placeholders' => [
             'not_synced' => 'Not synced',
             'sync_error' => 'Sync error',
+            'empty' => 'No data',
         ],
+    ],
+    'sender_types' => [
+        'system' => 'System',
+        'agent' => 'Agent',
+        'customer' => 'Customer',
     ],
 ];

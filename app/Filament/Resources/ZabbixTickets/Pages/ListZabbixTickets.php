@@ -7,11 +7,17 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Support\Enums\Width;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Artisan;
 
 class ListZabbixTickets extends ListRecords
 {
     protected static string $resource = ZabbixTicketResource::class;
+
+    public function getTitle(): string|Htmlable
+    {
+        return __('zabbix_tickets.navigation.plural');
+    }
 
     public function getMaxContentWidth(): Width|string|null
     {
