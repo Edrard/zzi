@@ -43,6 +43,11 @@ class AuditLogResource extends Resource
         return __('audit_logs.model.plural_label');
     }
 
+    public static function getBreadcrumb(): string
+    {
+        return static::getPluralModelLabel();
+    }
+
     public static function canCreate(): bool
     {
         return false;

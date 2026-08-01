@@ -80,15 +80,34 @@ return [
         'zabbix_ticket' => 'Zabbix Ticket',
         'user' => 'User',
         'cleanup' => 'Cleanup',
+        'znuny_standalone_ticket' => 'Znuny Standalone Ticket',
+        'scheduled_znuny_task_run' => 'Scheduled Znuny task run',
+        'znuny_ticket_creation_attempt' => 'Znuny ticket creation attempt',
     ],
     'actions' => [
         'settings' => [
             'updated' => 'Settings Updated',
             'znuny_connection_tested' => 'Znuny Connection Tested',
             'zabbix_connection_tested' => 'Zabbix Connection Tested',
+            'cache' => [
+                'clear' => 'Settings cache cleared',
+            ],
+            'znuny_agent_cache' => [
+                'clear' => 'Znuny agent cache cleared',
+            ],
+            'znuny_queue_cache' => [
+                'clear' => 'Znuny queue cache cleared',
+            ],
+            'znuny_lookup_cache' => [
+                'clear' => 'Znuny lookup cache cleared',
+            ],
+            'znuny_ticket_article_cache' => [
+                'clear' => 'Znuny ticket article cache cleared',
+            ],
         ],
         'user' => [
             'locked' => 'User Locked',
+            'unlocked' => 'User Unlocked',
             'updated' => 'User Updated',
             'created' => 'User Created',
         ],
@@ -99,6 +118,7 @@ return [
         ],
         'cleanup' => [
             'finished' => 'Cleanup Finished',
+            'failed' => 'Cleanup Failed',
         ],
         'znuny_ticket_sync_updated' => 'Znuny Ticket Sync Updated',
         'znuny_ticket_sync_missing' => 'Znuny Ticket Sync Missing',
@@ -106,7 +126,19 @@ return [
         'zabbix_ticket' => [
             'link_created' => 'Zabbix Ticket Link Created',
         ],
+        'scheduled_znuny_attempt_manual_retry_created' => 'Manual retry created',
+        'scheduled_znuny_attempt_manually_linked' => 'Creation attempt manually linked',
+        'scheduled_znuny_run_manually_closed' => 'Run manually closed',
+        'scheduled_znuny_run_retry_created' => 'Retry run created',
+        'scheduled_znuny_run_uncertain' => 'Run uncertain',
         'znuny' => [
+            'standalone_ticket' => [
+                'created' => 'Standalone ticket created',
+                'failed' => 'Standalone ticket creation failed',
+                'failed_validation' => 'Standalone ticket validation failed',
+            ],
+            'connection_failed' => 'Znuny Connection Failed',
+            'connection_tested' => 'Znuny Connection Tested',
             'manual_ticket_create' => [
                 'attempt' => 'Manual Ticket Create Attempt',
                 'locked' => 'Manual Ticket Create Locked',
@@ -134,6 +166,8 @@ return [
             ],
         ],
         'zabbix' => [
+            'connection_failed' => 'Zabbix Connection Failed',
+            'connection_tested' => 'Zabbix Connection Tested',
             'problems_poll_recovered' => 'Problems Poll Recovered',
             'problems_poll_completed' => 'Problems Poll Completed',
             'problems_poll_failed' => 'Problems Poll Failed',

@@ -80,15 +80,34 @@ return [
         'zabbix_ticket' => 'Заявка Zabbix',
         'user' => 'Користувач',
         'cleanup' => 'Очищення',
+        'znuny_standalone_ticket' => 'Окрема заявка Znuny',
+        'scheduled_znuny_task_run' => 'Запуск запланованого завдання Znuny',
+        'znuny_ticket_creation_attempt' => 'Спроба створення звернення Znuny',
     ],
     'actions' => [
         'settings' => [
             'updated' => 'Оновлено налаштування',
             'znuny_connection_tested' => 'Перевірено підключення до Znuny',
             'zabbix_connection_tested' => 'Перевірено підключення до Zabbix',
+            'cache' => [
+                'clear' => 'Кеш налаштувань очищено',
+            ],
+            'znuny_agent_cache' => [
+                'clear' => 'Кеш агентів Znuny очищено',
+            ],
+            'znuny_queue_cache' => [
+                'clear' => 'Кеш черг Znuny очищено',
+            ],
+            'znuny_lookup_cache' => [
+                'clear' => 'Кеш пошуку Znuny очищено',
+            ],
+            'znuny_ticket_article_cache' => [
+                'clear' => 'Кеш статей заявок Znuny очищено',
+            ],
         ],
         'user' => [
             'locked' => 'Користувача заблоковано',
+            'unlocked' => 'Користувача розблоковано',
             'updated' => 'Користувача оновлено',
             'created' => 'Створено користувача',
         ],
@@ -99,6 +118,7 @@ return [
         ],
         'cleanup' => [
             'finished' => 'Очищення завершено',
+            'failed' => 'Помилка очищення',
         ],
         'znuny_ticket_sync_updated' => 'Синхронізацію заявок Znuny оновлено',
         'znuny_ticket_sync_missing' => 'Відсутня синхронізація заявок Znuny',
@@ -106,7 +126,19 @@ return [
         'zabbix_ticket' => [
             'link_created' => 'Створено посилання на заявку Zabbix',
         ],
+        'scheduled_znuny_attempt_manual_retry_created' => 'Створено повторну спробу вручну',
+        'scheduled_znuny_attempt_manually_linked' => 'Спробу створення вручну пов’язано зі зверненням',
+        'scheduled_znuny_run_manually_closed' => 'Запуск закрито вручну',
+        'scheduled_znuny_run_retry_created' => 'Створено повторний запуск',
+        'scheduled_znuny_run_uncertain' => 'Невизначений запуск',
         'znuny' => [
+            'standalone_ticket' => [
+                'created' => 'Окрему заявку Znuny створено',
+                'failed' => 'Помилка створення окремої заявки Znuny',
+                'failed_validation' => 'Помилка перевірки окремої заявки Znuny',
+            ],
+            'connection_failed' => 'Помилка підключення до Znuny',
+            'connection_tested' => 'Перевірено підключення до Znuny',
             'manual_ticket_create' => [
                 'attempt' => 'Спроба ручного створення заявки',
                 'locked' => 'Ручне створення заявки заблоковано',
@@ -134,6 +166,8 @@ return [
             ],
         ],
         'zabbix' => [
+            'connection_failed' => 'Помилка підключення до Zabbix',
+            'connection_tested' => 'Перевірено підключення до Zabbix',
             'problems_poll_recovered' => 'Відновлено опитування проблем',
             'problems_poll_completed' => 'Опитування проблем завершено',
             'problems_poll_failed' => 'Помилка опитування проблем',
