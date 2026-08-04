@@ -1,0 +1,144 @@
+<?php
+
+namespace App\Console\Commands;
+
+use App\Enums\ZnunyPrewarmRefreshResult;
+use App\Services\Znuny\Cache\PrewarmSnapshotManager;
+use App\Services\Znuny\ZnunyClient;
+use Illuminate\Console\Command;
+use Throwable;
+
+class ZnunyWarmLookupsCommand extends Command
+{
+    protected $signature = 'znuny:cache:warm-lookups';
+    protected $description = 'Warm up Znuny lookups (states, priorities, types)';
+
+    public function handle(ZnunyClient $client): int
+    {
+        $manager = new PrewarmSnapshotManager('lookups');
+
+        $intervalMinutes = (int) config('app.znuny_prewarm.default_refresh_interval_minutes', 5);
+
+        $result = $manager->refresh(
+            function () use ($client) {
+                $rawStates = $client->getTicketStates();
+                $rawPriorities = $client->getTicketPriorities();
+                $rawTypes = $client->getTicketTypes();
+
+                $states = $this->normalizeCategory($rawStates, 'states');
+                $priorities = $this->normalizeCategory($rawPriorities, 'priorities');
+                $types = $this->normalizeCategory($rawTypes, 'types');
+
+                return [
+                    'payload' => [
+                        'states' => $states,
+                        'priorities' => $priorities,
+                        'types' => $types,
+                    ],
+                    'item_count' => count($states) + count($priorities) + count($types),
+                ];
+            },
+            'artisan',
+            $intervalMinutes
+        );
+
+        if ($result === ZnunyPrewarmRefreshResult::SKIPPED_LOCKED) {
+            $this->warn('Lookups warmup skipped because another process holds the lock.');
+            return self::SUCCESS;
+        }
+
+        if ($result === ZnunyPrewarmRefreshResult::FAILED) {
+            $this->error($this->getSafeLastError($manager));
+            return self::FAILURE;
+        }
+
+        $this->info('Successfully warmed up lookups dataset.');
+        return self::SUCCESS;
+    }
+
+    private function getSafeLastError(PrewarmSnapshotManager $manager): string
+    {
+        try {
+            $meta = $manager->readMetadata();
+            if (! empty($meta['last_error']) && is_string($meta['last_error']) && trim($meta['last_error']) !== '') {
+                return trim($meta['last_error']);
+            }
+        } catch (Throwable $e) {
+            // Ignore metadata read failure during error reporting
+        }
+
+        return 'Refresh failed; see application logs.';
+    }
+
+    private function normalizeCategory(mixed $rawItems, string $categoryName): array
+    {
+        if (! is_array($rawItems)) {
+            throw new \Exception("Raw {$categoryName} must be an array.");
+        }
+
+        if (array_key_exists('Data', $rawItems)) {
+            if (! is_array($rawItems['Data'])) {
+                throw new \Exception("Malformed Data wrapper in {$categoryName}: must be an array.");
+            }
+            $rawItems = $rawItems['Data'];
+        } elseif (array_key_exists('data', $rawItems)) {
+            if (! is_array($rawItems['data'])) {
+                throw new \Exception("Malformed data wrapper in {$categoryName}: must be an array.");
+            }
+            $rawItems = $rawItems['data'];
+        }
+
+        $normalized = [];
+
+        foreach ($rawItems as $item) {
+            $scalarValue = null;
+
+            if (is_string($item) || is_int($item) || is_float($item)) {
+                $scalarValue = $item;
+            } elseif (is_array($item)) {
+                $keys = ['name', 'Name', 'label', 'Label', 'value', 'Value'];
+                foreach ($keys as $k) {
+                    if (isset($item[$k]) && (is_string($item[$k]) || is_int($item[$k]) || is_float($item[$k]))) {
+                        $scalarValue = $item[$k];
+                        break;
+                    }
+                }
+            }
+
+            if ($scalarValue === null) {
+                throw new \Exception("Malformed item in {$categoryName} without recognizable scalar value.");
+            }
+
+            $trimmed = trim((string) $scalarValue);
+            if ($trimmed === '') {
+                throw new \Exception("Blank normalized value in {$categoryName}.");
+            }
+
+            if (isset($normalized[$trimmed])) {
+                throw new \Exception("Duplicate normalized value '{$trimmed}' inside category {$categoryName}.");
+            }
+
+            $normalized[$trimmed] = $trimmed;
+        }
+
+        if (empty($normalized)) {
+            throw new \Exception("Empty normalized category: {$categoryName}");
+        }
+
+        uksort($normalized, function ($a, $b) {
+            $cmp = strnatcasecmp($a, $b);
+            if ($cmp === 0) {
+                return strcmp($a, $b);
+            }
+            return $cmp;
+        });
+
+        // Ensure keys and values are properly aligned after sort, just in case
+        $finalAssoc = [];
+        foreach ($normalized as $key => $val) {
+            $finalAssoc[$key] = $val;
+        }
+
+        return $finalAssoc;
+    }
+}
