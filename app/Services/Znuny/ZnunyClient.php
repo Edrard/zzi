@@ -74,9 +74,12 @@ class ZnunyClient
     /**
      * Handle raw HTTP requests using Laravel Http facade with timeout/ssl defaults.
      */
-    protected function request(): PendingRequest
+    protected function buildPendingRequest(): PendingRequest
     {
         $timeout = SettingsService::int('znuny_api_timeout', 15) ?? 15;
+        if ($timeout <= 0) {
+            $timeout = 1;
+        }
         $verifySsl = SettingsService::bool('znuny_api_verify_ssl', true) ?? true;
 
         return Http::timeout($timeout)
@@ -145,6 +148,19 @@ class ZnunyClient
         return (int) $ticketIdStr;
     }
 
+    private function normalizeStrictPositiveId(mixed $value, string $field): int
+    {
+        if (is_int($value) && $value > 0) {
+            return $value;
+        }
+
+        if (is_string($value) && preg_match('/^[1-9][0-9]*$/', $value)) {
+            return (int) $value;
+        }
+
+        throw new Exception("Malformed raw ID for {$field}.");
+    }
+
     /**
      * Check if exception message represents an invalid session error.
      */
@@ -172,7 +188,7 @@ class ZnunyClient
         }
 
         try {
-            $response = $this->request()->post($this->apiUrl().'/Session', [
+            $response = $this->buildPendingRequest()->post($this->apiUrl().'/Session', [
                 'UserLogin' => $username,
                 'Password' => $password,
             ]);
@@ -213,7 +229,7 @@ class ZnunyClient
 
         try {
             $session = $this->sessionId();
-            $response = $this->request()->get($this->apiUrl()."/ZnunyAgentListTicket/{$normalizedId}", [
+            $response = $this->buildPendingRequest()->get($this->apiUrl()."/ZnunyAgentListTicket/{$normalizedId}", [
                 'SessionID' => $session,
             ]);
 
@@ -271,7 +287,7 @@ class ZnunyClient
         return $this->withSessionRetry(function ($session) use ($ticketId) {
             $normalizedId = $this->normalizeTicketId($ticketId);
 
-            $response = $this->request()->get($this->apiUrl().'/Ticket/'.rawurlencode((string) $normalizedId), [
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/Ticket/'.rawurlencode((string) $normalizedId), [
                 'SessionID' => $session,
                 'AllArticles' => 1,
                 'DynamicFields' => 0,
@@ -328,7 +344,7 @@ class ZnunyClient
     {
         try {
             $session = $this->sessionId();
-            $response = $this->request()->get($this->apiUrl().'/Agent', [
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/Agent', [
                 'SessionID' => $session,
             ]);
 
@@ -340,20 +356,23 @@ class ZnunyClient
 
             $normalized = [];
             foreach ($data['Agents'] as $agent) {
-                if (! isset($agent['UserID']) || ! isset($agent['UserLogin'])) {
-                    continue;
+                if (! is_array($agent)) {
+                    throw new Exception('Agent entry must be an array.');
                 }
 
-                $userIdStr = (string) $agent['UserID'];
-                if (! preg_match('/^[1-9]\d*$/', $userIdStr)) {
-                    continue; // Skip invalid UserID safely
+                if (! array_key_exists('UserID', $agent)) {
+                    throw new Exception('Agent entry must have a UserID.');
                 }
 
-                $id = (int) $userIdStr;
+                $id = $this->normalizeStrictPositiveId($agent['UserID'], 'UserID');
+
+                if (! array_key_exists('UserLogin', $agent)) {
+                    throw new Exception('Agent entry must have a UserLogin.');
+                }
+
                 $login = trim((string) $agent['UserLogin']);
-
                 if ($login === '') {
-                    continue; // Skip invalid UserLogin safely
+                    throw new Exception('Agent entry must have a non-empty UserLogin.');
                 }
 
                 $fullname = isset($agent['UserFullname']) ? trim((string) $agent['UserFullname']) : null;
@@ -371,7 +390,13 @@ class ZnunyClient
                 ];
             }
 
-            usort($normalized, fn ($a, $b) => strcasecmp($a['label'], $b['label']));
+            usort($normalized, function ($a, $b) {
+                $cmp = strcasecmp($a['label'], $b['label']);
+                if ($cmp === 0) {
+                    return $a['id'] <=> $b['id'];
+                }
+                return $cmp;
+            });
 
             return $normalized;
 
@@ -393,7 +418,7 @@ class ZnunyClient
     {
         try {
             $session = $this->sessionId();
-            $response = $this->request()->get($this->apiUrl().'/TicketState', [
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/TicketState', [
                 'SessionID' => $session,
             ]);
 
@@ -423,7 +448,7 @@ class ZnunyClient
     {
         try {
             $session = $this->sessionId();
-            $response = $this->request()->get($this->apiUrl().'/TicketPriority', [
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/TicketPriority', [
                 'SessionID' => $session,
             ]);
 
@@ -453,7 +478,7 @@ class ZnunyClient
     {
         try {
             $session = $this->sessionId();
-            $response = $this->request()->get($this->apiUrl().'/TicketType', [
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/TicketType', [
                 'SessionID' => $session,
             ]);
 
@@ -510,7 +535,7 @@ class ZnunyClient
         return $this->withSessionRetry(function ($session) use ($payload) {
             $payload['SessionID'] = $session;
 
-            $response = $this->request()->get($this->apiUrl().'/ZnunyAgentListTicketSearch', $payload);
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/ZnunyAgentListTicketSearch', $payload);
 
             $data = $this->processResponse($response);
 
@@ -567,7 +592,7 @@ class ZnunyClient
         return $this->withSessionRetry(function ($session) use ($payload) {
             $payload['SessionID'] = $session;
 
-            $response = $this->request()->get($this->apiUrl().'/ZnunyAgentListTicketSearch', $payload);
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/ZnunyAgentListTicketSearch', $payload);
 
             $data = $this->processResponse($response);
 
@@ -795,7 +820,7 @@ class ZnunyClient
     public function health(): array
     {
         return $this->withSessionRetry(function ($session) {
-            $response = $this->request()->get($this->apiUrl().'/Health', [
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/Health', [
                 'SessionID' => $session,
             ]);
 
@@ -816,7 +841,7 @@ class ZnunyClient
     public function systemConfig(): array
     {
         return $this->withSessionRetry(function ($session) {
-            $response = $this->request()->get($this->apiUrl().'/SystemConfig', [
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/SystemConfig', [
                 'SessionID' => $session,
             ]);
 
@@ -844,35 +869,58 @@ class ZnunyClient
     public function getQueues(): array
     {
         return $this->withSessionRetry(function ($session) {
-            $response = $this->request()->get($this->apiUrl().'/Queue', [
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/Queue', [
                 'SessionID' => $session,
             ]);
 
             $data = $this->processResponse($response);
             $normalized = [];
 
-            if (! empty($data['Queues']) && is_array($data['Queues'])) {
-                foreach ($data['Queues'] as $q) {
-                    $id = $q['QueueID'] ?? null;
-                    $name = trim((string) ($q['Name'] ?? ''));
-
-                    if (! is_numeric($id) || $id <= 0 || $name === '') {
-                        continue;
-                    }
-
-                    $fullName = isset($q['FullName']) ? trim((string) $q['FullName']) : $name;
-
-                    $normalized[] = [
-                        'id' => (int) $id,
-                        'name' => $name,
-                        'full_name' => $fullName,
-                        'valid_id' => (int) ($q['ValidID'] ?? 1),
-                        'label' => $name,
-                    ];
-                }
+            if (! isset($data['Queues']) || ! is_array($data['Queues'])) {
+                throw new Exception('Invalid Queues list returned from Znuny API.');
             }
 
-            usort($normalized, fn ($a, $b) => strcasecmp($a['label'], $b['label']));
+            foreach ($data['Queues'] as $q) {
+                if (! is_array($q)) {
+                    throw new Exception('Queue entry must be an array.');
+                }
+
+                if (! array_key_exists('QueueID', $q)) {
+                    throw new Exception('Queue entry must have a QueueID.');
+                }
+                $id = $this->normalizeStrictPositiveId($q['QueueID'], 'QueueID');
+
+                if (! array_key_exists('Name', $q)) {
+                    throw new Exception('Queue entry must have a Name.');
+                }
+                $name = trim((string) $q['Name']);
+                if ($name === '') {
+                    throw new Exception('Queue entry must have a non-empty Name.');
+                }
+
+                if (! array_key_exists('ValidID', $q)) {
+                    throw new Exception('Queue entry must have a ValidID.');
+                }
+                $validId = $this->normalizeStrictPositiveId($q['ValidID'], 'ValidID');
+
+                $fullName = isset($q['FullName']) ? trim((string) $q['FullName']) : $name;
+
+                $normalized[] = [
+                    'id' => $id,
+                    'name' => $name,
+                    'full_name' => $fullName,
+                    'valid_id' => $validId,
+                    'label' => $name,
+                ];
+            }
+
+            usort($normalized, function ($a, $b) {
+                $cmp = strcasecmp($a['label'], $b['label']);
+                if ($cmp === 0) {
+                    return $a['id'] <=> $b['id'];
+                }
+                return $cmp;
+            });
 
             return $normalized;
         });
@@ -884,7 +932,7 @@ class ZnunyClient
     public function getQueue(int|string $queueId): array
     {
         return $this->withSessionRetry(function ($session) use ($queueId) {
-            $response = $this->request()->get($this->apiUrl().'/Queue/'.rawurlencode((string) $queueId), [
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/Queue/'.rawurlencode((string) $queueId), [
                 'SessionID' => $session,
             ]);
 
@@ -902,7 +950,7 @@ class ZnunyClient
         return $this->withSessionRetry(function ($session) use ($payload) {
             $payload['SessionID'] = $session;
 
-            $response = $this->request()->post($this->apiUrl().'/TicketMoveAssign/Validate', $payload);
+            $response = $this->buildPendingRequest()->post($this->apiUrl().'/TicketMoveAssign/Validate', $payload);
 
             return $this->processResponse($response);
         });
@@ -916,7 +964,7 @@ class ZnunyClient
         return $this->withSessionRetry(function ($session) use ($payload) {
             $payload['SessionID'] = $session;
 
-            $response = $this->request()->post($this->apiUrl().'/TicketMoveAssign', $payload);
+            $response = $this->buildPendingRequest()->post($this->apiUrl().'/TicketMoveAssign', $payload);
 
             return $this->processResponse($response);
         });
@@ -928,7 +976,7 @@ class ZnunyClient
     public function getQueueByName(string $name): array
     {
         return $this->withSessionRetry(function ($session) use ($name) {
-            $response = $this->request()->get($this->apiUrl().'/QueueByName/'.rawurlencode($name), [
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/QueueByName/'.rawurlencode($name), [
                 'SessionID' => $session,
             ]);
 
@@ -978,7 +1026,7 @@ class ZnunyClient
     public function getQueueAssignableAgents(int|string $queueId): array
     {
         return $this->withSessionRetry(function ($session) use ($queueId) {
-            $response = $this->request()->get($this->apiUrl().'/Queue/'.rawurlencode((string) $queueId).'/AssignableAgents', [
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/Queue/'.rawurlencode((string) $queueId).'/AssignableAgents', [
                 'SessionID' => $session,
             ]);
 
@@ -1017,29 +1065,41 @@ class ZnunyClient
     public function getAgentAssignableQueues(int|string $userId): array
     {
         return $this->withSessionRetry(function ($session) use ($userId) {
-            $response = $this->request()->get($this->apiUrl().'/Agent/'.rawurlencode((string) $userId).'/AssignableQueues', [
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/Agent/'.rawurlencode((string) $userId).'/AssignableQueues', [
                 'SessionID' => $session,
             ]);
 
             $data = $this->processResponse($response);
-            $normalized = [];
-
-            if (! empty($data['Queues']) && is_array($data['Queues'])) {
-                foreach ($data['Queues'] as $q) {
-                    $id = trim((string) ($q['QueueID'] ?? ''));
-                    if ($id === '') {
-                        continue;
-                    }
-                    $normalized[] = [
-                        'id' => (int) $id,
-                        'name' => trim((string) ($q['Name'] ?? '')),
-                        'group_id' => trim((string) ($q['GroupID'] ?? '')),
-                        'label' => trim((string) ($q['Name'] ?? '')),
-                    ];
-                }
+            if (! array_key_exists('Queues', $data) || ! is_array($data['Queues'])) {
+                throw new Exception('Invalid Assignable Queues list returned from Znuny API.');
             }
 
-            usort($normalized, fn ($a, $b) => strcasecmp($a['name'], $b['name']));
+            $normalized = [];
+            foreach ($data['Queues'] as $q) {
+                if (! is_array($q)) {
+                    throw new Exception('Queue relationship entry must be an array.');
+                }
+
+                if (! array_key_exists('QueueID', $q)) {
+                    throw new Exception('Queue relationship entry must have a QueueID.');
+                }
+                $id = $this->normalizeStrictPositiveId($q['QueueID'], 'QueueID');
+
+                $normalized[] = [
+                    'id' => $id,
+                    'name' => trim((string) ($q['Name'] ?? '')),
+                    'group_id' => trim((string) ($q['GroupID'] ?? '')),
+                    'label' => trim((string) ($q['Name'] ?? '')),
+                ];
+            }
+
+            usort($normalized, function ($a, $b) {
+                $cmp = strcasecmp($a['name'], $b['name']);
+                if ($cmp === 0) {
+                    return $a['id'] <=> $b['id'];
+                }
+                return $cmp;
+            });
 
             return $normalized;
         });
@@ -1053,7 +1113,7 @@ class ZnunyClient
         return $this->withSessionRetry(function ($session) use ($search, $limit) {
             $safeLimit = max(1, min(50, $limit));
 
-            $response = $this->request()->get($this->apiUrl().'/CustomerUser', [
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/CustomerUser', [
                 'SessionID' => $session,
                 'Search' => $search,
                 'Limit' => $safeLimit,
@@ -1099,7 +1159,7 @@ class ZnunyClient
     public function getCustomerUser(string $userLogin): array
     {
         return $this->withSessionRetry(function ($session) use ($userLogin) {
-            $response = $this->request()->get($this->apiUrl().'/CustomerUser/'.rawurlencode($userLogin), [
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/CustomerUser/'.rawurlencode($userLogin), [
                 'SessionID' => $session,
             ]);
 
@@ -1148,7 +1208,7 @@ class ZnunyClient
     public function resolveTicketDefaults(string $hostName): array
     {
         return $this->withSessionRetry(function ($session) use ($hostName) {
-            $response = $this->request()->get($this->apiUrl().'/ResolveTicketDefaults', [
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/ResolveTicketDefaults', [
                 'SessionID' => $session,
                 'HostName' => $hostName,
             ]);
@@ -1195,7 +1255,7 @@ class ZnunyClient
         return $this->withSessionRetry(function ($session) use ($payload) {
             $payload['SessionID'] = $session;
 
-            $response = $this->request()->post($this->apiUrl().'/ValidateTicketCreate', $payload);
+            $response = $this->buildPendingRequest()->post($this->apiUrl().'/ValidateTicketCreate', $payload);
 
             $data = $this->processResponse($response);
 
@@ -1215,7 +1275,7 @@ class ZnunyClient
         return $this->withSessionRetry(function ($session) use ($payload) {
             $payload['SessionID'] = $session;
 
-            $response = $this->request()->post($this->apiUrl().'/Ticket', $payload);
+            $response = $this->buildPendingRequest()->post($this->apiUrl().'/Ticket', $payload);
 
             $data = $this->processResponse($response);
 
@@ -1264,7 +1324,7 @@ class ZnunyClient
                 ],
             ];
 
-            $response = $this->request()->patch($this->apiUrl().'/Ticket/'.$normalizedId, $payload);
+            $response = $this->buildPendingRequest()->patch($this->apiUrl().'/Ticket/'.$normalizedId, $payload);
 
             $data = $this->processResponse($response);
 
@@ -1340,7 +1400,7 @@ class ZnunyClient
             $payload['SessionID'] = $session;
             $payload['TicketID'] = $normalizedId;
 
-            $response = $this->request()->post($this->apiUrl().'/TicketClose', $payload);
+            $response = $this->buildPendingRequest()->post($this->apiUrl().'/TicketClose', $payload);
 
             $data = $this->processResponse($response);
 
@@ -1359,7 +1419,7 @@ class ZnunyClient
             $payload['SessionID'] = $session;
             $payload['TicketID'] = $normalizedId;
 
-            $response = $this->request()->post($this->apiUrl().'/TicketReopen', $payload);
+            $response = $this->buildPendingRequest()->post($this->apiUrl().'/TicketReopen', $payload);
 
             $data = $this->processResponse($response);
 
@@ -1382,7 +1442,7 @@ class ZnunyClient
             }
 
             try {
-                $response = $this->request()->post($this->apiUrl().'/TicketUnlock', $payload);
+                $response = $this->buildPendingRequest()->post($this->apiUrl().'/TicketUnlock', $payload);
                 $data = $this->processResponse($response);
             } catch (Throwable $e) {
                 return [
@@ -1440,7 +1500,7 @@ class ZnunyClient
             }
 
             try {
-                $response = $this->request()->post($this->apiUrl().'/TicketLock', $payload);
+                $response = $this->buildPendingRequest()->post($this->apiUrl().'/TicketLock', $payload);
                 $data = $this->processResponse($response);
             } catch (Throwable $e) {
                 return [

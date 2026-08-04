@@ -139,6 +139,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Znuny Prewarm Cache
+    |--------------------------------------------------------------------------
+    */
+    'znuny_prewarm' => [
+        'cache_ttl_multiplier' => env('ZNUNY_PREWARM_CACHE_TTL_MULTIPLIER', 10),
+        'metadata_ttl_minutes' => env('ZNUNY_PREWARM_METADATA_TTL_MINUTES', 10080),
+        'default_refresh_interval_minutes' => 5,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Global UI Poll Interval
     |--------------------------------------------------------------------------
     |

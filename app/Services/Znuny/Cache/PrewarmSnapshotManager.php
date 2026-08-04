@@ -2,6 +2,7 @@
 
 namespace App\Services\Znuny\Cache;
 
+use App\Enums\ZnunyPrewarmRefreshResult;
 use Closure;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -16,17 +17,43 @@ class PrewarmSnapshotManager
     }
 
     /**
+     * Get the active snapshot (generation, payload, metadata) coherently.
+     * Returns null if missing or expired.
+     */
+    public function readActiveSnapshot(): ?array
+    {
+        for ($attempt = 1; $attempt <= 2; $attempt++) {
+            $metaBefore = $this->readMetadata();
+            $genBefore = $metaBefore['active_generation'];
+
+            if (! $genBefore) {
+                continue;
+            }
+
+            $payload = $this->getCache($genBefore);
+
+            $metaAfter = $this->readMetadata();
+            $genAfter = $metaAfter['active_generation'];
+
+            if ($genBefore === $genAfter && is_array($payload)) {
+                return [
+                    'generation' => $genBefore,
+                    'payload' => $payload,
+                    'metadata' => $metaAfter,
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Get the active payload, or null if none is ready.
      */
     public function readActive(): ?array
     {
-        $meta = $this->readMetadata();
-
-        if (empty($meta['active_generation'])) {
-            return null;
-        }
-
-        return Cache::get($meta['active_generation']);
+        $snapshot = $this->readActiveSnapshot();
+        return $snapshot ? $snapshot['payload'] : null;
     }
 
     /**
@@ -34,7 +61,9 @@ class PrewarmSnapshotManager
      */
     public function readMetadata(): array
     {
-        return Cache::get($this->getMetaKey(), [
+        $meta = $this->getCache($this->getMetaKey());
+
+        $base = [
             'dataset_name' => $this->datasetName,
             'status' => 'missing',
             'active_generation' => null,
@@ -43,81 +72,161 @@ class PrewarmSnapshotManager
             'last_successful_refresh_at' => null,
             'last_error' => null,
             'refresh_source' => null,
-        ]);
+        ];
+
+        if (is_array($meta)) {
+            $gen = (isset($meta['active_generation']) && is_string($meta['active_generation'])) ? trim($meta['active_generation']) : '';
+            $base['active_generation'] = $gen !== '' ? $gen : null;
+            $base['item_count'] = (isset($meta['item_count']) && is_int($meta['item_count']) && $meta['item_count'] >= 0) ? $meta['item_count'] : 0;
+            $allowedStatuses = ['missing', 'refreshing', 'ready', 'stale', 'failed'];
+            $base['status'] = (isset($meta['status']) && is_string($meta['status']) && in_array($meta['status'], $allowedStatuses, true)) ? $meta['status'] : ($base['active_generation'] ? 'ready' : 'missing');
+            $base['last_attempt_at'] = (isset($meta['last_attempt_at']) && is_string($meta['last_attempt_at'])) ? $meta['last_attempt_at'] : null;
+            $base['last_successful_refresh_at'] = (isset($meta['last_successful_refresh_at']) && is_string($meta['last_successful_refresh_at'])) ? $meta['last_successful_refresh_at'] : null;
+            $base['last_error'] = (isset($meta['last_error']) && is_string($meta['last_error'])) ? $meta['last_error'] : null;
+            $base['refresh_source'] = (isset($meta['refresh_source']) && is_string($meta['refresh_source'])) ? $meta['refresh_source'] : null;
+            $base['dataset_name'] = $this->datasetName;
+        }
+
+        return $base;
     }
 
     /**
      * Refresh the snapshot atomically.
-     *
-     * @param Closure $fetcher Should return the normalized array payload. Throws on failure.
-     * @param string $source The source of the refresh (e.g. 'artisan', 'scheduler')
-     * @return bool True if successful, false if failed.
+     * Note: Parent-runner lock ownership and environment-derived hard timeout
+     * are deferred to the scheduler/runner stage.
      */
-    public function refresh(Closure $fetcher, string $source = 'manual'): bool
+    public function refresh(Closure $fetcher, string $source, int $refreshIntervalMinutes, int $lockSeconds = 660): ZnunyPrewarmRefreshResult
     {
-        $lock = Cache::lock($this->getLockKey(), 120);
-
-        if (! $lock->get()) {
-            return false;
+        try {
+            $lock = $this->acquireLock($this->getLockKey(), $lockSeconds);
+            if (! $lock) {
+                return ZnunyPrewarmRefreshResult::SKIPPED_LOCKED;
+            }
+        } catch (\Throwable $e) {
+            Log::error("Failed to acquire lock for prewarm dataset [{$this->datasetName}]: " . $this->sanitizeError($e->getMessage()));
+            return ZnunyPrewarmRefreshResult::FAILED;
         }
-
-        $meta = $this->readMetadata();
-        $meta['last_attempt_at'] = now()->toIso8601String();
-        $meta['status'] = 'refreshing';
-        $meta['refresh_source'] = $source;
-        $this->saveMetadata($meta);
-
-        $tempKey = $this->getDatasetKeyPrefix() . '_v' . time() . '_' . uniqid();
 
         try {
-            $payload = $fetcher();
+            $effectiveRefreshIntervalMinutes = max(1, $refreshIntervalMinutes);
+            $cacheTtlMultiplier = max(
+                1,
+                (int) config('app.znuny_prewarm.cache_ttl_multiplier', 10),
+            );
+            $configuredMetadataTtlMinutes = max(
+                1,
+                (int) config('app.znuny_prewarm.metadata_ttl_minutes', 10080),
+            );
 
-            if (! is_array($payload)) {
-                throw new \Exception('Fetcher returned non-array payload.');
+            $payloadTtlMinutes =
+                $effectiveRefreshIntervalMinutes * $cacheTtlMultiplier;
+
+            $metadataTtlMinutes = max(
+                $payloadTtlMinutes,
+                $configuredMetadataTtlMinutes,
+            );
+
+            try {
+                $originalMeta = $this->readMetadata();
+            } catch (\Throwable $e) {
+                Log::error("Failed to read initial metadata for prewarm dataset [{$this->datasetName}]: " . $this->sanitizeError($e->getMessage()));
+                return ZnunyPrewarmRefreshResult::FAILED;
             }
 
-            // Write temporary snapshot
-            Cache::forever($tempKey, $payload);
+            $meta = $originalMeta;
+            $meta['last_attempt_at'] = now()->toIso8601String();
+            $meta['status'] = 'refreshing';
+            $meta['refresh_source'] = $source;
 
-            // Validation passed, swap metadata
-            $oldGeneration = $meta['active_generation'];
+            $tempKey = $this->getDatasetKeyPrefix() . '_v' . time() . '_' . uniqid();
+            $tempWritten = false;
+            $activated = false;
+            $successResult = ZnunyPrewarmRefreshResult::SUCCESS;
 
-            $meta['active_generation'] = $tempKey;
-            $meta['status'] = 'ready';
-            $meta['item_count'] = count($payload);
-            $meta['last_successful_refresh_at'] = now()->toIso8601String();
-            $meta['last_error'] = null;
-            
-            $this->saveMetadata($meta);
+            try {
+                if (! $this->storeCache($this->getMetaKey(), $meta, $metadataTtlMinutes)) {
+                    throw new \Exception("Cache::put returned false for metadata write.");
+                }
 
-            // Cleanup old snapshot
-            if ($oldGeneration && $oldGeneration !== $tempKey) {
-                Cache::forget($oldGeneration);
+                $fetchResult = $fetcher();
+
+                if (! is_array($fetchResult) || ! isset($fetchResult['payload']) || ! is_array($fetchResult['payload']) || ! isset($fetchResult['item_count']) || ! is_int($fetchResult['item_count']) || $fetchResult['item_count'] < 0) {
+                    throw new \Exception('Fetcher must return array with valid payload array and positive integer item_count.');
+                }
+
+                if (! $this->storeCache($tempKey, $fetchResult['payload'], $payloadTtlMinutes)) {
+                    throw new \Exception("Cache::put returned false for temporary payload write.");
+                }
+
+                $tempWritten = true;
+
+                $oldGeneration = $originalMeta['active_generation'];
+
+                $meta['active_generation'] = $tempKey;
+                $meta['status'] = 'ready';
+                $meta['item_count'] = $fetchResult['item_count'];
+                $meta['last_successful_refresh_at'] = now()->toIso8601String();
+                $meta['last_error'] = null;
+
+                if (! $this->storeCache($this->getMetaKey(), $meta, $metadataTtlMinutes)) {
+                    throw new \Exception("Cache::put returned false for activation metadata write.");
+                }
+
+                $activated = true;
+
+                // Cleanup old snapshot best-effort
+                if ($oldGeneration && $oldGeneration !== $tempKey) {
+                    try {
+                        if (! $this->forgetCache($oldGeneration)) {
+                            Log::warning("Failed to cleanup old generation for prewarm dataset [{$this->datasetName}]: returned false.");
+                        }
+                    } catch (\Throwable $ce) {
+                        Log::warning("Failed to cleanup old generation for prewarm dataset [{$this->datasetName}]: " . $this->sanitizeError($ce->getMessage()));
+                    }
+                }
+
+                return $successResult;
+            } catch (\Throwable $e) {
+                $sanitizedError = $this->sanitizeError($e->getMessage());
+                Log::error("Failed to refresh prewarm dataset [{$this->datasetName}]: " . $sanitizedError);
+
+                if (! $activated && $tempWritten) {
+                    try {
+                        if (! $this->forgetCache($tempKey)) {
+                            Log::warning("Failed to cleanup temp generation for prewarm dataset [{$this->datasetName}]: returned false.");
+                        }
+                    } catch (\Throwable $ce) {
+                        Log::warning("Failed to cleanup temp generation for prewarm dataset [{$this->datasetName}]: " . $this->sanitizeError($ce->getMessage()));
+                    }
+                }
+
+                if (! $activated) {
+                    try {
+                        $failMeta = $originalMeta;
+                        $failMeta['status'] = !empty($failMeta['active_generation']) ? 'stale' : 'failed';
+                        $failMeta['last_error'] = $sanitizedError;
+                        $failMeta['last_attempt_at'] = now()->toIso8601String();
+                        $failMeta['refresh_source'] = $source;
+
+                        if (! $this->storeCache($this->getMetaKey(), $failMeta, $metadataTtlMinutes)) {
+                            Log::warning("Failed to save error metadata for prewarm dataset [{$this->datasetName}]: returned false.");
+                        }
+                    } catch (\Throwable $me) {
+                        Log::warning("Failed to save error metadata for prewarm dataset [{$this->datasetName}]: " . $this->sanitizeError($me->getMessage()));
+                    }
+                }
+
+                return ZnunyPrewarmRefreshResult::FAILED;
             }
-
-            $lock->release();
-
-            return true;
-        } catch (\Throwable $e) {
-            Log::error("Failed to refresh prewarm dataset [{$this->datasetName}]: " . $e->getMessage());
-
-            // Remove temporary snapshot if it exists
-            Cache::forget($tempKey);
-
-            $meta = $this->readMetadata();
-            $meta['status'] = $meta['active_generation'] ? 'stale' : 'failed';
-            $meta['last_error'] = $this->sanitizeError($e->getMessage());
-            $this->saveMetadata($meta);
-
-            $lock->release();
-
-            return false;
+        } finally {
+            try {
+                if (! $this->releaseLock($lock)) {
+                    Log::warning("Failed to release lock for prewarm dataset [{$this->datasetName}]: returned false.");
+                }
+            } catch (\Throwable $e) {
+                Log::warning("Failed to release lock for prewarm dataset [{$this->datasetName}]: " . $this->sanitizeError($e->getMessage()));
+            }
         }
-    }
-
-    protected function saveMetadata(array $meta): void
-    {
-        Cache::forever($this->getMetaKey(), $meta);
     }
 
     private function getMetaKey(): string
@@ -135,19 +244,65 @@ class PrewarmSnapshotManager
         return 'znuny_prewarm_' . $this->datasetName;
     }
 
-    private function sanitizeError(string $error): string
+    protected function sanitizeError(string $error): string
     {
-        $keys = 'password|token|secret|api_key|apikey|access_token|refresh_token|client_secret|authorization';
+        // Remove stack trace case-insensitively
+        $stackTracePos = stripos($error, 'Stack trace:');
+        if ($stackTracePos !== false) {
+            $error = substr($error, 0, $stackTracePos);
+        }
+
+        // Redact secrets, keys, session IDs, Bearer tokens
+        $keys = 'password|token|secret|api_key|apikey|access_token|refresh_token|client_secret|authorization|SessionID|session_id';
+
+        // Bare Bearer token or Authorization: Bearer
+        $error = preg_replace('/(Bearer\s+)([^\s&"\'\r\n]+)/i', '$1***', $error);
+
+        // Redact quoted values (JSON, header, query with quotes)
         $error = preg_replace(
-            '/(' . $keys . ')([ "\']*[=:][ "\']*(?:Bearer\s+)?)([^\s&"\'\r\n]+)/i',
-            '$1$2***',
+            '/(["\']?(?:' . $keys . ')["\']?\s*[=:]\s*)(["\'])(.*?)\2/i',
+            '$1$2***$2',
             $error
         );
 
-        if (($pos = strpos($error, 'Stack trace:')) !== false) {
-            $error = substr($error, 0, $pos);
-        }
+        // Redact unquoted values
+        $error = preg_replace(
+            '/(["\']?(?:' . $keys . ')["\']?\s*[=:]\s*)(?!["\']|Bearer\b)([^\s&,\r\n]+)/i',
+            '$1***',
+            $error
+        );
 
         return substr(trim($error), 0, 500);
+    }
+
+    // --- Protected hooks for testability ---
+
+    protected function getCache(string $key)
+    {
+        return Cache::get($key);
+    }
+
+    protected function storeCache(string $key, $value, int $ttlMinutes): bool
+    {
+        return Cache::put($key, $value, now()->addMinutes($ttlMinutes));
+    }
+
+    protected function forgetCache(string $key): bool
+    {
+        return Cache::forget($key);
+    }
+
+    protected function acquireLock(string $key, int $seconds)
+    {
+        $lock = Cache::lock($key, $seconds);
+        if ($lock->get()) {
+            return $lock;
+        }
+        return false;
+    }
+
+    protected function releaseLock($lock): bool
+    {
+        return $lock ? $lock->release() : false;
     }
 }

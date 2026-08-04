@@ -12,12 +12,22 @@ class ZnunyQueueCacheReadService
     }
 
     /**
+     * Get the coherent snapshot (generation, payload, metadata).
+     * Returns null if missing or expired.
+     */
+    public function getSnapshot(): ?array
+    {
+        return $this->snapshotManager->readActiveSnapshot();
+    }
+
+    /**
      * Return the active cached queue dataset.
      * Never calls Znuny on cache miss. Returns an explicit empty result instead.
      */
     public function getQueues(): array
     {
-        return $this->snapshotManager->readActive() ?? [];
+        $snapshot = $this->getSnapshot();
+        return (isset($snapshot['payload']) && is_array($snapshot['payload'])) ? $snapshot['payload'] : [];
     }
 
     /**
