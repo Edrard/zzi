@@ -934,13 +934,11 @@ class SettingsLivewireTest extends TestCase
         $search($schema);
 
         $this->assertContains('testMailConnection', $actionNames);
-        $this->assertContains('clearSettingsCache', $actionNames);
-        $this->assertContains('clearZnunyAgentCache', $actionNames);
+        $this->assertContains('clearTicketArticleCache', $actionNames);
 
         $allDefaults = collect(DefaultSettings::all())->pluck('key')->toArray();
         $this->assertNotContains('testMailConnection', $allDefaults);
-        $this->assertNotContains('clearSettingsCache', $allDefaults);
-        $this->assertNotContains('clearZnunyAgentCache', $allDefaults);
+        $this->assertNotContains('clearTicketArticleCache', $allDefaults);
     }
 
     public function test_all_default_settings_have_complete_metadata_translations_for_supported_locales()

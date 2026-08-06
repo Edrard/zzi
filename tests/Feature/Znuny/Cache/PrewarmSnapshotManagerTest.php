@@ -487,6 +487,9 @@ class PrewarmSnapshotManagerTest extends TestCase
     {
         config(['app.znuny_prewarm.cache_ttl_multiplier' => 10]);
         config(['app.znuny_prewarm.metadata_ttl_minutes' => 10080]);
+        config(['app.znuny_prewarm.process_timeout_seconds' => 600]);
+        config(['app.znuny_prewarm.lock_expiry_grace_seconds' => 60]);
+        config(['app.znuny_prewarm.lock_expiry_seconds' => 9999]);
 
         $manager = new TestablePrewarmSnapshotManager('test_dataset');
 

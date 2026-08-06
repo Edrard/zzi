@@ -2,10 +2,7 @@
 
 namespace Tests\Unit\Services;
 
-use App\Models\Setting;
 use App\Services\RuntimeCacheMaintenanceService;
-use App\Services\SettingsService;
-use App\Services\Znuny\ZnunyCachedLookupService;
 use App\Services\Znuny\ZnunyTicketArticleCacheService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -47,86 +44,6 @@ class RuntimeCacheMaintenanceServiceTest extends TestCase
         ] as $key) {
             Cache::forget($key);
         }
-
-        app(SettingsService::class)->clearAllCaches();
-    }
-
-    public function test_clear_settings_cache_delegates_to_settings_service_and_clears_settings_cache()
-    {
-        // Persist a setting
-        Setting::updateOrCreate(['key' => 'test_maintenance_setting'], ['value' => 'initial_value', 'type' => 'string']);
-
-        // Populate cache
-        $settingsService = app(SettingsService::class);
-        $settingsService->clearAllCaches();
-
-        $this->assertEquals('initial_value', SettingsService::string('test_maintenance_setting'));
-
-        // Change DB value bypassing model events (which would normally clear cache)
-        Setting::where('key', 'test_maintenance_setting')->update(['value' => 'new_value']);
-
-        // Assert cache is still old
-        $this->assertEquals('initial_value', SettingsService::string('test_maintenance_setting'));
-
-        // Put an unrelated sentinel
-        Cache::put('unrelated_settings_sentinel', 'safe');
-
-        // Call our maintenance service
-        $this->service->clearSettingsCache();
-
-        // Verify settings cache is cleared and pulls new value
-        $this->assertEquals('new_value', SettingsService::string('test_maintenance_setting'));
-
-        // Verify unrelated sentinel remains
-        $this->assertEquals('safe', Cache::get('unrelated_settings_sentinel'));
-    }
-
-    public function test_clear_znuny_agent_cache_clears_agents_only()
-    {
-        Cache::put('znuny_active_agents', 'agent_data');
-        Cache::put('unrelated_sentinel', 'safe');
-        Cache::put('znuny.queues', 'queue_data');
-
-        $this->service->clearZnunyAgentCache();
-
-        $this->assertNull(Cache::get('znuny_active_agents'));
-        $this->assertEquals('safe', Cache::get('unrelated_sentinel'));
-        $this->assertEquals('queue_data', Cache::get('znuny.queues'));
-    }
-
-    public function test_clear_znuny_queue_cache_clears_queues_only()
-    {
-        Cache::put('znuny.queues', 'queue_data');
-        Cache::put('znuny_active_agents', 'agent_data');
-        Cache::put('unrelated_sentinel', 'safe');
-
-        $this->service->clearZnunyQueueCache();
-
-        $this->assertNull(Cache::get('znuny.queues'));
-        $this->assertEquals('agent_data', Cache::get('znuny_active_agents'));
-        $this->assertEquals('safe', Cache::get('unrelated_sentinel'));
-    }
-
-    public function test_clear_znuny_lookup_cache_invalidates_version()
-    {
-        $lookupService = app(ZnunyCachedLookupService::class);
-        $initialVersion = $lookupService->getCacheVersion();
-
-        Cache::put('znuny_active_agents', 'agent_data');
-        Cache::put('znuny.queues', 'queue_data');
-        Cache::put('settings_sentinel', 'safe');
-
-        $this->service->clearZnunyLookupCache();
-        $version2 = Cache::get('znuny_lookup_cache_version');
-        $this->assertGreaterThan($initialVersion, $version2);
-
-        $this->service->clearZnunyLookupCache();
-        $version3 = Cache::get('znuny_lookup_cache_version');
-        $this->assertGreaterThan($version2, $version3);
-
-        $this->assertEquals('agent_data', Cache::get('znuny_active_agents'));
-        $this->assertEquals('queue_data', Cache::get('znuny.queues'));
-        $this->assertEquals('safe', Cache::get('settings_sentinel'));
     }
 
     public function test_clear_ticket_article_cache_invalidates_generation()
@@ -159,10 +76,6 @@ class RuntimeCacheMaintenanceServiceTest extends TestCase
         Cache::put('session_sentinel', 'data');
         Cache::put('lock_sentinel', 'data');
 
-        $this->service->clearSettingsCache();
-        $this->service->clearZnunyAgentCache();
-        $this->service->clearZnunyQueueCache();
-        $this->service->clearZnunyLookupCache();
         $this->service->clearTicketArticleCache();
 
         $this->assertEquals('data', Cache::get('ticket_workspace_sentinel'));

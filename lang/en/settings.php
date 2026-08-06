@@ -761,6 +761,23 @@ return [
             'label' => 'Ticket Article Cache Lifetime (minutes)',
             'description' => 'How long Znuny ticket articles fetched for linked tickets may be cached. Set to 0 to bypass persistent ticket article caching.',
         ],
+        'znuny_prewarm_queues_interval_minutes' => [
+            'label' => 'Queues Prewarm Interval (minutes)',
+            'description' => 'Interval in minutes for queues cache prewarm.',
+        ],
+        'znuny_prewarm_agents_interval_minutes' => [
+            'label' => 'Agents Prewarm Interval (minutes)',
+            'description' => 'Interval in minutes for agents cache prewarm.',
+        ],
+        'znuny_prewarm_customer_users_interval_minutes' => [
+            'label' => 'Customer Users Prewarm Interval (minutes)',
+            'description' => 'Interval in minutes for customer users cache prewarm.',
+        ],
+        'znuny_prewarm_lookups_interval_minutes' => [
+            'label' => 'Lookups Prewarm Interval (minutes)',
+            'description' => 'Interval in minutes for lookups cache prewarm.',
+        ],
+
         'znuny_queue_cache_ttl_minutes' => [
             'label' => 'Znuny Queue Cache Lifetime (minutes)',
             'description' => 'Configured lifetime for cached Znuny queue data used by queue selectors, queue detection, and queue-mapping validation.',

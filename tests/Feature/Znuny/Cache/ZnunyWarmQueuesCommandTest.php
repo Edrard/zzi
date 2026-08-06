@@ -92,14 +92,63 @@ class ZnunyWarmQueuesCommandTest extends TestCase
         $this->artisan('znuny:cache:warm-queues')->assertFailed();
     }
 
-    public function test_malformed_valid_id_fails()
+    public function test_malformed_valid_id_type_fails()
     {
         Http::fake([
             '*/Session*' => Http::response(['SessionID' => 'test']),
-            '*/Queue*' => Http::response(['Queues' => [['QueueID' => 1, 'Name' => 'Support', 'ValidID' => -5]]])
+            '*/Queue*' => Http::response(['Queues' => [['QueueID' => 1, 'Name' => 'Support', 'ValidID' => '1junk']]])
         ]);
 
         $this->artisan('znuny:cache:warm-queues')->assertFailed();
+    }
+
+    public function test_mixed_active_and_inactive_queues_publishes_only_active_with_correct_item_count()
+    {
+        Http::fake([
+            '*/Session*' => Http::response(['SessionID' => 'test']),
+            '*/Queue*' => Http::response([
+                'Queues' => [
+                    ['QueueID' => 1, 'Name' => 'ActiveQueue', 'ValidID' => 1],
+                    ['QueueID' => 2, 'Name' => 'InactiveQueue', 'ValidID' => 2],
+                    ['QueueID' => 3, 'Name' => 'AnotherInactive', 'ValidID' => 3]
+                ]
+            ])
+        ]);
+
+        $this->artisan('znuny:cache:warm-queues')->assertSuccessful();
+
+        $meta = \Illuminate\Support\Facades\Cache::get('znuny_prewarm_queues_meta');
+        $this->assertEquals(1, $meta['item_count']);
+
+        $payload = \Illuminate\Support\Facades\Cache::get($meta['active_generation']);
+        $this->assertCount(1, $payload);
+        $this->assertEquals('ActiveQueue', $payload[0]['name']);
+    }
+
+    public function test_all_inactive_queues_fails_and_preserves_old_snapshot()
+    {
+        \Illuminate\Support\Facades\Cache::forever('znuny_prewarm_queues_meta', [
+            'active_generation' => 'old_gen_1',
+            'status' => 'ready'
+        ]);
+        \Illuminate\Support\Facades\Cache::forever('old_gen_1', [
+            ['id' => 1, 'name' => 'OldQueue', 'label' => 'OldQueue']
+        ]);
+
+        Http::fake([
+            '*/Session*' => Http::response(['SessionID' => 'test']),
+            '*/Queue*' => Http::response([
+                'Queues' => [
+                    ['QueueID' => 2, 'Name' => 'InactiveQueue', 'ValidID' => 2]
+                ]
+            ])
+        ]);
+
+        $this->artisan('znuny:cache:warm-queues')->assertFailed();
+
+        $meta = \Illuminate\Support\Facades\Cache::get('znuny_prewarm_queues_meta');
+        $this->assertEquals('stale', $meta['status']);
+        $this->assertEquals('old_gen_1', $meta['active_generation']);
     }
 
     public function test_mixed_valid_and_malformed_queue_fails_and_preserves_old_snapshot()
@@ -218,5 +267,45 @@ class ZnunyWarmQueuesCommandTest extends TestCase
         $meta = \Illuminate\Support\Facades\Cache::get('znuny_prewarm_queues_meta');
         $this->assertEquals('failed', $meta['status']);
         $this->assertStringContainsString('Network error', $meta['last_error']);
+    }
+    public function test_sentinel_failed_emits_correct_output()
+    {
+        \Illuminate\Support\Facades\Http::preventStrayRequests();
+        \Illuminate\Support\Facades\Http::fake([
+            '*' => \Illuminate\Support\Facades\Http::response('Server Error', 500)
+        ]);
+
+        $this->artisan('znuny:cache:warm-queues')
+            ->expectsOutput('PREWARM_RESULT=failed')
+            ->assertFailed();
+    }
+
+    public function test_sentinel_success_emits_correct_output()
+    {
+        Http::fake([
+            '*/Session*' => Http::response(['SessionID' => 'test']),
+            '*/Queue*' => Http::response([
+                'Queues' => [
+                    ['QueueID' => '1', 'Name' => 'Support', 'ValidID' => '1'],
+                ]
+            ])
+        ]);
+
+        $this->artisan('znuny:cache:warm-queues')
+            ->expectsOutput('PREWARM_RESULT=success')
+            ->assertSuccessful();
+    }
+
+    public function test_sentinel_skipped_locked_emits_correct_output()
+    {
+        // Acquire the lock to force skip
+        $lock = \Illuminate\Support\Facades\Cache::lock('znuny_prewarm_queues_lock', 60);
+        $lock->get();
+
+        $this->artisan('znuny:cache:warm-queues')
+            ->expectsOutput('PREWARM_RESULT=skipped_locked')
+            ->assertSuccessful();
+
+        $lock->release();
     }
 }

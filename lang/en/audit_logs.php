@@ -83,6 +83,7 @@ return [
         'znuny_standalone_ticket' => 'Znuny Standalone Ticket',
         'scheduled_znuny_task_run' => 'Scheduled Znuny task run',
         'znuny_ticket_creation_attempt' => 'Znuny ticket creation attempt',
+        'znuny_prewarm_dataset' => 'Znuny reference dataset',
     ],
     'actions' => [
         'settings' => [
@@ -172,6 +173,7 @@ return [
             'problems_poll_completed' => 'Problems Poll Completed',
             'problems_poll_failed' => 'Problems Poll Failed',
         ],
+        'znuny_prewarm_manual_refresh' => 'Znuny reference data refreshed manually',
     ],
     'labels' => [
         'no_context' => 'No context',

@@ -419,4 +419,76 @@ class ZnunyWarmCustomerUsersCommandTest extends TestCase
         $this->assertStringContainsString('token=***', $meta['last_error']);
         $this->assertEquals('artisan', $meta['refresh_source']);
     }
+    public function test_customer_user_duplicate_suppression_within_queue()
+    {
+        $this->seedValidQueueSnapshot([
+            ['id' => 1, 'name' => 'Support', 'label' => 'SupportAlias', 'valid_id' => 1]
+        ]);
+
+        Http::fake([
+            '*/Session*' => Http::response(['SessionID' => 'test_dedupe']),
+            '*/CustomerUser*Search=Support&*' => Http::response([
+                'CustomerUsers' => [
+                    $this->rawUser('alice.duplicate', 'Alice', 'First', 'first@example.com')
+                ]
+            ]),
+            '*/CustomerUser*Search=SupportAlias&*' => Http::response([
+                'CustomerUsers' => [
+                    $this->rawUser('alice.duplicate', 'Alice', 'Later', 'later@example.com'), // Duplicate login
+                    $this->rawUser('bob.unique', 'Bob', 'Unique', 'bob@example.com')
+                ]
+            ])
+        ]);
+
+        $this->artisan('znuny:cache:warm-customer-users')->assertSuccessful();
+
+        $meta = Cache::get('znuny_prewarm_customer_users_meta');
+        $this->assertEquals(2, $meta['item_count'], 'Should count exactly two unique items for the queue');
+
+        $payload = Cache::get($meta['active_generation']);
+        $queueOptions = $payload['queues'][0]['options'];
+
+        $this->assertCount(2, $queueOptions, 'Should have exactly two options remaining after deduplication');
+        $this->assertArrayHasKey('alice.duplicate', $queueOptions);
+        $this->assertArrayHasKey('bob.unique', $queueOptions);
+
+        $this->assertStringContainsString('First', $queueOptions['alice.duplicate'], 'First accepted label should win');
+        $this->assertStringNotContainsString('Later', $queueOptions['alice.duplicate'], 'Duplicate result from a later search term must not replace the first label');
+    }
+
+    public function test_sentinel_failed_emits_correct_output()
+    {
+        $queueService = \Mockery::mock(\App\Services\Znuny\Cache\ZnunyQueueCacheReadService::class);
+        $queueService->shouldReceive('getSnapshot')->andReturn(['generation' => 'queue_gen_1', 'payload' => [['id' => 1, 'name' => 'Support']]]);
+        $this->app->instance(\App\Services\Znuny\Cache\ZnunyQueueCacheReadService::class, $queueService);
+
+        \Illuminate\Support\Facades\Http::preventStrayRequests();
+        \Illuminate\Support\Facades\Http::fake([
+            '*' => \Illuminate\Support\Facades\Http::response('Server Error', 500)
+        ]);
+
+        $this->artisan('znuny:cache:warm-customer-users')
+            ->expectsOutput('PREWARM_RESULT=failed')
+            ->assertFailed();
+    }
+
+    public function test_sentinel_success_emits_correct_output()
+    {
+        $queueService = \Mockery::mock(\App\Services\Znuny\Cache\ZnunyQueueCacheReadService::class);
+        $queueService->shouldReceive('getSnapshot')->andReturn(['generation' => 'queue_gen_1', 'payload' => [['id' => 1, 'name' => 'Support']]]);
+        $this->app->instance(\App\Services\Znuny\Cache\ZnunyQueueCacheReadService::class, $queueService);
+
+        Http::fake([
+            '*/Session*' => Http::response(['SessionID' => 'test']),
+            '*/CustomerUser*' => Http::response([
+                'CustomerUsers' => [
+                    $this->rawUser('alice', 'A', 'A', 'a@a')
+                ]
+            ])
+        ]);
+
+        $this->artisan('znuny:cache:warm-customer-users')
+            ->expectsOutput('PREWARM_RESULT=success')
+            ->assertSuccessful();
+    }
 }

@@ -495,4 +495,51 @@ class ZnunyWarmAgentsCommandTest extends TestCase
 
         $this->assertEquals('queue_gen_1', $payload['queue_generation']);
     }
+    public function test_sentinel_failed_emits_correct_output()
+    {
+        $queueService = Mockery::mock(ZnunyQueueCacheReadService::class);
+        $queueService->shouldReceive('getSnapshot')->andReturn(['generation' => 'queue_gen_1', 'payload' => [['id' => 1]]]);
+        $this->app->instance(ZnunyQueueCacheReadService::class, $queueService);
+
+        \Illuminate\Support\Facades\Http::preventStrayRequests();
+        \Illuminate\Support\Facades\Http::fake([
+            '*' => \Illuminate\Support\Facades\Http::response('Server Error', 500)
+        ]);
+
+        $this->artisan('znuny:cache:warm-agents')
+            ->expectsOutput('PREWARM_RESULT=failed')
+            ->assertFailed();
+    }
+
+    public function test_sentinel_success_emits_correct_output()
+    {
+        $queueService = Mockery::mock(ZnunyQueueCacheReadService::class);
+        $queueService->shouldReceive('getSnapshot')->andReturn(['generation' => 'queue_gen_1', 'payload' => [['id' => 1]]]);
+        $this->app->instance(ZnunyQueueCacheReadService::class, $queueService);
+
+        Http::fake([
+            '*/Session*' => Http::response(['SessionID' => 'test']),
+            '*Agent?SessionID=*' => Http::response(['Agents' => [
+                ['UserID' => 1, 'UserLogin' => 'a', 'UserFullname' => 'a']
+            ]]),
+            '*/Agent/1/AssignableQueues*' => Http::response(['Queues' => [['QueueID' => 1]]]),
+        ]);
+
+        $this->artisan('znuny:cache:warm-agents')
+            ->expectsOutput('PREWARM_RESULT=success')
+            ->assertSuccessful();
+    }
+
+    public function test_sentinel_skipped_locked_emits_correct_output()
+    {
+        // Acquire the lock to force skip
+        $lock = \Illuminate\Support\Facades\Cache::lock('znuny_prewarm_agents_lock', 60);
+        $lock->get();
+
+        $this->artisan('znuny:cache:warm-agents')
+            ->expectsOutput('PREWARM_RESULT=skipped_locked')
+            ->assertSuccessful();
+
+        $lock->release();
+    }
 }

@@ -473,7 +473,7 @@ final class ScheduledZnunyTicketCreationAttemptManualRetryServiceTest extends Te
 
         $failingLogger = new class extends AuditLogger
         {
-            public static function log(string $action, ?string $entityType = null, int|string|null $entityId = null, array $context = [], ?User $user = null): AuditLog
+            public static function log(string $action, ?string $entityType = null, int|string|null $entityId = null, array $context = [], ?User $user = null, bool $useAuthenticatedUserFallback = true): AuditLog
             {
                 throw new RuntimeException('Forced audit failure');
             }

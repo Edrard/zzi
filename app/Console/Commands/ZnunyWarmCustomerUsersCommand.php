@@ -18,7 +18,7 @@ class ZnunyWarmCustomerUsersCommand extends Command
     public function handle(ZnunyClient $client, ZnunyQueueCacheReadService $queueService): int
     {
         $manager = new PrewarmSnapshotManager('customer_users');
-        $intervalMinutes = (int) config('app.znuny_prewarm.default_refresh_interval_minutes', 5);
+        $intervalMinutes = max(3, \App\Services\SettingsService::int('znuny_prewarm_customer_users_interval_minutes', 30));
 
         $result = $manager->refresh(
             function () use ($client, $queueService) {
@@ -168,15 +168,18 @@ class ZnunyWarmCustomerUsersCommand extends Command
 
         if ($result === ZnunyPrewarmRefreshResult::SKIPPED_LOCKED) {
             $this->warn('Customer users warmup skipped: Another refresh is already running.');
+            $this->line('PREWARM_RESULT=skipped_locked');
             return self::SUCCESS;
         }
 
         if ($result === ZnunyPrewarmRefreshResult::FAILED) {
             $this->error($this->getSafeFailureMessage($manager));
+            $this->line('PREWARM_RESULT=failed');
             return self::FAILURE;
         }
 
         $this->info('Successfully warmed Znuny customer users.');
+        $this->line('PREWARM_RESULT=success');
         return self::SUCCESS;
     }
 

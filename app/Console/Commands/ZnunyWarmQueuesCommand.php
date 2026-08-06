@@ -43,6 +43,14 @@ class ZnunyWarmQueuesCommand extends Command
                     throw new \Exception('Invalid payload: missing or invalid queue ID.');
                 }
 
+                if (! is_int($queue['valid_id'])) {
+                    throw new \Exception('Invalid payload: valid_id must be an integer.');
+                }
+
+                if ($queue['valid_id'] !== 1) {
+                    continue; // Skip inactive queues
+                }
+
                 $qId = (int) $queue['id'];
 
                 if (isset($seenQueueIds[$qId])) {
@@ -52,6 +60,10 @@ class ZnunyWarmQueuesCommand extends Command
 
                 $queue['id'] = $qId;
                 $normalizedQueues[] = $queue;
+            }
+
+            if (empty($normalizedQueues)) {
+                throw new \Exception('Invalid payload: no active queues remaining after filtering.');
             }
 
             usort($normalizedQueues, function ($a, $b) {
@@ -66,19 +78,22 @@ class ZnunyWarmQueuesCommand extends Command
                 'payload' => $normalizedQueues,
                 'item_count' => count($normalizedQueues),
             ];
-        }, 'artisan', config('app.znuny_prewarm.default_refresh_interval_minutes', 5));
+        }, 'artisan', max(3, \App\Services\SettingsService::int('znuny_prewarm_queues_interval_minutes', 5)));
 
         if ($result === ZnunyPrewarmRefreshResult::SKIPPED_LOCKED) {
             $this->warn('Znuny queues cache warmup skipped: Another refresh is already running.');
+            $this->line('PREWARM_RESULT=skipped_locked');
             return self::SUCCESS;
         }
 
         if ($result === ZnunyPrewarmRefreshResult::FAILED) {
             $this->error('Failed to warm queues cache. Error: ' . $this->getSafeFailureMessage($manager));
+            $this->line('PREWARM_RESULT=failed');
             return self::FAILURE;
         }
 
         $this->info('Successfully warmed Znuny queues cache.');
+        $this->line('PREWARM_RESULT=success');
         return self::SUCCESS;
     }
 

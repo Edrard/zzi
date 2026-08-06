@@ -161,19 +161,22 @@ class ZnunyWarmAgentsCommand extends Command
                 ],
                 'item_count' => count($agents),
             ];
-        }, 'artisan', config('app.znuny_prewarm.default_refresh_interval_minutes', 5));
+        }, 'artisan', max(3, \App\Services\SettingsService::int('znuny_prewarm_agents_interval_minutes', 5)));
 
         if ($result === ZnunyPrewarmRefreshResult::SKIPPED_LOCKED) {
             $this->warn('Znuny agents cache warmup skipped: Another refresh is already running.');
+            $this->line('PREWARM_RESULT=skipped_locked');
             return self::SUCCESS;
         }
 
         if ($result === ZnunyPrewarmRefreshResult::FAILED) {
             $this->error('Failed to warm agents cache. Error: ' . $this->getSafeFailureMessage($manager));
+            $this->line('PREWARM_RESULT=failed');
             return self::FAILURE;
         }
 
         $this->info('Successfully warmed Znuny agents cache.');
+        $this->line('PREWARM_RESULT=success');
         return self::SUCCESS;
     }
 

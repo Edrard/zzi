@@ -29,11 +29,7 @@ class SettingsCacheMaintenanceActionTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
 
         $actions = [
-            ['clearSettingsCacheAction', 'clearSettingsCache', 'settings.cache.clear', 'settings', 'Settings cache cleared', 'Cached application settings were cleared successfully.'],
-            ['clearZnunyAgentCacheAction', 'clearZnunyAgentCache', 'settings.znuny_agent_cache.clear', 'znuny_agent', 'Znuny agent cache cleared', 'Cached Znuny agent data was cleared successfully.'],
-            ['clearZnunyQueueCacheAction', 'clearZnunyQueueCache', 'settings.znuny_queue_cache.clear', 'znuny_queue', 'Znuny queue cache cleared', 'Cached Znuny queue data was cleared successfully.'],
-            ['clearZnunyLookupCacheAction', 'clearZnunyLookupCache', 'settings.znuny_lookup_cache.clear', 'znuny_lookup', 'Znuny lookup cache cleared', 'Cached Znuny lookup data was invalidated successfully.'],
-            ['clearTicketArticleCacheAction', 'clearTicketArticleCache', 'settings.znuny_ticket_article_cache.clear', 'znuny_ticket_article', 'Ticket article cache cleared', 'Cached Znuny ticket article data was invalidated successfully.'],
+            ['clearTicketArticleCacheAction', 'clearTicketArticleCache', 'settings.znuny_ticket_article_cache.clear', 'znuny_ticket_article', 'Ticket article cache cleared', 'Cached Znuny ticket articles were cleared successfully.'],
         ];
 
         foreach ($actions as [$actionMethod, $serviceMethod, $auditAction, $cacheScope, $title, $body]) {
@@ -70,11 +66,7 @@ class SettingsCacheMaintenanceActionTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
 
         $actions = [
-            ['clearSettingsCacheAction', 'clearSettingsCache', 'settings.cache.clear', 'settings', 'Settings cache cleared', 'Cached application settings were cleared successfully.', 'The Settings cache could not be cleared. Review the application logs for details.'],
-            ['clearZnunyAgentCacheAction', 'clearZnunyAgentCache', 'settings.znuny_agent_cache.clear', 'znuny_agent', 'Znuny agent cache cleared', 'Cached Znuny agent data was cleared successfully.', 'The Znuny Agent cache could not be cleared. Review the application logs for details.'],
-            ['clearZnunyQueueCacheAction', 'clearZnunyQueueCache', 'settings.znuny_queue_cache.clear', 'znuny_queue', 'Znuny queue cache cleared', 'Cached Znuny queue data was cleared successfully.', 'The Znuny Queue cache could not be cleared. Review the application logs for details.'],
-            ['clearZnunyLookupCacheAction', 'clearZnunyLookupCache', 'settings.znuny_lookup_cache.clear', 'znuny_lookup', 'Znuny lookup cache cleared', 'Cached Znuny lookup data was invalidated successfully.', 'The Znuny Lookup cache could not be cleared. Review the application logs for details.'],
-            ['clearTicketArticleCacheAction', 'clearTicketArticleCache', 'settings.znuny_ticket_article_cache.clear', 'znuny_ticket_article', 'Ticket article cache cleared', 'Cached Znuny ticket article data was invalidated successfully.', 'The Ticket Article cache could not be cleared. Review the application logs for details.'],
+            ['clearTicketArticleCacheAction', 'clearTicketArticleCache', 'settings.znuny_ticket_article_cache.clear', 'znuny_ticket_article', 'Ticket article cache cleared', 'Cached Znuny ticket articles were cleared successfully.', 'The Ticket Article cache could not be cleared. Review the application logs for details.'],
         ];
 
         foreach ($actions as [$actionMethod, $serviceMethod, $auditAction, $cacheScope, $successTitle, $successBody, $failureBody]) {
@@ -123,10 +115,6 @@ class SettingsCacheMaintenanceActionTest extends TestCase
         $this->actingAs($viewer);
 
         $actionMethods = [
-            'clearSettingsCacheAction',
-            'clearZnunyAgentCacheAction',
-            'clearZnunyQueueCacheAction',
-            'clearZnunyLookupCacheAction',
             'clearTicketArticleCacheAction',
         ];
 
@@ -134,11 +122,6 @@ class SettingsCacheMaintenanceActionTest extends TestCase
             AuditLog::query()->delete();
 
             $this->mock(RuntimeCacheMaintenanceService::class, function (MockInterface $mock) {
-                // Ensure no maintenance method is called
-                $mock->shouldReceive('clearSettingsCache')->never();
-                $mock->shouldReceive('clearZnunyAgentCache')->never();
-                $mock->shouldReceive('clearZnunyQueueCache')->never();
-                $mock->shouldReceive('clearZnunyLookupCache')->never();
                 $mock->shouldReceive('clearTicketArticleCache')->never();
             });
 
@@ -179,7 +162,6 @@ class SettingsCacheMaintenanceActionTest extends TestCase
         $searchSection($schema);
 
         $this->assertNotNull($maintenanceSection, 'Runtime Cache Maintenance section not found');
-        $this->assertEquals('Clear individual application runtime caches without changing saved settings or clearing unrelated cache scopes.', $maintenanceSection->getDescription());
 
         $maintenanceActions = [];
 
@@ -196,37 +178,9 @@ class SettingsCacheMaintenanceActionTest extends TestCase
 
         $searchActions($maintenanceSection->getChildComponents());
 
-        $this->assertCount(5, $maintenanceActions);
+        $this->assertCount(1, $maintenanceActions);
 
         $expectedActions = [
-            [
-                'name' => 'clearSettingsCache',
-                'label' => 'Clear Settings Cache',
-                'modalHeading' => 'Clear Settings Cache?',
-                'modalDescription' => 'This clears the cached application settings. Saved settings remain unchanged and will be loaded again when needed.',
-                'modalSubmit' => 'Clear Settings Cache',
-            ],
-            [
-                'name' => 'clearZnunyAgentCache',
-                'label' => 'Clear Znuny Agent Cache',
-                'modalHeading' => 'Clear Znuny Agent Cache?',
-                'modalDescription' => 'This clears the cached active Znuny agent list. The next agent request may contact Znuny again.',
-                'modalSubmit' => 'Clear Agent Cache',
-            ],
-            [
-                'name' => 'clearZnunyQueueCache',
-                'label' => 'Clear Znuny Queue Cache',
-                'modalHeading' => 'Clear Znuny Queue Cache?',
-                'modalDescription' => 'This clears the cached Znuny queue list. The next queue request may contact Znuny again.',
-                'modalSubmit' => 'Clear Queue Cache',
-            ],
-            [
-                'name' => 'clearZnunyLookupCache',
-                'label' => 'Clear Znuny Lookup Cache',
-                'modalHeading' => 'Clear Znuny Lookup Cache?',
-                'modalDescription' => 'This invalidates reusable Znuny lookup data such as owners, CustomerUsers, states, priorities, types, queues, and search candidates.',
-                'modalSubmit' => 'Clear Lookup Cache',
-            ],
             [
                 'name' => 'clearTicketArticleCache',
                 'label' => 'Clear Ticket Article Cache',
@@ -254,9 +208,6 @@ class SettingsCacheMaintenanceActionTest extends TestCase
             if (method_exists($action, 'getModalSubmitActionLabel')) {
                 $this->assertEquals($expected['modalSubmit'], $action->getModalSubmitActionLabel());
             }
-
-            $this->assertNotEquals('Clear All Runtime Caches', $action->getName());
-            $this->assertNotEquals('Clear All Runtime Caches', $action->getLabel());
 
             $this->actingAs($admin);
             $this->assertTrue($action->isVisible(), "Action {$expected['name']} should be visible to admin");

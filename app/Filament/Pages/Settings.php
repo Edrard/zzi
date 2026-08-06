@@ -480,53 +480,8 @@ class Settings extends Page implements HasForms
         }
     }
 
-    public function clearSettingsCacheAction(): void
-    {
-        $this->executeCacheMaintenance(
-            fn () => app(RuntimeCacheMaintenanceService::class)->clearSettingsCache(),
-            'settings.cache.clear',
-            'settings',
-            __('settings.settings_page.notifications.cache_clearing_successful.title_settings'),
-            __('settings.settings_page.notifications.cache_clearing_successful.body_settings'),
-            __('settings.settings_page.notifications.cache_clearing_failed.body_settings')
-        );
-    }
 
-    public function clearZnunyAgentCacheAction(): void
-    {
-        $this->executeCacheMaintenance(
-            fn () => app(RuntimeCacheMaintenanceService::class)->clearZnunyAgentCache(),
-            'settings.znuny_agent_cache.clear',
-            'znuny_agent',
-            __('settings.settings_page.notifications.cache_clearing_successful.title_agent'),
-            __('settings.settings_page.notifications.cache_clearing_successful.body_agent'),
-            __('settings.settings_page.notifications.cache_clearing_failed.body_agent')
-        );
-    }
 
-    public function clearZnunyQueueCacheAction(): void
-    {
-        $this->executeCacheMaintenance(
-            fn () => app(RuntimeCacheMaintenanceService::class)->clearZnunyQueueCache(),
-            'settings.znuny_queue_cache.clear',
-            'znuny_queue',
-            __('settings.settings_page.notifications.cache_clearing_successful.title_queue'),
-            __('settings.settings_page.notifications.cache_clearing_successful.body_queue'),
-            __('settings.settings_page.notifications.cache_clearing_failed.body_queue')
-        );
-    }
-
-    public function clearZnunyLookupCacheAction(): void
-    {
-        $this->executeCacheMaintenance(
-            fn () => app(RuntimeCacheMaintenanceService::class)->clearZnunyLookupCache(),
-            'settings.znuny_lookup_cache.clear',
-            'znuny_lookup',
-            __('settings.settings_page.notifications.cache_clearing_successful.title_lookup'),
-            __('settings.settings_page.notifications.cache_clearing_successful.body_lookup'),
-            __('settings.settings_page.notifications.cache_clearing_failed.body_lookup')
-        );
-    }
 
     public function clearTicketArticleCacheAction(): void
     {
@@ -1054,7 +1009,7 @@ class Settings extends Page implements HasForms
                 $groups['Znuny Ticket Defaults'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['znuny_ticket_workspace_enabled', 'znuny_ticket_cache_refresh_interval_minutes', 'znuny_ticket_cache_max_pages_per_run', 'znuny_ticket_cache_ttl_minutes', 'znuny_ticket_cache_default_limit', 'znuny_ticket_workspace_active_state_type_ids', 'znuny_closed_ticket_window_days', 'znuny_closed_ticket_small_sync_interval_minutes'])) {
                 $groups['Znuny']['Ticket Workspace'][$setting->key] = $component;
-            } elseif (in_array($setting->key, ['znuny_queue_cache_ttl_minutes', 'znuny_agent_cache_ttl_minutes', 'znuny_ticket_snapshot_cache_ttl_minutes']) || str_contains($setting->key, '_cache_')) {
+            } elseif (in_array($setting->key, ['znuny_queue_cache_ttl_minutes', 'znuny_agent_cache_ttl_minutes', 'znuny_ticket_snapshot_cache_ttl_minutes', 'znuny_prewarm_queues_interval_minutes', 'znuny_prewarm_agents_interval_minutes', 'znuny_prewarm_lookups_interval_minutes', 'znuny_prewarm_customer_users_interval_minutes']) || str_contains($setting->key, '_cache_')) {
                 $groups['Cache'][] = $component;
             } elseif (in_array($setting->key, ['znuny_detailed_sync_audit_enabled', 'zabbix_problem_sync_audit_enabled', 'znuny_ticket_workspace_sync_audit_enabled', 'znuny_closed_ticket_sync_audit_auto_enabled'])) {
                 $groups['Audit Log'][] = $component;
@@ -2027,10 +1982,21 @@ class Settings extends Page implements HasForms
 
         foreach ($cacheComponents as $component) {
             $name = method_exists($component, 'getName') ? $component->getName() : null;
+
+            // Skip legacy TTL fields entirely so they don't appear in the UI
             if (in_array($name, [
                 'znuny_agent_cache_ttl_minutes',
                 'znuny_queue_cache_ttl_minutes',
                 'znuny_lookup_cache_ttl_minutes',
+            ])) {
+                continue;
+            }
+
+            if (in_array($name, [
+                'znuny_prewarm_queues_interval_minutes',
+                'znuny_prewarm_agents_interval_minutes',
+                'znuny_prewarm_lookups_interval_minutes',
+                'znuny_prewarm_customer_users_interval_minutes',
                 'znuny_ticket_article_cache_ttl_minutes',
                 'znuny_ticket_snapshot_cache_ttl_minutes',
             ])) {
@@ -2040,22 +2006,36 @@ class Settings extends Page implements HasForms
             }
         }
 
-        if (isset($explicit['znuny_agent_cache_ttl_minutes'])) {
-            $explicit['znuny_agent_cache_ttl_minutes']
-                ->label($this->localizedSettingLabel('znuny_agent_cache_ttl_minutes', 'Znuny Agent Cache Lifetime (minutes)'))
-                ->helperText($this->localizedSettingDescription('znuny_agent_cache_ttl_minutes', 'Configured lifetime for cached active Znuny agent data used by owner selectors and agent-name displays.'));
+        if (isset($explicit['znuny_prewarm_queues_interval_minutes'])) {
+            $explicit['znuny_prewarm_queues_interval_minutes']
+                ->label($this->localizedSettingLabel('znuny_prewarm_queues_interval_minutes', 'Значення інтервалу оновлення черг Znuny (у хвилинах)'))
+                ->helperText($this->localizedSettingDescription('znuny_prewarm_queues_interval_minutes', 'Інтервал фонового оновлення кешу черг.'))
+                ->numeric()
+                ->minValue(3);
         }
 
-        if (isset($explicit['znuny_queue_cache_ttl_minutes'])) {
-            $explicit['znuny_queue_cache_ttl_minutes']
-                ->label($this->localizedSettingLabel('znuny_queue_cache_ttl_minutes', 'Znuny Queue Cache Lifetime (minutes)'))
-                ->helperText($this->localizedSettingDescription('znuny_queue_cache_ttl_minutes', 'Configured lifetime for cached Znuny queue data used by queue selectors, queue detection, and queue-mapping validation.'));
+        if (isset($explicit['znuny_prewarm_agents_interval_minutes'])) {
+            $explicit['znuny_prewarm_agents_interval_minutes']
+                ->label($this->localizedSettingLabel('znuny_prewarm_agents_interval_minutes', 'Значення інтервалу оновлення агентів Znuny (у хвилинах)'))
+                ->helperText($this->localizedSettingDescription('znuny_prewarm_agents_interval_minutes', 'Інтервал фонового оновлення кешу агентів.'))
+                ->numeric()
+                ->minValue(3);
         }
 
-        if (isset($explicit['znuny_lookup_cache_ttl_minutes'])) {
-            $explicit['znuny_lookup_cache_ttl_minutes']
-                ->label($this->localizedSettingLabel('znuny_lookup_cache_ttl_minutes', 'Znuny Lookup Cache Lifetime (minutes)'))
-                ->helperText($this->localizedSettingDescription('znuny_lookup_cache_ttl_minutes', 'How long reusable Znuny lookup data such as owners by queue, CustomerUsers, states, priorities, types, filtered queues, and template or search candidates may be cached. Set to 0 to bypass persistent lookup caching.'));
+        if (isset($explicit['znuny_prewarm_lookups_interval_minutes'])) {
+            $explicit['znuny_prewarm_lookups_interval_minutes']
+                ->label($this->localizedSettingLabel('znuny_prewarm_lookups_interval_minutes', 'Значення інтервалу оновлення довідників Znuny (у хвилинах)'))
+                ->helperText($this->localizedSettingDescription('znuny_prewarm_lookups_interval_minutes', 'Інтервал фонового оновлення станів, пріоритетів та типів.'))
+                ->numeric()
+                ->minValue(3);
+        }
+
+        if (isset($explicit['znuny_prewarm_customer_users_interval_minutes'])) {
+            $explicit['znuny_prewarm_customer_users_interval_minutes']
+                ->label($this->localizedSettingLabel('znuny_prewarm_customer_users_interval_minutes', 'Значення інтервалу оновлення клієнтів Znuny (у хвилинах)'))
+                ->helperText($this->localizedSettingDescription('znuny_prewarm_customer_users_interval_minutes', 'Інтервал фонового оновлення клієнтів (CustomerUsers).'))
+                ->numeric()
+                ->minValue(3);
         }
 
         if (isset($explicit['znuny_ticket_article_cache_ttl_minutes'])) {
@@ -2072,16 +2052,19 @@ class Settings extends Page implements HasForms
 
         $schema = [];
 
-        if (isset($explicit['znuny_agent_cache_ttl_minutes']) || isset($explicit['znuny_queue_cache_ttl_minutes']) || isset($explicit['znuny_lookup_cache_ttl_minutes'])) {
+        if (isset($explicit['znuny_prewarm_queues_interval_minutes']) || isset($explicit['znuny_prewarm_agents_interval_minutes']) || isset($explicit['znuny_prewarm_lookups_interval_minutes']) || isset($explicit['znuny_prewarm_customer_users_interval_minutes'])) {
             $section1 = [];
-            if (isset($explicit['znuny_agent_cache_ttl_minutes'])) {
-                $section1[] = $explicit['znuny_agent_cache_ttl_minutes'];
+            if (isset($explicit['znuny_prewarm_queues_interval_minutes'])) {
+                $section1[] = $explicit['znuny_prewarm_queues_interval_minutes'];
             }
-            if (isset($explicit['znuny_queue_cache_ttl_minutes'])) {
-                $section1[] = $explicit['znuny_queue_cache_ttl_minutes'];
+            if (isset($explicit['znuny_prewarm_agents_interval_minutes'])) {
+                $section1[] = $explicit['znuny_prewarm_agents_interval_minutes'];
             }
-            if (isset($explicit['znuny_lookup_cache_ttl_minutes'])) {
-                $section1[] = $explicit['znuny_lookup_cache_ttl_minutes'];
+            if (isset($explicit['znuny_prewarm_lookups_interval_minutes'])) {
+                $section1[] = $explicit['znuny_prewarm_lookups_interval_minutes'];
+            }
+            if (isset($explicit['znuny_prewarm_customer_users_interval_minutes'])) {
+                $section1[] = $explicit['znuny_prewarm_customer_users_interval_minutes'];
             }
             $schema[] = Section::make('znuny_reference_data')
                 ->heading(__('settings.settings_page.sections.znuny_reference_data.heading'))
@@ -2122,46 +2105,6 @@ class Settings extends Page implements HasForms
             ->description(__('settings.settings_page.sections.runtime_cache_maintenance.description'))
             ->schema([
                 Actions::make([
-                    Action::make('clearSettingsCache')
-                        ->label(__('settings.settings_page.actions.clear_settings_cache.label'))
-                        ->color('warning')
-                        ->icon('heroicon-o-arrow-path')
-                        ->requiresConfirmation()
-                        ->modalHeading(__('settings.settings_page.actions.clear_settings_cache.modal_heading'))
-                        ->modalDescription(__('settings.settings_page.actions.clear_settings_cache.modal_description'))
-                        ->modalSubmitActionLabel(__('settings.settings_page.actions.clear_settings_cache.modal_submit_action_label'))
-                        ->action('clearSettingsCacheAction')
-                        ->visible(fn () => auth()->user()?->role === 'admin'),
-                    Action::make('clearZnunyAgentCache')
-                        ->label(__('settings.settings_page.actions.clear_znuny_agent_cache.label'))
-                        ->color('warning')
-                        ->icon('heroicon-o-arrow-path')
-                        ->requiresConfirmation()
-                        ->modalHeading(__('settings.settings_page.actions.clear_znuny_agent_cache.modal_heading'))
-                        ->modalDescription(__('settings.settings_page.actions.clear_znuny_agent_cache.modal_description'))
-                        ->modalSubmitActionLabel(__('settings.settings_page.actions.clear_znuny_agent_cache.modal_submit_action_label'))
-                        ->action('clearZnunyAgentCacheAction')
-                        ->visible(fn () => auth()->user()?->role === 'admin'),
-                    Action::make('clearZnunyQueueCache')
-                        ->label(__('settings.settings_page.actions.clear_znuny_queue_cache.label'))
-                        ->color('warning')
-                        ->icon('heroicon-o-arrow-path')
-                        ->requiresConfirmation()
-                        ->modalHeading(__('settings.settings_page.actions.clear_znuny_queue_cache.modal_heading'))
-                        ->modalDescription(__('settings.settings_page.actions.clear_znuny_queue_cache.modal_description'))
-                        ->modalSubmitActionLabel(__('settings.settings_page.actions.clear_znuny_queue_cache.modal_submit_action_label'))
-                        ->action('clearZnunyQueueCacheAction')
-                        ->visible(fn () => auth()->user()?->role === 'admin'),
-                    Action::make('clearZnunyLookupCache')
-                        ->label(__('settings.settings_page.actions.clear_znuny_lookup_cache.label'))
-                        ->color('warning')
-                        ->icon('heroicon-o-arrow-path')
-                        ->requiresConfirmation()
-                        ->modalHeading(__('settings.settings_page.actions.clear_znuny_lookup_cache.modal_heading'))
-                        ->modalDescription(__('settings.settings_page.actions.clear_znuny_lookup_cache.modal_description'))
-                        ->modalSubmitActionLabel(__('settings.settings_page.actions.clear_znuny_lookup_cache.modal_submit_action_label'))
-                        ->action('clearZnunyLookupCacheAction')
-                        ->visible(fn () => auth()->user()?->role === 'admin'),
                     Action::make('clearTicketArticleCache')
                         ->label(__('settings.settings_page.actions.clear_ticket_article_cache.label'))
                         ->color('warning')

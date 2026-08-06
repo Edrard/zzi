@@ -83,6 +83,7 @@ return [
         'znuny_standalone_ticket' => 'Окрема заявка Znuny',
         'scheduled_znuny_task_run' => 'Запуск запланованого завдання Znuny',
         'znuny_ticket_creation_attempt' => 'Спроба створення звернення Znuny',
+        'znuny_prewarm_dataset' => 'Набір довідкових даних Znuny',
     ],
     'actions' => [
         'settings' => [
@@ -172,6 +173,7 @@ return [
             'problems_poll_completed' => 'Опитування проблем завершено',
             'problems_poll_failed' => 'Помилка опитування проблем',
         ],
+        'znuny_prewarm_manual_refresh' => 'Довідкові дані Znuny оновлено вручну',
     ],
     'labels' => [
         'no_context' => 'Контекст відсутній',

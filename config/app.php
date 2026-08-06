@@ -1,5 +1,8 @@
 <?php
 
+$prewarmProcessTimeout = max(1, (int) env('ZNUNY_PREWARM_PROCESS_TIMEOUT_SECONDS', 600));
+$prewarmLockExpiryGrace = max(0, (int) env('ZNUNY_PREWARM_LOCK_EXPIRY_SECONDS', 60));
+
 return [
 
     /*
@@ -143,8 +146,15 @@ return [
     |--------------------------------------------------------------------------
     */
     'znuny_prewarm' => [
+        'php_cli_binary' => env(
+            'ZNUNY_PREWARM_PHP_CLI_BINARY',
+            '/path/to/php',
+        ),
         'cache_ttl_multiplier' => env('ZNUNY_PREWARM_CACHE_TTL_MULTIPLIER', 10),
         'metadata_ttl_minutes' => env('ZNUNY_PREWARM_METADATA_TTL_MINUTES', 10080),
+        'process_timeout_seconds' => $prewarmProcessTimeout,
+        'lock_expiry_grace_seconds' => $prewarmLockExpiryGrace,
+        'lock_expiry_seconds' => $prewarmProcessTimeout + $prewarmLockExpiryGrace,
         'default_refresh_interval_minutes' => 5,
     ],
 

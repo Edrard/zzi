@@ -106,6 +106,12 @@ class DefaultSettings
             ['key' => 'znuny_agent_cache_ttl_minutes', 'value' => '15', 'type' => 'integer', 'description' => 'How long Znuny agent lists are cached. 0 disables this cache.'],
             ['key' => 'znuny_ticket_snapshot_cache_ttl_minutes', 'value' => '5', 'type' => 'integer', 'description' => 'How long linked ticket snapshots may be cached. 0 disables this cache.'],
 
+            // Prewarm intervals
+            ['key' => 'znuny_prewarm_queues_interval_minutes', 'value' => '5', 'type' => 'integer', 'description' => 'Interval in minutes for queues cache prewarm.'],
+            ['key' => 'znuny_prewarm_agents_interval_minutes', 'value' => '5', 'type' => 'integer', 'description' => 'Interval in minutes for agents cache prewarm.'],
+            ['key' => 'znuny_prewarm_customer_users_interval_minutes', 'value' => '30', 'type' => 'integer', 'description' => 'Interval in minutes for customer users cache prewarm.'],
+            ['key' => 'znuny_prewarm_lookups_interval_minutes', 'value' => '60', 'type' => 'integer', 'description' => 'Interval in minutes for lookups cache prewarm.'],
+
             // Sync
             ['key' => 'znuny_linked_ticket_sync_interval_minutes', 'value' => '5', 'type' => 'integer', 'description' => 'How often linked Znuny tickets should be synchronized by the scheduler.'],
             ['key' => 'znuny_linked_ticket_sync_batch_size', 'value' => '50', 'type' => 'integer', 'description' => 'Maximum linked tickets to synchronize per run. 0 means all eligible tickets.'],

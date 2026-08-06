@@ -86,3 +86,25 @@ if ($autoCloseMode === 'dry_run' && $syncInterval > 0) {
 Schedule::command('znuny:precache-lookups')->hourly()->withoutOverlapping();
 
 Schedule::command('scheduled-znuny:run')->everyMinute()->withoutOverlapping();
+
+// Znuny Prewarm Datasets
+$prewarmDatasets = [
+    'queues' => ['key' => 'znuny_prewarm_queues_interval_minutes', 'default' => 5],
+    'agents' => ['key' => 'znuny_prewarm_agents_interval_minutes', 'default' => 5],
+    'customer_users' => ['key' => 'znuny_prewarm_customer_users_interval_minutes', 'default' => 30],
+    'lookups' => ['key' => 'znuny_prewarm_lookups_interval_minutes', 'default' => 60],
+];
+
+foreach ($prewarmDatasets as $dataset => $config) {
+    Schedule::call(function () use ($dataset, $config) {
+        try {
+            $interval = max(3, SettingsService::int($config['key'], $config['default']));
+        } catch (Throwable $e) {
+            $interval = max(3, $config['default']);
+        }
+
+        if ((intdiv(now()->timestamp, 60) % $interval) === 0) {
+            app(\App\Services\Znuny\Cache\PrewarmRunnerService::class)->run($dataset, 'scheduler');
+        }
+    })->everyMinute()->name('znuny-prewarm-' . $dataset);
+}

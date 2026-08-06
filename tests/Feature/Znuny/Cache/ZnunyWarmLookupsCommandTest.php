@@ -357,4 +357,42 @@ class ZnunyWarmLookupsCommandTest extends TestCase
         $this->artisan('znuny:cache:warm-lookups')->assertSuccessful();
         Http::assertSentCount(4);
     }
+    public function test_sentinel_failed_emits_correct_output()
+    {
+        \Illuminate\Support\Facades\Http::preventStrayRequests();
+        \Illuminate\Support\Facades\Http::fake([
+            '*' => \Illuminate\Support\Facades\Http::response('Server Error', 500)
+        ]);
+
+        $this->artisan('znuny:cache:warm-lookups')
+            ->expectsOutput('PREWARM_RESULT=failed')
+            ->assertFailed();
+    }
+
+    public function test_sentinel_success_emits_correct_output()
+    {
+        Http::fake([
+            '*/Session*' => Http::response(['SessionID' => 'test']),
+            '*/TicketState*' => Http::response(['TicketStates' => ['open']]),
+            '*/TicketPriority*' => Http::response(['TicketPriorities' => ['high']]),
+            '*/TicketType*' => Http::response(['TicketTypes' => ['Incident']]),
+        ]);
+
+        $this->artisan('znuny:cache:warm-lookups')
+            ->expectsOutput('PREWARM_RESULT=success')
+            ->assertSuccessful();
+    }
+
+    public function test_sentinel_skipped_locked_emits_correct_output()
+    {
+        // Acquire the lock to force skip
+        $lock = \Illuminate\Support\Facades\Cache::lock('znuny_prewarm_lookups_lock', 60);
+        $lock->get();
+
+        $this->artisan('znuny:cache:warm-lookups')
+            ->expectsOutput('PREWARM_RESULT=skipped_locked')
+            ->assertSuccessful();
+
+        $lock->release();
+    }
 }
