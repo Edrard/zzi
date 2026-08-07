@@ -99,18 +99,21 @@ class ZnunyAgentServiceTest extends TestCase
         $service->getAgents(failSilently: false);
     }
 
-    public function test_force_refresh_does_not_mutate_reader_or_use_api()
+    public function test_repeated_get_agents_calls_use_injected_reader()
     {
         $this->mock(ZnunyAgentCacheReadService::class, function (MockInterface $mock) {
-            $mock->shouldReceive('getAgents')->once()->andReturn([
+            $mock->shouldReceive('getAgents')->twice()->andReturn([
                 ['id' => 1, 'login' => 'agent1', 'valid_id' => 1],
             ]);
         });
 
         $service = app(ZnunyAgentService::class);
-        $agents = $service->getAgents(failSilently: true, forceRefresh: true);
 
-        $this->assertCount(1, $agents);
+        $agentsFirst = $service->getAgents(failSilently: true);
+        $this->assertCount(1, $agentsFirst);
+
+        $agentsSecond = $service->getAgents(failSilently: true);
+        $this->assertCount(1, $agentsSecond);
     }
 
     public function test_get_selectable_agents_preserves_valid_agent_and_excluded_login_filtering()

@@ -21,11 +21,11 @@ class ZnunyAgentService
     }
 
     /**
-     * Get active agents from cache or fetch from API if not cached.
+     * Get active agents from the prewarmed cache reader.
      * On failure, it suppresses exception and returns an empty array to prevent crashing UI,
      * but you can pass $failSilently = false to throw it.
      */
-    public function getAgents(bool $failSilently = true, bool $forceRefresh = false): array
+    public function getAgents(bool $failSilently = true): array
     {
         $this->lastError = null;
 
@@ -83,9 +83,9 @@ class ZnunyAgentService
      * Get active agents excluding technical/service logins.
      * Use this for future manual ticket creation modals and ticket owner selection.
      */
-    public function getSelectableAgents(bool $failSilently = true, bool $forceRefresh = false): array
+    public function getSelectableAgents(bool $failSilently = true): array
     {
-        $agents = $this->getAgents($failSilently, $forceRefresh);
+        $agents = $this->getAgents($failSilently);
 
         $validAgents = array_filter($agents, fn ($agent) => ($agent['valid_id'] ?? 1) === 1);
 
