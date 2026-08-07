@@ -413,55 +413,265 @@ class ZnunyCachedLookupServiceTest extends TestCase
         $this->assertNull($service->getCustomerUserLabel('u1'));
     }
 
-    public function test_resolve_template_candidate_one_word_exact_match()
+    public function test_resolve_template_candidate_r1_one_word_exact()
     {
-        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>123', 'type' => 'string']);
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>Clients', 'type' => 'string']);
 
-        $this->mock(ZnunyClient::class, function ($mock) {
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
             $mock->shouldNotReceive('getCustomerUser');
             $mock->shouldNotReceive('searchCustomerUsers');
         });
 
-        $this->mock(\App\Services\Znuny\Cache\ZnunyCustomerUserCacheReadService::class, function ($mock) {
-            $mock->shouldReceive('getOptionsForQueue')->with('OneWord')->once()->andReturn(['OneWord123' => 'L']);
-        });
-        $service = app(ZnunyCachedLookupService::class);
-        $this->assertEquals('OneWord123', $service->resolveTemplateCandidate('OneWord'));
-    }
-
-    public function test_resolve_template_candidate_multi_word_exact_match()
-    {
-        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>@example.com', 'type' => 'string']);
-
-        $this->mock(\App\Services\Znuny\Cache\ZnunyCustomerUserCacheReadService::class, function ($mock) {
-            $mock->shouldReceive('getOptionsForQueue')->with('Network Hardware')->once()->andReturn(['NetworkHardware@example.com' => 'L']);
-        });
-        $service = app(ZnunyCachedLookupService::class);
-        $this->assertEquals('NetworkHardware@example.com', $service->resolveTemplateCandidate('Network Hardware'));
-    }
-
-    public function test_resolve_template_candidate_multi_word_fallback()
-    {
-        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>-suffix', 'type' => 'string']);
-
-        $this->mock(\App\Services\Znuny\Cache\ZnunyCustomerUserCacheReadService::class, function ($mock) {
-            $mock->shouldReceive('getOptionsForQueue')->with('Network Hardware')->once()->andReturn([
-                'network-foo-suffix' => 'Foo',
-                'network-hardware-suffix' => 'Hardware',
-                'other-user' => 'L'
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('Support')->once()->andReturn([
+                'SupportClients' => 'Support Clients',
             ]);
         });
+
         $service = app(ZnunyCachedLookupService::class);
-        $this->assertEquals('network-hardware-suffix', $service->resolveTemplateCandidate('Network Hardware'));
+        $this->assertSame('SupportClients', $service->resolveTemplateCandidate('Support'));
     }
 
-    public function test_resolve_template_candidate_empty_options_return_null()
+    public function test_resolve_template_candidate_r2_one_word_exact_case_insensitive()
     {
-        $this->mock(\App\Services\Znuny\Cache\ZnunyCustomerUserCacheReadService::class, function ($mock) {
-            $mock->shouldReceive('getOptionsForQueue')->with('Q1')->once()->andReturn([]);
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>Clients', 'type' => 'string']);
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
         });
+
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('Support')->once()->andReturn([
+                'supportclients' => 'Support Clients',
+            ]);
+        });
+
         $service = app(ZnunyCachedLookupService::class);
-        $this->assertNull($service->resolveTemplateCandidate('Q1'));
+        $this->assertSame('supportclients', $service->resolveTemplateCandidate('Support'));
+    }
+
+    public function test_resolve_template_candidate_r3_one_word_exact_miss_returns_null()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>Clients', 'type' => 'string']);
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('Support')->once()->andReturn([
+                'SupportAlphaClients' => 'Alpha',
+                'SupportZuluClients' => 'Zulu',
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertSame(null, $service->resolveTemplateCandidate('Support'));
+    }
+
+    public function test_resolve_template_candidate_r4_multi_word_no_space_exact_wins()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>Clients', 'type' => 'string']);
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('Agent bud')->once()->andReturn([
+                'AgentAlphaClients' => 'A',
+                'AgentBudClients' => 'B',
+                'AgentZuluClients' => 'Z',
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertSame('AgentBudClients', $service->resolveTemplateCandidate('Agent bud'));
+    }
+
+    public function test_resolve_template_candidate_r5_one_regex_fallback_candidate()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>Clients', 'type' => 'string']);
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('Agent bud')->once()->andReturn([
+                'AgentSomethingClients' => 'A',
+                'OtherUser' => 'O',
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertSame('AgentSomethingClients', $service->resolveTemplateCandidate('Agent bud'));
+    }
+
+    public function test_resolve_template_candidate_r6_multiple_regex_second_word_uniquely_selects()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>Clients', 'type' => 'string']);
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('Agent bud')->once()->andReturn([
+                'AgentAlphaClients' => 'A',
+                'AgentBudUaClients' => 'B',
+                'AgentTestClients' => 'T',
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertSame('AgentBudUaClients', $service->resolveTemplateCandidate('Agent bud'));
+    }
+
+    public function test_resolve_template_candidate_r7_multiple_second_word_matches_deterministic_first()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>Clients', 'type' => 'string']);
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('Agent bud')->once()->andReturn([
+                'AgentBudZClients' => 'Z',
+                'AgentBudAClients' => 'A',
+                'AgentBudMClients' => 'M',
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertSame('AgentBudAClients', $service->resolveTemplateCandidate('Agent bud'));
+    }
+
+    public function test_resolve_template_candidate_r8_zero_second_word_matches_deterministic_original_first()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>Clients', 'type' => 'string']);
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('Agent bud')->once()->andReturn([
+                'AgentZuluClients' => 'Z',
+                'AgentAlphaClients' => 'A',
+                'AgentTestClients' => 'T',
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertSame('AgentAlphaClients', $service->resolveTemplateCandidate('Agent bud'));
+    }
+
+    public function test_resolve_template_candidate_r9_third_word_ignored()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>Clients', 'type' => 'string']);
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('Agent bud ukraine')->once()->andReturn([
+                'AgentBudPolandClients' => 'P',
+                'AgentOtherUkraineClients' => 'U',
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertSame('AgentBudPolandClients', $service->resolveTemplateCandidate('Agent bud ukraine'));
+    }
+
+    public function test_resolve_template_candidate_r10_no_regex_candidates_returns_null()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>Clients', 'type' => 'string']);
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('Agent bud')->once()->andReturn([
+                'SomethingElse' => 'S',
+                'AgentBudCustomer' => 'C',
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertSame(null, $service->resolveTemplateCandidate('Agent bud'));
+    }
+
+    public function test_resolve_template_candidate_r11_configured_suffix_is_dynamic()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>Customer', 'type' => 'string']);
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('Agent bud')->once()->andReturn([
+                'AgentAlphaClients' => 'A',
+                'AgentBudCustomer' => 'C',
+                'AgentZuluCustomer' => 'Z',
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertSame('AgentBudCustomer', $service->resolveTemplateCandidate('Agent bud'));
+    }
+
+    public function test_resolve_template_candidate_r12_incompatible_template_exact_exists()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => 'Customer-<queue>', 'type' => 'string']);
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('Agent bud')->once()->andReturn([
+                'Customer-Agentbud' => 'C',
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertSame('Customer-Agentbud', $service->resolveTemplateCandidate('Agent bud'));
+    }
+
+    public function test_resolve_template_candidate_r13_incompatible_template_exact_absent()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => 'Customer-<queue>', 'type' => 'string']);
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('Agent bud')->once()->andReturn([
+                'AgentAlphaClients' => 'A',
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertSame(null, $service->resolveTemplateCandidate('Agent bud'));
     }
 
     public function test_search_customer_user_options_calls_client_once_with_trimmed_query()
