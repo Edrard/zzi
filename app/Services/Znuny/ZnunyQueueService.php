@@ -2,43 +2,17 @@
 
 namespace App\Services\Znuny;
 
-use App\Services\SettingsService;
-use Illuminate\Support\Facades\Cache;
+use App\Services\Znuny\Cache\ZnunyQueueCacheReadService;
 
 class ZnunyQueueService
 {
-    private const QUEUE_CACHE_KEY = 'znuny.queues';
-
-    public function __construct(private ZnunyClient $client) {}
-
-    private function getCacheTtlMinutes(): int
-    {
-        // 0 is valid and means bypass persistent cache.
-        // Negative, missing, or unreadable values fall back to 15.
-        $ttl = SettingsService::int('znuny_queue_cache_ttl_minutes', 15);
-
-        return $ttl >= 0 ? $ttl : 15;
-    }
-
-    /**
-     * Clears the cached queues exactly.
-     */
-    public function clearCache(): void
-    {
-        Cache::forget(self::QUEUE_CACHE_KEY);
-    }
+    public function __construct(
+        private ZnunyQueueCacheReadService $queueReader
+    ) {}
 
     public function getQueues(): array
     {
-        $ttl = $this->getCacheTtlMinutes();
-
-        if ($ttl === 0) {
-            return $this->client->getQueues();
-        }
-
-        return Cache::remember(self::QUEUE_CACHE_KEY, now()->addMinutes($ttl), function () {
-            return $this->client->getQueues();
-        });
+        return $this->queueReader->getQueues();
     }
 
     public function getSelectableQueuesResult(): array
@@ -63,7 +37,7 @@ class ZnunyQueueService
         } catch (\Throwable $e) {
             return [
                 'options' => [],
-                'error' => 'Could not load queues from Znuny API. You can try again later.',
+                'error' => 'Could not load prewarmed Znuny queue reference data. You can try again later.',
             ];
         }
     }
@@ -95,7 +69,7 @@ class ZnunyQueueService
 
             return ['found' => false, 'warnings' => ['Queue not found.']];
         } catch (\Throwable $e) {
-            return ['found' => false, 'warnings' => ['Could not load queues from Znuny API.']];
+            return ['found' => false, 'warnings' => ['Could not load prewarmed Znuny queue reference data.']];
         }
     }
 }

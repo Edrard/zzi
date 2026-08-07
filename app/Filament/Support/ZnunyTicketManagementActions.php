@@ -7,6 +7,7 @@ use App\Services\AuditLogger;
 use App\Services\SettingsService;
 use App\Services\Znuny\ZnunyAgentService;
 use App\Services\Znuny\ZnunyAssignmentDependencyService;
+use App\Services\Znuny\ZnunyCachedLookupService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyLinkedTicketCloseService;
 use App\Services\Znuny\ZnunyLinkedTicketReopenService;
@@ -521,15 +522,40 @@ class ZnunyTicketManagementActions
                         ->label(__('znuny_ticket_workspace.management_actions.target_queue'))
                         ->default($payload->znuny_queue_name)
                         ->required()
-                        ->options(function ($get) use ($arguments, $record) {
+                        ->noOptionsMessage(function (ZnunyCachedLookupService $lookupService) {
+                            $qState = $lookupService->getPrewarmDatasetState('queues');
+                            $aState = $lookupService->getPrewarmDatasetState('agents');
+                            if (! $qState['available'] || ! $aState['available']) {
+                                return __('znuny_data_status.consumer.unavailable');
+                            }
+
+                            return __('znuny_ticket_workspace.management_actions.no_options_available');
+                        })
+                        ->helperText(function (ZnunyCachedLookupService $lookupService) {
+                            $qState = $lookupService->getPrewarmDatasetState('queues');
+                            $aState = $lookupService->getPrewarmDatasetState('agents');
+                            if (! $qState['available'] || ! $aState['available']) {
+                                return __('znuny_data_status.consumer.unavailable');
+                            }
+                            if ($qState['status'] === 'stale' || $aState['status'] === 'stale') {
+                                return __('znuny_data_status.consumer.stale');
+                            }
+                            if ($qState['status'] === 'refreshing' || $aState['status'] === 'refreshing') {
+                                return __('znuny_data_status.consumer.refreshing');
+                            }
+
+                            return null;
+                        })
+                        ->options(function ($get) use ($arguments, $record, $payload) {
                             $service = app(ZnunyAssignmentDependencyService::class);
+                            $options = [];
                             try {
-                                return $service->getQueueOptionsForOwnerLogin($get('target_owner'));
+                                $options = $service->getQueueOptionsForOwnerLogin($get('target_owner'));
                             } catch (ConnectionException $e) {
                                 static $notifiedQueue = false;
                                 if (! $notifiedQueue) {
                                     $notifiedQueue = true;
-                                    $payload = TicketDetailsPayload::fromRecord($record, $arguments);
+                                    $payloadError = TicketDetailsPayload::fromRecord($record, $arguments);
 
                                     $curlCode = null;
                                     if ($e->getCode() > 0) {
@@ -541,7 +567,7 @@ class ZnunyTicketManagementActions
                                     $context = [
                                         'operation' => 'agent_assignable_queues',
                                         'context' => 'change_assignment',
-                                        'ticket_id' => $payload->znuny_ticket_id,
+                                        'ticket_id' => $payloadError->znuny_ticket_id,
                                         'local_record_id' => $record?->getKey(),
                                         'agent_login' => $get('target_owner'),
                                         'exception' => class_basename($e),
@@ -556,7 +582,7 @@ class ZnunyTicketManagementActions
                                     AuditLogger::log(
                                         action: 'znuny.connection_failed',
                                         entityType: 'ZnunyTicket',
-                                        entityId: $payload->znuny_ticket_id,
+                                        entityId: $payloadError->znuny_ticket_id,
                                         context: $context
                                     );
                                     Notification::make()
@@ -565,19 +591,34 @@ class ZnunyTicketManagementActions
                                         ->danger()
                                         ->send();
                                 }
-
-                                return [];
+                            } catch (\Throwable $e) {
+                                $options = [];
                             }
+
+                            $currentQueue = $payload->znuny_queue_name;
+                            if ($currentQueue && ! isset($options[$currentQueue])) {
+                                $options[$currentQueue] = (string) $currentQueue;
+                            }
+
+                            return $options;
                         })
                         ->searchable()
                         ->live()
                         ->afterStateUpdated(function ($set, $get, ?string $state) {
                             $owner = $get('target_owner');
                             if ($owner && $state) {
-                                $service = app(ZnunyAssignmentDependencyService::class);
-                                $validOptions = $service->getOwnerLoginOptionsForQueue($state);
-                                if (! array_key_exists($owner, $validOptions)) {
-                                    $set('target_owner', null);
+                                $lookupService = app(ZnunyCachedLookupService::class);
+                                $qState = $lookupService->getPrewarmDatasetState('queues');
+                                $aState = $lookupService->getPrewarmDatasetState('agents');
+                                if ($qState['available'] && $aState['available']) {
+                                    $service = app(ZnunyAssignmentDependencyService::class);
+                                    try {
+                                        $validOptions = $service->getOwnerLoginOptionsForQueue($state);
+                                        if (! array_key_exists($owner, $validOptions)) {
+                                            $set('target_owner', null);
+                                        }
+                                    } catch (\Throwable $e) {
+                                    }
                                 }
                             }
                         }),
@@ -586,20 +627,63 @@ class ZnunyTicketManagementActions
                         ->label(__('znuny_ticket_workspace.management_actions.target_owner'))
                         ->default($payload->znuny_owner_name)
                         ->required()
-                        ->options(function ($get) {
-                            $service = app(ZnunyAssignmentDependencyService::class);
+                        ->noOptionsMessage(function (ZnunyCachedLookupService $lookupService) {
+                            $qState = $lookupService->getPrewarmDatasetState('queues');
+                            $aState = $lookupService->getPrewarmDatasetState('agents');
+                            if (! $qState['available'] || ! $aState['available']) {
+                                return __('znuny_data_status.consumer.unavailable');
+                            }
 
-                            return $service->getOwnerLoginOptionsForQueue($get('target_queue'));
+                            return __('znuny_ticket_workspace.management_actions.no_options_available');
+                        })
+                        ->helperText(function (ZnunyCachedLookupService $lookupService) {
+                            $qState = $lookupService->getPrewarmDatasetState('queues');
+                            $aState = $lookupService->getPrewarmDatasetState('agents');
+                            if (! $qState['available'] || ! $aState['available']) {
+                                return __('znuny_data_status.consumer.unavailable');
+                            }
+                            if ($qState['status'] === 'stale' || $aState['status'] === 'stale') {
+                                return __('znuny_data_status.consumer.stale');
+                            }
+                            if ($qState['status'] === 'refreshing' || $aState['status'] === 'refreshing') {
+                                return __('znuny_data_status.consumer.refreshing');
+                            }
+
+                            return null;
+                        })
+                        ->options(function ($get) use ($payload) {
+                            $service = app(ZnunyAssignmentDependencyService::class);
+                            $options = [];
+                            try {
+                                $options = $service->getOwnerLoginOptionsForQueue($get('target_queue'));
+                            } catch (\Throwable $e) {
+                                $options = [];
+                            }
+
+                            $currentOwner = $payload->znuny_owner_name;
+                            if ($currentOwner && ! isset($options[$currentOwner])) {
+                                $options[$currentOwner] = (string) $currentOwner;
+                            }
+
+                            return $options;
                         })
                         ->searchable()
                         ->live()
                         ->afterStateUpdated(function ($set, $get, ?string $state) {
                             $queueName = $get('target_queue');
                             if ($queueName && $state) {
-                                $service = app(ZnunyAssignmentDependencyService::class);
-                                $validOptions = $service->getQueueOptionsForOwnerLogin($state);
-                                if (! array_key_exists($queueName, $validOptions)) {
-                                    $set('target_queue', null);
+                                $lookupService = app(ZnunyCachedLookupService::class);
+                                $qState = $lookupService->getPrewarmDatasetState('queues');
+                                $aState = $lookupService->getPrewarmDatasetState('agents');
+                                if ($qState['available'] && $aState['available']) {
+                                    $service = app(ZnunyAssignmentDependencyService::class);
+                                    try {
+                                        $validOptions = $service->getQueueOptionsForOwnerLogin($state);
+                                        if (! array_key_exists($queueName, $validOptions)) {
+                                            $set('target_queue', null);
+                                        }
+                                    } catch (\Throwable $e) {
+                                    }
                                 }
                             }
                         }),
@@ -608,19 +692,60 @@ class ZnunyTicketManagementActions
                         ->label(__('znuny_ticket_workspace.management_actions.target_customer'))
                         ->default($payload->customer_user)
                         ->searchable()
-                        ->getSearchResultsUsing(function (string $search) {
-                            $client = app(ZnunyClient::class);
-
-                            return collect($client->searchCustomerUsers($search, 20))->pluck('label', 'login')->toArray();
-                        })
-                        ->getOptionLabelUsing(function ($value) {
-                            $client = app(ZnunyClient::class);
-                            $user = $client->getCustomerUser($value);
-                            if (! empty($user['found']) && ! empty($user['label'])) {
-                                return $user['label'];
+                        ->noOptionsMessage(function (ZnunyCachedLookupService $lookupService) {
+                            $state = $lookupService->getPrewarmDatasetState('customer_users');
+                            if (! $state['available']) {
+                                return __('znuny_data_status.consumer.customer_users_unavailable_search_live');
                             }
 
-                            return $value;
+                            return __('znuny_ticket_workspace.management_actions.no_options_available');
+                        })
+                        ->helperText(function (ZnunyCachedLookupService $lookupService) {
+                            $state = $lookupService->getPrewarmDatasetState('customer_users');
+                            if (! $state['available']) {
+                                return __('znuny_data_status.consumer.customer_users_unavailable_search_live');
+                            }
+                            if ($state['status'] === 'stale') {
+                                return __('znuny_data_status.consumer.stale');
+                            }
+                            if ($state['status'] === 'refreshing') {
+                                return __('znuny_data_status.consumer.refreshing');
+                            }
+
+                            return null;
+                        })
+                        ->getSearchResultsUsing(function (string $search, $get) {
+                            $query = trim($search);
+                            $lookupService = app(ZnunyCachedLookupService::class);
+                            if ($query === '') {
+                                $queue = $get('target_queue');
+                                if (blank($queue)) {
+                                    return [];
+                                }
+                                try {
+                                    return $lookupService->getCustomerUserPrimaryOptionsForQueue($queue);
+                                } catch (\Throwable $e) {
+                                    return [];
+                                }
+                            }
+                            try {
+                                return $lookupService->searchCustomerUserOptions($query, 20);
+                            } catch (\Throwable $e) {
+                                return [];
+                            }
+                        })
+                        ->getOptionLabelUsing(function ($value) {
+                            if (empty($value)) {
+                                return null;
+                            }
+                            $lookupService = app(ZnunyCachedLookupService::class);
+                            try {
+                                $label = $lookupService->getCustomerUserLabel($value);
+
+                                return $label ?: $value;
+                            } catch (\Throwable $e) {
+                                return $value;
+                            }
                         }),
                     Textarea::make('note')
                         ->label(__('znuny_ticket_workspace.management_actions.note'))

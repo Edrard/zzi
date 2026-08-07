@@ -28,10 +28,6 @@ class ZnunyWarmCustomerUsersCommand extends Command
                 }
 
                 $queues = $snapshot['payload'];
-                $mappings = app(SettingsService::class)->json('znuny_queue_host_mappings', []);
-                if (! is_array($mappings)) {
-                    $mappings = [];
-                }
 
                 $finalQueues = [];
                 $seenQueueIds = [];
@@ -64,7 +60,7 @@ class ZnunyWarmCustomerUsersCommand extends Command
                     $seenQueueIds[$qId] = true;
                     $seenQueueNames[$qName] = true;
 
-                    $searchTerms = $this->buildSearchTerms($queue, $mappings);
+                    $searchTerms = $this->buildSearchTerms($queue);
 
                     $options = [];
                     foreach ($searchTerms as $term) {
@@ -200,86 +196,27 @@ class ZnunyWarmCustomerUsersCommand extends Command
         return 'Refresh failed; see application logs.';
     }
 
-    private function buildSearchTerms(array $queue, array $mappings): array
+    private function buildSearchTerms(array $queue): array
     {
-        $terms = [];
         $qName = trim((string) $queue['name']);
-        if ($qName !== '') {
-            $terms[] = $qName;
+        if ($qName === '') {
+            return [];
         }
 
-        if (isset($queue['label'])) {
-            $label = trim((string) $queue['label']);
-            if ($label !== '' && ! $this->inTermsCaseInsensitive($label, $terms)) {
-                $terms[] = $label;
-            }
+        $words = preg_split('/\s+/u', $qName);
+        $firstWord = $words[0] ?? '';
+
+        if (count($words) === 1) {
+            $term = $qName;
+        } else {
+            $term = $firstWord;
         }
 
-        if (isset($queue['full_name'])) {
-            $fullName = trim((string) $queue['full_name']);
-            if ($fullName !== '' && ! $this->inTermsCaseInsensitive($fullName, $terms)) {
-                $terms[] = $fullName;
-            }
+        if (mb_strlen($term) >= 2) {
+            return [$term];
         }
 
-        foreach ($mappings as $mapping) {
-            if (! is_array($mapping)) {
-                continue;
-            }
-
-            $mq = null;
-            $keys = ['queue', 'queue_name', 'znuny_queue', 'znuny_queue_name'];
-            foreach ($keys as $k) {
-                if (isset($mapping[$k]) && is_string($mapping[$k])) {
-                    $mq = trim($mapping[$k]);
-                    break;
-                }
-            }
-
-            if ($mq !== null && $mq !== '') {
-                // Compare case-insensitively against name, label, full name
-                $match = false;
-                if (strcasecmp($mq, $qName) === 0) {
-                    $match = true;
-                } elseif (isset($queue['label']) && strcasecmp($mq, trim((string) $queue['label'])) === 0) {
-                    $match = true;
-                } elseif (isset($queue['full_name']) && strcasecmp($mq, trim((string) $queue['full_name'])) === 0) {
-                    $match = true;
-                }
-
-                if ($match) {
-                    $prefix = null;
-                    if (isset($mapping['host_prefix']) && is_string($mapping['host_prefix'])) {
-                        $prefix = trim($mapping['host_prefix']);
-                    } elseif (isset($mapping['prefix']) && is_string($mapping['prefix'])) {
-                        $prefix = trim($mapping['prefix']);
-                    }
-
-                    if ($prefix !== null && $prefix !== '' && ! $this->inTermsCaseInsensitive($prefix, $terms)) {
-                        $terms[] = $prefix;
-                    }
-                }
-            }
-        }
-
-        $finalTerms = [];
-        foreach ($terms as $t) {
-            if (mb_strlen($t) >= 2) {
-                $finalTerms[] = $t;
-            }
-        }
-
-        return $finalTerms;
-    }
-
-    private function inTermsCaseInsensitive(string $search, array $terms): bool
-    {
-        foreach ($terms as $t) {
-            if (strcasecmp($t, $search) === 0) {
-                return true;
-            }
-        }
-        return false;
+        return [];
     }
 
     private function isValidId($id): bool

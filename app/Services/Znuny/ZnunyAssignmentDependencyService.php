@@ -2,12 +2,32 @@
 
 namespace App\Services\Znuny;
 
+use App\Services\Znuny\Cache\ZnunyAgentCacheReadService;
+use App\Services\Znuny\Cache\ZnunyQueueCacheReadService;
+
 class ZnunyAssignmentDependencyService
 {
     public function __construct(
-        protected ZnunyClient $client,
+        protected ZnunyQueueCacheReadService $queueReader,
+        protected ZnunyAgentCacheReadService $agentReader,
         protected ZnunyAgentService $agentService
     ) {}
+
+    private function getQueueByName(?string $queueName): ?array
+    {
+        if (empty($queueName)) {
+            return null;
+        }
+
+        $queues = $this->queueReader->getQueues();
+        foreach ($queues as $queue) {
+            if (strcasecmp($queue['name'] ?? '', $queueName) === 0) {
+                return $queue;
+            }
+        }
+
+        return null;
+    }
 
     public function getAssignableAgentsForQueue(?string $queueName): array
     {
@@ -15,7 +35,7 @@ class ZnunyAssignmentDependencyService
             return $this->agentService->getSelectableAgents();
         }
 
-        $queue = $this->client->getQueueByName($queueName);
+        $queue = $this->getQueueByName($queueName);
         if (empty($queue['id'])) {
             return $this->agentService->getSelectableAgents();
         }
@@ -36,7 +56,7 @@ class ZnunyAssignmentDependencyService
             return app(ZnunyUiFilterService::class)->filterOwnerOptionsForUi($options, $agents);
         }
 
-        $queue = $this->client->getQueueByName($queueName);
+        $queue = $this->getQueueByName($queueName);
         if (empty($queue['id'])) {
             $agents = $this->agentService->getSelectableAgents();
 
@@ -61,7 +81,7 @@ class ZnunyAssignmentDependencyService
             return [];
         }
 
-        $queue = $this->client->getQueueByName($queueName);
+        $queue = $this->getQueueByName($queueName);
         if (empty($queue['id'])) {
             return [];
         }
@@ -79,7 +99,7 @@ class ZnunyAssignmentDependencyService
     public function getQueueOptionsForOwnerId(?string $ownerId): array
     {
         if (empty($ownerId)) {
-            $queues = collect($this->client->getQueues())
+            $queues = collect($this->queueReader->getQueues())
                 ->filter(fn ($queue) => ($queue['valid_id'] ?? 1) === 1)
                 ->values()
                 ->toArray();
@@ -89,9 +109,20 @@ class ZnunyAssignmentDependencyService
             return app(ZnunyUiFilterService::class)->filterQueuesForUi($options);
         }
 
-        $queues = $this->client->getAgentAssignableQueues((int) $ownerId);
+        $queueIds = $this->agentReader->getQueueIdsForAgent((int) $ownerId);
+        $allQueues = $this->queueReader->getQueues();
 
-        $options = collect($queues)->pluck('label', 'name')->toArray();
+        $assignableQueues = [];
+        foreach ($queueIds as $queueId) {
+            foreach ($allQueues as $q) {
+                if (($q['id'] ?? null) === $queueId) {
+                    $assignableQueues[] = $q;
+                    break;
+                }
+            }
+        }
+
+        $options = collect($assignableQueues)->pluck('label', 'name')->toArray();
 
         return app(ZnunyUiFilterService::class)->filterQueuesForUi($options);
     }
@@ -131,7 +162,7 @@ class ZnunyAssignmentDependencyService
             return app(ZnunyUiFilterService::class)->filterOwnerOptionsForUi($options, $agents);
         }
 
-        $queue = $this->client->getQueueByName($queueName);
+        $queue = $this->getQueueByName($queueName);
         if (empty($queue['id'])) {
             $agents = $this->agentService->getSelectableAgents();
 
@@ -153,37 +184,76 @@ class ZnunyAssignmentDependencyService
     public function getQueueOptionsForOwnerLogin(?string $ownerLogin): array
     {
         if (empty($ownerLogin)) {
-            $queues = collect($this->client->getQueues())
+            $queues = collect($this->queueReader->getQueues())
                 ->filter(fn ($queue) => ($queue['valid_id'] ?? 1) === 1)
                 ->values()
                 ->toArray();
 
             $options = collect($queues)->pluck('label', 'name')->toArray();
 
-            return app(ZnunyUiFilterService::class)->filterQueuesForUi($options);
+            return $this->sortQueueOptions(
+                app(ZnunyUiFilterService::class)->filterQueuesForUi($options)
+            );
         }
 
         if (app(ZnunyUiFilterService::class)->isAgentLoginExcluded($ownerLogin)) {
             return [];
         }
 
-        $agents = $this->client->getAgents();
+        $agents = $this->agentReader->getAgents();
         $agentId = collect($agents)->firstWhere('login', $ownerLogin)['id'] ?? null;
         if (! $agentId) {
-            $queues = collect($this->client->getQueues())
+            $queues = collect($this->queueReader->getQueues())
                 ->filter(fn ($queue) => ($queue['valid_id'] ?? 1) === 1)
                 ->values()
                 ->toArray();
 
             $options = collect($queues)->pluck('label', 'name')->toArray();
 
-            return app(ZnunyUiFilterService::class)->filterQueuesForUi($options);
+            return $this->sortQueueOptions(
+                app(ZnunyUiFilterService::class)->filterQueuesForUi($options)
+            );
         }
 
-        $queues = $this->client->getAgentAssignableQueues($agentId);
+        $queueIds = $this->agentReader->getQueueIdsForAgent((int) $agentId);
+        $allQueues = $this->queueReader->getQueues();
 
-        $options = collect($queues)->pluck('label', 'name')->toArray();
+        $assignableQueues = [];
+        foreach ($queueIds as $queueId) {
+            foreach ($allQueues as $q) {
+                if (($q['id'] ?? null) === $queueId) {
+                    $assignableQueues[] = $q;
+                    break;
+                }
+            }
+        }
 
-        return app(ZnunyUiFilterService::class)->filterQueuesForUi($options);
+        $options = collect($assignableQueues)->pluck('label', 'name')->toArray();
+
+        return $this->sortQueueOptions(
+            app(ZnunyUiFilterService::class)->filterQueuesForUi($options)
+        );
+    }
+
+    private function sortQueueOptions(array $options): array
+    {
+        uksort($options, function ($keyA, $keyB) use ($options) {
+            $labelA = $options[$keyA];
+            $labelB = $options[$keyB];
+
+            $cmp = strnatcasecmp($labelA, $labelB);
+            if ($cmp !== 0) {
+                return $cmp;
+            }
+
+            $cmp = strcmp($labelA, $labelB);
+            if ($cmp !== 0) {
+                return $cmp;
+            }
+
+            return strcmp($keyA, $keyB);
+        });
+
+        return $options;
     }
 }

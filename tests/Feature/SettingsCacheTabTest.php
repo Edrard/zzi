@@ -6,7 +6,6 @@ use App\Filament\Pages\Settings;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\SettingsService;
-use App\Services\Znuny\ZnunyCachedLookupService;
 use App\Services\Znuny\ZnunyTicketArticleCacheService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -65,9 +64,6 @@ class SettingsCacheTabTest extends TestCase
 
                 if ($isThisTab && $name) {
                     if (in_array($name, [
-                        'znuny_agent_cache_ttl_minutes',
-                        'znuny_queue_cache_ttl_minutes',
-                        'znuny_lookup_cache_ttl_minutes',
                         'znuny_ticket_article_cache_ttl_minutes',
                         'znuny_ticket_snapshot_cache_ttl_minutes',
                     ])) {
@@ -92,9 +88,6 @@ class SettingsCacheTabTest extends TestCase
         $search($schema);
 
         $expectedFieldsOrder = [
-            'znuny_agent_cache_ttl_minutes',
-            'znuny_queue_cache_ttl_minutes',
-            'znuny_lookup_cache_ttl_minutes',
             'znuny_ticket_article_cache_ttl_minutes',
             'znuny_ticket_snapshot_cache_ttl_minutes',
         ];
@@ -130,9 +123,6 @@ class SettingsCacheTabTest extends TestCase
             foreach ($components as $c) {
                 $name = method_exists($c, 'getName') ? $c->getName() : null;
                 if ($name && in_array($name, [
-                    'znuny_agent_cache_ttl_minutes',
-                    'znuny_queue_cache_ttl_minutes',
-                    'znuny_lookup_cache_ttl_minutes',
                     'znuny_ticket_article_cache_ttl_minutes',
                     'znuny_ticket_snapshot_cache_ttl_minutes',
                 ])) {
@@ -151,9 +141,6 @@ class SettingsCacheTabTest extends TestCase
 
         $search($schema);
 
-        $this->assertEquals('Znuny Agent Cache Lifetime (minutes)', $componentsByName['znuny_agent_cache_ttl_minutes']->getLabel());
-        $this->assertEquals('Znuny Queue Cache Lifetime (minutes)', $componentsByName['znuny_queue_cache_ttl_minutes']->getLabel());
-        $this->assertEquals('Znuny Lookup Cache Lifetime (minutes)', $componentsByName['znuny_lookup_cache_ttl_minutes']->getLabel());
         $this->assertEquals('Ticket Article Cache Lifetime (minutes)', $componentsByName['znuny_ticket_article_cache_ttl_minutes']->getLabel());
         $this->assertEquals('Linked Ticket Snapshot Cache Lifetime (minutes)', $componentsByName['znuny_ticket_snapshot_cache_ttl_minutes']->getLabel());
 
@@ -168,9 +155,7 @@ class SettingsCacheTabTest extends TestCase
         );
 
         // Helper text assertions
-        $component->assertSee('Configured lifetime for cached active Znuny agent data used by owner selectors and agent-name displays.');
-        $component->assertSee('Configured lifetime for cached Znuny queue data used by queue selectors, queue detection, and queue-mapping validation.');
-        $component->assertSee('How long reusable Znuny lookup data such as owners by queue, CustomerUsers, states, priorities, types, filtered queues, and template or search candidates may be cached. Set to 0 to bypass persistent lookup caching.');
+
         $component->assertSee('How long Znuny ticket articles fetched for linked tickets may be cached. Set to 0 to bypass persistent ticket article caching.');
         $component->assertSee('Configured lifetime for cached linked-ticket snapshot data. A snapshot may include locally stored Znuny ticket details such as state, owner, queue, priority, and synchronization metadata. This setting does not control Ticket Workspace caching and does not delete local ticket links or data in Znuny.');
     }
@@ -257,9 +242,6 @@ class SettingsCacheTabTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
 
         $payload = $this->getValidSettingsPayload([
-            'znuny_agent_cache_ttl_minutes' => 45,
-            'znuny_queue_cache_ttl_minutes' => 45,
-            'znuny_lookup_cache_ttl_minutes' => 45,
             'znuny_ticket_article_cache_ttl_minutes' => 45,
             'znuny_ticket_snapshot_cache_ttl_minutes' => 45,
         ]);
@@ -270,125 +252,8 @@ class SettingsCacheTabTest extends TestCase
             ->call('save')
             ->assertHasNoFormErrors();
 
-        $this->assertEquals('45', Setting::where('key', 'znuny_agent_cache_ttl_minutes')->value('value'));
-        $this->assertEquals('45', Setting::where('key', 'znuny_queue_cache_ttl_minutes')->value('value'));
-        $this->assertEquals('45', Setting::where('key', 'znuny_lookup_cache_ttl_minutes')->value('value'));
+        $this->assertEquals('45', Setting::where('key', 'znuny_ticket_article_cache_ttl_minutes')->value('value'));
         $this->assertEquals('45', Setting::where('key', 'znuny_ticket_snapshot_cache_ttl_minutes')->value('value'));
-    }
-
-    public function test_saving_changed_lookup_ttl_invalidates_lookup_cache_only()
-    {
-        $admin = User::factory()->create(['role' => 'admin']);
-
-        // Persist the entire payload so nothing else is deemed changed
-        foreach ($this->getValidSettingsPayload(['znuny_lookup_cache_ttl_minutes' => 60]) as $k => $v) {
-            if ($k === 'mail_smtp_password_clear') {
-                continue;
-            }
-            $valStr = is_bool($v) ? ($v ? 'true' : 'false') : (string) $v;
-            Setting::updateOrCreate(['key' => $k], ['value' => $valStr, 'type' => is_bool($v) ? 'boolean' : (is_int($v) ? 'integer' : 'string')]);
-        }
-
-        // Also clear settings cache so it loads the seeded values correctly
-        app(SettingsService::class)->clearAllCaches();
-
-        $initialVersion = app(ZnunyCachedLookupService::class)->getCacheVersion();
-
-        Cache::put('znuny_active_agents', 'sentinel_agent');
-        Cache::put('znuny.queues', 'sentinel_queue');
-
-        $payload = $this->getValidSettingsPayload([
-            'znuny_lookup_cache_ttl_minutes' => 99,
-        ]);
-
-        Livewire::actingAs($admin)->test(Settings::class)
-            ->fillForm($payload)
-            ->call('save')
-            ->assertHasNoFormErrors();
-
-        $newVersion = app(ZnunyCachedLookupService::class)->getCacheVersion();
-        $this->assertNotEquals($initialVersion, $newVersion);
-
-        $this->assertEquals('sentinel_agent', Cache::get('znuny_active_agents'));
-        $this->assertEquals('sentinel_queue', Cache::get('znuny.queues'));
-    }
-
-    public function test_saving_unchanged_lookup_ttl_does_not_invalidate()
-    {
-        $admin = User::factory()->create(['role' => 'admin']);
-
-        // Persist the entire payload so nothing else is deemed changed
-        foreach ($this->getValidSettingsPayload(['znuny_lookup_cache_ttl_minutes' => 60]) as $k => $v) {
-            if ($k === 'mail_smtp_password_clear') {
-                continue;
-            }
-            $valStr = is_bool($v) ? ($v ? 'true' : 'false') : (string) $v;
-            Setting::updateOrCreate(['key' => $k], ['value' => $valStr, 'type' => is_bool($v) ? 'boolean' : (is_int($v) ? 'integer' : 'string')]);
-        }
-
-        // Also clear settings cache so it loads the seeded values correctly
-        app(SettingsService::class)->clearAllCaches();
-
-        $initialVersion = app(ZnunyCachedLookupService::class)->getCacheVersion();
-
-        Cache::put('znuny_active_agents', 'sentinel_agent');
-        Cache::put('znuny.queues', 'sentinel_queue');
-
-        $payload = $this->getValidSettingsPayload([
-            'znuny_lookup_cache_ttl_minutes' => 60,
-        ]);
-
-        Livewire::actingAs($admin)->test(Settings::class)
-            ->fillForm($payload)
-            ->call('save')
-            ->assertHasNoFormErrors();
-
-        $newVersion = app(ZnunyCachedLookupService::class)->getCacheVersion();
-        $this->assertEquals($initialVersion, $newVersion);
-
-        $this->assertEquals('sentinel_agent', Cache::get('znuny_active_agents'));
-        $this->assertEquals('sentinel_queue', Cache::get('znuny.queues'));
-    }
-
-    public function test_saving_lookup_and_agent_ttl_invalidates_both_caches()
-    {
-        $admin = User::factory()->create(['role' => 'admin']);
-
-        // Persist the entire payload so nothing else is deemed changed
-        foreach ($this->getValidSettingsPayload(['znuny_lookup_cache_ttl_minutes' => 60, 'znuny_agent_cache_ttl_minutes' => 60]) as $k => $v) {
-            if ($k === 'mail_smtp_password_clear') {
-                continue;
-            }
-            $valStr = is_bool($v) ? ($v ? 'true' : 'false') : (string) $v;
-            Setting::updateOrCreate(['key' => $k], ['value' => $valStr, 'type' => is_bool($v) ? 'boolean' : (is_int($v) ? 'integer' : 'string')]);
-        }
-
-        // Also clear settings cache so it loads the seeded values correctly
-        app(SettingsService::class)->clearAllCaches();
-
-        $initialVersion = app(ZnunyCachedLookupService::class)->getCacheVersion();
-
-        Cache::put('znuny_active_agents', 'sentinel_agent');
-        Cache::put('znuny.queues', 'sentinel_queue');
-
-        $payload = $this->getValidSettingsPayload([
-            'znuny_lookup_cache_ttl_minutes' => 99,
-            'znuny_agent_cache_ttl_minutes' => 99,
-        ]);
-
-        Livewire::actingAs($admin)->test(Settings::class)
-            ->fillForm($payload)
-            ->call('save')
-            ->assertHasNoFormErrors();
-
-        $newVersion = app(ZnunyCachedLookupService::class)->getCacheVersion();
-        $this->assertNotEquals($initialVersion, $newVersion);
-
-        $this->assertNull(Cache::get('znuny_active_agents'));
-        $this->assertNull(Cache::get('znuny.queues'));
-
-        $this->assertEquals('99', Setting::where('key', 'znuny_lookup_cache_ttl_minutes')->value('value'));
-        $this->assertEquals('99', Setting::where('key', 'znuny_agent_cache_ttl_minutes')->value('value'));
     }
 
     public function test_saving_changed_article_ttl_invalidates_article_cache_only()
@@ -405,10 +270,6 @@ class SettingsCacheTabTest extends TestCase
         app(SettingsService::class)->clearAllCaches();
 
         $initialArticleVersion = app(ZnunyTicketArticleCacheService::class)->getGeneration();
-        $initialLookupVersion = app(ZnunyCachedLookupService::class)->getCacheVersion();
-
-        Cache::put('znuny_active_agents', 'sentinel_agent');
-        Cache::put('znuny.queues', 'sentinel_queue');
 
         $payload = $this->getValidSettingsPayload(['znuny_ticket_article_cache_ttl_minutes' => 99]);
 
@@ -420,11 +281,6 @@ class SettingsCacheTabTest extends TestCase
         $newArticleVersion = app(ZnunyTicketArticleCacheService::class)->getGeneration();
         $this->assertNotEquals($initialArticleVersion, $newArticleVersion);
 
-        $newLookupVersion = app(ZnunyCachedLookupService::class)->getCacheVersion();
-        $this->assertEquals($initialLookupVersion, $newLookupVersion);
-
-        $this->assertEquals('sentinel_agent', Cache::get('znuny_active_agents'));
-        $this->assertEquals('sentinel_queue', Cache::get('znuny.queues'));
         $this->assertEquals('99', Setting::where('key', 'znuny_ticket_article_cache_ttl_minutes')->value('value'));
     }
 
@@ -442,10 +298,6 @@ class SettingsCacheTabTest extends TestCase
         app(SettingsService::class)->clearAllCaches();
 
         $initialArticleVersion = app(ZnunyTicketArticleCacheService::class)->getGeneration();
-        $initialLookupVersion = app(ZnunyCachedLookupService::class)->getCacheVersion();
-
-        Cache::put('znuny_active_agents', 'sentinel_agent');
-        Cache::put('znuny.queues', 'sentinel_queue');
 
         $payload = $this->getValidSettingsPayload(['znuny_ticket_article_cache_ttl_minutes' => 15]);
 
@@ -456,49 +308,5 @@ class SettingsCacheTabTest extends TestCase
 
         $newArticleVersion = app(ZnunyTicketArticleCacheService::class)->getGeneration();
         $this->assertEquals($initialArticleVersion, $newArticleVersion);
-
-        $newLookupVersion = app(ZnunyCachedLookupService::class)->getCacheVersion();
-        $this->assertEquals($initialLookupVersion, $newLookupVersion);
-
-        $this->assertEquals('sentinel_agent', Cache::get('znuny_active_agents'));
-        $this->assertEquals('sentinel_queue', Cache::get('znuny.queues'));
-    }
-
-    public function test_saving_article_and_agent_ttl_invalidates_both_caches()
-    {
-        $admin = User::factory()->create(['role' => 'admin']);
-
-        foreach ($this->getValidSettingsPayload(['znuny_ticket_article_cache_ttl_minutes' => 15, 'znuny_agent_cache_ttl_minutes' => 60]) as $k => $v) {
-            if ($k === 'mail_smtp_password_clear') {
-                continue;
-            }
-            $valStr = is_bool($v) ? ($v ? 'true' : 'false') : (string) $v;
-            Setting::updateOrCreate(['key' => $k], ['value' => $valStr, 'type' => is_bool($v) ? 'boolean' : (is_int($v) ? 'integer' : 'string')]);
-        }
-        app(SettingsService::class)->clearAllCaches();
-
-        $initialArticleVersion = app(ZnunyTicketArticleCacheService::class)->getGeneration();
-
-        Cache::put('znuny_active_agents', 'sentinel_agent');
-        Cache::put('znuny.queues', 'sentinel_queue');
-
-        $payload = $this->getValidSettingsPayload([
-            'znuny_ticket_article_cache_ttl_minutes' => 99,
-            'znuny_agent_cache_ttl_minutes' => 99,
-        ]);
-
-        Livewire::actingAs($admin)->test(Settings::class)
-            ->fillForm($payload)
-            ->call('save')
-            ->assertHasNoFormErrors();
-
-        $newArticleVersion = app(ZnunyTicketArticleCacheService::class)->getGeneration();
-        $this->assertNotEquals($initialArticleVersion, $newArticleVersion);
-
-        $this->assertNull(Cache::get('znuny_active_agents'));
-        $this->assertNull(Cache::get('znuny.queues'));
-
-        $this->assertEquals('99', Setting::where('key', 'znuny_ticket_article_cache_ttl_minutes')->value('value'));
-        $this->assertEquals('99', Setting::where('key', 'znuny_agent_cache_ttl_minutes')->value('value'));
     }
 }

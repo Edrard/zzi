@@ -8,7 +8,8 @@ class ZnunyTicketModalStateBuilder
         protected ZnunyAgentService $agentService,
         protected ZnunyQueueService $queueService,
         protected ZnunyLookupService $lookupService,
-        protected ZnunyTicketAdvancedDefaultsService $defaultsService
+        protected ZnunyTicketAdvancedDefaultsService $defaultsService,
+        protected ZnunyCachedLookupService $cachedLookupService
     ) {}
 
     /**
@@ -44,6 +45,28 @@ class ZnunyTicketModalStateBuilder
         $notes = [];
         $warnings = [];
 
+        $datasets = ['queues', 'agents', 'customer_users', 'lookups'];
+        foreach ($datasets as $dataset) {
+            $state = $this->cachedLookupService->getPrewarmDatasetState($dataset);
+            if ($state['available'] && $state['status'] === 'ready') {
+                continue;
+            }
+
+            $label = __('znuny_data_status.datasets.'.$dataset);
+
+            if (! $state['available']) {
+                if ($dataset === 'customer_users') {
+                    $warnings[] = "{$label}: ".__('znuny_data_status.consumer.customer_users_unavailable_search_live');
+                } else {
+                    $warnings[] = "{$label}: ".__('znuny_data_status.consumer.unavailable');
+                }
+            } elseif ($state['status'] === 'stale') {
+                $warnings[] = "{$label}: ".__('znuny_data_status.consumer.stale');
+            } elseif ($state['status'] === 'refreshing') {
+                $warnings[] = "{$label}: ".__('znuny_data_status.consumer.refreshing');
+            }
+        }
+
         try {
             $candidates = $this->lookupService->resolveTicketDefaultCandidates($hostName);
             if ($candidates['queue']['found']) {
@@ -52,17 +75,24 @@ class ZnunyTicketModalStateBuilder
                 if (app(ZnunyUiFilterService::class)->isQueueExcluded($defaultQueue, $candidates['queue']['full_name'] ?? null)) {
                     $warnings[] = "Default queue '{$defaultQueue}' is excluded by your queue filters. Please select a different queue.";
                     $defaultQueue = null;
+                } else {
+                    $customerUserOptions = $this->cachedLookupService->getCustomerUserPrimaryOptionsForQueue($defaultQueue);
                 }
             }
             if ($candidates['customer_user']['found']) {
                 $defaultCustomerUser = $candidates['customer_user']['login'];
-                $customerUserOptions[$defaultCustomerUser] = $candidates['customer_user']['login'];
+                if (! isset($customerUserOptions[$defaultCustomerUser])) {
+                    $labelCache = $this->cachedLookupService->getCustomerUserLabel($defaultCustomerUser) ?? $defaultCustomerUser;
+                    $customerUserOptions[$defaultCustomerUser] = $labelCache;
+                }
             }
             $notes = $candidates['notes'] ?? [];
             $warnings = array_merge($warnings, $candidates['warnings'] ?? []);
         } catch (\Throwable $e) {
             $warnings[] = 'Lookup failed: '.$e->getMessage();
         }
+
+        $warnings = array_values(array_unique($warnings));
 
         return [
             'agent_options' => $agentOptions,

@@ -3,12 +3,13 @@
 namespace App\Services\Znuny;
 
 use App\Services\SettingsService;
+use App\Services\Znuny\Cache\ZnunyCustomerUserCacheReadService;
 
 class ZnunyLookupService
 {
     public function __construct(
         protected ZnunyTicketDefaultRuleService $ruleService,
-        protected ZnunyClient $client,
+        protected ZnunyCustomerUserCacheReadService $customerUserReader,
         protected ZnunyQueueService $queueService
     ) {}
 
@@ -98,15 +99,25 @@ class ZnunyLookupService
 
         if ($local['customer_user']) {
             try {
-                $cuResponse = $this->client->getCustomerUser($local['customer_user']);
-                if ($cuResponse['found']) {
+                $snapshot = $this->customerUserReader->getSnapshot();
+                $found = false;
+
+                if (is_array($snapshot) && isset($snapshot['queues']) && is_array($snapshot['queues'])) {
+                    foreach ($snapshot['queues'] as $q) {
+                        if (is_array($q['options'] ?? null) && isset($q['options'][$local['customer_user']])) {
+                            $found = true;
+                            break;
+                        }
+                    }
+                }
+
+                if ($found) {
                     $result['customer_user'] = [
                         'found' => true,
-                        'login' => $cuResponse['login'],
-                        'customer_id' => $cuResponse['customer_id'],
+                        'login' => $local['customer_user'],
                     ];
                 } else {
-                    $result['warnings'] = array_merge($result['warnings'], $cuResponse['warnings'] ?? []);
+                    $result['warnings'][] = "CustomerUser not found in prewarm cache: {$local['customer_user']}";
                 }
             } catch (\Throwable $e) {
                 $result['warnings'][] = "Failed to validate CustomerUser: {$e->getMessage()}";

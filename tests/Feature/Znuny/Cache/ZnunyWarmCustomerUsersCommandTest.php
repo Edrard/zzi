@@ -53,24 +53,20 @@ class ZnunyWarmCustomerUsersCommandTest extends TestCase
         ];
     }
 
-    public function test_successful_atomic_publication_and_exact_term_order()
+    public function test_prewarm_search_terms_logic_with_one_word_queue()
     {
         $this->seedValidQueueSnapshot([
             [
                 'id' => 1,
-                'name' => 'IT Support Kyiv',
-                'label' => ' Kyiv IT ',
-                'full_name' => 'Parent::IT Support Kyiv',
+                'name' => 'Support',
+                'label' => 'Support Label',
+                'full_name' => 'Parent::Support',
                 'valid_id' => 1,
             ]
         ]);
 
         $this->appendSettingsMappings([
-            ['queue' => 'IT Support Kyiv', 'host_prefix' => 'prefix1'],
-            ['queue_name' => ' Kyiv IT ', 'prefix' => 'prefix2'],
-            ['znuny_queue' => 'Parent::IT Support Kyiv', 'prefix' => 'prefix3'],
-            ['znuny_queue_name' => 'Parent::IT Support Kyiv', 'host_prefix' => 'prefix3'],
-            ['queue' => 'IT Support Kyiv', 'prefix' => 'a'],
+            ['queue' => 'Support', 'host_prefix' => 'prefix1'],
         ]);
 
         $sentSearches = [];
@@ -78,71 +74,137 @@ class ZnunyWarmCustomerUsersCommandTest extends TestCase
         Http::fake([
             '*/Session*' => Http::response(['SessionID' => 'test']),
             '*/CustomerUser*' => function ($req) use (&$sentSearches) {
-                $this->assertSame(50, (int) $req['Limit']);
                 $search = $req['Search'];
                 $sentSearches[] = $search;
 
-                $this->assertNotEquals('IT', $search);
-                $this->assertNotEquals('Support', $search);
-                $this->assertNotEquals('Kyiv', $search);
-
-                if ($search === 'IT Support Kyiv') {
-                    return Http::response(['CustomerUsers' => [
-                        $this->rawUser('u1', 'First', 'One', 'u1@test'),
-                        $this->rawUser('u2', 'First', 'Two', 'u2@test'),
-                    ]]);
-                }
-                if ($search === 'Kyiv IT') {
-                    return Http::response(['CustomerUsers' => []]);
-                }
-                if ($search === 'Parent::IT Support Kyiv') {
-                    return Http::response(['CustomerUsers' => [
-                        $this->rawUser('u2', 'New', 'Two', 'u2@test'), // duplicate login
-                        $this->rawUser('u3', 'First', 'Three', 'u3@test'),
-                    ]]);
-                }
-                if (in_array($search, ['prefix1', 'prefix2', 'prefix3'])) {
-                    return Http::response(['CustomerUsers' => []]);
-                }
-
-                $this->fail("Unexpected search term: {$search}");
+                $this->assertEquals('Support', $search);
+                return Http::response(['CustomerUsers' => [
+                    $this->rawUser('u1', 'First', 'One', 'u1@test'),
+                ]]);
             },
         ]);
 
         $this->artisan('znuny:cache:warm-customer-users')->assertSuccessful();
 
         $meta = Cache::get('znuny_prewarm_customer_users_meta');
-        $this->assertEquals('ready', $meta['status']);
-        $this->assertEquals('artisan', $meta['refresh_source']);
-        $this->assertEquals(3, $meta['item_count']);
-
         $payload = Cache::get($meta['active_generation']);
         $queue = $payload['queues'][0];
 
-        $expectedTerms = [
-            'IT Support Kyiv',
-            'Kyiv IT',
-            'Parent::IT Support Kyiv',
-            'prefix1',
-            'prefix2',
-            'prefix3'
-        ];
-        $this->assertEquals($expectedTerms, $queue['search_terms']);
-        $this->assertEquals($expectedTerms, $sentSearches);
+        $this->assertEquals(['Support'], $queue['search_terms']);
+        $this->assertEquals(['Support'], $sentSearches);
+    }
+
+    public function test_prewarm_search_terms_logic_with_multi_word_queue()
+    {
+        $this->seedValidQueueSnapshot([
+            [
+                'id' => 1,
+                'name' => 'Agent bud',
+                'label' => 'Agent bud label',
+                'full_name' => 'Parent::Agent bud',
+                'valid_id' => 1,
+            ]
+        ]);
+
+        $this->appendSettingsMappings([
+            ['queue' => 'Agent bud', 'host_prefix' => 'prefix1'],
+        ]);
+
+        $sentSearches = [];
+
+        Http::fake([
+            '*/Session*' => Http::response(['SessionID' => 'test']),
+            '*/CustomerUser*' => function ($req) use (&$sentSearches) {
+                $search = $req['Search'];
+                $sentSearches[] = $search;
+
+                $this->assertEquals('Agent', $search);
+                return Http::response(['CustomerUsers' => [
+                    $this->rawUser('AgentBudClients', 'AgentBud', 'Global', 'u1@test'),
+                    $this->rawUser('AgentAnother', 'Agent', 'Another', 'u2@test'),
+                ]]);
+            },
+        ]);
+
+        $this->artisan('znuny:cache:warm-customer-users')->assertSuccessful();
+
+        $meta = Cache::get('znuny_prewarm_customer_users_meta');
+        $payload = Cache::get($meta['active_generation']);
+        $queue = $payload['queues'][0];
+
+        $this->assertEquals(['Agent'], $queue['search_terms']);
+        $this->assertEquals(['Agent'], $sentSearches);
 
         $expectedOptions = [
-            'u1' => 'First One <u1>',
-            'u2' => 'First Two <u2>', // first wins
-            'u3' => 'First Three <u3>',
+            'AgentAnother' => 'Agent Another <AgentAnother>',
+            'AgentBudClients' => 'AgentBud Global <AgentBudClients>',
         ];
 
-        // Exact final options map
         $this->assertEquals($expectedOptions, $queue['options']);
+    }
 
-        // Assert exact request counts (1 session, 6 searches = 7 total)
-        Http::assertSentCount(7);
-        Http::assertSent(fn ($req) => str_contains($req->url(), 'Session'));
-        Http::assertNotSent(fn ($req) => str_contains($req->url(), 'Queue'));
+    public function test_prewarm_search_terms_logic_with_three_words()
+    {
+        $this->seedValidQueueSnapshot([
+            [
+                'id' => 1,
+                'name' => 'Agent bud ukraine',
+                'valid_id' => 1,
+            ]
+        ]);
+
+        $sentSearches = [];
+
+        Http::fake([
+            '*/Session*' => Http::response(['SessionID' => 'test']),
+            '*/CustomerUser*' => function ($req) use (&$sentSearches) {
+                $search = $req['Search'];
+                $sentSearches[] = $search;
+
+                $this->assertEquals('Agent', $search);
+                return Http::response(['CustomerUsers' => []]);
+            },
+        ]);
+
+        $this->artisan('znuny:cache:warm-customer-users')->assertSuccessful();
+
+        $meta = Cache::get('znuny_prewarm_customer_users_meta');
+        $payload = Cache::get($meta['active_generation']);
+        $queue = $payload['queues'][0];
+
+        $this->assertEquals(['Agent'], $queue['search_terms']);
+        $this->assertEquals(['Agent'], $sentSearches);
+    }
+
+    public function test_prewarm_search_terms_logic_with_short_first_word()
+    {
+        $this->seedValidQueueSnapshot([
+            [
+                'id' => 1,
+                'name' => 'A Team',
+                'valid_id' => 1,
+            ]
+        ]);
+
+        $sentSearches = [];
+
+        Http::fake([
+            '*/Session*' => Http::response(['SessionID' => 'test']),
+            '*/CustomerUser*' => function ($req) use (&$sentSearches) {
+                $search = $req['Search'];
+                $sentSearches[] = $search;
+                return Http::response(['CustomerUsers' => []]);
+            },
+        ]);
+
+        $this->artisan('znuny:cache:warm-customer-users')->assertSuccessful();
+
+        $meta = Cache::get('znuny_prewarm_customer_users_meta');
+        $payload = Cache::get($meta['active_generation']);
+        $queue = $payload['queues'][0];
+
+        $this->assertEquals([], $queue['search_terms']);
+        $this->assertEquals([], $sentSearches);
     }
 
     public function test_fifty_user_cap()
@@ -161,14 +223,7 @@ class ZnunyWarmCustomerUsersCommandTest extends TestCase
 
                 if ($search === 'Q1') {
                     $res = [];
-                    for ($i = 1; $i <= 40; $i++) {
-                        $res[] = $this->rawUser("user{$i}", "F{$i}", "L{$i}", "u{$i}@test");
-                    }
-                    return Http::response(['CustomerUsers' => $res]);
-                }
-                if ($search === 'Q1_Label') {
-                    $res = [];
-                    for ($i = 41; $i <= 65; $i++) {
+                    for ($i = 1; $i <= 65; $i++) {
                         $res[] = $this->rawUser("user{$i}", "F{$i}", "L{$i}", "u{$i}@test");
                     }
                     return Http::response(['CustomerUsers' => $res]);
@@ -185,8 +240,7 @@ class ZnunyWarmCustomerUsersCommandTest extends TestCase
         $this->assertCount(50, $payload['queues'][0]['options']);
         $this->assertEquals(50, $meta['item_count']);
 
-        // Assert Q1_Full was never searched
-        $this->assertEquals(['Q1', 'Q1_Label'], $sentSearches);
+        $this->assertEquals(['Q1'], $sentSearches);
     }
 
     public function test_empty_results_are_valid()
@@ -427,13 +481,9 @@ class ZnunyWarmCustomerUsersCommandTest extends TestCase
 
         Http::fake([
             '*/Session*' => Http::response(['SessionID' => 'test_dedupe']),
-            '*/CustomerUser*Search=Support&*' => Http::response([
+            '*/CustomerUser*' => Http::response([
                 'CustomerUsers' => [
-                    $this->rawUser('alice.duplicate', 'Alice', 'First', 'first@example.com')
-                ]
-            ]),
-            '*/CustomerUser*Search=SupportAlias&*' => Http::response([
-                'CustomerUsers' => [
+                    $this->rawUser('alice.duplicate', 'Alice', 'First', 'first@example.com'),
                     $this->rawUser('alice.duplicate', 'Alice', 'Later', 'later@example.com'), // Duplicate login
                     $this->rawUser('bob.unique', 'Bob', 'Unique', 'bob@example.com')
                 ]
@@ -453,7 +503,7 @@ class ZnunyWarmCustomerUsersCommandTest extends TestCase
         $this->assertArrayHasKey('bob.unique', $queueOptions);
 
         $this->assertStringContainsString('First', $queueOptions['alice.duplicate'], 'First accepted label should win');
-        $this->assertStringNotContainsString('Later', $queueOptions['alice.duplicate'], 'Duplicate result from a later search term must not replace the first label');
+        $this->assertStringNotContainsString('Later', $queueOptions['alice.duplicate'], 'Duplicate result must not replace the first label');
     }
 
     public function test_sentinel_failed_emits_correct_output()

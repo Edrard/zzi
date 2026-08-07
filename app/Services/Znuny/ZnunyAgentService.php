@@ -2,18 +2,15 @@
 
 namespace App\Services\Znuny;
 
-use App\Services\SettingsService;
-use Illuminate\Support\Facades\Cache;
+use App\Services\Znuny\Cache\ZnunyAgentCacheReadService;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class ZnunyAgentService
 {
-    private const CACHE_KEY = 'znuny_active_agents';
-
     private ?string $lastError = null;
 
-    public function __construct(private ZnunyClient $client) {}
+    public function __construct(private ZnunyAgentCacheReadService $agentReader) {}
 
     /**
      * Get the last error encountered during agent fetching.
@@ -21,23 +18,6 @@ class ZnunyAgentService
     public function lastError(): ?string
     {
         return $this->lastError;
-    }
-
-    private function getCacheTtlMinutes(): int
-    {
-        // 0 is valid and means bypass persistent cache.
-        // Negative, missing, or unreadable values fall back to 15.
-        $ttl = SettingsService::int('znuny_agent_cache_ttl_minutes', 15);
-
-        return $ttl >= 0 ? $ttl : 15;
-    }
-
-    /**
-     * Clears the cached active agents exactly.
-     */
-    public function clearCache(): void
-    {
-        Cache::forget(self::CACHE_KEY);
     }
 
     /**
@@ -48,20 +28,9 @@ class ZnunyAgentService
     public function getAgents(bool $failSilently = true, bool $forceRefresh = false): array
     {
         $this->lastError = null;
-        $ttl = $this->getCacheTtlMinutes();
-
-        if ($forceRefresh) {
-            Cache::forget(self::CACHE_KEY);
-        }
 
         try {
-            if ($ttl === 0) {
-                return $this->client->getAgents();
-            }
-
-            return Cache::remember(self::CACHE_KEY, now()->addMinutes($ttl), function () {
-                return $this->client->getAgents();
-            });
+            return $this->agentReader->getAgents();
         } catch (Throwable $e) {
             $this->lastError = $e->getMessage();
             Log::error('Failed to fetch Znuny agents: '.$e->getMessage());
@@ -128,9 +97,20 @@ class ZnunyAgentService
         $this->lastError = null;
 
         try {
-            $agents = $this->client->getQueueAssignableAgents($queueId);
+            $agentIds = $this->agentReader->getAgentIdsForQueue((int) $queueId);
+            $agents = $this->agentReader->getAgents();
 
-            return $this->filterSelectableAgents($agents);
+            $assignableAgents = [];
+            foreach ($agentIds as $id) {
+                foreach ($agents as $agent) {
+                    if (($agent['id'] ?? null) === $id) {
+                        $assignableAgents[] = $agent;
+                        break;
+                    }
+                }
+            }
+
+            return $this->filterSelectableAgents($assignableAgents);
         } catch (Throwable $e) {
             $this->lastError = $e->getMessage();
             Log::error('Failed to fetch Znuny assignable agents for queue: '.$e->getMessage());

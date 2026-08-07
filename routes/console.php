@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\SettingsService;
+use App\Services\Znuny\Cache\PrewarmRunnerService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -83,8 +84,6 @@ if ($autoCloseMode === 'dry_run' && $syncInterval > 0) {
         ->withoutOverlapping();
 }
 
-Schedule::command('znuny:precache-lookups')->hourly()->withoutOverlapping();
-
 Schedule::command('scheduled-znuny:run')->everyMinute()->withoutOverlapping();
 
 // Znuny Prewarm Datasets
@@ -104,7 +103,7 @@ foreach ($prewarmDatasets as $dataset => $config) {
         }
 
         if ((intdiv(now()->timestamp, 60) % $interval) === 0) {
-            app(\App\Services\Znuny\Cache\PrewarmRunnerService::class)->run($dataset, 'scheduler');
+            app(PrewarmRunnerService::class)->run($dataset, 'scheduler');
         }
-    })->everyMinute()->name('znuny-prewarm-' . $dataset);
+    })->everyMinute()->name('znuny-prewarm-'.$dataset);
 }

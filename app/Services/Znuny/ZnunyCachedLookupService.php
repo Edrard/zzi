@@ -3,7 +3,10 @@
 namespace App\Services\Znuny;
 
 use App\Services\SettingsService;
-use Illuminate\Support\Facades\Cache;
+use App\Services\Znuny\Cache\ZnunyAgentCacheReadService;
+use App\Services\Znuny\Cache\ZnunyCustomerUserCacheReadService;
+use App\Services\Znuny\Cache\ZnunyLookupCacheReadService;
+use App\Services\Znuny\Cache\ZnunyQueueCacheReadService;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -13,62 +16,28 @@ class ZnunyCachedLookupService
 
     protected ZnunyQueueHostMappingService $mappingService;
 
-    public function __construct(ZnunyClient $client, ZnunyQueueHostMappingService $mappingService)
-    {
+    protected ZnunyQueueCacheReadService $queueReader;
+
+    protected ZnunyAgentCacheReadService $agentReader;
+
+    protected ZnunyLookupCacheReadService $lookupReader;
+
+    protected ZnunyCustomerUserCacheReadService $customerUserReader;
+
+    public function __construct(
+        ZnunyClient $client,
+        ZnunyQueueHostMappingService $mappingService,
+        ZnunyQueueCacheReadService $queueReader,
+        ZnunyAgentCacheReadService $agentReader,
+        ZnunyLookupCacheReadService $lookupReader,
+        ZnunyCustomerUserCacheReadService $customerUserReader
+    ) {
         $this->client = $client;
         $this->mappingService = $mappingService;
-    }
-
-    public function getCacheTtl(): int
-    {
-        $ttl = SettingsService::int('znuny_lookup_cache_ttl_minutes', 60);
-
-        return $ttl >= 0 ? $ttl : 60;
-    }
-
-    private function rememberLookup(string $key, callable $callback): mixed
-    {
-        $ttl = $this->getCacheTtl();
-
-        if ($ttl === 0) {
-            return $callback();
-        }
-
-        return Cache::remember($key, now()->addMinutes($ttl), $callback);
-    }
-
-    public function clearCache(): void
-    {
-        $this->invalidateCache();
-    }
-
-    protected ?int $cacheVersion = null;
-
-    public function getCacheVersion(): int
-    {
-        if ($this->cacheVersion !== null) {
-            return $this->cacheVersion;
-        }
-
-        return $this->cacheVersion = Cache::rememberForever('znuny_lookup_cache_version', fn () => now()->timestamp);
-    }
-
-    public function invalidateCache(): void
-    {
-        $current = Cache::get('znuny_lookup_cache_version');
-        $timestamp = now()->timestamp;
-
-        $next = is_numeric($current)
-            ? max($timestamp, ((int) $current) + 1)
-            : $timestamp;
-
-        Cache::forever('znuny_lookup_cache_version', $next);
-        $this->cacheVersion = $next;
-    }
-
-    private function getCacheKey(string $key): string
-    {
-        return $key.'_v'.$this->getCacheVersion();
+        $this->queueReader = $queueReader;
+        $this->agentReader = $agentReader;
+        $this->lookupReader = $lookupReader;
+        $this->customerUserReader = $customerUserReader;
     }
 
     public function getGlobalQueueExclusionRegexes(): array
@@ -86,24 +55,8 @@ class ZnunyCachedLookupService
 
     public function getAllQueues(): array
     {
-        $start = microtime(true);
         try {
-            $key = $this->getCacheKey('znuny_lookup_queues_all');
-            $ttl = $this->getCacheTtl();
-            $hit = $ttl > 0 && Cache::has($key);
-
-            $result = $this->rememberLookup($key, function () {
-                return $this->client->getQueues();
-            });
-
-            $duration = round((microtime(true) - $start) * 1000, 2);
-            Log::debug('ZnunyCachedLookupService::getAllQueues', [
-                'cache' => $hit ? 'hit' : 'miss',
-                'duration_ms' => $duration,
-                'count' => is_array($result) ? count($result) : 0,
-            ]);
-
-            return $result;
+            return $this->queueReader->getQueues();
         } catch (Throwable $e) {
             report($e);
 
@@ -150,28 +103,33 @@ class ZnunyCachedLookupService
 
         $start = microtime(true);
         try {
-            $key = $this->getCacheKey('znuny_lookup_owners_raw_'.md5($queueName));
-            $ttl = $this->getCacheTtl();
-            $hit = $ttl > 0 && Cache::has($key);
+            // 1. Find Queue ID
+            $all = $this->getAllQueues(); // Also using cached queues here!
+            $queueId = null;
+            foreach ($all as $q) {
+                if ($q['name'] === $queueName) {
+                    $queueId = $q['id'];
+                    break;
+                }
+            }
 
-            $rawUsers = $this->rememberLookup($key, function () use ($queueName) {
-                // 1. Find Queue ID
-                $all = $this->getAllQueues(); // Also using cached queues here!
-                $queueId = null;
-                foreach ($all as $q) {
-                    if ($q['name'] === $queueName) {
-                        $queueId = $q['id'];
+            if (! $queueId) {
+                return [];
+            }
+
+            // 2. Fetch assignable users for this Queue
+            $agentIds = $this->agentReader->getAgentIdsForQueue((int) $queueId);
+            $agents = $this->agentReader->getAgents();
+
+            $rawUsers = [];
+            foreach ($agentIds as $id) {
+                foreach ($agents as $agent) {
+                    if (($agent['id'] ?? null) === $id) {
+                        $rawUsers[] = $agent;
                         break;
                     }
                 }
-
-                if (! $queueId) {
-                    return [];
-                }
-
-                // 2. Fetch assignable users for this Queue
-                return $this->client->getQueueAssignableAgents($queueId);
-            });
+            }
 
             $options = [];
             foreach ($rawUsers as $user) {
@@ -185,7 +143,7 @@ class ZnunyCachedLookupService
             $duration = round((microtime(true) - $start) * 1000, 2);
             Log::debug('ZnunyCachedLookupService::getAssignableOwnerOptionsForQueue', [
                 'queue' => md5($queueName),
-                'cache' => $hit ? 'hit' : 'miss',
+                'cache' => 'N/A (uses readers)',
                 'duration_ms' => $duration,
                 'count_raw' => count($options),
                 'count_filtered' => count($result),
@@ -243,16 +201,7 @@ class ZnunyCachedLookupService
     public function getTicketStates(): array
     {
         try {
-            return $this->rememberLookup($this->getCacheKey('znuny_lookup_states'), function () {
-                $states = $this->client->getTicketStates();
-                $normalized = $this->normalizeDictionaryOptions($states);
-
-                if (empty($normalized)) {
-                    throw new \Exception('ZnunyClient returned empty or malformed states array.');
-                }
-
-                return $normalized;
-            });
+            return $this->lookupReader->getStates();
         } catch (Throwable $e) {
             report($e);
 
@@ -263,16 +212,7 @@ class ZnunyCachedLookupService
     public function getTicketPriorities(): array
     {
         try {
-            return $this->rememberLookup($this->getCacheKey('znuny_lookup_priorities'), function () {
-                $priorities = $this->client->getTicketPriorities();
-                $normalized = $this->normalizeDictionaryOptions($priorities);
-
-                if (empty($normalized)) {
-                    throw new \Exception('ZnunyClient returned empty or malformed priorities array.');
-                }
-
-                return $normalized;
-            });
+            return $this->lookupReader->getPriorities();
         } catch (Throwable $e) {
             report($e);
 
@@ -283,16 +223,7 @@ class ZnunyCachedLookupService
     public function getTicketTypes(): array
     {
         try {
-            return $this->rememberLookup($this->getCacheKey('znuny_lookup_types'), function () {
-                $types = $this->client->getTicketTypes();
-                $normalized = $this->normalizeDictionaryOptions($types);
-
-                if (empty($normalized)) {
-                    throw new \Exception('ZnunyClient returned empty or malformed types array.');
-                }
-
-                return $normalized;
-            });
+            return $this->lookupReader->getTypes();
         } catch (Throwable $e) {
             report($e);
 
@@ -302,36 +233,19 @@ class ZnunyCachedLookupService
 
     public function getCustomerUserPrimaryOptionsForQueue(string $queueName): array
     {
-        if (empty(trim($queueName))) {
+        $queueName = trim($queueName);
+        if (empty($queueName)) {
             return [];
         }
 
         $start = microtime(true);
         try {
-            $key = $this->getCacheKey('znuny_lookup_customers_'.md5($queueName));
-            $ttl = $this->getCacheTtl();
-            $hit = $ttl > 0 && Cache::has($key);
-
-            $result = $this->rememberLookup($key, function () use ($queueName) {
-                $terms = $this->getCustomerUserSearchTerms($queueName);
-
-                $options = [];
-                foreach ($terms as $term) {
-                    $results = $this->client->searchCustomerUsers($term);
-                    foreach ($results as $res) {
-                        if (! empty($res['login'])) {
-                            $options[$res['login']] = $res['label'] ?? $res['login'];
-                        }
-                    }
-                }
-
-                return $options;
-            });
+            $result = $this->customerUserReader->getOptionsForQueue($queueName);
 
             $duration = round((microtime(true) - $start) * 1000, 2);
             Log::debug('ZnunyCachedLookupService::getCustomerUserPrimaryOptionsForQueue', [
                 'queue' => md5($queueName),
-                'cache' => $hit ? 'hit' : 'miss',
+                'cache' => 'N/A (uses reader)',
                 'duration_ms' => $duration,
                 'count' => is_array($result) ? count($result) : 0,
             ]);
@@ -346,57 +260,34 @@ class ZnunyCachedLookupService
 
     public function getCustomerUserLabel(string $login): ?string
     {
-        if (empty(trim($login))) {
+        $login = trim($login);
+        if (empty($login)) {
             return null;
         }
 
         $start = microtime(true);
-        $key = $this->getCacheKey('znuny_lookup_customer_label_'.md5($login));
-        $ttl = $this->getCacheTtl();
-        $cached = null;
-
-        if ($ttl > 0) {
-            $cached = Cache::get($key);
-        }
-
-        if ($cached !== null) {
-            $duration = round((microtime(true) - $start) * 1000, 2);
-            Log::debug('ZnunyCachedLookupService::getCustomerUserLabel', [
-                'login' => md5($login),
-                'cache' => 'hit',
-                'duration_ms' => $duration,
-            ]);
-
-            return $cached;
-        }
-
         try {
-            $user = $this->client->getCustomerUser($login);
+            $snapshot = $this->customerUserReader->getSnapshot();
+            $label = null;
 
-            if (! empty($user['found'])) {
-                $label = $user['label'] ?? $login;
-                if ($ttl > 0) {
-                    Cache::put($key, $label, now()->addMinutes($ttl));
+            if (is_array($snapshot) && isset($snapshot['queues']) && is_array($snapshot['queues'])) {
+                foreach ($snapshot['queues'] as $q) {
+                    if (is_array($q['options'] ?? null) && isset($q['options'][$login])) {
+                        $label = $q['options'][$login];
+                        break;
+                    }
                 }
-
-                $duration = round((microtime(true) - $start) * 1000, 2);
-                Log::debug('ZnunyCachedLookupService::getCustomerUserLabel', [
-                    'login' => md5($login),
-                    'cache' => 'miss',
-                    'duration_ms' => $duration,
-                ]);
-
-                return $label;
             }
 
             $duration = round((microtime(true) - $start) * 1000, 2);
             Log::debug('ZnunyCachedLookupService::getCustomerUserLabel', [
                 'login' => md5($login),
-                'cache' => 'miss',
+                'cache' => 'N/A (uses reader snapshot)',
+                'found' => $label !== null,
                 'duration_ms' => $duration,
             ]);
 
-            return null;
+            return $label;
         } catch (Throwable $e) {
             report($e);
 
@@ -406,119 +297,214 @@ class ZnunyCachedLookupService
 
     public function getCustomerUserSearchTerms(string $queueName): array
     {
-        $terms = [];
-        $lowerQueueName = strtolower(trim($queueName));
+        $queueName = trim($queueName);
+        if (empty($queueName)) {
+            return [];
+        }
 
-        // Get actual mappings from settings directly or via service
-        $mappings = [];
         try {
-            $rawMappings = SettingsService::json('znuny_queue_host_mappings', []);
-            $mappings = is_array($rawMappings) ? $rawMappings : [];
+            return $this->customerUserReader->getSearchTermsForQueue($queueName);
         } catch (Throwable $e) {
             report($e);
+
+            return [];
         }
-
-        // 3. Queue label / full name
-        $all = [];
-        try {
-            $all = $this->getAllQueues();
-        } catch (Throwable $e) {
-            report($e);
-        }
-
-        $queueLabel = null;
-        $queueFullName = null;
-
-        foreach ($all as $q) {
-            if (strtolower(trim($q['name'] ?? '')) === $lowerQueueName) {
-                $queueLabel = strtolower(trim($q['label'] ?? ''));
-                $queueFullName = strtolower(trim($q['full_name'] ?? ''));
-                break;
-            }
-        }
-
-        // 1. Mapped host_prefix values
-        foreach ($mappings as $mapping) {
-            $q = $mapping['queue'] ?? $mapping['queue_name'] ?? $mapping['znuny_queue'] ?? $mapping['znuny_queue_name'] ?? '';
-            $p = $mapping['host_prefix'] ?? $mapping['prefix'] ?? '';
-
-            if ($q !== '' && $p !== '') {
-                $lowerQ = strtolower(trim($q));
-                if ($lowerQ === $lowerQueueName || $lowerQ === $queueLabel || $lowerQ === $queueFullName) {
-                    $terms[] = trim($p);
-                }
-            }
-        }
-
-        // 2. Selected queue name
-        $terms[] = $queueName;
-
-        // Add label/fullname if different
-        if (! empty($queueLabel) && $queueLabel !== $lowerQueueName) {
-            foreach ($all as $q) {
-                if (strtolower(trim($q['name'] ?? '')) === $lowerQueueName) {
-                    $terms[] = trim($q['label'] ?? '');
-                    break;
-                }
-            }
-        }
-
-        if (! empty($queueFullName) && $queueFullName !== $lowerQueueName && $queueFullName !== $queueLabel) {
-            foreach ($all as $q) {
-                if (strtolower(trim($q['name'] ?? '')) === $lowerQueueName) {
-                    $terms[] = trim($q['full_name'] ?? '');
-                    break;
-                }
-            }
-        }
-
-        // Filter empty and unique
-        $terms = array_values(array_filter(array_unique($terms)));
-
-        return $terms;
     }
 
     public function resolveTemplateCandidate(string $queueName): ?string
     {
-        if (empty(trim($queueName))) {
+        $queueName = trim($queueName);
+        if (empty($queueName)) {
             return null;
         }
 
         $start = microtime(true);
         try {
-            $key = $this->getCacheKey('znuny_lookup_candidate_'.md5($queueName));
-            $ttl = $this->getCacheTtl();
-            $hit = $ttl > 0 && Cache::has($key);
+            $options = $this->customerUserReader->getOptionsForQueue($queueName);
 
-            $result = $this->rememberLookup($key, function () use ($queueName) {
-                $terms = $this->getCustomerUserSearchTerms($queueName);
-                $ruleService = app(ZnunyTicketDefaultRuleService::class);
+            if (empty($options)) {
+                return null;
+            }
 
-                foreach ($terms as $term) {
-                    $candidate = $ruleService->customerUserFromQueue($term);
-                    if ($candidate) {
-                        $user = $this->client->getCustomerUser($candidate);
-                        if ($user['found']) {
-                            return $candidate;
+            $ruleService = app(ZnunyTicketDefaultRuleService::class);
+            $accepted = null;
+
+            $words = preg_split('/\s+/u', $queueName);
+            $wordCount = count($words);
+
+            if ($wordCount === 1) {
+                $expected = $ruleService->customerUserFromQueue($queueName);
+                if (! empty($expected)) {
+                    foreach (array_keys($options) as $login) {
+                        if (strcasecmp((string) $login, $expected) === 0) {
+                            $accepted = (string) $login;
+                            break;
+                        }
+                    }
+                }
+            } else {
+                $noSpaceQueue = preg_replace('/\s+/u', '', $queueName);
+                $expected = $ruleService->customerUserFromQueue($noSpaceQueue);
+
+                $exactMatch = null;
+                if (! empty($expected)) {
+                    foreach (array_keys($options) as $login) {
+                        if (strcasecmp((string) $login, $expected) === 0) {
+                            $exactMatch = (string) $login;
+                            break;
                         }
                     }
                 }
 
-                return null;
-            });
+                if ($exactMatch !== null) {
+                    $accepted = $exactMatch;
+                } else {
+                    $template = SettingsService::string('znuny_customer_user_from_queue_template');
+                    if (! empty($template) && str_starts_with($template, '<queue>')) {
+                        $suffix = substr($template, 7);
+                        if ($suffix !== '') {
+                            $firstWord = $words[0];
+                            $secondWord = $words[1] ?? '';
+
+                            $pattern = '/^'.preg_quote($firstWord, '/').'.*'.preg_quote($suffix, '/').'$/ui';
+                            $candidates = [];
+                            foreach (array_keys($options) as $login) {
+                                if (preg_match($pattern, (string) $login)) {
+                                    $candidates[] = (string) $login;
+                                }
+                            }
+
+                            if (count($candidates) === 1) {
+                                $accepted = $candidates[0];
+                            } elseif (count($candidates) > 1) {
+                                $secondWordCandidates = [];
+                                foreach ($candidates as $c) {
+                                    if (mb_stripos($c, $secondWord) !== false) {
+                                        $secondWordCandidates[] = $c;
+                                    }
+                                }
+
+                                if (count($secondWordCandidates) === 1) {
+                                    $accepted = $secondWordCandidates[0];
+                                } elseif (count($secondWordCandidates) > 1) {
+                                    $accepted = $this->sortCandidates($secondWordCandidates)[0];
+                                } else {
+                                    $accepted = $this->sortCandidates($candidates)[0];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             $duration = round((microtime(true) - $start) * 1000, 2);
             Log::debug('ZnunyCachedLookupService::resolveTemplateCandidate', [
                 'queue' => md5($queueName),
-                'cache' => $hit ? 'hit' : 'miss',
+                'cache' => 'N/A (uses reader)',
                 'duration_ms' => $duration,
             ]);
 
-            return $result;
+            return $accepted;
         } catch (Throwable $e) {
             report($e);
 
             return null;
+        }
+    }
+
+    private function sortCandidates(array $candidates): array
+    {
+        usort($candidates, function ($a, $b) {
+            $cmp = strnatcasecmp($a, $b);
+            if ($cmp === 0) {
+                return strcmp($a, $b);
+            }
+
+            return $cmp;
+        });
+
+        return $candidates;
+    }
+
+    public function searchCustomerUserOptions(string $search, int $limit = 20): array
+    {
+        $search = trim($search);
+        if (empty($search)) {
+            return [];
+        }
+
+        $safeLimit = max(1, min(50, $limit));
+
+        try {
+            $results = $this->client->searchCustomerUsers($search, $safeLimit);
+            $options = [];
+
+            foreach ($results as $res) {
+                $loginRaw = $res['login'] ?? null;
+                $login = (is_scalar($loginRaw) || $loginRaw instanceof \Stringable) ? trim((string) $loginRaw) : '';
+
+                if ($login === '') {
+                    continue;
+                }
+
+                $labelRaw = $res['label'] ?? null;
+                $label = (is_scalar($labelRaw) || $labelRaw instanceof \Stringable) ? trim((string) $labelRaw) : '';
+
+                if ($label === '') {
+                    $label = $login;
+                }
+
+                $options[$login] = $label;
+            }
+
+            return $options;
+        } catch (Throwable $e) {
+            report($e);
+
+            return [];
+        }
+    }
+
+    /**
+     * @return array{available: bool, status: string}
+     */
+    public function getPrewarmDatasetState(string $dataset): array
+    {
+        $reader = match ($dataset) {
+            'queues' => $this->queueReader,
+            'agents' => $this->agentReader,
+            'lookups' => $this->lookupReader,
+            'customer_users' => $this->customerUserReader,
+            default => null,
+        };
+
+        if ($reader === null) {
+            return ['available' => false, 'status' => 'unknown'];
+        }
+
+        try {
+            $snapshot = $reader->getSnapshot();
+            $metadata = $reader->getMetadata();
+
+            $statusRaw = $metadata['status'] ?? null;
+            $allowedStatuses = ['missing', 'refreshing', 'ready', 'stale', 'failed'];
+
+            if (is_string($statusRaw) && in_array($statusRaw, $allowedStatuses, true)) {
+                $status = $statusRaw;
+            } else {
+                $status = 'unknown';
+            }
+
+            $available = $snapshot !== null;
+
+            return [
+                'available' => $available,
+                'status' => $status,
+            ];
+        } catch (Throwable $e) {
+            report($e);
+
+            return ['available' => false, 'status' => 'failed'];
         }
     }
 }

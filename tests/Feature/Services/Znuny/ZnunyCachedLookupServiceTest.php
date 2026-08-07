@@ -4,12 +4,14 @@ namespace Tests\Feature\Services\Znuny;
 
 use App\Models\Setting;
 use App\Services\SettingsService;
+use App\Services\Znuny\Cache\ZnunyAgentCacheReadService;
+use App\Services\Znuny\Cache\ZnunyCustomerUserCacheReadService;
+use App\Services\Znuny\Cache\ZnunyLookupCacheReadService;
+use App\Services\Znuny\Cache\ZnunyQueueCacheReadService;
 use App\Services\Znuny\ZnunyCachedLookupService;
 use App\Services\Znuny\ZnunyClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Cache;
 use Mockery\MockInterface;
-use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class ZnunyCachedLookupServiceTest extends TestCase
@@ -22,10 +24,14 @@ class ZnunyCachedLookupServiceTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_caches_all_queues()
+    public function test_get_all_queues_returns_payload_from_reader()
     {
         $this->mock(ZnunyClient::class, function (MockInterface $mock) {
-            $mock->shouldReceive('getQueues')->once()->andReturn([
+            $mock->shouldNotReceive('getQueues');
+        });
+
+        $this->mock(ZnunyQueueCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getQueues')->twice()->andReturn([
                 ['id' => 1, 'name' => 'Raw', 'label' => 'Raw'],
             ]);
         });
@@ -35,14 +41,49 @@ class ZnunyCachedLookupServiceTest extends TestCase
         $queues1 = $service->getAllQueues();
         $this->assertCount(1, $queues1);
 
-        // Second call should hit cache, not the mock (since we used once())
         $queues2 = $service->getAllQueues();
         $this->assertCount(1, $queues2);
+    }
+
+    public function test_exception_in_reader_returns_empty_array_with_no_live_fallback()
+    {
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getQueues');
+        });
+
+        $this->mock(ZnunyQueueCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getQueues')->once()->andThrow(new \Exception('Reader Error'));
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+
+        $queues1 = $service->getAllQueues();
+        $this->assertEquals([], $queues1);
+    }
+
+    public function test_empty_reader_result_returns_empty_with_no_fallback()
+    {
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getQueues');
+        });
+
+        $this->mock(ZnunyQueueCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getQueues')->once()->andReturn([]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+
+        $queues1 = $service->getAllQueues();
+        $this->assertEquals([], $queues1);
     }
 
     public function test_filters_queues_with_regexes()
     {
         $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getQueues');
+        });
+
+        $this->mock(ZnunyQueueCacheReadService::class, function (MockInterface $mock) {
             $mock->shouldReceive('getQueues')->andReturn([
                 ['id' => 1, 'name' => 'Raw', 'label' => 'Raw'],
                 ['id' => 2, 'name' => 'Network', 'label' => 'Network'],
@@ -73,6 +114,10 @@ class ZnunyCachedLookupServiceTest extends TestCase
     public function test_handles_invalid_regex_safely()
     {
         $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getQueues');
+        });
+
+        $this->mock(ZnunyQueueCacheReadService::class, function (MockInterface $mock) {
             $mock->shouldReceive('getQueues')->andReturn([
                 ['id' => 1, 'name' => 'Raw', 'label' => 'Raw'],
             ]);
@@ -96,40 +141,23 @@ class ZnunyCachedLookupServiceTest extends TestCase
         $this->assertArrayHasKey('Raw', $filtered);
     }
 
-    public function test_resolves_customer_search_terms_with_mappings()
+    public function test_gets_assignable_owner_options_from_readers()
     {
         $this->mock(ZnunyClient::class, function (MockInterface $mock) {
-            $mock->shouldReceive('getQueues')->andReturn([
-                ['id' => 1, 'name' => 'NetworkQueue', 'label' => 'Network Queue (Full)'],
-            ]);
+            $mock->shouldNotReceive('getQueues');
+            $mock->shouldNotReceive('getQueueAssignableAgents');
         });
 
-        Setting::updateOrCreate(
-            ['key' => 'znuny_queue_host_mappings'],
-            [
-                'type' => 'json',
-                'value' => json_encode([
-                    ['queue_name' => 'NetworkQueue', 'host_prefix' => 'Net1'],
-                    ['queue_name' => 'NetworkQueue', 'host_prefix' => 'Net2'],
-                ]),
-            ]
-        );
-
-        $service = app(ZnunyCachedLookupService::class);
-        $terms = $service->getCustomerUserSearchTerms('NetworkQueue');
-
-        // Mapped prefixes first, then name, then label
-        $this->assertEquals(['Net1', 'Net2', 'NetworkQueue', 'Network Queue (Full)'], $terms);
-    }
-
-    public function test_caches_owner_options_for_queue()
-    {
-        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+        $this->mock(ZnunyQueueCacheReadService::class, function (MockInterface $mock) {
             $mock->shouldReceive('getQueues')->andReturn([
                 ['id' => 1, 'name' => 'Raw', 'label' => 'Raw'],
             ]);
-            $mock->shouldReceive('getQueueAssignableAgents')->with(1)->once()->andReturn([
-                ['id' => 10, 'label' => 'John Doe'],
+        });
+
+        $this->mock(ZnunyAgentCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getAgentIdsForQueue')->with(1)->once()->andReturn([10]);
+            $mock->shouldReceive('getAgents')->once()->andReturn([
+                ['id' => 10, 'label' => 'John Doe', 'login' => 'johndoe'],
             ]);
         });
 
@@ -137,148 +165,18 @@ class ZnunyCachedLookupServiceTest extends TestCase
 
         $owners1 = $service->getAssignableOwnerOptionsForQueue('Raw');
         $this->assertEquals([10 => 'John Doe'], $owners1);
-
-        // Second call should hit cache
-        $owners2 = $service->getAssignableOwnerOptionsForQueue('Raw');
-        $this->assertEquals([10 => 'John Doe'], $owners2);
     }
 
-    public function test_clear_cache_invalidates_version()
-    {
-        $service = app(ZnunyCachedLookupService::class);
-        $v1 = $service->getCacheVersion();
-
-        $service->invalidateCache();
-        $v2 = $service->getCacheVersion();
-
-        $service->invalidateCache();
-        $v3 = $service->getCacheVersion();
-
-        $this->assertGreaterThan($v1, $v2);
-        $this->assertGreaterThan($v2, $v3);
-    }
-
-    public function test_clear_cache_forces_next_lookup_to_call_client()
+    public function test_get_ticket_states_returns_exact_reader_map()
     {
         $this->mock(ZnunyClient::class, function (MockInterface $mock) {
-            $mock->shouldReceive('getQueues')->once()->andReturn([
-                ['id' => 1, 'name' => 'First', 'label' => 'First'],
-            ]);
-            $mock->shouldReceive('getQueues')->once()->andReturn([
-                ['id' => 1, 'name' => 'Second', 'label' => 'Second'],
-            ]);
+            $mock->shouldNotReceive('getTicketStates');
         });
 
-        $service = app(ZnunyCachedLookupService::class);
-        $result1 = $service->getAllQueues();
-        $this->assertEquals('First', $result1[0]['name']);
-
-        $service->clearCache();
-
-        $result2 = $service->getAllQueues();
-        $this->assertEquals('Second', $result2[0]['name']);
-    }
-
-    public function test_exception_does_not_cache_empty_array()
-    {
-        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
-            $mock->shouldReceive('getQueues')->once()->andThrow(new \Exception('API Error'));
-            $mock->shouldReceive('getQueues')->once()->andReturn([
-                ['id' => 1, 'name' => 'Raw', 'label' => 'Raw'],
-            ]);
-        });
-
-        $service = app(ZnunyCachedLookupService::class);
-
-        // First call fails, returns []
-        $queues1 = $service->getAllQueues();
-        $this->assertEquals([], $queues1);
-
-        // Second call should retry client and succeed, not hit cache
-        $queues2 = $service->getAllQueues();
-        $this->assertEquals([['id' => 1, 'name' => 'Raw', 'label' => 'Raw']], $queues2);
-    }
-
-    public function test_customer_user_label_caches_successful_result()
-    {
-        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
-            $mock->shouldReceive('getCustomerUser')->with('knownuser')->once()->andReturn([
-                'found' => true,
-                'login' => 'knownuser',
-                'label' => 'Known User <knownuser>',
-            ]);
-        });
-
-        $service = app(ZnunyCachedLookupService::class);
-
-        $label1 = $service->getCustomerUserLabel('knownuser');
-        $this->assertEquals('Known User <knownuser>', $label1);
-
-        // Second call should hit cache, not the mock
-        $label2 = $service->getCustomerUserLabel('knownuser');
-        $this->assertEquals('Known User <knownuser>', $label2);
-    }
-
-    public function test_customer_user_label_does_not_cache_missing_user()
-    {
-        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
-            $mock->shouldReceive('getCustomerUser')->with('missinguser')->twice()->andReturn([
-                'found' => false,
-            ]);
-        });
-
-        $service = app(ZnunyCachedLookupService::class);
-
-        $label1 = $service->getCustomerUserLabel('missinguser');
-        $this->assertNull($label1);
-
-        // Second call should hit the mock again, as negative results are not cached
-        $label2 = $service->getCustomerUserLabel('missinguser');
-        $this->assertNull($label2);
-    }
-
-    public function test_customer_user_label_does_not_cache_exception()
-    {
-        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
-            $mock->shouldReceive('getCustomerUser')->with('erroruser')->twice()->andThrow(new \Exception('API Error'));
-        });
-
-        $service = app(ZnunyCachedLookupService::class);
-
-        $label1 = $service->getCustomerUserLabel('erroruser');
-        $this->assertNull($label1);
-
-        // Second call should hit the mock again, as exceptions are not cached
-        $label2 = $service->getCustomerUserLabel('erroruser');
-        $this->assertNull($label2);
-    }
-
-    public function test_get_customer_user_search_terms_uses_cached_queues()
-    {
-        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
-            $mock->shouldReceive('getQueues')->once()->andReturn([
-                ['id' => 1, 'name' => 'NetworkQueue', 'label' => 'Network Queue (Full)'],
-            ]);
-        });
-
-        $service = app(ZnunyCachedLookupService::class);
-
-        // First call populates cache via getAllQueues()
-        $terms1 = $service->getCustomerUserSearchTerms('NetworkQueue');
-
-        // Second call should hit cache for getAllQueues() and not call client again
-        $terms2 = $service->getCustomerUserSearchTerms('NetworkQueue');
-
-        $this->assertEquals(['NetworkQueue', 'Network Queue (Full)'], $terms1);
-        $this->assertEquals(['NetworkQueue', 'Network Queue (Full)'], $terms2);
-    }
-
-    public function test_get_ticket_states_handles_string_list()
-    {
-        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
-            $mock->shouldReceive('getTicketStates')->once()->andReturn([
-                'open',
-                'closed successful',
+        $this->mock(ZnunyLookupCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getStates')->once()->andReturn([
+                'open' => 'open',
+                'closed successful' => 'closed successful',
             ]);
         });
 
@@ -291,226 +189,537 @@ class ZnunyCachedLookupServiceTest extends TestCase
         ], $states);
     }
 
-    public function test_get_ticket_states_handles_array_objects()
+    public function test_get_ticket_priorities_returns_exact_reader_map()
     {
         $this->mock(ZnunyClient::class, function (MockInterface $mock) {
-            $mock->shouldReceive('getTicketStates')->once()->andReturn([
-                ['name' => 'open'],
-                ['Name' => 'closed successful'],
-                ['label' => 'pending reminder'],
-                ['id' => 4, 'value' => 'merged'],
-            ]);
+            $mock->shouldNotReceive('getTicketPriorities');
         });
 
-        $service = app(ZnunyCachedLookupService::class);
-        $states = $service->getTicketStates();
-
-        $this->assertEquals([
-            'open' => 'open',
-            'closed successful' => 'closed successful',
-            'pending reminder' => 'pending reminder',
-            'merged' => 'merged',
-        ], $states);
-    }
-
-    public function test_get_ticket_types_handles_array_objects_and_skips_malformed()
-    {
-        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
-            $mock->shouldReceive('getTicketTypes')->once()->andReturn([
-                ['name' => 'Unclassified'],
-                ['id' => 2], // malformed, missing name key
-                ['Name' => 'Incident'],
-                '', // malformed empty string
-                null, // malformed null
-                ['name' => ''], // empty string value
-                ['Label' => 'RfC'],
-            ]);
-        });
-
-        $service = app(ZnunyCachedLookupService::class);
-        $types = $service->getTicketTypes();
-
-        $this->assertEquals([
-            'Unclassified' => 'Unclassified',
-            'Incident' => 'Incident',
-            'RfC' => 'RfC',
-        ], $types);
-    }
-
-    public function test_get_ticket_priorities_handles_nested_data_key()
-    {
-        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
-            $mock->shouldReceive('getTicketPriorities')->once()->andReturn([
-                'Data' => [
-                    ['name' => '1 very low'],
-                    ['name' => '2 low'],
-                    ['name' => '3 normal'],
-                ],
+        $this->mock(ZnunyLookupCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getPriorities')->once()->andReturn([
+                '3 normal' => '3 normal',
             ]);
         });
 
         $service = app(ZnunyCachedLookupService::class);
         $priorities = $service->getTicketPriorities();
 
+        $this->assertEquals(['3 normal' => '3 normal'], $priorities);
+    }
+
+    public function test_get_ticket_types_returns_exact_reader_map()
+    {
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getTicketTypes');
+        });
+
+        $this->mock(ZnunyLookupCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getTypes')->once()->andReturn([
+                'Incident' => 'Incident',
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $types = $service->getTicketTypes();
+
+        $this->assertEquals(['Incident' => 'Incident'], $types);
+    }
+
+    public function test_reader_empty_array_is_returned_as_empty_array()
+    {
+        $this->mock(ZnunyLookupCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getStates')->once()->andReturn([]);
+            $mock->shouldReceive('getPriorities')->once()->andReturn([]);
+            $mock->shouldReceive('getTypes')->once()->andReturn([]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+
+        $this->assertEquals([], $service->getTicketStates());
+        $this->assertEquals([], $service->getTicketPriorities());
+        $this->assertEquals([], $service->getTicketTypes());
+    }
+
+    public function test_reader_exception_returns_empty_array_safely()
+    {
+        $this->mock(ZnunyLookupCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getStates')->once()->andThrow(new \Exception('States error'));
+            $mock->shouldReceive('getPriorities')->once()->andThrow(new \Exception('Priorities error'));
+            $mock->shouldReceive('getTypes')->once()->andThrow(new \Exception('Types error'));
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+
+        $this->assertEquals([], $service->getTicketStates());
+        $this->assertEquals([], $service->getTicketPriorities());
+        $this->assertEquals([], $service->getTicketTypes());
+    }
+
+    public function test_repeated_calls_read_through_reader_and_do_not_use_caching()
+    {
+        $this->mock(ZnunyLookupCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getStates')->twice()->andReturn(['s' => 's']);
+            $mock->shouldReceive('getPriorities')->twice()->andReturn(['p' => 'p']);
+            $mock->shouldReceive('getTypes')->twice()->andReturn(['t' => 't']);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+
+        $service->getTicketStates();
+        $service->getTicketStates();
+
+        $service->getTicketPriorities();
+        $service->getTicketPriorities();
+
+        $service->getTicketTypes();
+        $service->getTicketTypes();
+    }
+
+    public function test_get_customer_user_primary_options_for_queue_returns_exact_reader_map()
+    {
+        $this->mock(ZnunyClient::class, function ($mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('QueueA')->once()->andReturn(['user1' => 'Label1']);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $options = $service->getCustomerUserPrimaryOptionsForQueue('QueueA');
+        $this->assertEquals(['user1' => 'Label1'], $options);
+    }
+
+    public function test_get_customer_user_primary_options_empty_queue_returns_empty_without_reader()
+    {
+        $this->mock(ZnunyClient::class, function ($mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function ($mock) {
+            $mock->shouldNotReceive('getOptionsForQueue');
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertEquals([], $service->getCustomerUserPrimaryOptionsForQueue(''));
+        $this->assertEquals([], $service->getCustomerUserPrimaryOptionsForQueue('   '));
+    }
+
+    public function test_get_customer_user_primary_options_reader_empty_remains_empty()
+    {
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('QueueA')->once()->andReturn([]);
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertEquals([], $service->getCustomerUserPrimaryOptionsForQueue('QueueA'));
+    }
+
+    public function test_get_customer_user_primary_options_reader_exception_reports_and_returns_empty()
+    {
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('QueueA')->once()->andThrow(new \Exception('Reader error'));
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertEquals([], $service->getCustomerUserPrimaryOptionsForQueue('QueueA'));
+    }
+
+    public function test_get_customer_user_primary_options_repeated_calls_invoke_reader_repeatedly()
+    {
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('QueueA')->twice()->andReturn(['u1' => 'L1']);
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $service->getCustomerUserPrimaryOptionsForQueue('QueueA');
+        $service->getCustomerUserPrimaryOptionsForQueue('QueueA');
+    }
+
+    public function test_get_customer_user_search_terms_returns_exact_reader_list()
+    {
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getSearchTermsForQueue')->with('QueueA')->once()->andReturn(['term1', 'term2']);
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertEquals(['term1', 'term2'], $service->getCustomerUserSearchTerms('QueueA'));
+    }
+
+    public function test_get_customer_user_search_terms_empty_queue_returns_empty()
+    {
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function ($mock) {
+            $mock->shouldNotReceive('getSearchTermsForQueue');
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertEquals([], $service->getCustomerUserSearchTerms(''));
+    }
+
+    public function test_get_customer_user_search_terms_reader_miss_and_exception_return_empty()
+    {
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getSearchTermsForQueue')->with('QueueA')->once()->andReturn([]);
+            $mock->shouldReceive('getSearchTermsForQueue')->with('QueueA')->once()->andThrow(new \Exception('error'));
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertEquals([], $service->getCustomerUserSearchTerms('QueueA'));
+        $this->assertEquals([], $service->getCustomerUserSearchTerms('QueueA'));
+    }
+
+    public function test_get_customer_user_label_returns_first_matching_in_snapshot_order()
+    {
+        $this->mock(ZnunyClient::class, function ($mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getSnapshot')->once()->andReturn([
+                'queues' => [
+                    ['queue_name' => 'Q1', 'options' => ['u1' => 'L1-Q1']],
+                    ['queue_name' => 'Q2', 'options' => ['u2' => 'L2']],
+                    ['queue_name' => 'Q3', 'options' => ['u1' => 'L1-Q3']], // duplicate login
+                ],
+            ]);
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertEquals('L1-Q1', $service->getCustomerUserLabel('u1'));
+    }
+
+    public function test_get_customer_user_label_missing_login_returns_null()
+    {
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getSnapshot')->once()->andReturn([
+                'queues' => [['queue_name' => 'Q1', 'options' => ['u1' => 'L1']]],
+            ]);
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertNull($service->getCustomerUserLabel('u2'));
+    }
+
+    public function test_get_customer_user_label_empty_login_returns_null()
+    {
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function ($mock) {
+            $mock->shouldNotReceive('getSnapshot');
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertNull($service->getCustomerUserLabel(''));
+    }
+
+    public function test_get_customer_user_label_exception_returns_null()
+    {
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getSnapshot')->once()->andThrow(new \Exception('err'));
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertNull($service->getCustomerUserLabel('u1'));
+    }
+
+    public function test_resolve_template_candidate_one_word_exact_match()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>123', 'type' => 'string']);
+
+        $this->mock(ZnunyClient::class, function ($mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+
+        $this->mock(\App\Services\Znuny\Cache\ZnunyCustomerUserCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('OneWord')->once()->andReturn(['OneWord123' => 'L']);
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertEquals('OneWord123', $service->resolveTemplateCandidate('OneWord'));
+    }
+
+    public function test_resolve_template_candidate_multi_word_exact_match()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>@example.com', 'type' => 'string']);
+
+        $this->mock(\App\Services\Znuny\Cache\ZnunyCustomerUserCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('Network Hardware')->once()->andReturn(['NetworkHardware@example.com' => 'L']);
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertEquals('NetworkHardware@example.com', $service->resolveTemplateCandidate('Network Hardware'));
+    }
+
+    public function test_resolve_template_candidate_multi_word_fallback()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>-suffix', 'type' => 'string']);
+
+        $this->mock(\App\Services\Znuny\Cache\ZnunyCustomerUserCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('Network Hardware')->once()->andReturn([
+                'network-foo-suffix' => 'Foo',
+                'network-hardware-suffix' => 'Hardware',
+                'other-user' => 'L'
+            ]);
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertEquals('network-hardware-suffix', $service->resolveTemplateCandidate('Network Hardware'));
+    }
+
+    public function test_resolve_template_candidate_empty_options_return_null()
+    {
+        $this->mock(\App\Services\Znuny\Cache\ZnunyCustomerUserCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('Q1')->once()->andReturn([]);
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertNull($service->resolveTemplateCandidate('Q1'));
+    }
+
+    public function test_search_customer_user_options_calls_client_once_with_trimmed_query()
+    {
+        $this->mock(ZnunyClient::class, function ($mock) {
+            $mock->shouldReceive('searchCustomerUsers')->with('my search', 20)->once()->andReturn([
+                ['login' => 'user1', 'label' => 'Label1'],
+            ]);
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $options = $service->searchCustomerUserOptions('  my search  ', 20);
+        $this->assertEquals(['user1' => 'Label1'], $options);
+    }
+
+    public function test_search_customer_user_options_clamp_limit()
+    {
+        $this->mock(ZnunyClient::class, function ($mock) {
+            $mock->shouldReceive('searchCustomerUsers')->with('search1', 1)->once()->andReturn([]);
+            $mock->shouldReceive('searchCustomerUsers')->with('search2', 50)->once()->andReturn([]);
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $service->searchCustomerUserOptions('search1', -10);
+        $service->searchCustomerUserOptions('search2', 999);
+    }
+
+    public function test_search_customer_user_options_empty_search_returns_empty_without_client()
+    {
+        $this->mock(ZnunyClient::class, function ($mock) {
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertEquals([], $service->searchCustomerUserOptions('   '));
+    }
+
+    public function test_search_customer_user_options_empty_labels_fallback_to_login_and_empty_login_skipped()
+    {
+        $this->mock(ZnunyClient::class, function ($mock) {
+            $mock->shouldReceive('searchCustomerUsers')->once()->andReturn([
+                ['login' => 'u1', 'label' => ' '], // empty label
+                ['login' => ' ', 'label' => 'L2'], // empty login
+                ['login' => 'u3', 'label' => null], // absent label
+                ['label' => 'L4'], // absent login
+                ['login' => 'u5', 'label' => 'L5'],
+            ]);
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $options = $service->searchCustomerUserOptions('search');
+
         $this->assertEquals([
-            '1 very low' => '1 very low',
-            '2 low' => '2 low',
-            '3 normal' => '3 normal',
-        ], $priorities);
+            'u1' => 'u1',
+            'u3' => 'u3',
+            'u5' => 'L5',
+        ], $options);
+
+        // ensure order is preserved
+        $this->assertEquals(['u1', 'u3', 'u5'], array_keys($options));
     }
 
-    public function test_dictionary_methods_cache_successful_result_and_retry_on_exception()
+    public function test_search_customer_user_options_exception_returns_empty()
     {
-        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
-            $mock->shouldReceive('getTicketStates')->once()->andReturn([]);
-            $mock->shouldReceive('getTicketStates')->once()->andReturn(['open']);
-            $mock->shouldReceive('getTicketStates')->never();
+        $this->mock(ZnunyClient::class, function ($mock) {
+            $mock->shouldReceive('searchCustomerUsers')->once()->andThrow(new \Exception('client err'));
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertEquals([], $service->searchCustomerUserOptions('search'));
+    }
+
+    public function test_search_customer_user_options_repeated_calls_prove_no_caching()
+    {
+        $this->mock(ZnunyClient::class, function ($mock) {
+            $mock->shouldReceive('searchCustomerUsers')->twice()->andReturn([]);
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $service->searchCustomerUserOptions('search');
+        $service->searchCustomerUserOptions('search');
+    }
+
+    public function test_search_customer_user_options_accepts_stringable_objects()
+    {
+        $this->mock(ZnunyClient::class, function ($mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldReceive('searchCustomerUsers')->once()->andReturn([
+                [
+                    'login' => new class implements \Stringable
+                    {
+                        public function __toString(): string
+                        {
+                            return ' obj-login ';
+                        }
+                    },
+                    'label' => new class implements \Stringable
+                    {
+                        public function __toString(): string
+                        {
+                            return ' obj-label ';
+                        }
+                    },
+                ],
+            ]);
+        });
+        $service = app(ZnunyCachedLookupService::class);
+        $options = $service->searchCustomerUserOptions('search');
+
+        $this->assertEquals(['obj-login' => 'obj-label'], $options);
+    }
+
+    public function test_get_prewarm_dataset_state_ready_and_valid()
+    {
+        $this->mock(ZnunyClient::class, function ($mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+
+        $this->mock(ZnunyQueueCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getSnapshot')->once()->andReturn([]);
+            $mock->shouldReceive('getMetadata')->once()->andReturn(['status' => 'ready']);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $state = $service->getPrewarmDatasetState('queues');
+        $this->assertEquals(['available' => true, 'status' => 'ready'], $state);
+    }
+
+    public function test_get_prewarm_dataset_state_stale_and_valid()
+    {
+        $this->mock(ZnunyQueueCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getSnapshot')->once()->andReturn([]);
+            $mock->shouldReceive('getMetadata')->once()->andReturn(['status' => 'stale']);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $state = $service->getPrewarmDatasetState('queues');
+        $this->assertEquals(['available' => true, 'status' => 'stale'], $state);
+    }
+
+    public function test_get_prewarm_dataset_state_refreshing_and_valid()
+    {
+        $this->mock(ZnunyQueueCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getSnapshot')->once()->andReturn([]);
+            $mock->shouldReceive('getMetadata')->once()->andReturn(['status' => 'refreshing']);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $state = $service->getPrewarmDatasetState('queues');
+        $this->assertEquals(['available' => true, 'status' => 'refreshing'], $state);
+    }
+
+    public function test_get_prewarm_dataset_state_missing_and_null_snapshot()
+    {
+        $this->mock(ZnunyQueueCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getSnapshot')->once()->andReturnNull();
+            $mock->shouldReceive('getMetadata')->once()->andReturn(['status' => 'missing']);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $state = $service->getPrewarmDatasetState('queues');
+        $this->assertEquals(['available' => false, 'status' => 'missing'], $state);
+    }
+
+    public function test_get_prewarm_dataset_state_failed_and_null_snapshot()
+    {
+        $this->mock(ZnunyQueueCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getSnapshot')->once()->andReturnNull();
+            $mock->shouldReceive('getMetadata')->once()->andReturn(['status' => 'failed']);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $state = $service->getPrewarmDatasetState('queues');
+        $this->assertEquals(['available' => false, 'status' => 'failed'], $state);
+    }
+
+    public function test_get_prewarm_dataset_state_ready_metadata_but_null_snapshot()
+    {
+        $this->mock(ZnunyQueueCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getSnapshot')->once()->andReturnNull();
+            $mock->shouldReceive('getMetadata')->once()->andReturn(['status' => 'ready']);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $state = $service->getPrewarmDatasetState('queues');
+        $this->assertEquals(['available' => false, 'status' => 'ready'], $state);
+    }
+
+    public function test_get_prewarm_dataset_state_invalid_or_missing_status()
+    {
+        $this->mock(ZnunyQueueCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getSnapshot')->twice()->andReturn([]);
+            $mock->shouldReceive('getMetadata')->once()->andReturn([]);
+            $mock->shouldReceive('getMetadata')->once()->andReturn(['status' => 'foo']);
         });
 
         $service = app(ZnunyCachedLookupService::class);
 
-        // First call fails validation (empty array)
-        $states1 = $service->getTicketStates();
-        $this->assertEquals([], $states1);
+        $state1 = $service->getPrewarmDatasetState('queues');
+        $this->assertEquals(['available' => true, 'status' => 'unknown'], $state1);
 
-        // Second call retries and caches successful result
-        $states2 = $service->getTicketStates();
-        $this->assertEquals(['open' => 'open'], $states2);
-
-        // Third call hits cache, not the mock
-        $states3 = $service->getTicketStates();
-        $this->assertEquals(['open' => 'open'], $states3);
+        $state2 = $service->getPrewarmDatasetState('queues');
+        $this->assertEquals(['available' => true, 'status' => 'unknown'], $state2);
     }
 
-    public function test_positive_ttl_caches_and_expires_exactly()
+    public function test_get_prewarm_dataset_state_reader_exception()
     {
-        Setting::updateOrCreate(
-            ['key' => 'znuny_lookup_cache_ttl_minutes'],
-            ['type' => 'integer', 'value' => '10']
-        );
-
-        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
-            $mock->shouldReceive('getQueues')->once()->andReturn([
-                ['id' => 1, 'name' => 'DatasetA', 'label' => 'DatasetA'],
-            ]);
-            $mock->shouldReceive('getQueues')->once()->andReturn([
-                ['id' => 2, 'name' => 'DatasetB', 'label' => 'DatasetB'],
-            ]);
+        $this->mock(ZnunyQueueCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getSnapshot')->once()->andThrow(new \Exception('Reader err'));
         });
 
         $service = app(ZnunyCachedLookupService::class);
-
-        // First call populates cache
-        $result1 = $service->getAllQueues();
-        $this->assertEquals('DatasetA', $result1[0]['name']);
-
-        // Travel 9 minutes - still cached
-        try {
-            $this->travel(9)->minutes();
-            $result2 = $service->getAllQueues();
-            $this->assertEquals('DatasetA', $result2[0]['name']);
-
-            // Travel to > 10 minutes - expires, fetches DatasetB
-            $this->travel(2)->minutes(); // total 11
-            $result3 = $service->getAllQueues();
-            $this->assertEquals('DatasetB', $result3[0]['name']);
-        } finally {
-            $this->travelBack();
-        }
+        $state = $service->getPrewarmDatasetState('queues');
+        $this->assertEquals(['available' => false, 'status' => 'failed'], $state);
     }
 
-    public function test_zero_ttl_bypasses_cache()
+    public function test_get_prewarm_dataset_state_invalid_dataset()
     {
-        Setting::updateOrCreate(
-            ['key' => 'znuny_lookup_cache_ttl_minutes'],
-            ['type' => 'integer', 'value' => '0']
-        );
-
-        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
-            $mock->shouldReceive('getQueues')->times(3)->andReturn([
-                ['id' => 1, 'name' => 'Live', 'label' => 'Live'],
-            ]);
+        $this->mock(ZnunyQueueCacheReadService::class, function ($mock) {
+            $mock->shouldNotReceive('getSnapshot');
+            $mock->shouldNotReceive('getMetadata');
+        });
+        $this->mock(ZnunyAgentCacheReadService::class, function ($mock) {
+            $mock->shouldNotReceive('getSnapshot');
+            $mock->shouldNotReceive('getMetadata');
+        });
+        $this->mock(ZnunyLookupCacheReadService::class, function ($mock) {
+            $mock->shouldNotReceive('getSnapshot');
+            $mock->shouldNotReceive('getMetadata');
+        });
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function ($mock) {
+            $mock->shouldNotReceive('getSnapshot');
+            $mock->shouldNotReceive('getMetadata');
         });
 
         $service = app(ZnunyCachedLookupService::class);
-
-        $service->getAllQueues();
-        $service->getAllQueues();
-        $service->getAllQueues();
-
-        $key = 'znuny_lookup_queues_all_v'.$service->getCacheVersion();
-        $this->assertFalse(Cache::has($key));
+        $state = $service->getPrewarmDatasetState('invalid_dataset');
+        $this->assertEquals(['available' => false, 'status' => 'unknown'], $state);
     }
 
-    public function test_zero_ttl_bypasses_cache_for_customer_user_label()
+    public function test_get_prewarm_dataset_state_mapping_coverage()
     {
-        Setting::updateOrCreate(
-            ['key' => 'znuny_lookup_cache_ttl_minutes'],
-            ['type' => 'integer', 'value' => '0']
-        );
-
-        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
-            $mock->shouldReceive('getCustomerUser')->with('testuser')->twice()->andReturn([
-                'found' => true,
-                'login' => 'testuser',
-                'label' => 'Test User',
-            ]);
+        $this->mock(ZnunyQueueCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getSnapshot')->once()->andReturn([]);
+            $mock->shouldReceive('getMetadata')->once()->andReturn(['status' => 'ready']);
+        });
+        $this->mock(ZnunyAgentCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getSnapshot')->once()->andReturn([]);
+            $mock->shouldReceive('getMetadata')->once()->andReturn(['status' => 'stale']);
+        });
+        $this->mock(ZnunyLookupCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getSnapshot')->once()->andReturn([]);
+            $mock->shouldReceive('getMetadata')->once()->andReturn(['status' => 'refreshing']);
+        });
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function ($mock) {
+            $mock->shouldReceive('getSnapshot')->once()->andReturn([]);
+            $mock->shouldReceive('getMetadata')->once()->andReturn(['status' => 'missing']);
         });
 
         $service = app(ZnunyCachedLookupService::class);
-
-        $result1 = $service->getCustomerUserLabel('testuser');
-        $this->assertEquals('Test User', $result1);
-
-        $result2 = $service->getCustomerUserLabel('testuser');
-        $this->assertEquals('Test User', $result2);
-
-        $key = 'znuny_lookup_customer_label_'.md5('testuser').'_v'.$service->getCacheVersion();
-        $this->assertFalse(Cache::has($key));
-    }
-
-    #[DataProvider('invalidTtlProvider')]
-    public function test_invalid_ttl_falls_back_to_60_minutes($value, $type)
-    {
-        if ($value !== null) {
-            Setting::updateOrCreate(
-                ['key' => 'znuny_lookup_cache_ttl_minutes'],
-                ['type' => $type, 'value' => $value]
-            );
-        } else {
-            Setting::where('key', 'znuny_lookup_cache_ttl_minutes')->delete();
-        }
-
-        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
-            $mock->shouldReceive('getQueues')->once()->andReturn([
-                ['id' => 1, 'name' => 'Fallback', 'label' => 'Fallback'],
-            ]);
-            $mock->shouldReceive('getQueues')->once()->andReturn([
-                ['id' => 2, 'name' => 'Expired', 'label' => 'Expired'],
-            ]);
-        });
-
-        $service = app(ZnunyCachedLookupService::class);
-
-        $service->getAllQueues();
-
-        try {
-            $this->travel(59)->minutes();
-            $service->getAllQueues(); // Still cached at 59 mins
-
-            $this->travel(2)->minutes(); // 61 mins
-            $service->getAllQueues(); // Expired at 61 mins
-        } finally {
-            $this->travelBack();
-        }
-    }
-
-    public static function invalidTtlProvider(): array
-    {
-        return [
-            'missing setting' => [null, 'integer'],
-            'unreadable string' => ['invalid', 'string'],
-            'negative value' => [-15, 'integer'],
-        ];
+        $this->assertEquals(['available' => true, 'status' => 'ready'], $service->getPrewarmDatasetState('queues'));
+        $this->assertEquals(['available' => true, 'status' => 'stale'], $service->getPrewarmDatasetState('agents'));
+        $this->assertEquals(['available' => true, 'status' => 'refreshing'], $service->getPrewarmDatasetState('lookups'));
+        $this->assertEquals(['available' => true, 'status' => 'missing'], $service->getPrewarmDatasetState('customer_users'));
     }
 }

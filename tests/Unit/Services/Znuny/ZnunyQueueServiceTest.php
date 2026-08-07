@@ -2,13 +2,11 @@
 
 namespace Tests\Unit\Services\Znuny;
 
-use App\Models\Setting;
-use App\Services\Znuny\ZnunyClient;
+use App\Services\Znuny\Cache\ZnunyQueueCacheReadService;
 use App\Services\Znuny\ZnunyQueueService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Mockery;
-use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class ZnunyQueueServiceTest extends TestCase
@@ -17,14 +15,14 @@ class ZnunyQueueServiceTest extends TestCase
 
     private ZnunyQueueService $service;
 
-    private $clientMock;
+    private $queueReaderMock;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->clientMock = Mockery::mock(ZnunyClient::class);
-        $this->service = new ZnunyQueueService($this->clientMock);
+        $this->queueReaderMock = Mockery::mock(ZnunyQueueCacheReadService::class);
+        $this->service = new ZnunyQueueService($this->queueReaderMock);
 
         Cache::clear(); // Important to clear cache for isolated tests
     }
@@ -63,102 +61,45 @@ class ZnunyQueueServiceTest extends TestCase
         ];
     }
 
-    public function test_get_queues_caches_results(): void
+    public function test_get_queues_returns_reader_payload(): void
     {
-        $this->clientMock->shouldReceive('getQueues')
+        $this->queueReaderMock->shouldReceive('getQueues')
             ->once()
             ->andReturn($this->getSampleQueues());
 
-        // First call should hit the client and cache it
-        $queues1 = $this->service->getQueues();
-        $this->assertCount(3, $queues1);
-
-        // Second call should hit the cache, NOT the client
-        $queues2 = $this->service->getQueues();
-        $this->assertCount(3, $queues2);
+        $queues = $this->service->getQueues();
+        $this->assertCount(3, $queues);
+        $this->assertEquals('Raw', $queues[0]['name']);
     }
 
-    public function test_queue_cache_ttl_zero_bypasses_cache_and_repeated_calls_hit_api(): void
+    public function test_get_queues_performs_no_additional_caching(): void
     {
-        Setting::updateOrCreate(
-            ['key' => 'znuny_queue_cache_ttl_minutes'],
-            ['type' => 'integer', 'value' => 0]
-        );
+        $payload = $this->getSampleQueues();
 
-        $this->clientMock->shouldReceive('getQueues')
+        $this->queueReaderMock->shouldReceive('getQueues')
             ->twice()
-            ->andReturn($this->getSampleQueues());
-
-        $this->service->getQueues();
-        $this->service->getQueues();
-
-        $this->assertFalse(Cache::has('znuny.queues'));
-    }
-
-    public function test_queue_cache_expiration(): void
-    {
-        Setting::updateOrCreate(
-            ['key' => 'znuny_queue_cache_ttl_minutes'],
-            ['type' => 'integer', 'value' => 10]
-        );
-
-        $this->clientMock->shouldReceive('getQueues')
-            ->times(2)
-            ->andReturn(
-                [['id' => 1, 'name' => 'QueueA', 'valid_id' => 1]],
-                [['id' => 2, 'name' => 'QueueB', 'valid_id' => 1]]
-            );
+            ->andReturn($payload);
 
         $result1 = $this->service->getQueues();
-        $this->assertEquals('QueueA', $result1[0]['name']);
-
-        $this->travel(9)->minutes();
-
         $result2 = $this->service->getQueues();
-        $this->assertEquals('QueueA', $result2[0]['name']);
 
-        $this->travel(2)->minutes(); // total 11 minutes
-
-        $result3 = $this->service->getQueues();
-        $this->assertEquals('QueueB', $result3[0]['name']);
-
-        $this->travelBack();
+        $this->assertSame($payload, $result1);
+        $this->assertSame($payload, $result2);
     }
 
-    public static function queueFallbackDataProvider(): array
+    public function test_reader_cache_miss_returns_empty_with_no_fallback(): void
     {
-        return [
-            'missing' => [null, 'string'],
-            'unreadable string' => ['not-an-integer', 'string'],
-            'negative' => [-5, 'integer'],
-        ];
-    }
-
-    #[DataProvider('queueFallbackDataProvider')]
-    public function test_queue_cache_ttl_fallback_for_invalid_values($value, $type): void
-    {
-        if ($value !== null) {
-            Setting::updateOrCreate(
-                ['key' => 'znuny_queue_cache_ttl_minutes'],
-                ['type' => $type, 'value' => $value]
-            );
-        } else {
-            Setting::where('key', 'znuny_queue_cache_ttl_minutes')->delete();
-        }
-
-        $this->clientMock->shouldReceive('getQueues')
+        $this->queueReaderMock->shouldReceive('getQueues')
             ->once()
-            ->andReturn($this->getSampleQueues());
+            ->andReturn([]);
 
-        $this->service->getQueues();
-        $this->service->getQueues();
-
-        $this->assertTrue(Cache::has('znuny.queues'));
+        $queues = $this->service->getQueues();
+        $this->assertEmpty($queues);
     }
 
     public function test_get_selectable_queues_result_preserves_label_fallback(): void
     {
-        $this->clientMock->shouldReceive('getQueues')
+        $this->queueReaderMock->shouldReceive('getQueues')
             ->once()
             ->andReturn([
                 [
@@ -187,7 +128,7 @@ class ZnunyQueueServiceTest extends TestCase
 
     public function test_find_queue_by_name_returns_correct_shape_when_found(): void
     {
-        $this->clientMock->shouldReceive('getQueues')
+        $this->queueReaderMock->shouldReceive('getQueues')
             ->once()
             ->andReturn($this->getSampleQueues());
 
@@ -204,7 +145,7 @@ class ZnunyQueueServiceTest extends TestCase
 
     public function test_find_queue_by_name_applies_safe_fallbacks(): void
     {
-        $this->clientMock->shouldReceive('getQueues')
+        $this->queueReaderMock->shouldReceive('getQueues')
             ->once()
             ->andReturn([
                 [
@@ -226,7 +167,7 @@ class ZnunyQueueServiceTest extends TestCase
 
     public function test_find_queue_by_name_is_case_insensitive(): void
     {
-        $this->clientMock->shouldReceive('getQueues')
+        $this->queueReaderMock->shouldReceive('getQueues')
             ->once()
             ->andReturn($this->getSampleQueues());
 
@@ -238,7 +179,7 @@ class ZnunyQueueServiceTest extends TestCase
 
     public function test_find_queue_by_name_returns_false_when_not_found(): void
     {
-        $this->clientMock->shouldReceive('getQueues')
+        $this->queueReaderMock->shouldReceive('getQueues')
             ->once()
             ->andReturn($this->getSampleQueues());
 
@@ -248,42 +189,37 @@ class ZnunyQueueServiceTest extends TestCase
         $this->assertContains('Queue not found.', $result['warnings']);
     }
 
-    public function test_find_queue_by_name_returns_warning_on_api_failure(): void
+    public function test_find_queue_by_name_returns_warning_on_reader_failure(): void
     {
-        $this->clientMock->shouldReceive('getQueues')
+        $this->queueReaderMock->shouldReceive('getQueues')
             ->once()
-            ->andThrow(new \Exception('API Error'));
+            ->andThrow(new \Exception('Reader Error'));
 
         $result = $this->service->findQueueByName('Raw');
 
-        $this->assertFalse($result['found']);
-        $this->assertContains('Could not load queues from Znuny API.', $result['warnings']);
+        $this->assertSame([
+            'found' => false,
+            'warnings' => [
+                'Could not load prewarmed Znuny queue reference data.',
+            ],
+        ], $result);
+
+        $this->assertStringNotContainsString('Znuny API', $result['warnings'][0]);
     }
 
     public function test_get_selectable_queues_result_on_error(): void
     {
-        $this->clientMock->shouldReceive('getQueues')
+        $this->queueReaderMock->shouldReceive('getQueues')
             ->once()
-            ->andThrow(new \Exception('API Error'));
+            ->andThrow(new \Exception('Reader Error'));
 
         $result = $this->service->getSelectableQueuesResult();
 
-        $this->assertNotNull($result['error']);
-        $this->assertEmpty($result['options']);
-    }
+        $this->assertSame([
+            'options' => [],
+            'error' => 'Could not load prewarmed Znuny queue reference data. You can try again later.',
+        ], $result);
 
-    public function test_clear_cache_removes_queue_cache_only(): void
-    {
-        Cache::put('znuny.queues', 'data');
-        Cache::put('unrelated_sentinel', 'safe');
-        Cache::put('znuny_active_agents', 'agent_data');
-
-        $this->clientMock->shouldNotReceive('getQueues');
-
-        $this->service->clearCache();
-
-        $this->assertNull(Cache::get('znuny.queues'));
-        $this->assertEquals('safe', Cache::get('unrelated_sentinel'));
-        $this->assertEquals('agent_data', Cache::get('znuny_active_agents'));
+        $this->assertStringNotContainsString('Znuny API', $result['error']);
     }
 }

@@ -4,7 +4,6 @@ namespace App\Filament\Schemas;
 
 use App\Filament\Pages\CreateTicket;
 use App\Services\Znuny\ZnunyCachedLookupService;
-use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketAdvancedDefaultsService;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -24,7 +23,28 @@ class ZnunyTicketCreationSchema
                         ->required()
                         ->searchable()
                         ->preload()
-                        ->noOptionsMessage(__('create_ticket.messages.no_options_available'))
+                        ->noOptionsMessage(function (ZnunyCachedLookupService $lookupService) {
+                            $state = $lookupService->getPrewarmDatasetState('queues');
+                            if (! $state['available']) {
+                                return __('znuny_data_status.consumer.unavailable');
+                            }
+
+                            return __('create_ticket.messages.no_options_available');
+                        })
+                        ->helperText(function (ZnunyCachedLookupService $lookupService) {
+                            $state = $lookupService->getPrewarmDatasetState('queues');
+                            if (! $state['available']) {
+                                return __('znuny_data_status.consumer.unavailable');
+                            }
+                            if ($state['status'] === 'stale') {
+                                return __('znuny_data_status.consumer.stale');
+                            }
+                            if ($state['status'] === 'refreshing') {
+                                return __('znuny_data_status.consumer.refreshing');
+                            }
+
+                            return null;
+                        })
                         ->optionsLimit(1000)
                         ->live()
                         ->afterStateUpdated(function ($state, $set, ZnunyCachedLookupService $lookupService) {
@@ -52,7 +72,30 @@ class ZnunyTicketCreationSchema
                         ->required()
                         ->searchable()
                         ->preload()
-                        ->noOptionsMessage(__('create_ticket.messages.no_options_available'))
+                        ->noOptionsMessage(function (ZnunyCachedLookupService $lookupService) {
+                            $qState = $lookupService->getPrewarmDatasetState('queues');
+                            $aState = $lookupService->getPrewarmDatasetState('agents');
+                            if (! $qState['available'] || ! $aState['available']) {
+                                return __('znuny_data_status.consumer.unavailable');
+                            }
+
+                            return __('create_ticket.messages.no_options_available');
+                        })
+                        ->helperText(function (ZnunyCachedLookupService $lookupService) {
+                            $qState = $lookupService->getPrewarmDatasetState('queues');
+                            $aState = $lookupService->getPrewarmDatasetState('agents');
+                            if (! $qState['available'] || ! $aState['available']) {
+                                return __('znuny_data_status.consumer.unavailable');
+                            }
+                            if ($qState['status'] === 'stale' || $aState['status'] === 'stale') {
+                                return __('znuny_data_status.consumer.stale');
+                            }
+                            if ($qState['status'] === 'refreshing' || $aState['status'] === 'refreshing') {
+                                return __('znuny_data_status.consumer.refreshing');
+                            }
+
+                            return null;
+                        })
                         ->options(function ($get, ZnunyCachedLookupService $lookupService) {
                             try {
                                 return $lookupService->getAssignableOwnerOptionsForQueue($get('queue') ?? '');
@@ -67,7 +110,28 @@ class ZnunyTicketCreationSchema
                         ->required()
                         ->searchable()
                         ->preload()
-                        ->noOptionsMessage(__('create_ticket.messages.no_options_available'))
+                        ->noOptionsMessage(function (ZnunyCachedLookupService $lookupService) {
+                            $state = $lookupService->getPrewarmDatasetState('customer_users');
+                            if (! $state['available']) {
+                                return __('znuny_data_status.consumer.customer_users_unavailable_search_live');
+                            }
+
+                            return __('create_ticket.messages.no_options_available');
+                        })
+                        ->helperText(function (ZnunyCachedLookupService $lookupService) {
+                            $state = $lookupService->getPrewarmDatasetState('customer_users');
+                            if (! $state['available']) {
+                                return __('znuny_data_status.consumer.customer_users_unavailable_search_live');
+                            }
+                            if ($state['status'] === 'stale') {
+                                return __('znuny_data_status.consumer.stale');
+                            }
+                            if ($state['status'] === 'refreshing') {
+                                return __('znuny_data_status.consumer.refreshing');
+                            }
+
+                            return null;
+                        })
                         ->live()
                         ->key(fn ($get) => 'customer-user-'.($get('queue') ?: 'none'))
                         ->options(function ($get, ZnunyCachedLookupService $lookupService) {
@@ -97,7 +161,7 @@ class ZnunyTicketCreationSchema
 
                             return $options;
                         })
-                        ->getSearchResultsUsing(function (string $search, $get, ZnunyCachedLookupService $lookupService, ZnunyClient $client) {
+                        ->getSearchResultsUsing(function (string $search, $get, ZnunyCachedLookupService $lookupService) {
                             $query = trim($search);
 
                             if ($query === '') {
@@ -117,9 +181,7 @@ class ZnunyTicketCreationSchema
                             }
 
                             try {
-                                return collect($client->searchCustomerUsers($query))
-                                    ->pluck('label', 'login')
-                                    ->toArray();
+                                return $lookupService->searchCustomerUserOptions($query);
                             } catch (\Throwable $e) {
                                 report($e);
 
@@ -170,7 +232,28 @@ class ZnunyTicketCreationSchema
                             ->required()
                             ->searchable()
                             ->preload()
-                            ->noOptionsMessage(__('create_ticket.messages.no_options_available'))
+                            ->noOptionsMessage(function (ZnunyCachedLookupService $lookupService) {
+                                $state = $lookupService->getPrewarmDatasetState('lookups');
+                                if (! $state['available']) {
+                                    return __('znuny_data_status.consumer.unavailable');
+                                }
+
+                                return __('create_ticket.messages.no_options_available');
+                            })
+                            ->helperText(function (ZnunyCachedLookupService $lookupService) {
+                                $state = $lookupService->getPrewarmDatasetState('lookups');
+                                if (! $state['available']) {
+                                    return __('znuny_data_status.consumer.unavailable');
+                                }
+                                if ($state['status'] === 'stale') {
+                                    return __('znuny_data_status.consumer.stale');
+                                }
+                                if ($state['status'] === 'refreshing') {
+                                    return __('znuny_data_status.consumer.refreshing');
+                                }
+
+                                return null;
+                            })
                             ->default(fn (ZnunyTicketAdvancedDefaultsService $defaultsService) => $defaultsService->getDefaults()['priority'])
                             ->options(function (ZnunyCachedLookupService $lookupService) {
                                 try {
@@ -188,7 +271,28 @@ class ZnunyTicketCreationSchema
                             ->required()
                             ->searchable()
                             ->preload()
-                            ->noOptionsMessage(__('create_ticket.messages.no_options_available'))
+                            ->noOptionsMessage(function (ZnunyCachedLookupService $lookupService) {
+                                $state = $lookupService->getPrewarmDatasetState('lookups');
+                                if (! $state['available']) {
+                                    return __('znuny_data_status.consumer.unavailable');
+                                }
+
+                                return __('create_ticket.messages.no_options_available');
+                            })
+                            ->helperText(function (ZnunyCachedLookupService $lookupService) {
+                                $state = $lookupService->getPrewarmDatasetState('lookups');
+                                if (! $state['available']) {
+                                    return __('znuny_data_status.consumer.unavailable');
+                                }
+                                if ($state['status'] === 'stale') {
+                                    return __('znuny_data_status.consumer.stale');
+                                }
+                                if ($state['status'] === 'refreshing') {
+                                    return __('znuny_data_status.consumer.refreshing');
+                                }
+
+                                return null;
+                            })
                             ->default(fn (ZnunyTicketAdvancedDefaultsService $defaultsService) => $defaultsService->getDefaults()['state'])
                             ->options(function (ZnunyCachedLookupService $lookupService) {
                                 try {

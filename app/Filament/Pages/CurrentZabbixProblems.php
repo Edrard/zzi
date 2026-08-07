@@ -14,7 +14,7 @@ use App\Services\Zabbix\ZabbixTicketStatusPresenter;
 use App\Services\Znuny\ZabbixTicketLinkService;
 use App\Services\Znuny\ZnunyAgentService;
 use App\Services\Znuny\ZnunyAssignmentDependencyService;
-use App\Services\Znuny\ZnunyClient;
+use App\Services\Znuny\ZnunyCachedLookupService;
 use App\Services\Znuny\ZnunyManualTicketLifecycleService;
 use App\Services\Znuny\ZnunyTicketCreationService;
 use App\Services\Znuny\ZnunyTicketModalStateBuilder;
@@ -677,13 +677,8 @@ class CurrentZabbixProblems extends Page
         }
 
         try {
-            $client = app(ZnunyClient::class);
-            $results = $client->searchCustomerUsers($search, 20);
-            $options = [];
-            foreach ($results as $res) {
-                $options[$res['login']] = $res['label'] ?? $res['login'];
-            }
-            $this->ticketCustomerUserOptions = $options;
+            $lookupService = app(ZnunyCachedLookupService::class);
+            $this->ticketCustomerUserOptions = $lookupService->searchCustomerUserOptions($search, 20);
         } catch (\Throwable $e) {
             // ignore
         }

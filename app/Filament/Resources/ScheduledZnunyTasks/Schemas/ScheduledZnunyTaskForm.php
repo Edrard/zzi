@@ -5,7 +5,6 @@ namespace App\Filament\Resources\ScheduledZnunyTasks\Schemas;
 use App\Services\Cron\CronService;
 use App\Services\Support\DateTimeDisplayService;
 use App\Services\Znuny\ZnunyCachedLookupService;
-use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketAdvancedDefaultsService;
 use Carbon\Carbon;
 use Filament\Forms\Components\Hidden;
@@ -94,6 +93,28 @@ class ScheduledZnunyTaskForm
                             ->required(fn ($get) => $get('enabled') === true)
                             ->searchable()
                             ->preload()
+                            ->noOptionsMessage(function (ZnunyCachedLookupService $lookupService) {
+                                $state = $lookupService->getPrewarmDatasetState('queues');
+                                if (! $state['available']) {
+                                    return __('znuny_data_status.consumer.unavailable');
+                                }
+
+                                return __('scheduled_znuny_tasks.form.no_options');
+                            })
+                            ->helperText(function (ZnunyCachedLookupService $lookupService) {
+                                $state = $lookupService->getPrewarmDatasetState('queues');
+                                if (! $state['available']) {
+                                    return __('znuny_data_status.consumer.unavailable');
+                                }
+                                if ($state['status'] === 'stale') {
+                                    return __('znuny_data_status.consumer.stale');
+                                }
+                                if ($state['status'] === 'refreshing') {
+                                    return __('znuny_data_status.consumer.refreshing');
+                                }
+
+                                return null;
+                            })
                             ->optionsLimit(1000)
                             ->live()
                             ->afterStateUpdated(function ($state, $set, ZnunyCachedLookupService $lookupService) {
@@ -118,18 +139,49 @@ class ScheduledZnunyTaskForm
                                     }
                                 }
                             })
-                            ->options(function (ZnunyCachedLookupService $lookupService) {
+                            ->options(function ($get, ZnunyCachedLookupService $lookupService) {
                                 try {
-                                    return $lookupService->getFilteredQueueOptions();
+                                    $options = $lookupService->getFilteredQueueOptions();
                                 } catch (\Throwable $e) {
-                                    return [];
+                                    $options = [];
                                 }
+
+                                $current = $get('queue_name');
+                                if ($current && ! isset($options[$current])) {
+                                    $options[$current] = (string) $current;
+                                }
+
+                                return $options;
                             }),
                         Select::make('owner_id')
                             ->label(__('scheduled_znuny_tasks.form.owner'))
                             ->required(fn ($get) => $get('enabled') === true)
                             ->searchable()
                             ->preload()
+                            ->noOptionsMessage(function (ZnunyCachedLookupService $lookupService) {
+                                $qState = $lookupService->getPrewarmDatasetState('queues');
+                                $aState = $lookupService->getPrewarmDatasetState('agents');
+                                if (! $qState['available'] || ! $aState['available']) {
+                                    return __('znuny_data_status.consumer.unavailable');
+                                }
+
+                                return __('scheduled_znuny_tasks.form.no_options');
+                            })
+                            ->helperText(function (ZnunyCachedLookupService $lookupService) {
+                                $qState = $lookupService->getPrewarmDatasetState('queues');
+                                $aState = $lookupService->getPrewarmDatasetState('agents');
+                                if (! $qState['available'] || ! $aState['available']) {
+                                    return __('znuny_data_status.consumer.unavailable');
+                                }
+                                if ($qState['status'] === 'stale' || $aState['status'] === 'stale') {
+                                    return __('znuny_data_status.consumer.stale');
+                                }
+                                if ($qState['status'] === 'refreshing' || $aState['status'] === 'refreshing') {
+                                    return __('znuny_data_status.consumer.refreshing');
+                                }
+
+                                return null;
+                            })
                             ->live(onBlur: true)
                             ->afterStateUpdated(function ($state, $set, $get, ZnunyCachedLookupService $lookupService) {
                                 if (empty($state)) {
@@ -148,17 +200,17 @@ class ScheduledZnunyTaskForm
                             ->options(function ($get, ZnunyCachedLookupService $lookupService) {
                                 try {
                                     $options = $lookupService->getAssignableOwnerOptionsForQueue($get('queue_name') ?? '');
-                                    $current = $get('owner_id');
-                                    // owner_login display fallback for currently selected option if not in queue options
-                                    $currentDisplay = $get('owner_login') ?: $current;
-                                    if ($current && ! isset($options[$current])) {
-                                        $options[$current] = $currentDisplay;
-                                    }
-
-                                    return $options;
                                 } catch (\Throwable $e) {
-                                    return [];
+                                    $options = [];
                                 }
+
+                                $current = $get('owner_id');
+                                $currentDisplay = $get('owner_login') ?: $current;
+                                if ($current && ! isset($options[$current])) {
+                                    $options[$current] = (string) $currentDisplay;
+                                }
+
+                                return $options;
                             }),
                         Hidden::make('owner_login'),
                         Select::make('customer_user_login')
@@ -166,32 +218,60 @@ class ScheduledZnunyTaskForm
                             ->required(fn ($get) => $get('enabled') === true)
                             ->searchable()
                             ->preload()
+                            ->noOptionsMessage(function (ZnunyCachedLookupService $lookupService) {
+                                $state = $lookupService->getPrewarmDatasetState('customer_users');
+                                if (! $state['available']) {
+                                    return __('znuny_data_status.consumer.customer_users_unavailable_search_live');
+                                }
+
+                                return __('scheduled_znuny_tasks.form.no_options');
+                            })
+                            ->helperText(function (ZnunyCachedLookupService $lookupService) {
+                                $state = $lookupService->getPrewarmDatasetState('customer_users');
+                                if (! $state['available']) {
+                                    return __('znuny_data_status.consumer.customer_users_unavailable_search_live');
+                                }
+                                if ($state['status'] === 'stale') {
+                                    return __('znuny_data_status.consumer.stale');
+                                }
+                                if ($state['status'] === 'refreshing') {
+                                    return __('znuny_data_status.consumer.refreshing');
+                                }
+
+                                return null;
+                            })
                             ->live()
                             ->key(fn ($get) => 'customer-user-'.($get('queue_name') ?: 'none'))
                             ->options(function ($get, ZnunyCachedLookupService $lookupService) {
                                 $queue = $get('queue_name');
-                                if (empty($queue)) {
-                                    return [];
+                                $options = [];
+
+                                if (! empty($queue)) {
+                                    try {
+                                        $options = $lookupService->getCustomerUserPrimaryOptionsForQueue($queue);
+                                    } catch (\Throwable $e) {
+                                        $options = [];
+                                    }
                                 }
-                                try {
-                                    $options = $lookupService->getCustomerUserPrimaryOptionsForQueue($queue);
-                                } catch (\Throwable $e) {
-                                    $options = [];
-                                }
+
                                 $current = $get('customer_user_login');
                                 if ($current && ! isset($options[$current])) {
+                                    $label = null;
                                     try {
                                         $label = $lookupService->getCustomerUserLabel($current);
-                                        if ($label) {
-                                            $options[$current] = $label;
-                                        }
                                     } catch (\Throwable $e) {
+                                    }
+
+                                    if ($label) {
+                                        $options[$current] = $label;
+                                    } else {
+                                        $options[$current] = (string) $current;
                                     }
                                 }
 
                                 return $options;
                             })
-                            ->getSearchResultsUsing(function (string $search, $get, ZnunyCachedLookupService $lookupService, ZnunyClient $client) {
+                            ->getSearchResultsUsing(function (string $search, $get, ZnunyCachedLookupService $lookupService) {
                                 $query = trim($search);
                                 if ($query === '') {
                                     $queue = $get('queue_name');
@@ -205,9 +285,7 @@ class ScheduledZnunyTaskForm
                                     }
                                 }
                                 try {
-                                    return collect($client->searchCustomerUsers($query))
-                                        ->pluck('label', 'login')
-                                        ->toArray();
+                                    return $lookupService->searchCustomerUserOptions($query);
                                 } catch (\Throwable $e) {
                                     return [];
                                 }
@@ -238,25 +316,83 @@ class ScheduledZnunyTaskForm
                             ->label(__('scheduled_znuny_tasks.form.priority'))
                             ->searchable()
                             ->preload()
-                            ->default(fn () => app(ZnunyTicketAdvancedDefaultsService::class)->getDefaults()['priority'])
-                            ->options(function (ZnunyCachedLookupService $lookupService) {
-                                try {
-                                    return $lookupService->getTicketPriorities();
-                                } catch (\Throwable $e) {
-                                    return [];
+                            ->noOptionsMessage(function (ZnunyCachedLookupService $lookupService) {
+                                $state = $lookupService->getPrewarmDatasetState('lookups');
+                                if (! $state['available']) {
+                                    return __('znuny_data_status.consumer.unavailable');
                                 }
+
+                                return __('scheduled_znuny_tasks.form.no_options');
+                            })
+                            ->helperText(function (ZnunyCachedLookupService $lookupService) {
+                                $state = $lookupService->getPrewarmDatasetState('lookups');
+                                if (! $state['available']) {
+                                    return __('znuny_data_status.consumer.unavailable');
+                                }
+                                if ($state['status'] === 'stale') {
+                                    return __('znuny_data_status.consumer.stale');
+                                }
+                                if ($state['status'] === 'refreshing') {
+                                    return __('znuny_data_status.consumer.refreshing');
+                                }
+
+                                return null;
+                            })
+                            ->default(fn () => app(ZnunyTicketAdvancedDefaultsService::class)->getDefaults()['priority'])
+                            ->options(function ($get, ZnunyCachedLookupService $lookupService) {
+                                try {
+                                    $options = $lookupService->getTicketPriorities();
+                                } catch (\Throwable $e) {
+                                    $options = [];
+                                }
+
+                                $current = $get('priority_name');
+                                if ($current && ! isset($options[$current])) {
+                                    $options[$current] = (string) $current;
+                                }
+
+                                return $options;
                             }),
                         Select::make('state_name')
                             ->label(__('scheduled_znuny_tasks.form.state'))
                             ->searchable()
                             ->preload()
-                            ->default(fn () => app(ZnunyTicketAdvancedDefaultsService::class)->getDefaults()['state'])
-                            ->options(function (ZnunyCachedLookupService $lookupService) {
-                                try {
-                                    return $lookupService->getTicketStates();
-                                } catch (\Throwable $e) {
-                                    return [];
+                            ->noOptionsMessage(function (ZnunyCachedLookupService $lookupService) {
+                                $state = $lookupService->getPrewarmDatasetState('lookups');
+                                if (! $state['available']) {
+                                    return __('znuny_data_status.consumer.unavailable');
                                 }
+
+                                return __('scheduled_znuny_tasks.form.no_options');
+                            })
+                            ->helperText(function (ZnunyCachedLookupService $lookupService) {
+                                $state = $lookupService->getPrewarmDatasetState('lookups');
+                                if (! $state['available']) {
+                                    return __('znuny_data_status.consumer.unavailable');
+                                }
+                                if ($state['status'] === 'stale') {
+                                    return __('znuny_data_status.consumer.stale');
+                                }
+                                if ($state['status'] === 'refreshing') {
+                                    return __('znuny_data_status.consumer.refreshing');
+                                }
+
+                                return null;
+                            })
+                            ->default(fn () => app(ZnunyTicketAdvancedDefaultsService::class)->getDefaults()['state'])
+                            ->options(function ($get, ZnunyCachedLookupService $lookupService) {
+                                try {
+                                    $options = $lookupService->getTicketStates();
+                                } catch (\Throwable $e) {
+                                    $options = [];
+                                }
+
+                                $current = $get('state_name');
+                                if ($current && ! isset($options[$current])) {
+                                    $options[$current] = (string) $current;
+                                }
+
+                                return $options;
                             }),
                         Select::make('lock_name')
                             ->label(__('scheduled_znuny_tasks.form.lock'))

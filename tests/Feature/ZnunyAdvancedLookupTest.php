@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Setting;
 use App\Services\SettingsService;
+use App\Services\Znuny\Cache\ZnunyCustomerUserCacheReadService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyLookupService;
 use App\Services\Znuny\ZnunyQueueService;
@@ -36,14 +37,17 @@ class ZnunyAdvancedLookupTest extends TestCase
         ]);
     }
 
-    private function getLookupService(): ZnunyLookupService
+    private function getLookupService(?array $customerUserSnapshot = null): ZnunyLookupService
     {
         $mockQueueService = \Mockery::mock(ZnunyQueueService::class);
         $mockQueueService->shouldReceive('findQueueByName')->andReturnUsing(function ($name) {
             return (new ZnunyClient)->getQueueByName($name);
         });
 
-        return new ZnunyLookupService(new ZnunyTicketDefaultRuleService, new ZnunyClient, $mockQueueService);
+        $mockReader = \Mockery::mock(ZnunyCustomerUserCacheReadService::class);
+        $mockReader->shouldReceive('getSnapshot')->andReturn($customerUserSnapshot ?? []);
+
+        return new ZnunyLookupService(new ZnunyTicketDefaultRuleService, $mockReader, $mockQueueService);
     }
 
     public function test_health_normalization()
@@ -313,15 +317,16 @@ class ZnunyAdvancedLookupTest extends TestCase
                     'ValidID' => 1,
                 ],
             ], 200),
-            'https://example.invalid/api/CustomerUser/TestCompanyClients*' => Http::response([
-                'CustomerUser' => [
-                    'UserLogin' => 'TestCompanyClients',
-                    'UserCustomerID' => 'testcompany',
-                ],
-            ], 200),
         ]);
 
-        $service = $this->getLookupService();
+        $service = $this->getLookupService([
+            'queues' => [
+                [
+                    'queue_name' => 'TestCompany',
+                    'options' => ['TestCompanyClients' => 'Test User <TestCompanyClients>'],
+                ],
+            ],
+        ]);
         $response = $service->resolveTicketDefaultCandidates('TestCompany swiss test01');
 
         $this->assertEquals('TestCompany', $response['detected']['queue_name']);
@@ -329,7 +334,7 @@ class ZnunyAdvancedLookupTest extends TestCase
         $this->assertTrue($response['queue']['found']);
         $this->assertEquals(85, $response['queue']['id']);
         $this->assertTrue($response['customer_user']['found']);
-        $this->assertEquals('testcompany', $response['customer_user']['customer_id']);
+        $this->assertEquals('TestCompanyClients', $response['customer_user']['login']);
     }
 
     public function test_lookup_service_queue_missing_but_cu_exists()
@@ -338,19 +343,21 @@ class ZnunyAdvancedLookupTest extends TestCase
             'https://example.invalid/api/QueueByName/TestCompany*' => Http::response([
                 'Queue' => [],
             ], 200),
-            'https://example.invalid/api/CustomerUser/TestCompanyClients*' => Http::response([
-                'CustomerUser' => [
-                    'UserLogin' => 'TestCompanyClients',
-                    'UserCustomerID' => 'testcompany',
-                ],
-            ], 200),
         ]);
 
-        $service = $this->getLookupService();
+        $service = $this->getLookupService([
+            'queues' => [
+                [
+                    'queue_name' => 'TestCompany',
+                    'options' => ['TestCompanyClients' => 'Test User <TestCompanyClients>'],
+                ],
+            ],
+        ]);
         $response = $service->resolveTicketDefaultCandidates('TestCompany swiss test01');
 
         $this->assertFalse($response['queue']['found']);
         $this->assertTrue($response['customer_user']['found']);
+        $this->assertEquals('TestCompanyClients', $response['customer_user']['login']);
         $this->assertContains('Queue not found.', $response['warnings']);
     }
 
@@ -360,7 +367,7 @@ class ZnunyAdvancedLookupTest extends TestCase
         Setting::updateOrCreate(['key' => 'znuny_queue_from_host_regex'], ['value' => '^(?<queue>[0-9]+)$']);
 
         // No Http fakes needed as API shouldn't be called if detection fails
-        $service = $this->getLookupService();
+        $service = $this->getLookupService([]);
         $response = $service->resolveTicketDefaultCandidates('TestCompany swiss test01');
 
         $this->assertNull($response['detected']['queue_name']);
@@ -382,13 +389,12 @@ class ZnunyAdvancedLookupTest extends TestCase
 
         Http::fake([
             'https://example.invalid/api/QueueByName/TestCompany*' => Http::response(['Queue' => []], 200),
-            'https://example.invalid/api/CustomerUser/TestCompanyClients*' => Http::response(['CustomerUser' => []], 200),
             'https://example.invalid/api/QueueByName/MappedQueue*' => Http::response([
                 'Queue' => ['QueueID' => 99, 'Name' => 'MappedQueue', 'FullName' => 'Mapped Queue', 'ValidID' => 1],
             ], 200),
         ]);
 
-        $service = $this->getLookupService();
+        $service = $this->getLookupService([]);
         $response = $service->resolveTicketDefaultCandidates('TestCompany swiss test01');
 
         $this->assertTrue($response['queue']['found']);
@@ -409,10 +415,9 @@ class ZnunyAdvancedLookupTest extends TestCase
 
         Http::fake([
             'https://example.invalid/api/QueueByName/TestCompany*' => Http::response(['Queue' => []], 200),
-            'https://example.invalid/api/CustomerUser/TestCompanyClients*' => Http::response(['CustomerUser' => []], 200),
         ]);
 
-        $service = $this->getLookupService();
+        $service = $this->getLookupService([]);
         $response = $service->resolveTicketDefaultCandidates('TestCompany');
 
         $this->assertFalse($response['queue']['found']);
@@ -429,18 +434,19 @@ class ZnunyAdvancedLookupTest extends TestCase
 
         Http::fake([
             'https://example.invalid/api/QueueByName/TestCompany*' => Http::response(['Queue' => []], 200),
-            'https://example.invalid/api/CustomerUser/TestCompanyClients*' => Http::response([
-                'CustomerUser' => [
-                    'UserLogin' => 'TestCompanyClients',
-                    'UserCustomerID' => 'testcompany',
-                ],
-            ], 200),
             'https://example.invalid/api/QueueByName/ExampleCompany*' => Http::response([
                 'Queue' => ['QueueID' => 103, 'Name' => 'ExampleCompany', 'FullName' => 'Example Company', 'ValidID' => 1],
             ], 200),
         ]);
 
-        $service = $this->getLookupService();
+        $service = $this->getLookupService([
+            'queues' => [
+                [
+                    'queue_name' => 'TestCompany',
+                    'options' => ['TestCompanyClients' => 'Test User <TestCompanyClients>'],
+                ],
+            ],
+        ]);
         $response = $service->resolveTicketDefaultCandidates('TestCompany kyiv sw01');
 
         $this->assertTrue($response['queue']['found']);
@@ -460,11 +466,10 @@ class ZnunyAdvancedLookupTest extends TestCase
 
         Http::fake([
             'https://example.invalid/api/QueueByName/BadQueueHost*' => Http::response(['Queue' => []], 200),
-            'https://example.invalid/api/CustomerUser/BadQueueHostClients*' => Http::response(['CustomerUser' => []], 200),
             'https://example.invalid/api/QueueByName/NonExistentQueue*' => Http::response(['Queue' => []], 200),
         ]);
 
-        $service = $this->getLookupService();
+        $service = $this->getLookupService([]);
         $response = $service->resolveTicketDefaultCandidates('BadQueueHost router01');
 
         $this->assertFalse($response['queue']['found']);
@@ -485,10 +490,9 @@ class ZnunyAdvancedLookupTest extends TestCase
             'https://example.invalid/api/QueueByName/TestCompany*' => Http::response([
                 'Queue' => ['QueueID' => 85, 'Name' => 'TestCompany', 'FullName' => 'TestCompany Full', 'ValidID' => 1],
             ], 200),
-            'https://example.invalid/api/CustomerUser/TestCompanyClients*' => Http::response(['CustomerUser' => []], 200),
         ]);
 
-        $service = $this->getLookupService();
+        $service = $this->getLookupService([]);
         $response = $service->resolveTicketDefaultCandidates('TestCompany swiss test01');
 
         $this->assertTrue($response['queue']['found']);
@@ -511,13 +515,12 @@ class ZnunyAdvancedLookupTest extends TestCase
 
         Http::fake([
             'https://example.invalid/api/QueueByName/MatchHost*' => Http::response(['Queue' => []], 200),
-            'https://example.invalid/api/CustomerUser/MatchHostClients*' => Http::response(['CustomerUser' => []], 200),
             'https://example.invalid/api/QueueByName/FirstWinnerQueue*' => Http::response([
                 'Queue' => ['QueueID' => 200, 'Name' => 'FirstWinnerQueue', 'FullName' => 'First Winner', 'ValidID' => 1],
             ], 200),
         ]);
 
-        $service = $this->getLookupService();
+        $service = $this->getLookupService([]);
         $response = $service->resolveTicketDefaultCandidates('MatchHost firewall');
 
         $this->assertTrue($response['queue']['found']);

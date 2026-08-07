@@ -50,11 +50,16 @@ return [
         'refresh_now' => 'Refresh Now',
     ],
 
-
-
     'values' => [
         'never' => 'Never',
         'none' => 'None',
         'minutes' => 'min',
+    ],
+
+    'consumer' => [
+        'unavailable' => 'Znuny reference data is currently unavailable.',
+        'stale' => 'Using older cached Znuny reference data.',
+        'refreshing' => 'Znuny reference data is currently refreshing. Using the latest available cached data.',
+        'customer_users_unavailable_search_live' => 'CustomerUser preload is currently unavailable. You can still type to search CustomerUsers.',
     ],
 ];

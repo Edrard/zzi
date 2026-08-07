@@ -35,7 +35,6 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Lang;
 use Illuminate\Support\HtmlString;
@@ -479,9 +478,6 @@ class Settings extends Page implements HasForms
                 ->send();
         }
     }
-
-
-
 
     public function clearTicketArticleCacheAction(): void
     {
@@ -1210,31 +1206,16 @@ class Settings extends Page implements HasForms
             $this->form->fill(array_merge($this->form->getState(), ['mail_smtp_password_clear' => false]));
         }
 
-        $shouldInvalidateLookupCache = false;
         $shouldInvalidateArticleCache = false;
-        $shouldClearZnunyReferenceCaches = false;
 
         foreach ($changedSettings as $change) {
-            if ($change['key'] === 'znuny_lookup_cache_ttl_minutes') {
-                $shouldInvalidateLookupCache = true;
-            } elseif ($change['key'] === 'znuny_ticket_article_cache_ttl_minutes') {
+            if ($change['key'] === 'znuny_ticket_article_cache_ttl_minutes') {
                 $shouldInvalidateArticleCache = true;
-            } elseif (str_starts_with($change['key'], 'znuny_')) {
-                $shouldClearZnunyReferenceCaches = true;
             }
-        }
-
-        if ($shouldInvalidateLookupCache) {
-            app(ZnunyCachedLookupService::class)->invalidateCache();
         }
 
         if ($shouldInvalidateArticleCache) {
             app(ZnunyTicketArticleCacheService::class)->forgetAll();
-        }
-
-        if ($shouldClearZnunyReferenceCaches) {
-            Cache::forget('znuny_active_agents');
-            Cache::forget('znuny.queues');
         }
 
         app(SettingsAuditLogService::class)->logChanges($changedSettings);
