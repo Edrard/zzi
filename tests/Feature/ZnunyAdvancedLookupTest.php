@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Setting;
 use App\Services\SettingsService;
-use App\Services\Znuny\Cache\ZnunyCustomerUserCacheReadService;
+use App\Services\Znuny\ZnunyCachedLookupService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyLookupService;
 use App\Services\Znuny\ZnunyQueueService;
@@ -37,17 +37,158 @@ class ZnunyAdvancedLookupTest extends TestCase
         ]);
     }
 
-    private function getLookupService(?array $customerUserSnapshot = null): ZnunyLookupService
+    private function getLookupService(array $resolverMap = []): ZnunyLookupService
     {
         $mockQueueService = \Mockery::mock(ZnunyQueueService::class);
         $mockQueueService->shouldReceive('findQueueByName')->andReturnUsing(function ($name) {
             return (new ZnunyClient)->getQueueByName($name);
         });
 
-        $mockReader = \Mockery::mock(ZnunyCustomerUserCacheReadService::class);
-        $mockReader->shouldReceive('getSnapshot')->andReturn($customerUserSnapshot ?? []);
+        $mockResolver = \Mockery::mock(ZnunyCachedLookupService::class);
+        foreach ($resolverMap as $queue => $candidate) {
+            $mockResolver->shouldReceive('resolveTemplateCandidate')->with($queue)->andReturn($candidate);
+        }
+        $mockResolver->shouldReceive('resolveTemplateCandidate')->andReturnNull()->byDefault();
 
-        return new ZnunyLookupService(new ZnunyTicketDefaultRuleService, $mockReader, $mockQueueService);
+        return new ZnunyLookupService(new ZnunyTicketDefaultRuleService, $mockResolver, $mockQueueService);
+    }
+
+    public function test_lookup_service_t1_mapped_multi_word_queue_drives_customer_user()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], ['value' => json_encode([
+            [
+                'host_prefix' => 'Agentbud',
+                'queue_name' => 'Agent bud',
+            ],
+        ]), 'type' => 'json']);
+
+        Http::fake([
+            'https://example.invalid/api/QueueByName/Agentbud*' => Http::response(['Queue' => []], 200),
+            'https://example.invalid/api/QueueByName/Agent%20bud*' => Http::response([
+                'Queue' => ['QueueID' => 101, 'Name' => 'Agent bud', 'FullName' => 'Agent bud', 'ValidID' => 1],
+            ], 200),
+        ]);
+
+        $service = $this->getLookupService([
+            'Agent bud' => 'AgentBudClients',
+        ]);
+
+        $response = $service->resolveTicketDefaultCandidates('Agentbud swiss ts01');
+
+        $this->assertTrue($response['queue']['found']);
+        $this->assertSame('Agent bud', $response['queue']['name']);
+
+        $this->assertTrue($response['customer_user']['found']);
+        $this->assertSame('AgentBudClients', $response['customer_user']['login']);
+
+        $this->assertContains('Queue resolved by prefix: Agentbud → Agent bud', $response['notes']);
+
+        // Assert no warnings contain AgentbudClients (the raw host-derived candidate)
+        foreach ($response['warnings'] as $warning) {
+            $this->assertStringNotContainsString('AgentbudClients', $warning);
+        }
+    }
+
+    public function test_lookup_service_t2_mapped_queue_resolver_miss_warning_uses_final_queue()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], ['value' => json_encode([
+            [
+                'host_prefix' => 'Agentbud',
+                'queue_name' => 'Agent bud',
+            ],
+        ]), 'type' => 'json']);
+
+        Http::fake([
+            'https://example.invalid/api/QueueByName/Agentbud*' => Http::response(['Queue' => []], 200),
+            'https://example.invalid/api/QueueByName/Agent%20bud*' => Http::response([
+                'Queue' => ['QueueID' => 101, 'Name' => 'Agent bud', 'FullName' => 'Agent bud', 'ValidID' => 1],
+            ], 200),
+        ]);
+
+        // Explicitly map 'Agent bud' to null for resolver
+        $service = $this->getLookupService([
+            'Agent bud' => null,
+        ]);
+
+        $response = $service->resolveTicketDefaultCandidates('Agentbud swiss ts01');
+
+        $this->assertFalse($response['customer_user']['found']);
+
+        $this->assertContains('CustomerUser not found in prewarm cache for queue: Agent bud', $response['warnings']);
+        foreach ($response['warnings'] as $warning) {
+            $this->assertStringNotContainsString('AgentbudClients', $warning);
+        }
+    }
+
+    public function test_lookup_service_t3_direct_one_word_queue_remains_standard()
+    {
+        Http::fake([
+            'https://example.invalid/api/QueueByName/Support*' => Http::response([
+                'Queue' => ['QueueID' => 102, 'Name' => 'Support', 'FullName' => 'Support', 'ValidID' => 1],
+            ], 200),
+        ]);
+
+        $service = $this->getLookupService([
+            'Support' => 'SupportClients',
+        ]);
+
+        $response = $service->resolveTicketDefaultCandidates('Support swiss ts01');
+
+        $this->assertTrue($response['queue']['found']);
+        $this->assertSame('Support', $response['queue']['name']);
+
+        $this->assertTrue($response['customer_user']['found']);
+        $this->assertSame('SupportClients', $response['customer_user']['login']);
+    }
+
+    public function test_lookup_service_t4_unresolved_queue_does_not_resolve_customer_user()
+    {
+        Http::fake([
+            'https://example.invalid/api/QueueByName/UnknownHost*' => Http::response(['Queue' => []], 200),
+        ]);
+
+        // We can use a mock that explicitly forbids resolveTemplateCandidate to prove it's never called
+        $mockQueueService = \Mockery::mock(ZnunyQueueService::class);
+        $mockQueueService->shouldReceive('findQueueByName')->andReturn(['found' => false, 'warnings' => ['Queue not found.']]);
+
+        $mockResolver = \Mockery::mock(ZnunyCachedLookupService::class);
+        $mockResolver->shouldNotReceive('resolveTemplateCandidate');
+
+        $service = new ZnunyLookupService(new ZnunyTicketDefaultRuleService, $mockResolver, $mockQueueService);
+
+        $response = $service->resolveTicketDefaultCandidates('UnknownHost router');
+
+        $this->assertFalse($response['queue']['found']);
+        $this->assertFalse($response['customer_user']['found']);
+        $this->assertContains('Queue not found.', $response['warnings']);
+    }
+
+    public function test_lookup_service_t5_mapping_must_win_over_raw_host_customer_user()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], ['value' => json_encode([
+            [
+                'host_prefix' => 'Agentbud',
+                'queue_name' => 'Agent bud',
+            ],
+        ]), 'type' => 'json']);
+
+        Http::fake([
+            'https://example.invalid/api/QueueByName/Agentbud*' => Http::response(['Queue' => []], 200),
+            'https://example.invalid/api/QueueByName/Agent%20bud*' => Http::response([
+                'Queue' => ['QueueID' => 101, 'Name' => 'Agent bud', 'FullName' => 'Agent bud', 'ValidID' => 1],
+            ], 200),
+        ]);
+
+        // The raw host-derived customer user would be AgentbudClients
+        // But the mapped final queue is "Agent bud" and returns "AgentBudClients"
+        $service = $this->getLookupService([
+            'Agent bud' => 'AgentBudClients',
+        ]);
+
+        $response = $service->resolveTicketDefaultCandidates('Agentbud router');
+
+        $this->assertTrue($response['customer_user']['found']);
+        $this->assertSame('AgentBudClients', $response['customer_user']['login']);
     }
 
     public function test_health_normalization()
@@ -320,12 +461,7 @@ class ZnunyAdvancedLookupTest extends TestCase
         ]);
 
         $service = $this->getLookupService([
-            'queues' => [
-                [
-                    'queue_name' => 'TestCompany',
-                    'options' => ['TestCompanyClients' => 'Test User <TestCompanyClients>'],
-                ],
-            ],
+            'TestCompany' => 'TestCompanyClients',
         ]);
         $response = $service->resolveTicketDefaultCandidates('TestCompany swiss test01');
 
@@ -346,18 +482,12 @@ class ZnunyAdvancedLookupTest extends TestCase
         ]);
 
         $service = $this->getLookupService([
-            'queues' => [
-                [
-                    'queue_name' => 'TestCompany',
-                    'options' => ['TestCompanyClients' => 'Test User <TestCompanyClients>'],
-                ],
-            ],
+            'TestCompany' => 'TestCompanyClients',
         ]);
         $response = $service->resolveTicketDefaultCandidates('TestCompany swiss test01');
 
         $this->assertFalse($response['queue']['found']);
-        $this->assertTrue($response['customer_user']['found']);
-        $this->assertEquals('TestCompanyClients', $response['customer_user']['login']);
+        $this->assertFalse($response['customer_user']['found']);
         $this->assertContains('Queue not found.', $response['warnings']);
     }
 
@@ -440,19 +570,14 @@ class ZnunyAdvancedLookupTest extends TestCase
         ]);
 
         $service = $this->getLookupService([
-            'queues' => [
-                [
-                    'queue_name' => 'TestCompany',
-                    'options' => ['TestCompanyClients' => 'Test User <TestCompanyClients>'],
-                ],
-            ],
+            'ExampleCompany' => 'ExampleCompanyClients',
         ]);
         $response = $service->resolveTicketDefaultCandidates('TestCompany kyiv sw01');
 
         $this->assertTrue($response['queue']['found']);
         $this->assertEquals('ExampleCompany', $response['queue']['name']);
         $this->assertTrue($response['customer_user']['found']);
-        $this->assertEquals('TestCompanyClients', $response['customer_user']['login']);
+        $this->assertEquals('ExampleCompanyClients', $response['customer_user']['login']);
     }
 
     public function test_lookup_service_mapping_mapped_queue_not_found()

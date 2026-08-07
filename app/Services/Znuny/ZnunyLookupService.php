@@ -3,13 +3,12 @@
 namespace App\Services\Znuny;
 
 use App\Services\SettingsService;
-use App\Services\Znuny\Cache\ZnunyCustomerUserCacheReadService;
 
 class ZnunyLookupService
 {
     public function __construct(
         protected ZnunyTicketDefaultRuleService $ruleService,
-        protected ZnunyCustomerUserCacheReadService $customerUserReader,
+        protected ZnunyCachedLookupService $cachedLookupService,
         protected ZnunyQueueService $queueService
     ) {}
 
@@ -97,27 +96,17 @@ class ZnunyLookupService
             $result['warnings'] = array_merge($result['warnings'], $primaryQueueWarnings);
         }
 
-        if ($local['customer_user']) {
+        if ($result['queue']['found']) {
+            $resolvedQueueName = $result['queue']['name'];
             try {
-                $snapshot = $this->customerUserReader->getSnapshot();
-                $found = false;
-
-                if (is_array($snapshot) && isset($snapshot['queues']) && is_array($snapshot['queues'])) {
-                    foreach ($snapshot['queues'] as $q) {
-                        if (is_array($q['options'] ?? null) && isset($q['options'][$local['customer_user']])) {
-                            $found = true;
-                            break;
-                        }
-                    }
-                }
-
-                if ($found) {
+                $candidate = $this->cachedLookupService->resolveTemplateCandidate($resolvedQueueName);
+                if (! empty($candidate)) {
                     $result['customer_user'] = [
                         'found' => true,
-                        'login' => $local['customer_user'],
+                        'login' => $candidate,
                     ];
                 } else {
-                    $result['warnings'][] = "CustomerUser not found in prewarm cache: {$local['customer_user']}";
+                    $result['warnings'][] = "CustomerUser not found in prewarm cache for queue: {$resolvedQueueName}";
                 }
             } catch (\Throwable $e) {
                 $result['warnings'][] = "Failed to validate CustomerUser: {$e->getMessage()}";
