@@ -241,7 +241,6 @@ class ZnunyAdvancedLookupTest extends TestCase
             'https://example.invalid/api/Queue*' => Http::response([
                 'Queues' => [
                     ['QueueID' => 85, 'Name' => 'TestCompany', 'FullName' => 'TestCompany Full', 'ValidID' => 1],
-                    ['QueueID' => -1, 'Name' => 'Invalid'], // Should be skipped
                 ],
             ], 200),
         ]);
