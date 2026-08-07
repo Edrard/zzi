@@ -284,24 +284,7 @@ return [
                 'modal_description' => 'This clears the cached application settings. Saved settings remain unchanged and will be loaded again when needed.',
                 'modal_submit_action_label' => 'Clear Settings Cache',
             ],
-            'clear_znuny_agent_cache' => [
-                'label' => 'Clear Znuny Agent Cache',
-                'modal_heading' => 'Clear Znuny Agent Cache?',
-                'modal_description' => 'This clears the cached active Znuny agent list. The next agent request may contact Znuny again.',
-                'modal_submit_action_label' => 'Clear Agent Cache',
-            ],
-            'clear_znuny_queue_cache' => [
-                'label' => 'Clear Znuny Queue Cache',
-                'modal_heading' => 'Clear Znuny Queue Cache?',
-                'modal_description' => 'This clears the cached Znuny queue list. The next queue request may contact Znuny again.',
-                'modal_submit_action_label' => 'Clear Queue Cache',
-            ],
-            'clear_znuny_lookup_cache' => [
-                'label' => 'Clear Znuny Lookup Cache',
-                'modal_heading' => 'Clear Znuny Lookup Cache?',
-                'modal_description' => 'This invalidates reusable Znuny lookup data such as owners, CustomerUsers, states, priorities, types, queues, and search candidates.',
-                'modal_submit_action_label' => 'Clear Lookup Cache',
-            ],
+
             'clear_ticket_article_cache' => [
                 'label' => 'Clear Ticket Article Cache',
                 'modal_heading' => 'Clear Ticket Article Cache?',
@@ -778,18 +761,6 @@ return [
             'description' => 'Interval in minutes for lookups cache prewarm.',
         ],
 
-        'znuny_queue_cache_ttl_minutes' => [
-            'label' => 'Znuny Queue Cache Lifetime (minutes)',
-            'description' => 'Configured lifetime for cached Znuny queue data used by queue selectors, queue detection, and queue-mapping validation.',
-        ],
-        'znuny_lookup_cache_ttl_minutes' => [
-            'label' => 'Znuny Lookup Cache Lifetime (minutes)',
-            'description' => 'How long reusable Znuny lookup data such as owners by queue, CustomerUsers, states, priorities, types, filtered queues, and template or search candidates may be cached. Set to 0 to bypass persistent lookup caching.',
-        ],
-        'znuny_agent_cache_ttl_minutes' => [
-            'label' => 'Znuny Agent Cache Lifetime (minutes)',
-            'description' => 'Configured lifetime for cached active Znuny agent data used by owner selectors and agent-name displays.',
-        ],
         'znuny_ticket_snapshot_cache_ttl_minutes' => [
             'label' => 'Linked Ticket Snapshot Cache Lifetime (minutes)',
             'description' => 'Configured lifetime for cached linked-ticket snapshot data. A snapshot may include locally stored Znuny ticket details such as state, owner, queue, priority, and synchronization metadata. This setting does not control Ticket Workspace caching and does not delete local ticket links or data in Znuny.',

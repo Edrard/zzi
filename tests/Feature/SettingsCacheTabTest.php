@@ -212,9 +212,6 @@ class SettingsCacheTabTest extends TestCase
             'znuny_api_verify_ssl' => true,
             'znuny_api_timeout' => 10,
 
-            'znuny_agent_cache_ttl_minutes' => 60,
-            'znuny_queue_cache_ttl_minutes' => 60,
-            'znuny_lookup_cache_ttl_minutes' => 60,
             'znuny_ticket_article_cache_ttl_minutes' => 60,
             'znuny_ticket_snapshot_cache_ttl_minutes' => 60,
 

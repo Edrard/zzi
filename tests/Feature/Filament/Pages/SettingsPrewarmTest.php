@@ -3,12 +3,11 @@
 namespace Tests\Feature\Filament\Pages;
 
 use App\Filament\Pages\Settings;
-use App\Models\Setting;
 use App\Models\User;
 use App\Support\Settings\DefaultSettings;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 
 class SettingsPrewarmTest extends TestCase
 {
@@ -22,13 +21,13 @@ class SettingsPrewarmTest extends TestCase
             $defaults[$item['key']] = $item['value'];
         }
 
-        $this->assertEquals(5, (int)$defaults['znuny_prewarm_queues_interval_minutes']);
-        $this->assertEquals(5, (int)$defaults['znuny_prewarm_agents_interval_minutes']);
-        $this->assertEquals(60, (int)$defaults['znuny_prewarm_lookups_interval_minutes']);
-        $this->assertEquals(30, (int)$defaults['znuny_prewarm_customer_users_interval_minutes']);
+        $this->assertEquals(5, (int) $defaults['znuny_prewarm_queues_interval_minutes']);
+        $this->assertEquals(5, (int) $defaults['znuny_prewarm_agents_interval_minutes']);
+        $this->assertEquals(60, (int) $defaults['znuny_prewarm_lookups_interval_minutes']);
+        $this->assertEquals(30, (int) $defaults['znuny_prewarm_customer_users_interval_minutes']);
     }
 
-    public function test_legacy_ttl_fields_preserved()
+    public function test_legacy_ttl_fields_absent()
     {
         $all = DefaultSettings::all();
         $defaults = [];
@@ -36,9 +35,9 @@ class SettingsPrewarmTest extends TestCase
             $defaults[$item['key']] = $item['value'];
         }
 
-        $this->assertArrayHasKey('znuny_agent_cache_ttl_minutes', $defaults);
-        $this->assertArrayHasKey('znuny_queue_cache_ttl_minutes', $defaults);
-        $this->assertArrayHasKey('znuny_lookup_cache_ttl_minutes', $defaults);
+        $this->assertArrayNotHasKey('znuny_agent_cache_ttl_minutes', $defaults);
+        $this->assertArrayNotHasKey('znuny_queue_cache_ttl_minutes', $defaults);
+        $this->assertArrayNotHasKey('znuny_lookup_cache_ttl_minutes', $defaults);
 
         $this->assertArrayHasKey('znuny_ticket_article_cache_ttl_minutes', $defaults);
         $this->assertArrayHasKey('znuny_ticket_snapshot_cache_ttl_minutes', $defaults);
@@ -76,23 +75,5 @@ class SettingsPrewarmTest extends TestCase
 
         // ticket article clear action remains
         $component->assertSee('clearTicketArticleCache');
-    }
-
-    public function test_saving_visible_settings_does_not_overwrite_legacy_ttl()
-    {
-        $admin = User::factory()->create(['role' => 'admin']);
-
-        Setting::updateOrCreate(['key' => 'znuny_agent_cache_ttl_minutes'], ['value' => '999']);
-        Setting::updateOrCreate(['key' => 'znuny_queue_cache_ttl_minutes'], ['value' => '888']);
-        Setting::updateOrCreate(['key' => 'znuny_lookup_cache_ttl_minutes'], ['value' => '777']);
-
-        Livewire::actingAs($admin)
-            ->test(Settings::class)
-            ->set('data.znuny_prewarm_queues_interval_minutes', 10)
-            ->call('save');
-
-        $this->assertEquals('999', Setting::where('key', 'znuny_agent_cache_ttl_minutes')->value('value'));
-        $this->assertEquals('888', Setting::where('key', 'znuny_queue_cache_ttl_minutes')->value('value'));
-        $this->assertEquals('777', Setting::where('key', 'znuny_lookup_cache_ttl_minutes')->value('value'));
     }
 }

@@ -575,14 +575,6 @@ class Settings extends Page implements HasForms
                     'label' => 'Problem Presence Window (minutes)',
                     'description' => 'How long a last-seen Zabbix problem is still considered present after it stops appearing in Zabbix poll results. This helps avoid premature resolved-state transitions between poll cycles.',
                 ],
-                'znuny_agent_cache_ttl_minutes' => [
-                    'label' => 'Znuny Agent Cache TTL Minutes',
-                    'description' => 'How long Znuny agent list data is cached. 0 disables this cache.',
-                ],
-                'znuny_queue_cache_ttl_minutes' => [
-                    'label' => 'Znuny Queue Cache TTL Minutes',
-                    'description' => 'How long Znuny queue list data is cached. 0 disables this cache.',
-                ],
                 'znuny_ticket_snapshot_cache_ttl_minutes' => [
                     'label' => 'Znuny Ticket Snapshot Cache TTL Minutes',
                     'description' => 'How long linked ticket snapshot data may be cached before refresh. 0 disables this cache.',
@@ -1005,7 +997,7 @@ class Settings extends Page implements HasForms
                 $groups['Znuny Ticket Defaults'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['znuny_ticket_workspace_enabled', 'znuny_ticket_cache_refresh_interval_minutes', 'znuny_ticket_cache_max_pages_per_run', 'znuny_ticket_cache_ttl_minutes', 'znuny_ticket_cache_default_limit', 'znuny_ticket_workspace_active_state_type_ids', 'znuny_closed_ticket_window_days', 'znuny_closed_ticket_small_sync_interval_minutes'])) {
                 $groups['Znuny']['Ticket Workspace'][$setting->key] = $component;
-            } elseif (in_array($setting->key, ['znuny_queue_cache_ttl_minutes', 'znuny_agent_cache_ttl_minutes', 'znuny_ticket_snapshot_cache_ttl_minutes', 'znuny_prewarm_queues_interval_minutes', 'znuny_prewarm_agents_interval_minutes', 'znuny_prewarm_lookups_interval_minutes', 'znuny_prewarm_customer_users_interval_minutes']) || str_contains($setting->key, '_cache_')) {
+            } elseif (in_array($setting->key, ['znuny_ticket_snapshot_cache_ttl_minutes', 'znuny_prewarm_queues_interval_minutes', 'znuny_prewarm_agents_interval_minutes', 'znuny_prewarm_lookups_interval_minutes', 'znuny_prewarm_customer_users_interval_minutes']) || str_contains($setting->key, '_cache_')) {
                 $groups['Cache'][] = $component;
             } elseif (in_array($setting->key, ['znuny_detailed_sync_audit_enabled', 'zabbix_problem_sync_audit_enabled', 'znuny_ticket_workspace_sync_audit_enabled', 'znuny_closed_ticket_sync_audit_auto_enabled'])) {
                 $groups['Audit Log'][] = $component;
@@ -1963,15 +1955,6 @@ class Settings extends Page implements HasForms
 
         foreach ($cacheComponents as $component) {
             $name = method_exists($component, 'getName') ? $component->getName() : null;
-
-            // Skip legacy TTL fields entirely so they don't appear in the UI
-            if (in_array($name, [
-                'znuny_agent_cache_ttl_minutes',
-                'znuny_queue_cache_ttl_minutes',
-                'znuny_lookup_cache_ttl_minutes',
-            ])) {
-                continue;
-            }
 
             if (in_array($name, [
                 'znuny_prewarm_queues_interval_minutes',

@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Setting;
-use App\Support\Settings\DefaultSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -11,68 +10,51 @@ class ZnunyLookupCacheSettingTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_default_settings_contains_lookup_cache_ttl()
+    public function test_cleanup_migration_removes_all_three_legacy_settings()
     {
-        $defaults = DefaultSettings::all();
+        Setting::updateOrCreate(['key' => 'znuny_queue_cache_ttl_minutes'], ['value' => '15', 'type' => 'integer']);
+        Setting::updateOrCreate(['key' => 'znuny_agent_cache_ttl_minutes'], ['value' => '15', 'type' => 'integer']);
+        Setting::updateOrCreate(['key' => 'znuny_lookup_cache_ttl_minutes'], ['value' => '60', 'type' => 'integer']);
 
-        $lookupSetting = collect($defaults)->firstWhere('key', 'znuny_lookup_cache_ttl_minutes');
+        Setting::updateOrCreate(['key' => 'znuny_ticket_article_cache_ttl_minutes'], ['value' => '15', 'type' => 'integer']);
 
-        $this->assertNotNull($lookupSetting);
-        $this->assertEquals('60', $lookupSetting['value']);
-        $this->assertEquals('integer', $lookupSetting['type']);
-        $this->assertEquals('Lifetime in minutes for reusable Znuny lookup data such as queue owners, CustomerUsers, states, priorities, types, filtered queues, and lookup candidates. Set to 0 to bypass persistent lookup caching.', $lookupSetting['description']);
-    }
-
-    public function test_migration_inserts_setting_when_missing()
-    {
-        // First delete it if it exists from seeders
-        Setting::where('key', 'znuny_lookup_cache_ttl_minutes')->delete();
-
-        // Run the specific migration
-        $migrationPath = database_path('migrations/2026_07_15_120000_add_znuny_lookup_cache_setting.php');
+        $migrationPath = database_path('migrations/2026_08_07_200800_remove_legacy_znuny_reference_cache_settings.php');
         $migration = require $migrationPath;
         $migration->up();
 
+        $this->assertDatabaseMissing('settings', ['key' => 'znuny_queue_cache_ttl_minutes']);
+        $this->assertDatabaseMissing('settings', ['key' => 'znuny_agent_cache_ttl_minutes']);
+        $this->assertDatabaseMissing('settings', ['key' => 'znuny_lookup_cache_ttl_minutes']);
+
+        $this->assertDatabaseHas('settings', ['key' => 'znuny_ticket_article_cache_ttl_minutes']);
+    }
+
+    public function test_cleanup_migration_down_restores_all_three_legacy_settings()
+    {
+        Setting::whereIn('key', [
+            'znuny_queue_cache_ttl_minutes',
+            'znuny_agent_cache_ttl_minutes',
+            'znuny_lookup_cache_ttl_minutes',
+        ])->delete();
+
+        $migrationPath = database_path('migrations/2026_08_07_200800_remove_legacy_znuny_reference_cache_settings.php');
+        $migration = require $migrationPath;
+        $migration->down();
+
+        $this->assertDatabaseHas('settings', [
+            'key' => 'znuny_queue_cache_ttl_minutes',
+            'value' => '15',
+            'type' => 'integer',
+        ]);
+        $this->assertDatabaseHas('settings', [
+            'key' => 'znuny_agent_cache_ttl_minutes',
+            'value' => '15',
+            'type' => 'integer',
+        ]);
         $this->assertDatabaseHas('settings', [
             'key' => 'znuny_lookup_cache_ttl_minutes',
             'value' => '60',
             'type' => 'integer',
         ]);
-    }
-
-    public function test_migration_does_not_overwrite_existing_value()
-    {
-        Setting::updateOrCreate(
-            ['key' => 'znuny_lookup_cache_ttl_minutes'],
-            [
-                'value' => '30',
-                'type' => 'string',
-                'description' => 'Custom description',
-            ]
-        );
-
-        $migrationPath = database_path('migrations/2026_07_15_120000_add_znuny_lookup_cache_setting.php');
-        $migration = require $migrationPath;
-        $migration->up();
-
-        $this->assertDatabaseHas('settings', [
-            'key' => 'znuny_lookup_cache_ttl_minutes',
-            'value' => '30',
-            'type' => 'string',
-            'description' => 'Custom description',
-        ]);
-    }
-
-    public function test_migration_rollback_is_non_destructive()
-    {
-        Setting::updateOrCreate(['key' => 'znuny_lookup_cache_ttl_minutes'], ['value' => '60']);
-        Setting::updateOrCreate(['key' => 'other_setting'], ['value' => 'test']);
-
-        $migrationPath = database_path('migrations/2026_07_15_120000_add_znuny_lookup_cache_setting.php');
-        $migration = require $migrationPath;
-        $migration->down();
-
-        $this->assertDatabaseHas('settings', ['key' => 'znuny_lookup_cache_ttl_minutes']);
-        $this->assertDatabaseHas('settings', ['key' => 'other_setting']);
     }
 }

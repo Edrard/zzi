@@ -73,10 +73,10 @@ class ZnunyLegacyReferenceCacheCleanupBoundaryTest extends TestCase
         $this->assertStringNotContainsString('Cache::forget(\'znuny_active_agents\')', $content);
         $this->assertStringNotContainsString('Cache::forget(\'znuny.queues\')', $content);
 
-        // But compatibility retained
-        $this->assertStringContainsString('znuny_agent_cache_ttl_minutes', $content);
-        $this->assertStringContainsString('znuny_queue_cache_ttl_minutes', $content);
-        $this->assertStringContainsString('znuny_lookup_cache_ttl_minutes', $content);
+        // And legacy compatibility removed
+        $this->assertStringNotContainsString('znuny_agent_cache_ttl_minutes', $content);
+        $this->assertStringNotContainsString('znuny_queue_cache_ttl_minutes', $content);
+        $this->assertStringNotContainsString('znuny_lookup_cache_ttl_minutes', $content);
         $this->assertStringContainsString('znuny_ticket_article_cache_ttl_minutes', $content);
         $this->assertStringContainsString('clearTicketArticleCache', $content);
         $this->assertStringContainsString('znuny_prewarm_queues_interval_minutes', $content);
@@ -90,9 +90,9 @@ class ZnunyLegacyReferenceCacheCleanupBoundaryTest extends TestCase
         $defaultPath = base_path('app/Support/Settings/DefaultSettings.php');
         $this->assertFileExists($defaultPath);
         $defaultContent = file_get_contents($defaultPath);
-        $this->assertStringContainsString('znuny_agent_cache_ttl_minutes', $defaultContent);
-        $this->assertStringContainsString('znuny_queue_cache_ttl_minutes', $defaultContent);
-        $this->assertStringContainsString('znuny_lookup_cache_ttl_minutes', $defaultContent);
+        $this->assertStringNotContainsString('znuny_agent_cache_ttl_minutes', $defaultContent);
+        $this->assertStringNotContainsString('znuny_queue_cache_ttl_minutes', $defaultContent);
+        $this->assertStringNotContainsString('znuny_lookup_cache_ttl_minutes', $defaultContent);
 
         $prewarmPath = base_path('app/Services/Znuny/Cache/PrewarmSnapshotManager.php');
         $this->assertFileExists($prewarmPath);
