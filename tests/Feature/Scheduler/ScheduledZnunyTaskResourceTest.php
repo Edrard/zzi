@@ -16,6 +16,7 @@ use App\Services\ScheduledZnunyTaskRunProcessor;
 use App\Services\ScheduledZnunyTicketCreationService;
 use App\Services\SchedulerSafetyService;
 use App\Services\SettingsService;
+use App\Services\Support\DateTimeDisplayService;
 use App\Services\Znuny\ZnunyCachedLookupService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -603,22 +604,52 @@ class ScheduledZnunyTaskResourceTest extends TestCase
         $response->assertSee('Direct Edit Test Task');
     }
 
-    public function test_next_run_at_is_displayed_in_local_timezone()
+    public function test_next_run_at_is_calculated_dynamically_without_mutating_scheduler_cursor()
     {
         $admin = User::factory()->create(['role' => 'admin']);
         $this->actingAs($admin);
 
-        Carbon::setTestNow('2026-07-09 10:00:00'); // 10:00 UTC = 13:00 Kyiv
+        // Provide safe expectations for the existing partial mock to prevent uninitialized reader errors during table render
+        $lookupMock = $this->app->make(ZnunyCachedLookupService::class);
+        $lookupMock->shouldReceive('getFilteredQueueOptions')->andReturn([])->byDefault();
+        $lookupMock->shouldReceive('getCustomerUserPrimaryOptionsForQueue')->andReturn([])->byDefault();
+        $lookupMock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([])->byDefault();
+
+        // Set now to a fixed time: 2026-07-09 10:00:00 UTC
+        // Europe/Kyiv is UTC+3 in July, so local time is 13:00.
+        Carbon::setTestNow('2026-07-09 10:00:00');
 
         $task1 = ScheduledZnunyTask::create([
-            'name' => 'Task Valid',
+            'name' => 'Disabled Valid Task (NULL)',
             'enabled' => false,
-            'cron_expression' => '0 15 * * *',
+            'cron_expression' => '0 15 * * *', // 15:00 Kyiv daily
             'timezone' => 'Europe/Kyiv',
-            'next_run_at' => '2026-07-09 12:00:00', // 12:00 UTC should display as 15:00 Kyiv
+            'next_run_at' => null, // Should dynamically calculate
         ]);
 
         $task2 = ScheduledZnunyTask::create([
+            'name' => 'Disabled Valid Task (Stale)',
+            'enabled' => false,
+            'cron_expression' => '0 15 * * *',
+            'timezone' => 'Europe/Kyiv',
+            'next_run_at' => '2026-07-09 08:00:00', // Past 08:00 UTC, must dynamically recalculate
+        ]);
+
+        $task3 = ScheduledZnunyTask::create([
+            'name' => 'Enabled Valid Task (Stale)',
+            'enabled' => true,
+            'cron_expression' => '0 15 * * *',
+            'timezone' => 'Europe/Kyiv',
+            'next_run_at' => '2026-07-09 08:00:00', // Past 08:00 UTC, must dynamically recalculate
+            'queue_name' => 'Support',
+            'owner_id' => 2,
+            'owner_login' => 'john.doe',
+            'customer_user_login' => 'client',
+            'subject' => 'Test',
+            'body' => 'Test',
+        ]);
+
+        $task4 = ScheduledZnunyTask::create([
             'name' => 'Task Invalid',
             'enabled' => false,
             'cron_expression' => 'invalid',
@@ -626,21 +657,33 @@ class ScheduledZnunyTaskResourceTest extends TestCase
             'next_run_at' => null,
         ]);
 
-        $task3 = ScheduledZnunyTask::create([
-            'name' => 'Task Past',
-            'enabled' => false,
-            'cron_expression' => '0 15 * * *',
-            'timezone' => 'Europe/Kyiv',
-            'next_run_at' => '2026-07-09 08:00:00', // Past 08:00 UTC, must not be hidden
-        ]);
+        // Dynamically compute the expected representation
+        $cronService = app(CronService::class);
+        $next = $cronService->calculateNextRun('0 15 * * *', 'Europe/Kyiv');
+        $this->assertNotNull($next);
+
+        $expectedDisplay = app(DateTimeDisplayService::class)->formatDateTime($next->utc()->toDateTimeString());
 
         $component = Livewire::test(ListScheduledZnunyTasks::class);
 
-        // 12:00 UTC converts to 15:00 Europe/Kyiv
-        $component->assertTableColumnStateSet('next_run_at', '2026-07-09 15:00:00', $task1);
-        $component->assertTableColumnStateSet('next_run_at', null, $task2);
-        // 08:00 UTC converts to 11:00 Europe/Kyiv and is NOT recalculated
-        $component->assertTableColumnStateSet('next_run_at', '2026-07-09 11:00:00', $task3);
+        $component->assertTableColumnStateSet('next_run_at', $expectedDisplay, $task1);
+        $component->assertTableColumnStateSet('next_run_at', $expectedDisplay, $task2);
+        $component->assertTableColumnStateSet('next_run_at', $expectedDisplay, $task3);
+        $component->assertTableColumnStateSet('next_run_at', null, $task4);
+
+        // 4. Rendering the table does not mutate persisted next_run_at.
+        $this->assertDatabaseHas('scheduled_znuny_tasks', [
+            'id' => $task1->id,
+            'next_run_at' => null,
+        ]);
+        $this->assertDatabaseHas('scheduled_znuny_tasks', [
+            'id' => $task2->id,
+            'next_run_at' => '2026-07-09 08:00:00',
+        ]);
+        $this->assertDatabaseHas('scheduled_znuny_tasks', [
+            'id' => $task3->id,
+            'next_run_at' => '2026-07-09 08:00:00', // Ensure enabled task cursor isn't updated
+        ]);
 
         Carbon::setTestNow();
     }
