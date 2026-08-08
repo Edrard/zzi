@@ -7,6 +7,7 @@ use App\Models\ScheduledZnunyTask;
 use App\Services\Cron\CronService;
 use App\Services\Support\DateTimeDisplayService;
 use App\Services\Znuny\ZnunyCachedLookupService;
+use Carbon\Carbon;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\SelectColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -164,18 +165,12 @@ class ScheduledZnunyTasksTable
                     }),
                 TextColumn::make('next_run_at')
                     ->label(__('scheduled_znuny_tasks.table.next_run_at'))
-                    ->extraCellAttributes(function (ScheduledZnunyTask $record) {
-                        $cron = $record->cron_expression;
-                        $tz = $record->timezone;
-
-                        $cronService = app(CronService::class);
-                        if (empty($cron) || empty($tz) || ! $cronService->isValid($cron)) {
+                    ->extraCellAttributes(function (?string $state) {
+                        if (empty($state)) {
                             return ['data-scheduled-sort-value' => ''];
                         }
 
-                        $next = $cronService->calculateNextRun($cron, $tz);
-
-                        return ['data-scheduled-sort-value' => $next ? $next->timestamp : ''];
+                        return ['data-scheduled-sort-value' => Carbon::parse($state, 'UTC')->timestamp];
                     })
                     ->getStateUsing(function (ScheduledZnunyTask $record) {
                         $cron = $record->cron_expression;
@@ -188,11 +183,14 @@ class ScheduledZnunyTasksTable
 
                         $next = $cronService->calculateNextRun($cron, $tz);
 
-                        if (! $next) {
+                        return $next ? $next->utc()->toDateTimeString() : null;
+                    })
+                    ->formatStateUsing(function (?string $state) {
+                        if (empty($state)) {
                             return null;
                         }
 
-                        return app(DateTimeDisplayService::class)->formatDateTime($next->utc()->toDateTimeString());
+                        return app(DateTimeDisplayService::class)->formatDateTime($state);
                     })
                     ->placeholder(__('scheduled_znuny_tasks.placeholders.not_calculated')),
                 SelectColumn::make('queue_name')
