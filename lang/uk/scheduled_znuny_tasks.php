@@ -68,6 +68,9 @@ return [
         'not_resolved' => 'Не визначено',
         'no_options' => 'Немає доступних варіантів.',
     ],
+    'loading' => [
+        'filters' => 'Завантаження даних...',
+    ],
     'form' => [
         'sections' => [
             'task_details' => 'Деталі завдання',

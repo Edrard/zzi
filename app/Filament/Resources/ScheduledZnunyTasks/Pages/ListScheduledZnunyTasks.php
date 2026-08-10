@@ -6,11 +6,9 @@ use App\Filament\Resources\ScheduledZnunyTasks\ScheduledZnunyTaskResource;
 use App\Filament\Resources\ScheduledZnunyTasks\Widgets\SchedulerStatusConsole;
 use App\Models\ScheduledZnunyTask;
 use App\Services\Znuny\ZnunyCachedLookupService;
-use App\Support\ScheduledZnunyTasksRequestProfiler;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Support\Enums\Width;
-use Livewire\Attributes\Renderless;
 
 class ListScheduledZnunyTasks extends ListRecords
 {
@@ -57,68 +55,57 @@ class ListScheduledZnunyTasks extends ListRecords
 
     public function getQueueOptions(): array
     {
-        return app(ScheduledZnunyTasksRequestProfiler::class)->measure('filter_queue', function () {
-            return ScheduledZnunyTask::whereNotNull('queue_name')->distinct()->pluck('queue_name')->toArray();
-        });
-    }
-
-    #[Renderless]
-    public function getQueueEditorOptions(): array
-    {
-        return app(ZnunyCachedLookupService::class)->getFilteredQueueOptions();
+        return ScheduledZnunyTask::whereNotNull('queue_name')->distinct()->pluck('queue_name')->toArray();
     }
 
     public function getOwnerOptions(): array
     {
-        return app(ScheduledZnunyTasksRequestProfiler::class)->measure('filter_owner', function () {
-            $tasks = ScheduledZnunyTask::whereNotNull('owner_id')
-                ->select('owner_id', 'owner_login', 'queue_name')
-                ->get();
+        $tasks = ScheduledZnunyTask::whereNotNull('owner_id')
+            ->select('owner_id', 'owner_login', 'queue_name')
+            ->get();
 
-            $options = [];
-            $unresolved = [];
+        $options = [];
+        $unresolved = [];
 
-            // First pass: try to resolve from owner_login
-            foreach ($tasks as $task) {
-                $isRawId = (string) $task->owner_login === (string) $task->owner_id;
-                if (! empty($task->owner_login) && ! $isRawId) {
-                    $options[$task->owner_id] = $task->owner_login;
-                } elseif (! isset($options[$task->owner_id])) {
-                    $unresolved[$task->owner_id] = $task->queue_name;
-                }
+        // First pass: try to resolve from owner_login
+        foreach ($tasks as $task) {
+            $isRawId = (string) $task->owner_login === (string) $task->owner_id;
+            if (! empty($task->owner_login) && ! $isRawId) {
+                $options[$task->owner_id] = $task->owner_login;
+            } elseif (! isset($options[$task->owner_id])) {
+                $unresolved[$task->owner_id] = $task->queue_name;
+            }
+        }
+
+        // Second pass: try to resolve missing from lookup service
+        $lookupService = app(ZnunyCachedLookupService::class);
+        foreach ($unresolved as $ownerId => $queueName) {
+            if (isset($options[$ownerId])) {
+                continue; // was resolved by another task
             }
 
-            // Second pass: try to resolve missing from lookup service
-            $lookupService = app(ZnunyCachedLookupService::class);
-            foreach ($unresolved as $ownerId => $queueName) {
-                if (isset($options[$ownerId])) {
-                    continue; // was resolved by another task
-                }
+            $resolved = false;
+            if ($queueName) {
+                try {
+                    $queueOptions = $lookupService->getAssignableOwnerOptionsForQueue($queueName);
 
-                $resolved = false;
-                if ($queueName) {
-                    try {
-                        $queueOptions = app(ScheduledZnunyTasksRequestProfiler::class)->measure('owner_lookup', function () use ($lookupService, $queueName) {
-                            return $lookupService->getAssignableOwnerOptionsForQueue($queueName);
-                        });
-                        if (isset($queueOptions[$ownerId])) {
-                            $options[$ownerId] = (string) $queueOptions[$ownerId];
-                            $resolved = true;
-                        }
-                    } catch (\Throwable $e) {
-                        // Ignore API/cache errors and fallback
+                    if (isset($queueOptions[$ownerId])) {
+                        $options[$ownerId] = (string) $queueOptions[$ownerId];
+                        $resolved = true;
                     }
-                }
-
-                if (! $resolved) {
-                    $options[$ownerId] = "Owner ID: {$ownerId}";
+                } catch (\Throwable $e) {
+                    // Ignore API/cache errors and fallback
                 }
             }
 
-            asort($options, SORT_NATURAL | SORT_FLAG_CASE);
+            if (! $resolved) {
+                $options[$ownerId] = "Owner ID: {$ownerId}";
+            }
+        }
 
-            return $options;
-        });
+        asort($options, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return $options;
     }
 
     public function getMaxContentWidth(): Width|string|null

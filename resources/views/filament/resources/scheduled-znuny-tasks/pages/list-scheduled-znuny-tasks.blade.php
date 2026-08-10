@@ -1,4 +1,14 @@
 <x-filament-panels::page>
+<div
+    wire:loading.flex
+    wire:target="queueFilter, ownerFilter, activeFilter"
+    class="scheduled-znuny-filter-loading-overlay"
+    role="status"
+    aria-live="polite"
+    aria-label="{{ __('scheduled_znuny_tasks.loading.filters') }}"
+>
+    <div class="scheduled-znuny-filter-loading-spinner" aria-hidden="true"></div>
+</div>
 <style>
 @media (max-width: 900px) {
     .scheduled-task-filter-row {
@@ -118,86 +128,12 @@
     let currentCol = null;
     let currentAsc = true;
     let boundDelegation = false;
-    let scheduledQueueEditorOptions = null;
-    let scheduledQueueEditorOptionsPromise = null;
-
-    async function loadScheduledQueueEditorOptions() {
-        if (scheduledQueueEditorOptions !== null) {
-            return scheduledQueueEditorOptions;
-        }
-
-        if (scheduledQueueEditorOptionsPromise !== null) {
-            return scheduledQueueEditorOptionsPromise;
-        }
-
-        const wrapper = document.getElementById('scheduled-tasks-page-wrapper');
-        const livewireRoot = wrapper?.closest('[wire\\:id]') ?? wrapper?.querySelector('[wire\\:id]');
-        const componentId = livewireRoot?.getAttribute('wire:id');
-        const component = componentId ? Livewire.find(componentId) : null;
-
-        if (!component) return {};
-
-        scheduledQueueEditorOptionsPromise = component.getQueueEditorOptions()
-            .then(options => {
-                scheduledQueueEditorOptions = options;
-                return options;
-            })
-            .catch(error => {
-                scheduledQueueEditorOptionsPromise = null;
-                return {};
-            });
-
-        return scheduledQueueEditorOptionsPromise;
-    }
-
-    function populateScheduledQueueSelect(select, options) {
-        if (select.dataset.scheduledQueuePopulated === '1') return;
-
-        const currentValue = select.value;
-
-        const fragment = document.createDocumentFragment();
-        if (select.options.length > 0 && select.options[0].value === '') {
-            fragment.appendChild(select.options[0].cloneNode(true));
-        }
-
-        for (const [key, label] of Object.entries(options)) {
-            const opt = document.createElement('option');
-            opt.value = key;
-            opt.textContent = label;
-            fragment.appendChild(opt);
-        }
-
-        select.innerHTML = '';
-        select.appendChild(fragment);
-        select.value = currentValue;
-        select.dataset.scheduledQueuePopulated = '1';
-    }
-
-    function handleQueueSelectInteraction(e) {
-        const select = e.target.closest('.fi-ta-cell-queue-name .scheduled-znuny-select select.fi-select-input');
-        if (!select) return;
-
-        if (scheduledQueueEditorOptions !== null) {
-            populateScheduledQueueSelect(select, scheduledQueueEditorOptions);
-            return;
-        }
-
-        loadScheduledQueueEditorOptions().then(options => {
-            if (select.isConnected && Object.keys(options).length > 0) {
-                populateScheduledQueueSelect(select, options);
-            }
-        });
-    }
 
     function initScheduledTasksClientSort() {
-        loadScheduledQueueEditorOptions();
-
         const wrapper = document.getElementById('scheduled-tasks-page-wrapper');
         if (!wrapper) return;
 
         if (!boundDelegation) {
-            wrapper.addEventListener('pointerdown', handleQueueSelectInteraction);
-            wrapper.addEventListener('focusin', handleQueueSelectInteraction);
 
             wrapper.addEventListener('click', function(e) {
                 // Do not sort if user is interacting with an input/select
@@ -326,12 +262,84 @@
     document.addEventListener('livewire:navigated', initScheduledTasksClientSort);
     document.addEventListener('DOMContentLoaded', initScheduledTasksClientSort);
 
+    const scheduledTaskPendingRows = new Map();
+
+    function markScheduledTaskRowBusy(recordId) {
+        const el = document.querySelector(`[data-scheduled-record-id="${recordId}"]`);
+        if (!el) return;
+        const row = el.closest('tr');
+        if (row) {
+            row.classList.add('scheduled-znuny-row-busy');
+            row.setAttribute('aria-busy', 'true');
+            row.inert = true;
+        }
+    }
+
+    function clearScheduledTaskRowBusy(recordId) {
+        const el = document.querySelector(`[data-scheduled-record-id="${recordId}"]`);
+        if (!el) return;
+        const row = el.closest('tr');
+        if (row) {
+            row.classList.remove('scheduled-znuny-row-busy');
+            row.removeAttribute('aria-busy');
+            row.inert = false;
+        }
+    }
+
     if (window.Livewire && !window.stcs_hasBoundMorphHooks) {
         window.stcs_hasBoundMorphHooks = true;
         Livewire.hook('morph.updated', ({ el, component }) => {
             if (document.getElementById('scheduled-tasks-page-wrapper')) {
                 // Defer to let morph complete
                 requestAnimationFrame(() => initScheduledTasksClientSort());
+            }
+        });
+
+        Livewire.hook('commit', ({ commit, succeed, fail }) => {
+            if (!commit || !commit.calls) return;
+
+            let relevantCalls = commit.calls.filter(call =>
+                call.method === 'updateTableColumnState' &&
+                call.params &&
+                ['enabled', 'cron_expression', 'owner_id'].includes(call.params[0])
+            );
+
+            if (relevantCalls.length > 0) {
+                relevantCalls.forEach(call => {
+                    const recordId = call.params[1];
+                    let count = scheduledTaskPendingRows.get(recordId) || 0;
+                    scheduledTaskPendingRows.set(recordId, count + 1);
+                    markScheduledTaskRowBusy(recordId);
+                });
+
+                succeed(() => {
+                    relevantCalls.forEach(call => {
+                        const recordId = call.params[1];
+                        let count = scheduledTaskPendingRows.get(recordId) || 0;
+                        count--;
+                        if (count <= 0) {
+                            scheduledTaskPendingRows.delete(recordId);
+                            // Give DOM morph a tiny bit of time to settle if needed, but synchronous works as well if inert persists.
+                            requestAnimationFrame(() => clearScheduledTaskRowBusy(recordId));
+                        } else {
+                            scheduledTaskPendingRows.set(recordId, count);
+                        }
+                    });
+                });
+
+                fail(() => {
+                    relevantCalls.forEach(call => {
+                        const recordId = call.params[1];
+                        let count = scheduledTaskPendingRows.get(recordId) || 0;
+                        count--;
+                        if (count <= 0) {
+                            scheduledTaskPendingRows.delete(recordId);
+                            clearScheduledTaskRowBusy(recordId);
+                        } else {
+                            scheduledTaskPendingRows.set(recordId, count);
+                        }
+                    });
+                });
             }
         });
     }

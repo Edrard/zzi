@@ -7,7 +7,6 @@ use App\Models\ScheduledZnunyTask;
 use App\Services\Cron\CronService;
 use App\Services\Support\DateTimeDisplayService;
 use App\Services\Znuny\ZnunyCachedLookupService;
-use App\Support\ScheduledZnunyTasksRequestProfiler;
 use Carbon\Carbon;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\SelectColumn;
@@ -59,7 +58,10 @@ class ScheduledZnunyTasksTable
                 ToggleColumn::make('enabled')
                     ->label(__('scheduled_znuny_tasks.table.active'))
                     ->extraHeaderAttributes(['class' => 'scheduled-znuny-header'])
-                    ->extraCellAttributes(fn (ScheduledZnunyTask $record) => ['data-scheduled-sort-value' => $record->enabled ? '1' : '0'])
+                    ->extraCellAttributes(fn (ScheduledZnunyTask $record) => [
+                        'data-scheduled-sort-value' => $record->enabled ? '1' : '0',
+                        'data-scheduled-record-id' => $record->id,
+                    ])
                     ->rules(function (ScheduledZnunyTask $record) {
                         return [
                             function (string $attribute, $value, \Closure $fail) use ($record) {
@@ -114,7 +116,10 @@ class ScheduledZnunyTasksTable
                     ->label(__('scheduled_znuny_tasks.table.cron'))
                     ->extraAttributes(['class' => 'scheduled-znuny-cron'])
                     ->extraHeaderAttributes(['class' => 'scheduled-znuny-header'])
-                    ->extraCellAttributes(fn (ScheduledZnunyTask $record) => ['data-scheduled-sort-value' => $record->cron_expression ?? ''])
+                    ->extraCellAttributes(fn (ScheduledZnunyTask $record) => [
+                        'data-scheduled-sort-value' => $record->cron_expression ?? '',
+                        'data-scheduled-record-id' => $record->id,
+                    ])
                     ->rules([
                         function () {
                             return function (string $attribute, $value, \Closure $fail) {
@@ -155,19 +160,17 @@ class ScheduledZnunyTasksTable
                         return ['data-scheduled-sort-value' => Carbon::parse($state, 'UTC')->timestamp];
                     })
                     ->getStateUsing(function (ScheduledZnunyTask $record) {
-                        return app(ScheduledZnunyTasksRequestProfiler::class)->measure('cron_display', function () use ($record) {
-                            $cron = $record->cron_expression;
-                            $tz = $record->timezone;
+                        $cron = $record->cron_expression;
+                        $tz = $record->timezone;
 
-                            $cronService = app(CronService::class);
-                            if (empty($cron) || empty($tz) || ! $cronService->isValid($cron)) {
-                                return null;
-                            }
+                        $cronService = app(CronService::class);
+                        if (empty($cron) || empty($tz) || ! $cronService->isValid($cron)) {
+                            return null;
+                        }
 
-                            $next = $cronService->calculateNextRun($cron, $tz);
+                        $next = $cronService->calculateNextRun($cron, $tz);
 
-                            return $next ? $next->utc()->toDateTimeString() : null;
-                        });
+                        return $next ? $next->utc()->toDateTimeString() : null;
                     })
                     ->formatStateUsing(function (?string $state) {
                         if (empty($state)) {
@@ -177,118 +180,32 @@ class ScheduledZnunyTasksTable
                         return app(DateTimeDisplayService::class)->formatDateTime($state);
                     })
                     ->placeholder(__('scheduled_znuny_tasks.placeholders.not_calculated')),
-                SelectColumn::make('queue_name')
+                TextColumn::make('queue_name')
                     ->label(__('scheduled_znuny_tasks.table.queue'))
                     ->placeholder(__('scheduled_znuny_tasks.placeholders.not_selected'))
-                    ->extraAttributes(['class' => 'scheduled-znuny-select'])
-                    ->extraHeaderAttributes(['class' => 'scheduled-znuny-header'])
-                    ->options(function (ScheduledZnunyTask $record): array {
-                        $current = trim((string) ($record->queue_name ?? ''));
-
-                        return $current === ''
-                            ? []
-                            : [$current => $current];
-                    })
-                    ->updateStateUsing(function (ScheduledZnunyTask $record, $state) {
-                        if ($record->enabled && empty($state)) {
-                            Notification::make()->title(__('scheduled_znuny_tasks.notifications.cannot_clear_queue.title'))->body(__('scheduled_znuny_tasks.notifications.cannot_clear_queue.body'))->danger()->send();
-
-                            return ['error' => 'Queue is required for active tasks.'];
-                        }
-
-                        $record->queue_name = empty($state) ? null : $state;
-                        $record->owner_login = null;
-                        $record->owner_id = null;
-                        $record->customer_user_login = null;
-
-                        if ($state) {
-                            $lookupService = app(ZnunyCachedLookupService::class);
-                            $candidate = $lookupService->resolveTemplateCandidate($state);
-                            if ($candidate) {
-                                $record->customer_user_login = $candidate;
-                            }
-
-                            $ownerOptions = $lookupService->getAssignableOwnerOptionsForQueue($state);
-                            if (count($ownerOptions) === 1) {
-                                $onlyOwnerKey = array_key_first($ownerOptions);
-                                $onlyOwnerLabel = $ownerOptions[$onlyOwnerKey];
-                                if (is_numeric($onlyOwnerKey) && $onlyOwnerKey > 0) {
-                                    $record->owner_id = (int) $onlyOwnerKey;
-                                    $record->owner_login = (string) $onlyOwnerLabel;
-                                }
-                            }
-                        }
-                        $record->save();
-                    }),
-                SelectColumn::make('customer_user_login')
+                    ->extraHeaderAttributes(['class' => 'scheduled-znuny-header']),
+                TextColumn::make('customer_user_login')
                     ->label(__('scheduled_znuny_tasks.table.customer_user'))
                     ->placeholder(__('scheduled_znuny_tasks.placeholders.not_resolved'))
-                    ->extraAttributes(['class' => 'scheduled-znuny-select'])
                     ->extraHeaderAttributes(['class' => 'scheduled-znuny-header'])
-                    ->native(false)
-                    ->optionsLimit(10000)
-                    ->getOptionLabelUsing(function ($value) {
-                        if (empty($value)) {
+                    ->formatStateUsing(function ($state) {
+                        if (empty($state)) {
                             return null;
                         }
                         try {
-                            $label = app(ZnunyCachedLookupService::class)->getCustomerUserLabel((string) $value);
+                            $label = app(ZnunyCachedLookupService::class)->getCustomerUserLabel((string) $state);
 
-                            return $label ?: (string) $value;
+                            return $label ?: (string) $state;
                         } catch (\Throwable $e) {
-                            return (string) $value;
+                            return (string) $state;
                         }
-                    })
-                    ->options(function (ScheduledZnunyTask $record) {
-                        $queue = $record->queue_name;
-                        if (empty($queue)) {
-                            return [];
-                        }
-
-                        if (! request()->hasHeader('X-Livewire')) {
-                            return [];
-                        }
-
-                        $options = app(ScheduledZnunyTasksRequestProfiler::class)->measure('customer_lookup', function () use ($queue) {
-                            try {
-                                return app(ZnunyCachedLookupService::class)->getCustomerUserPrimaryOptionsForQueue($queue);
-                            } catch (\Throwable $e) {
-                                return [];
-                            }
-                        });
-
-                        try {
-                            $current = $record->customer_user_login;
-                            if ($current && ! isset($options[$current])) {
-                                $lookupService = app(ZnunyCachedLookupService::class);
-                                $label = $lookupService->getCustomerUserLabel($current);
-                                if ($label) {
-                                    $options[$current] = $label;
-                                } else {
-                                    $options[$current] = $current;
-                                }
-                            }
-
-                            return $options;
-                        } catch (\Throwable $e) {
-                            return $options ?? [];
-                        }
-                    })
-                    ->updateStateUsing(function (ScheduledZnunyTask $record, $state) {
-                        if ($record->enabled && empty($state)) {
-                            Notification::make()->title(__('scheduled_znuny_tasks.notifications.cannot_clear_customer_user.title'))->body(__('scheduled_znuny_tasks.notifications.cannot_clear_customer_user.body'))->danger()->send();
-
-                            return ['error' => 'Customer User is required for active tasks.'];
-                        }
-
-                        $record->customer_user_login = empty($state) ? null : $state;
-                        $record->save();
                     }),
                 SelectColumn::make('owner_id')
                     ->label(__('scheduled_znuny_tasks.table.owner'))
                     ->placeholder(__('scheduled_znuny_tasks.placeholders.not_selected'))
                     ->extraAttributes(['class' => 'scheduled-znuny-select'])
                     ->extraHeaderAttributes(['class' => 'scheduled-znuny-header'])
+                    ->extraCellAttributes(fn (ScheduledZnunyTask $record) => ['data-scheduled-record-id' => $record->id])
                     ->native(false)
                     ->optionsLimit(10000)
                     ->getOptionLabelUsing(function ($value, ScheduledZnunyTask $record) {
@@ -311,13 +228,11 @@ class ScheduledZnunyTasksTable
                             return [];
                         }
 
-                        $options = app(ScheduledZnunyTasksRequestProfiler::class)->measure('owner_lookup', function () use ($queue) {
-                            try {
-                                return app(ZnunyCachedLookupService::class)->getAssignableOwnerOptionsForQueue($queue);
-                            } catch (\Throwable $e) {
-                                return [];
-                            }
-                        });
+                        try {
+                            $options = app(ZnunyCachedLookupService::class)->getAssignableOwnerOptionsForQueue($queue);
+                        } catch (\Throwable $e) {
+                            $options = [];
+                        }
 
                         try {
                             $current = $record->owner_id;
