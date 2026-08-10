@@ -73,3 +73,212 @@ html:not(.dark) .linked-tickets-compact-table.fi-clickable:hover .fi-ta-text-ite
         border-top-color: var(--gray-800, #1f2937);
     }
 }
+
+/*
+ * Scheduled Znuny Tasks: compact table density.
+ *
+ * Important:
+ * Filament table cells themselves have little/no padding.
+ * Most vertical space comes from the column components inside the cells.
+ */
+.scheduled-znuny-header {
+    padding-block: 6px !important;
+    padding-inline: 8px !important;
+
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+/*
+ * Compact the actual Filament column components.
+ * Default is 12px horizontal / 16px vertical.
+ */
+.scheduled-znuny-row .fi-ta-text:not(.fi-inline),
+.scheduled-znuny-row .fi-ta-text-input:not(.fi-inline),
+.scheduled-znuny-row .fi-ta-select:not(.fi-inline),
+.scheduled-znuny-row .fi-ta-toggle:not(.fi-inline) {
+    padding-block: 4px !important;
+    padding-inline: 6px !important;
+}
+
+/*
+ * Stable column geometry:
+ * row content and filter results must never change total table width.
+ */
+.fi-ta-table:has(.scheduled-znuny-row) {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    table-layout: fixed !important;
+}
+
+.scheduled-znuny-row > .fi-ta-cell,
+.scheduled-znuny-row > .fi-ta-cell > .fi-ta-col {
+    min-width: 0 !important;
+    max-width: 100%;
+}
+
+/*
+ * Cron:
+ * Filament TextInputColumn has a default min-width of 12rem.
+ * Override that here; setting width alone is insufficient.
+ */
+.scheduled-znuny-row .scheduled-znuny-cron {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+}
+
+.scheduled-znuny-row .scheduled-znuny-cron .fi-input {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+
+    min-height: 28px !important;
+    padding-block: 2px !important;
+    padding-inline: 6px !important;
+
+    font-size: var(--text-xs, 0.75rem) !important;
+    line-height: 1.25rem !important;
+}
+
+/*
+ * Queue / Customer / Owner common control text.
+ */
+.scheduled-znuny-row .scheduled-znuny-select,
+.scheduled-znuny-row .scheduled-znuny-select .fi-input-wrp,
+.scheduled-znuny-row .scheduled-znuny-select .fi-input-wrp-content-ctn,
+.scheduled-znuny-row .scheduled-znuny-select .fi-select-input,
+.scheduled-znuny-row .scheduled-znuny-select .fi-select-input div[x-ref='select'],
+.scheduled-znuny-row .scheduled-znuny-select .fi-select-input-ctn,
+.scheduled-znuny-row .scheduled-znuny-select .fi-select-input-btn,
+.scheduled-znuny-row .scheduled-znuny-select .fi-select-input-value-ctn {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+}
+
+.scheduled-znuny-row .scheduled-znuny-select .fi-select-input {
+    font-size: var(--text-xs, 0.75rem) !important;
+}
+
+/*
+ * Native Queue select.
+ */
+.scheduled-znuny-row .fi-ta-cell-queue-name .scheduled-znuny-select select.fi-select-input {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+
+    min-height: 28px !important;
+    padding-block: 2px !important;
+    padding-inline-start: 8px !important;
+    padding-inline-end: 28px !important;
+
+    font-size: var(--text-xs, 0.75rem) !important;
+    line-height: 1.25rem !important;
+}
+
+/*
+ * Non-native Customer / Owner Filament select.
+ *
+ * Previous CSS only targeted `.fi-select-input`, which is only the wrapper.
+ * The visible control height comes from x-ref=select and .fi-select-input-btn.
+ */
+.scheduled-znuny-row .scheduled-znuny-select .fi-select-input div[x-ref='select'],
+.scheduled-znuny-row .scheduled-znuny-select .fi-select-input .fi-select-input-btn {
+    min-height: 28px !important;
+}
+
+.scheduled-znuny-row .scheduled-znuny-select .fi-select-input .fi-select-input-btn {
+    padding-block: 2px !important;
+    padding-inline-start: 8px !important;
+
+    font-size: var(--text-xs, 0.75rem) !important;
+    line-height: 1.25rem !important;
+}
+
+/*
+ * Two controls live at the right side of clearable SelectColumn:
+ * clear X + dropdown chevron.
+ * Keep enough room for both, but remove Filament's excessive default spacing.
+ */
+.scheduled-znuny-row .scheduled-znuny-select .fi-select-input .fi-select-input-ctn-clearable .fi-select-input-btn {
+    padding-inline-end: 44px !important;
+}
+
+.scheduled-znuny-row .scheduled-znuny-select .fi-select-input .fi-select-input-value-remove-btn {
+    inset-inline-end: 26px !important;
+}
+
+/*
+ * Selected value must NOT make a table row two lines tall.
+ * Only the CLOSED selected label is single-line/ellipsis.
+ * Dropdown items themselves remain unchanged and may show full/wrapped labels.
+ */
+.scheduled-znuny-row .scheduled-znuny-select .fi-select-input .fi-select-input-value-label {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/*
+ * Open Customer / Owner dropdown options.
+ * Filament defaults .fi-dropdown-list-item to --text-sm (14px).
+ */
+.scheduled-znuny-row .scheduled-znuny-select .fi-select-input-option {
+    font-size: var(--text-xs, 0.75rem) !important;
+    line-height: 1.25rem !important;
+}
+
+.scheduled-znuny-row .scheduled-znuny-select .fi-select-input-message {
+    font-size: var(--text-xs, 0.75rem) !important;
+    line-height: 1.25rem !important;
+}
+
+/*
+ * Percentage column widths.
+ */
+.fi-ta-table:has(.scheduled-znuny-row) .fi-ta-cell-enabled,
+.fi-ta-table:has(.scheduled-znuny-row) .fi-ta-header-cell-enabled {
+    width: 5% !important;
+}
+
+.fi-ta-table:has(.scheduled-znuny-row) .fi-ta-cell-name,
+.fi-ta-table:has(.scheduled-znuny-row) .fi-ta-header-cell-name {
+    width: 17% !important;
+}
+
+.fi-ta-table:has(.scheduled-znuny-row) .fi-ta-cell-cron-expression,
+.fi-ta-table:has(.scheduled-znuny-row) .fi-ta-header-cell-cron-expression {
+    width: 9% !important;
+}
+
+.fi-ta-table:has(.scheduled-znuny-row) .fi-ta-cell-next-run-at,
+.fi-ta-table:has(.scheduled-znuny-row) .fi-ta-header-cell-next-run-at {
+    width: 12% !important;
+}
+
+.fi-ta-table:has(.scheduled-znuny-row) .fi-ta-cell-queue-name,
+.fi-ta-table:has(.scheduled-znuny-row) .fi-ta-header-cell-queue-name {
+    width: 11% !important;
+}
+
+.fi-ta-table:has(.scheduled-znuny-row) .fi-ta-cell-customer-user-login,
+.fi-ta-table:has(.scheduled-znuny-row) .fi-ta-header-cell-customer-user-login {
+    width: 19% !important;
+}
+
+.fi-ta-table:has(.scheduled-znuny-row) .fi-ta-cell-owner-id,
+.fi-ta-table:has(.scheduled-znuny-row) .fi-ta-header-cell-owner-id {
+    width: 17% !important;
+}
+
+.fi-ta-table:has(.scheduled-znuny-row) .fi-ta-cell-last-status,
+.fi-ta-table:has(.scheduled-znuny-row) .fi-ta-header-cell-last-status {
+    width: 10% !important;
+}

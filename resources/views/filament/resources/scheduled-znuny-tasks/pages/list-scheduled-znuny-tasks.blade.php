@@ -115,8 +115,8 @@
 
 <script>
 (function() {
-    let currentCol = 0;
-    let currentAsc = false;
+    let currentCol = null;
+    let currentAsc = true;
     let boundDelegation = false;
 
     function initScheduledTasksClientSort() {
