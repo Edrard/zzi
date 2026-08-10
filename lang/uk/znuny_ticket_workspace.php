@@ -126,6 +126,7 @@ return [
         'not_available' => 'Недоступно',
     ],
     'management_actions' => [
+        'no_options_available' => 'Немає доступних варіантів.',
         'close_ticket' => 'Закрити',
         'close_ticket_heading_candidate' => 'Закрити звернення Znuny',
         'close_ticket_heading_anyway' => 'Все одно закрити звернення Znuny?',

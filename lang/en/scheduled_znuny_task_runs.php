@@ -95,6 +95,7 @@ return [
             'attempt' => 'Creation Attempt',
             'lookup' => 'Latest Lookup',
             'matches' => 'Lookup Matches',
+            'retry_chain' => 'Retry Chain',
         ],
         'actions' => [
             'review_attempt' => 'Review Attempt',
@@ -167,6 +168,11 @@ return [
             'ticket_state' => 'State',
             'ticket_state_type' => 'State Type',
             'ticket_queue' => 'Queue',
+            'retry_sequence' => 'Attempt',
+            'resolution_type' => 'Resolution Type',
+            'resolved_at' => 'Resolved At',
+            'created_by' => 'Created By',
+            'current_leaf' => 'Current',
             'yes' => 'Yes',
             'no' => 'No',
         ],
@@ -230,6 +236,14 @@ return [
             'unexpected_error' => [
                 'title' => 'Unexpected Error',
                 'body' => 'An unexpected error occurred during the operation.',
+            ],
+            'malformed_lineage' => [
+                'title' => 'Lineage Error',
+                'body' => 'Malformed retry lineage for this run.',
+            ],
+            'chain_closed' => [
+                'title' => 'Chain Closed',
+                'body' => 'The retry chain is already closed or successfully completed.',
             ],
         ],
         'empty' => [

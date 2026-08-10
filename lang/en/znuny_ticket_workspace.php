@@ -126,6 +126,7 @@ return [
         'not_available' => 'Not available',
     ],
     'management_actions' => [
+        'no_options_available' => 'No options available.',
         'close_ticket' => 'Close',
         'close_ticket_heading_candidate' => 'Close Znuny Ticket',
         'close_ticket_heading_anyway' => 'Close Znuny Ticket Anyway?',

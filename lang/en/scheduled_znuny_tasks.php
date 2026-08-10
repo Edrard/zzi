@@ -68,7 +68,11 @@ return [
         'not_resolved' => 'Not resolved',
         'no_options' => 'No options available.',
     ],
+    'loading' => [
+        'filters' => 'Loading data...',
+    ],
     'form' => [
+        'no_options' => 'No options available.',
         'sections' => [
             'task_details' => 'Task Details',
             'schedule' => 'Schedule',
