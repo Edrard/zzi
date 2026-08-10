@@ -674,6 +674,111 @@ class ZnunyCachedLookupServiceTest extends TestCase
         $this->assertSame(null, $service->resolveTemplateCandidate('Agent bud'));
     }
 
+    public function test_resolves_template_candidate_skips_malformed_mapping_rows()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>Clients', 'type' => 'string']);
+        Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], [
+            'value' => json_encode([
+                ['host_prefix' => ['bad'], 'queue_name' => 'A&P', 'note' => ''],
+                ['host_prefix' => 'BadPrefix', 'queue_name' => ['bad'], 'note' => ''],
+                ['host_prefix' => 'Aksenova', 'queue_name' => 'A&P', 'note' => ''],
+            ]),
+            'type' => 'json',
+        ]);
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('A&P')->once()->andReturn([
+                'AksenovaClients' => 'A&P Global <AksenovaClients>',
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertSame('AksenovaClients', $service->resolveTemplateCandidate('A&P'));
+    }
+
+    public function test_resolves_template_candidate_via_mapped_prefix()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>Clients', 'type' => 'string']);
+        Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], [
+            'value' => json_encode([
+                ['host_prefix' => 'Aksenova', 'queue_name' => 'A&P', 'note' => ''],
+            ]),
+            'type' => 'json',
+        ]);
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('A&P')->once()->andReturn([
+                'AksenovaClients' => 'A&P Global <AksenovaClients>',
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertSame('AksenovaClients', $service->resolveTemplateCandidate('A&P'));
+    }
+
+    public function test_resolves_template_candidate_existing_resolver_wins_before_mapping()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>Clients', 'type' => 'string']);
+        Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], [
+            'value' => json_encode([
+                ['host_prefix' => 'Mapped', 'queue_name' => 'Agent bud', 'note' => ''],
+            ]),
+            'type' => 'json',
+        ]);
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('Agent bud')->once()->andReturn([
+                'AgentClients' => 'Agent Clients',
+                'MappedClients' => 'Mapped Clients',
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertSame('AgentClients', $service->resolveTemplateCandidate('Agent bud'));
+    }
+
+    public function test_resolves_template_candidate_ambiguous_reverse_mappings_returns_null()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_customer_user_from_queue_template'], ['value' => '<queue>Clients', 'type' => 'string']);
+        Setting::updateOrCreate(['key' => 'znuny_queue_host_mappings'], [
+            'value' => json_encode([
+                ['host_prefix' => 'Aksenova', 'queue_name' => 'A&P', 'note' => ''],
+                ['host_prefix' => 'Other', 'queue_name' => 'A&P', 'note' => ''],
+            ]),
+            'type' => 'json',
+        ]);
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getCustomerUser');
+            $mock->shouldNotReceive('searchCustomerUsers');
+        });
+
+        $this->mock(ZnunyCustomerUserCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getOptionsForQueue')->with('A&P')->once()->andReturn([
+                'AksenovaClients' => 'Aksenova',
+                'OtherClients' => 'Other',
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $this->assertSame(null, $service->resolveTemplateCandidate('A&P'));
+    }
+
     public function test_search_customer_user_options_calls_client_once_with_trimmed_query()
     {
         $this->mock(ZnunyClient::class, function ($mock) {

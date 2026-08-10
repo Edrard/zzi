@@ -327,72 +327,35 @@ class ZnunyCachedLookupService
             }
 
             $ruleService = app(ZnunyTicketDefaultRuleService::class);
-            $accepted = null;
+            $accepted = $this->resolveCandidateFromSourceName($queueName, $options, $ruleService);
 
-            $words = preg_split('/\s+/u', $queueName);
-            $wordCount = count($words);
-
-            if ($wordCount === 1) {
-                $expected = $ruleService->customerUserFromQueue($queueName);
-                if (! empty($expected)) {
-                    foreach (array_keys($options) as $login) {
-                        if (strcasecmp((string) $login, $expected) === 0) {
-                            $accepted = (string) $login;
-                            break;
+            if ($accepted === null) {
+                $mappings = json_decode(SettingsService::string('znuny_queue_host_mappings'), true);
+                if (is_array($mappings)) {
+                    $fallbackCandidates = [];
+                    foreach ($mappings as $mapping) {
+                        if (! is_array($mapping)) {
+                            continue;
                         }
-                    }
-                }
-            } else {
-                $noSpaceQueue = preg_replace('/\s+/u', '', $queueName);
-                $expected = $ruleService->customerUserFromQueue($noSpaceQueue);
+                        $prefixRaw = $mapping['host_prefix'] ?? null;
+                        $qNameRaw = $mapping['queue_name'] ?? null;
 
-                $exactMatch = null;
-                if (! empty($expected)) {
-                    foreach (array_keys($options) as $login) {
-                        if (strcasecmp((string) $login, $expected) === 0) {
-                            $exactMatch = (string) $login;
-                            break;
+                        if (! is_string($prefixRaw) || ! is_string($qNameRaw)) {
+                            continue;
                         }
-                    }
-                }
 
-                if ($exactMatch !== null) {
-                    $accepted = $exactMatch;
-                } else {
-                    $template = SettingsService::string('znuny_customer_user_from_queue_template');
-                    if (! empty($template) && str_starts_with($template, '<queue>')) {
-                        $suffix = substr($template, 7);
-                        if ($suffix !== '') {
-                            $firstWord = $words[0];
-                            $secondWord = $words[1] ?? '';
+                        $prefix = trim($prefixRaw);
+                        $qName = trim($qNameRaw);
 
-                            $pattern = '/^'.preg_quote($firstWord, '/').'.*'.preg_quote($suffix, '/').'$/ui';
-                            $candidates = [];
-                            foreach (array_keys($options) as $login) {
-                                if (preg_match($pattern, (string) $login)) {
-                                    $candidates[] = (string) $login;
-                                }
-                            }
-
-                            if (count($candidates) === 1) {
-                                $accepted = $candidates[0];
-                            } elseif (count($candidates) > 1) {
-                                $secondWordCandidates = [];
-                                foreach ($candidates as $c) {
-                                    if (mb_stripos($c, $secondWord) !== false) {
-                                        $secondWordCandidates[] = $c;
-                                    }
-                                }
-
-                                if (count($secondWordCandidates) === 1) {
-                                    $accepted = $secondWordCandidates[0];
-                                } elseif (count($secondWordCandidates) > 1) {
-                                    $accepted = $this->sortCandidates($secondWordCandidates)[0];
-                                } else {
-                                    $accepted = $this->sortCandidates($candidates)[0];
-                                }
+                        if ($prefix !== '' && $qName !== '' && strcasecmp($qName, $queueName) === 0) {
+                            $mappedAccepted = $this->resolveCandidateFromSourceName($prefix, $options, $ruleService);
+                            if ($mappedAccepted !== null) {
+                                $fallbackCandidates[strtolower($mappedAccepted)] = $mappedAccepted;
                             }
                         }
+                    }
+                    if (count($fallbackCandidates) === 1) {
+                        $accepted = reset($fallbackCandidates);
                     }
                 }
             }
@@ -410,6 +373,80 @@ class ZnunyCachedLookupService
 
             return null;
         }
+    }
+
+    private function resolveCandidateFromSourceName(string $sourceName, array $options, ZnunyTicketDefaultRuleService $ruleService): ?string
+    {
+        $accepted = null;
+        $words = preg_split('/\s+/u', $sourceName);
+        $wordCount = count($words);
+
+        if ($wordCount === 1) {
+            $expected = $ruleService->customerUserFromQueue($sourceName);
+            if (! empty($expected)) {
+                foreach (array_keys($options) as $login) {
+                    if (strcasecmp((string) $login, $expected) === 0) {
+                        $accepted = (string) $login;
+                        break;
+                    }
+                }
+            }
+        } else {
+            $noSpaceQueue = preg_replace('/\s+/u', '', $sourceName);
+            $expected = $ruleService->customerUserFromQueue($noSpaceQueue);
+
+            $exactMatch = null;
+            if (! empty($expected)) {
+                foreach (array_keys($options) as $login) {
+                    if (strcasecmp((string) $login, $expected) === 0) {
+                        $exactMatch = (string) $login;
+                        break;
+                    }
+                }
+            }
+
+            if ($exactMatch !== null) {
+                $accepted = $exactMatch;
+            } else {
+                $template = SettingsService::string('znuny_customer_user_from_queue_template');
+                if (! empty($template) && str_starts_with($template, '<queue>')) {
+                    $suffix = substr($template, 7);
+                    if ($suffix !== '') {
+                        $firstWord = $words[0];
+                        $secondWord = $words[1] ?? '';
+
+                        $pattern = '/^'.preg_quote($firstWord, '/').'.*'.preg_quote($suffix, '/').'$/ui';
+                        $candidates = [];
+                        foreach (array_keys($options) as $login) {
+                            if (preg_match($pattern, (string) $login)) {
+                                $candidates[] = (string) $login;
+                            }
+                        }
+
+                        if (count($candidates) === 1) {
+                            $accepted = $candidates[0];
+                        } elseif (count($candidates) > 1) {
+                            $secondWordCandidates = [];
+                            foreach ($candidates as $c) {
+                                if (mb_stripos($c, $secondWord) !== false) {
+                                    $secondWordCandidates[] = $c;
+                                }
+                            }
+
+                            if (count($secondWordCandidates) === 1) {
+                                $accepted = $secondWordCandidates[0];
+                            } elseif (count($secondWordCandidates) > 1) {
+                                $accepted = $this->sortCandidates($secondWordCandidates)[0];
+                            } else {
+                                $accepted = $this->sortCandidates($candidates)[0];
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return $accepted;
     }
 
     private function sortCandidates(array $candidates): array
