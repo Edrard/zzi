@@ -118,12 +118,87 @@
     let currentCol = null;
     let currentAsc = true;
     let boundDelegation = false;
+    let scheduledQueueEditorOptions = null;
+    let scheduledQueueEditorOptionsPromise = null;
+
+    async function loadScheduledQueueEditorOptions() {
+        if (scheduledQueueEditorOptions !== null) {
+            return scheduledQueueEditorOptions;
+        }
+
+        if (scheduledQueueEditorOptionsPromise !== null) {
+            return scheduledQueueEditorOptionsPromise;
+        }
+
+        const wrapper = document.getElementById('scheduled-tasks-page-wrapper');
+        const livewireRoot = wrapper?.closest('[wire\\:id]') ?? wrapper?.querySelector('[wire\\:id]');
+        const componentId = livewireRoot?.getAttribute('wire:id');
+        const component = componentId ? Livewire.find(componentId) : null;
+
+        if (!component) return {};
+
+        scheduledQueueEditorOptionsPromise = component.getQueueEditorOptions()
+            .then(options => {
+                scheduledQueueEditorOptions = options;
+                return options;
+            })
+            .catch(error => {
+                scheduledQueueEditorOptionsPromise = null;
+                return {};
+            });
+
+        return scheduledQueueEditorOptionsPromise;
+    }
+
+    function populateScheduledQueueSelect(select, options) {
+        if (select.dataset.scheduledQueuePopulated === '1') return;
+
+        const currentValue = select.value;
+
+        const fragment = document.createDocumentFragment();
+        if (select.options.length > 0 && select.options[0].value === '') {
+            fragment.appendChild(select.options[0].cloneNode(true));
+        }
+
+        for (const [key, label] of Object.entries(options)) {
+            const opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = label;
+            fragment.appendChild(opt);
+        }
+
+        select.innerHTML = '';
+        select.appendChild(fragment);
+        select.value = currentValue;
+        select.dataset.scheduledQueuePopulated = '1';
+    }
+
+    function handleQueueSelectInteraction(e) {
+        const select = e.target.closest('.fi-ta-cell-queue-name .scheduled-znuny-select select.fi-select-input');
+        if (!select) return;
+
+        if (scheduledQueueEditorOptions !== null) {
+            populateScheduledQueueSelect(select, scheduledQueueEditorOptions);
+            return;
+        }
+
+        loadScheduledQueueEditorOptions().then(options => {
+            if (select.isConnected && Object.keys(options).length > 0) {
+                populateScheduledQueueSelect(select, options);
+            }
+        });
+    }
 
     function initScheduledTasksClientSort() {
+        loadScheduledQueueEditorOptions();
+
         const wrapper = document.getElementById('scheduled-tasks-page-wrapper');
         if (!wrapper) return;
 
         if (!boundDelegation) {
+            wrapper.addEventListener('pointerdown', handleQueueSelectInteraction);
+            wrapper.addEventListener('focusin', handleQueueSelectInteraction);
+
             wrapper.addEventListener('click', function(e) {
                 // Do not sort if user is interacting with an input/select
                 if (e.target.closest('input, select, button, a, label')) return;

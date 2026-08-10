@@ -19,23 +19,6 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ScheduledZnunyTasksTable
 {
-    private static function prepareQueueOptions(): void
-    {
-        if (app()->has('scheduled_tasks_queue_options')) {
-            return;
-        }
-
-        app(ScheduledZnunyTasksRequestProfiler::class)->measure('prepare_options', function () {
-            $lookupService = app(ZnunyCachedLookupService::class);
-
-            $queueOptions = app(ScheduledZnunyTasksRequestProfiler::class)->measure('queue_lookup', function () use ($lookupService) {
-                return $lookupService->getFilteredQueueOptions();
-            });
-
-            app()->instance('scheduled_tasks_queue_options', $queueOptions);
-        });
-    }
-
     public static function configure(Table $table): Table
     {
         return $table
@@ -199,10 +182,12 @@ class ScheduledZnunyTasksTable
                     ->placeholder(__('scheduled_znuny_tasks.placeholders.not_selected'))
                     ->extraAttributes(['class' => 'scheduled-znuny-select'])
                     ->extraHeaderAttributes(['class' => 'scheduled-znuny-header'])
-                    ->options(function () {
-                        self::prepareQueueOptions();
+                    ->options(function (ScheduledZnunyTask $record): array {
+                        $current = trim((string) ($record->queue_name ?? ''));
 
-                        return app('scheduled_tasks_queue_options') ?? [];
+                        return $current === ''
+                            ? []
+                            : [$current => $current];
                     })
                     ->updateStateUsing(function (ScheduledZnunyTask $record, $state) {
                         if ($record->enabled && empty($state)) {

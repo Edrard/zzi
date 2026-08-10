@@ -10,6 +10,7 @@ use App\Support\ScheduledZnunyTasksRequestProfiler;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Support\Enums\Width;
+use Livewire\Attributes\Renderless;
 
 class ListScheduledZnunyTasks extends ListRecords
 {
@@ -59,6 +60,12 @@ class ListScheduledZnunyTasks extends ListRecords
         return app(ScheduledZnunyTasksRequestProfiler::class)->measure('filter_queue', function () {
             return ScheduledZnunyTask::whereNotNull('queue_name')->distinct()->pluck('queue_name')->toArray();
         });
+    }
+
+    #[Renderless]
+    public function getQueueEditorOptions(): array
+    {
+        return app(ZnunyCachedLookupService::class)->getFilteredQueueOptions();
     }
 
     public function getOwnerOptions(): array
