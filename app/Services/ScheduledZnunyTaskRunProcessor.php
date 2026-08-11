@@ -289,7 +289,6 @@ class ScheduledZnunyTaskRunProcessor
             }
 
             // Cache is used for phase 3A consecutive failures.
-            // TODO: Move consecutive failure counter to settings if persistence across cache restarts is required.
             $failures = Cache::increment('scheduled_tasks_consecutive_failures');
             $autoDisable = SettingsService::bool('scheduled_tasks_auto_disable_on_failures', true);
             $threshold = SettingsService::int('scheduled_tasks_failure_threshold', 3);

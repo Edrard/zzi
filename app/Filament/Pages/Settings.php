@@ -585,11 +585,11 @@ class Settings extends Page implements HasForms
                 ],
                 'zabbix_problem_sync_audit_enabled' => [
                     'label' => 'Current Problems Sync Audit',
-                    'description' => 'Write summary audit records for scheduled Zabbix problem polling. Manual refreshes will be audited separately in a later stage regardless of this setting.',
+                    'description' => 'Write summary audit records for scheduled Zabbix problem polling.',
                 ],
                 'znuny_ticket_workspace_sync_audit_enabled' => [
                     'label' => 'Ticket Workspace Sync Audit',
-                    'description' => 'Write summary audit records for scheduled Ticket Workspace cache warming. Manual refreshes will be audited separately in a later stage regardless of this setting.',
+                    'description' => 'Write summary audit records for scheduled Ticket Workspace cache warming.',
                 ],
                 'znuny_ticket_url_template' => [
                     'label' => 'Znuny Ticket URL Template',
