@@ -44,6 +44,7 @@ class CreateTicketLocalizationTest extends TestCase
             $admin = User::factory()->create(['role' => 'admin']);
 
             $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
                 $mock->shouldReceive('getTicketStates')->andReturn(['new' => 'new']);
                 $mock->shouldReceive('getTicketPriorities')->andReturn(['3 normal' => '3 normal']);
             });
@@ -108,6 +109,7 @@ class CreateTicketLocalizationTest extends TestCase
             $admin = User::factory()->create(['role' => 'admin']);
 
             $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
                 $mock->shouldReceive('getTicketStates')->andReturn(['new' => 'new']);
                 $mock->shouldReceive('getTicketPriorities')->andReturn(['3 normal' => '3 normal']);
             });
@@ -168,6 +170,7 @@ class CreateTicketLocalizationTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
 
         $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
             $mock->shouldReceive('getTicketPriorities')->andReturn(['3 normal' => '3 normal']);
             $mock->shouldReceive('getTicketStates')->andReturn(['new' => 'new']);
         });
@@ -325,6 +328,7 @@ class CreateTicketLocalizationTest extends TestCase
             $admin = User::factory()->create(['role' => 'admin']);
 
             $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
                 $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['Raw' => 'Raw']);
                 $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([1 => 'John Doe']);
                 $mock->shouldReceive('getCustomerUserPrimaryOptionsForQueue')->andReturn(['johndoe' => 'John Doe <johndoe>']);

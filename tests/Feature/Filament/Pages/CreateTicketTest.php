@@ -20,9 +20,11 @@ class CreateTicketTest extends TestCase
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
-        $this->actingAs($admin)
-            ->get('/admin/create-ticket')
-            ->assertSuccessful();
+        $this->mock(ZnunyCachedLookupService::class, function (\Mockery\MockInterface $mock) {
+            $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
+            $mock->shouldReceive('getTicketStates')->andReturn(['new' => 'new'])->byDefault();
+            $mock->shouldReceive('getTicketPriorities')->andReturn(['3 normal' => '3 normal'])->byDefault();
+        });
 
         Livewire::actingAs($admin)
             ->test(CreateTicket::class)
@@ -38,6 +40,7 @@ class CreateTicketTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
 
         $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
             $mock->shouldReceive('getFilteredQueueOptions')->andReturn([
                 'Raw' => 'Raw',
             ]);
@@ -111,6 +114,7 @@ class CreateTicketTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
 
         $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
             $mock->shouldReceive('getFilteredQueueOptions')->andReturn([
                 'Raw' => 'Raw',
             ]);
@@ -174,6 +178,7 @@ class CreateTicketTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
 
         $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
             $mock->shouldReceive('getFilteredQueueOptions')->andReturn([
                 'Raw' => 'Raw',
                 'Network' => 'Network',
@@ -229,6 +234,7 @@ class CreateTicketTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
 
         $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
             $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['Raw' => 'Raw']);
             $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([]);
             $mock->shouldReceive('getTicketStates')->andReturn([]);
@@ -264,6 +270,7 @@ class CreateTicketTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
 
         $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
             $mock->shouldReceive('getFilteredQueueOptions')->andReturn([]);
             $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([]);
             $mock->shouldReceive('getTicketStates')->andReturn([]);
@@ -291,11 +298,12 @@ class CreateTicketTest extends TestCase
         $this->assertEquals([], $results);
     }
 
-    public function test_customer_user_search_calls_client_when_typed()
+    public function test_customer_user_search_uses_lookup_service_when_typed()
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
         $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
             $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['Raw' => 'Raw']);
             $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([]);
             $mock->shouldReceive('getTicketStates')->andReturn([]);
@@ -303,15 +311,16 @@ class CreateTicketTest extends TestCase
             $mock->shouldReceive('resolveTemplateCandidate')->andReturn(null);
 
             $mock->shouldReceive('getCustomerUserPrimaryOptionsForQueue')->andReturn([]);
-        });
-
-        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
-            $mock->shouldReceive('searchCustomerUsers')
+            $mock->shouldReceive('searchCustomerUserOptions')
                 ->with('john')
                 ->once()
                 ->andReturn([
-                    ['login' => 'johndoe', 'label' => 'John Doe <johndoe>'],
+                    'johndoe' => 'John Doe <johndoe>',
                 ]);
+        });
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('searchCustomerUsers');
         });
 
         $livewire = Livewire::actingAs($admin)
@@ -333,6 +342,7 @@ class CreateTicketTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
 
         $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
             $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['Raw' => 'Raw']);
             $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([]);
             $mock->shouldReceive('getTicketStates')->andReturn([]);
@@ -376,6 +386,7 @@ class CreateTicketTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
 
         $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
             $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['Raw' => 'Raw']);
             $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([]);
             $mock->shouldReceive('getTicketStates')->andReturn([]);
@@ -429,6 +440,7 @@ class CreateTicketTest extends TestCase
             ->assertSuccessful();
 
         $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
             $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['Raw' => 'Raw']);
             $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([1 => 'John Doe <johndoe>']);
             $mock->shouldReceive('getCustomerUserPrimaryOptionsForQueue')->andReturn(['johndoe' => 'John Doe <johndoe>']);
