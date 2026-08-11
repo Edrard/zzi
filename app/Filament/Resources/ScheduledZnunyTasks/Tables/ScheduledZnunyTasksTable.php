@@ -274,6 +274,11 @@ class ScheduledZnunyTasksTable
                         return ScheduledZnunyTaskResource::getStatusLabel($state);
                     })
                     ->badge()
+                    ->color(fn (?string $state): string => match ($state) {
+                        'success' => 'success',
+                        'failed', 'error' => 'danger',
+                        default => 'primary',
+                    })
                     ->extraCellAttributes(fn (ScheduledZnunyTask $record) => ['data-scheduled-sort-value' => $record->last_status ?? '']),
             ])
             ->paginated(false)
