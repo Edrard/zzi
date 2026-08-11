@@ -22,6 +22,8 @@ class RebuildOwnerSuggestionStatsCommandTest extends TestCase
             'cleanup_days' => 360,
         ]);
 
+        \Illuminate\Support\Facades\Cache::forget('owner_suggestion_last_rebuild_at');
+
         $this->artisan('owner-suggestion:rebuild-stats')
             ->expectsOutput('Starting Owner Suggestion stats rebuild...')
             ->expectsOutput('Rebuild completed successfully.')
@@ -37,6 +39,8 @@ class RebuildOwnerSuggestionStatsCommandTest extends TestCase
                 ]
             )
             ->assertSuccessful();
+
+        $this->assertNotNull(\Illuminate\Support\Facades\Cache::get('owner_suggestion_last_rebuild_at'));
     }
 
     public function test_command_failure_returns_failure_if_rebuilder_throws()
@@ -44,9 +48,13 @@ class RebuildOwnerSuggestionStatsCommandTest extends TestCase
         $mockRebuilder = $this->mock(OwnerSuggestionStatsRebuilder::class);
         $mockRebuilder->shouldReceive('rebuild')->once()->andThrow(new \Exception('DB failure'));
 
+        \Illuminate\Support\Facades\Cache::forget('owner_suggestion_last_rebuild_at');
+
         $this->artisan('owner-suggestion:rebuild-stats')
             ->expectsOutput('Starting Owner Suggestion stats rebuild...')
             ->expectsOutput('Rebuild failed: DB failure')
             ->assertFailed();
+
+        $this->assertNull(\Illuminate\Support\Facades\Cache::get('owner_suggestion_last_rebuild_at'));
     }
 }

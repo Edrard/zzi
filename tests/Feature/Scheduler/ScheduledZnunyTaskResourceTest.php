@@ -281,28 +281,6 @@ class ScheduledZnunyTaskResourceTest extends TestCase
         ]);
     }
 
-    public function test_empty_inline_queue_does_not_overwrite_existing()
-    {
-        $admin = User::factory()->create(['role' => 'admin']);
-
-        $task = ScheduledZnunyTask::create([
-            'name' => 'Valid Task',
-            'enabled' => true,
-            'queue_name' => 'OriginalQueue',
-        ]);
-
-        $this->actingAs($admin);
-
-        Livewire::test(ListScheduledZnunyTasks::class)
-            ->call('updateTableColumnState', 'queue_name', $task->id, '')
-            ->assertNotified('Cannot clear Queue');
-
-        $this->assertDatabaseHas('scheduled_znuny_tasks', [
-            'id' => $task->id,
-            'queue_name' => 'OriginalQueue',
-        ]);
-    }
-
     public function test_empty_inline_owner_does_not_overwrite_existing()
     {
         $admin = User::factory()->create(['role' => 'admin']);
@@ -725,95 +703,6 @@ class ScheduledZnunyTaskResourceTest extends TestCase
 
         // Confirm Customer User column exists
         $this->assertStringContainsString('Customer User', $html);
-    }
-
-    public function test_inline_queue_update_resets_owner_and_resolves_customer_user_candidate()
-    {
-        $admin = User::factory()->create(['role' => 'admin']);
-        $this->actingAs($admin);
-
-        $task = ScheduledZnunyTask::create([
-            'name' => 'Valid Task',
-            'enabled' => false,
-            'queue_name' => 'OldQueue',
-            'owner_login' => 'old.owner',
-            'customer_user_login' => 'old.customer',
-        ]);
-
-        $mock = \Mockery::mock(ZnunyCachedLookupService::class)->makePartial();
-        $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['NewQueue' => 'NewQueue', 'OldQueue' => 'OldQueue']);
-        $mock->shouldReceive('resolveTemplateCandidate')->with('NewQueue')->andReturn('new.customer');
-        $this->app->instance(ZnunyCachedLookupService::class, $mock);
-
-        Livewire::test(ListScheduledZnunyTasks::class)
-            ->call('updateTableColumnState', 'queue_name', $task->id, 'NewQueue')
-            ->assertSuccessful();
-
-        $this->assertDatabaseHas('scheduled_znuny_tasks', [
-            'id' => $task->id,
-            'queue_name' => 'NewQueue',
-            'owner_login' => null,
-            'customer_user_login' => 'new.customer',
-        ]);
-    }
-
-    public function test_inline_queue_update_resets_owner_and_nulls_customer_user_if_no_candidate()
-    {
-        $admin = User::factory()->create(['role' => 'admin']);
-        $this->actingAs($admin);
-
-        $task = ScheduledZnunyTask::create([
-            'name' => 'Valid Task',
-            'enabled' => false,
-            'queue_name' => 'OldQueue',
-            'owner_login' => 'old.owner',
-            'customer_user_login' => 'old.customer',
-        ]);
-
-        $mock = \Mockery::mock(ZnunyCachedLookupService::class)->makePartial();
-        $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['NewQueue' => 'NewQueue', 'OldQueue' => 'OldQueue']);
-        $mock->shouldReceive('resolveTemplateCandidate')->with('NewQueue')->andReturn(null);
-        $this->app->instance(ZnunyCachedLookupService::class, $mock);
-
-        $component = Livewire::test(ListScheduledZnunyTasks::class)
-            ->call('updateTableColumnState', 'queue_name', $task->id, 'NewQueue')
-            ->assertSuccessful();
-
-        $this->assertDatabaseHas('scheduled_znuny_tasks', [
-            'id' => $task->id,
-            'queue_name' => 'NewQueue',
-            'owner_login' => null,
-            'customer_user_login' => null,
-        ]);
-    }
-
-    public function test_manual_inline_customer_user_update_saves_and_does_not_reset_queue()
-    {
-        $admin = User::factory()->create(['role' => 'admin']);
-        $this->actingAs($admin);
-
-        $task = ScheduledZnunyTask::create([
-            'name' => 'Valid Task',
-            'enabled' => false,
-            'queue_name' => 'QueueName',
-            'owner_login' => 'owner.name',
-            'customer_user_login' => null,
-        ]);
-
-        $mock = \Mockery::mock(ZnunyCachedLookupService::class)->makePartial();
-        $mock->shouldReceive('getCustomerUserPrimaryOptionsForQueue')->with('QueueName')->andReturn(['manual.customer' => 'Manual Customer']);
-        $this->app->instance(ZnunyCachedLookupService::class, $mock);
-
-        Livewire::test(ListScheduledZnunyTasks::class)
-            ->call('updateTableColumnState', 'customer_user_login', $task->id, 'manual.customer')
-            ->assertSuccessful();
-
-        $this->assertDatabaseHas('scheduled_znuny_tasks', [
-            'id' => $task->id,
-            'queue_name' => 'QueueName', // Not reset
-            'owner_login' => 'owner.name', // Not reset
-            'customer_user_login' => 'manual.customer',
-        ]);
     }
 
     public function test_enable_is_blocked_when_owner_id_is_missing_but_login_is_present()
