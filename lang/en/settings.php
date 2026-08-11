@@ -831,23 +831,23 @@ return [
         ],
         'owner_suggestion_similarity_threshold' => [
             'label' => 'Owner Suggestion Similarity Threshold',
-            'description' => 'Minimum similarity percentage used later when grouping similar problem names for owner suggestions',
+            'description' => 'Minimum similarity percentage used when grouping similar problem names for owner suggestions.',
         ],
         'owner_suggestion_statistics_retention_days' => [
             'label' => 'Owner Suggestion Statistics Retention Days',
-            'description' => 'Observations older than this remain stored but will later receive the old-statistics weight coefficient during aggregation',
+            'description' => 'Observations older than this remain stored but receive the old-statistics weight coefficient during aggregation.',
         ],
         'owner_suggestion_old_weight_coefficient' => [
             'label' => 'Owner Suggestion Old Weight Coefficient',
-            'description' => 'Coefficient applied later to observations older than the retention window',
+            'description' => 'Coefficient applied to observations older than the statistics retention window.',
         ],
         'owner_suggestion_observation_cleanup_days' => [
             'label' => 'Owner Suggestion Observation Cleanup Days',
-            'description' => 'Raw owner suggestion observations older than this will be physically deleted by future cleanup logic',
+            'description' => 'Raw owner suggestion observations older than this are deleted during statistics rebuild.',
         ],
         'owner_suggestion_rebuild_interval_minutes' => [
             'label' => 'Owner Suggestion Rebuild Interval Minutes',
-            'description' => 'Minimum interval between future owner suggestion aggregate rebuilds',
+            'description' => 'Minimum interval in minutes between automatic Owner Suggestion statistics rebuilds.',
         ],
     ],
 ];

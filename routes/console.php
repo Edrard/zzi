@@ -86,6 +86,20 @@ if ($autoCloseMode === 'dry_run' && $syncInterval > 0) {
 
 Schedule::command('scheduled-znuny:run')->everyMinute()->withoutOverlapping();
 
+Schedule::command('owner-suggestion:rebuild-stats')
+    ->everyMinute()
+    ->when(function () {
+        try {
+            $interval = max(1, SettingsService::int('owner_suggestion_rebuild_interval_minutes', 180));
+        } catch (\Throwable $e) {
+            $interval = 180;
+        }
+        $lastRun = \Illuminate\Support\Facades\Cache::get('owner_suggestion_last_rebuild_at', 0);
+
+        return intdiv(now()->timestamp - $lastRun, 60) >= $interval;
+    })
+    ->withoutOverlapping();
+
 // Znuny Prewarm Datasets
 $prewarmDatasets = [
     'queues' => ['key' => 'znuny_prewarm_queues_interval_minutes', 'default' => 5],

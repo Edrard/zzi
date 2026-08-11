@@ -33,6 +33,8 @@ class RebuildOwnerSuggestionStatsCommand extends Command
         try {
             $summary = $rebuilder->rebuild();
 
+            \Illuminate\Support\Facades\Cache::put('owner_suggestion_last_rebuild_at', now()->timestamp);
+
             $this->info('Rebuild completed successfully.');
             $this->table(
                 ['Metric', 'Value'],
