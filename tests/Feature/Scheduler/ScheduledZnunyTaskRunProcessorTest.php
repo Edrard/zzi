@@ -627,4 +627,71 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
 
         $this->assertEquals(1, \App\Models\AuditLog::where("action", "scheduled_znuny_run_uncertain")->where("entity_id", $this->run->id)->count());
     }
+
+    public function test_confirmed_success_preserves_state_even_if_cache_cleanup_fails()
+    {
+        $this->ticketServiceMock->expects($this->once())
+            ->method('createTicketFromTask')
+            ->willReturn([
+                'outcome' => ScheduledTicketCreationOutcome::SUCCESS,
+                'ticket_id' => 124,
+                'ticket_number' => 'TN124',
+                'error_summary' => null,
+                'error_details' => null,
+            ]);
+
+        Cache::shouldReceive('forget')
+            ->once()
+            ->with('scheduled_tasks_consecutive_failures')
+            ->andThrow(new \Exception('Cache cleanup failed'));
+
+        $processor = app(ScheduledZnunyTaskRunProcessor::class);
+        $processor->processNextBatch(1, 10);
+
+        $this->run->refresh();
+        $this->task->refresh();
+
+        $this->assertEquals('success', $this->run->status);
+        $this->assertEquals(124, $this->run->ticket_id);
+        $this->assertEquals('TN124', $this->run->ticket_number);
+
+        $this->assertEquals('success', $this->task->last_status);
+        $this->assertEquals(124, $this->task->last_ticket_id);
+        $this->assertEquals('TN124', $this->task->last_ticket_number);
+    }
+
+    public function test_confirmed_success_preserves_run_success_state_even_if_task_update_fails()
+    {
+        $this->ticketServiceMock->expects($this->once())
+            ->method('createTicketFromTask')
+            ->willReturn([
+                'outcome' => ScheduledTicketCreationOutcome::SUCCESS,
+                'ticket_id' => 125,
+                'ticket_number' => 'TN125',
+                'error_summary' => null,
+                'error_details' => null,
+            ]);
+
+        $throw = true;
+        ScheduledZnunyTask::updating(function () use (&$throw) {
+            if ($throw) {
+                $throw = false;
+                throw new \Exception('Task update failure');
+            }
+        });
+
+        $processor = app(ScheduledZnunyTaskRunProcessor::class);
+        $processor->processNextBatch(1, 10);
+
+        $this->run->refresh();
+        $this->task->refresh();
+
+        $this->assertEquals('success', $this->run->status);
+        $this->assertEquals(125, $this->run->ticket_id);
+        $this->assertEquals('TN125', $this->run->ticket_number);
+
+        $this->assertEquals('success', $this->task->last_status);
+        $this->assertEquals(125, $this->task->last_ticket_id);
+        $this->assertEquals('TN125', $this->task->last_ticket_number);
+    }
 }

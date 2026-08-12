@@ -64,6 +64,7 @@ class ScheduledZnunyTaskRunProcessor
 
         $run->refresh();
 
+        $confirmedSuccess = false;
         try {
             $task = $run->task;
             if (! $task) {
@@ -76,6 +77,7 @@ class ScheduledZnunyTaskRunProcessor
 
             switch ($result['outcome']) {
                 case ScheduledTicketCreationOutcome::SUCCESS:
+                    $confirmedSuccess = true;
                     $run->update([
                         'status' => 'success',
                         'finished_at' => $finishedAt->toDateTimeString(),
@@ -271,6 +273,36 @@ class ScheduledZnunyTaskRunProcessor
             $finishedAt = now('UTC');
             Log::error('Scheduled task run processor exception: '.$e->getMessage(), ['run_id' => $run->id]);
 
+            if (isset($confirmedSuccess) && $confirmedSuccess) {
+                try {
+                    $run->update([
+                        'status' => 'success',
+                        'finished_at' => $finishedAt->toDateTimeString(),
+                        'duration_ms' => isset($startedAt) ? $startedAt->diffInMilliseconds($finishedAt) : null,
+                        'ticket_id' => $result['ticket_id'] ?? null,
+                        'ticket_number' => $result['ticket_number'] ?? null,
+                    ]);
+                } catch (\Throwable $inner) {
+                    Log::error('Failed to preserve run success state: '.$inner->getMessage(), ['run_id' => $run->id]);
+                }
+
+                if (isset($task)) {
+                    try {
+                        $task->update([
+                            'last_run_at' => $finishedAt->toDateTimeString(),
+                            'last_success_at' => $finishedAt->toDateTimeString(),
+                            'last_status' => 'success',
+                            'last_ticket_id' => $result['ticket_id'] ?? null,
+                            'last_ticket_number' => $result['ticket_number'] ?? null,
+                        ]);
+                    } catch (\Throwable $inner) {
+                        Log::error('Failed to preserve task success state: '.$inner->getMessage(), ['task_id' => $task->id]);
+                    }
+                }
+
+                return true;
+            }
+
             $run->update([
                 'status' => 'failed',
                 'finished_at' => $finishedAt->toDateTimeString(),
@@ -279,8 +311,8 @@ class ScheduledZnunyTaskRunProcessor
                 'error_details' => $e->getMessage()."\n".$e->getTraceAsString(),
             ]);
 
-            if ($run->task) {
-                $run->task->update([
+            if (isset($task) && $task) {
+                $task->update([
                     'last_run_at' => $finishedAt->toDateTimeString(),
                     'last_status' => 'failed',
                     'last_failure_at' => $finishedAt->toDateTimeString(),
