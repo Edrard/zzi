@@ -591,8 +591,6 @@ class ZnunyTicketManagementActions
                                         ->danger()
                                         ->send();
                                 }
-                            } catch (\Throwable $e) {
-                                $options = [];
                             }
 
                             $currentQueue = $payload->znuny_queue_name;
