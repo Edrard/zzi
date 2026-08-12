@@ -16,7 +16,8 @@ class ScheduledZnunyTaskRunProcessor
         private ScheduledZnunyTicketCreationService $ticketService,
         private SchedulerSafetyService $safetyService,
         private MailNotificationService $mailService,
-        private AuditLogger $auditLogger
+        private AuditLogger $auditLogger,
+        private \App\Services\Znuny\ZnunyTicketCreationReliabilityService $reliabilityService
     ) {}
 
     public function processNextBatch(int $limit, int $maxRuntimeSeconds): int
@@ -271,7 +272,12 @@ class ScheduledZnunyTaskRunProcessor
             }
         } catch (\Throwable $e) {
             $finishedAt = now('UTC');
-            Log::error('Scheduled task run processor exception: '.$e->getMessage(), ['run_id' => $run->id]);
+
+            $sanitizedMessage = $this->reliabilityService->sanitizeExceptionMessage($e->getMessage());
+            $safeSummary = mb_substr($sanitizedMessage, 0, 255);
+            $safeDetails = mb_substr(get_class($e) . ': ' . $sanitizedMessage, 0, 1000);
+
+            Log::error('Scheduled task run processor exception: '.$safeSummary, ['run_id' => $run->id]);
 
             if (isset($confirmedSuccess) && $confirmedSuccess) {
                 try {
@@ -283,7 +289,8 @@ class ScheduledZnunyTaskRunProcessor
                         'ticket_number' => $result['ticket_number'] ?? null,
                     ]);
                 } catch (\Throwable $inner) {
-                    Log::error('Failed to preserve run success state: '.$inner->getMessage(), ['run_id' => $run->id]);
+                    $innerSanitized = $this->reliabilityService->sanitizeExceptionMessage($inner->getMessage());
+                    Log::error('Failed to preserve run success state: '.$innerSanitized, ['run_id' => $run->id]);
                 }
 
                 if (isset($task)) {
@@ -296,7 +303,8 @@ class ScheduledZnunyTaskRunProcessor
                             'last_ticket_number' => $result['ticket_number'] ?? null,
                         ]);
                     } catch (\Throwable $inner) {
-                        Log::error('Failed to preserve task success state: '.$inner->getMessage(), ['task_id' => $task->id]);
+                        $innerSanitized = $this->reliabilityService->sanitizeExceptionMessage($inner->getMessage());
+                        Log::error('Failed to preserve task success state: '.$innerSanitized, ['task_id' => $task->id]);
                     }
                 }
 
@@ -307,8 +315,8 @@ class ScheduledZnunyTaskRunProcessor
                 'status' => 'failed',
                 'finished_at' => $finishedAt->toDateTimeString(),
                 'duration_ms' => isset($startedAt) ? $startedAt->diffInMilliseconds($finishedAt) : null,
-                'error_summary' => substr($e->getMessage(), 0, 255),
-                'error_details' => $e->getMessage()."\n".$e->getTraceAsString(),
+                'error_summary' => $safeSummary,
+                'error_details' => $safeDetails,
             ]);
 
             if (isset($task) && $task) {
@@ -316,7 +324,7 @@ class ScheduledZnunyTaskRunProcessor
                     'last_run_at' => $finishedAt->toDateTimeString(),
                     'last_status' => 'failed',
                     'last_failure_at' => $finishedAt->toDateTimeString(),
-                    'last_error_summary' => substr($e->getMessage(), 0, 255),
+                    'last_error_summary' => $safeSummary,
                 ]);
             }
 
@@ -329,7 +337,7 @@ class ScheduledZnunyTaskRunProcessor
                 $reason = "Reached {$threshold} consecutive failures.";
                 $this->safetyService->disableScheduler($reason);
                 $this->alertService->danger('scheduler', 'Scheduler Disabled (Failure Threshold)', "Disabled after task '{$run->task_name_snapshot}' failed. Reason: {$reason}");
-                $this->mailService->sendAlarm('Scheduler Disabled (Failure Threshold)', "Disabled after task '{$run->task_name_snapshot}' failed.\nError: ".$e->getMessage());
+                $this->mailService->sendAlarm('Scheduler Disabled (Failure Threshold)', "Disabled after task '{$run->task_name_snapshot}' failed.\nError: ".$safeDetails);
 
                 return false;
             }

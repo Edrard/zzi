@@ -643,7 +643,7 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
         Cache::shouldReceive('forget')
             ->once()
             ->with('scheduled_tasks_consecutive_failures')
-            ->andThrow(new \Exception('Cache cleanup failed'));
+            ->andThrow(new \Exception('Cache cleanup failed with password=CR003_PASSWORD_SECRET'));
 
         $processor = app(ScheduledZnunyTaskRunProcessor::class);
         $processor->processNextBatch(1, 10);
@@ -676,7 +676,7 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
         ScheduledZnunyTask::updating(function () use (&$throw) {
             if ($throw) {
                 $throw = false;
-                throw new \Exception('Task update failure');
+                throw new \Exception('Task update failure with token=CR003_TOKEN_SECRET');
             }
         });
 
@@ -693,5 +693,65 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
         $this->assertEquals('success', $this->task->last_status);
         $this->assertEquals(125, $this->task->last_ticket_id);
         $this->assertEquals('TN125', $this->task->last_ticket_number);
+    }
+
+    public function test_generic_exception_path_redacts_secrets_and_preserves_safe_summary()
+    {
+        $this->ticketServiceMock->expects($this->once())
+            ->method('createTicketFromTask')
+            ->willThrowException(new \Exception(
+                'Database Error: password=CR003_PASSWORD_SECRET token=CR003_TOKEN_SECRET SessionID=CR003_SESSION_SECRET authorization=CR003_AUTH_SECRET UserLogin=CR003_LOGIN_SECRET'
+            ));
+
+        $mailServiceMock = $this->createMock(MailNotificationService::class);
+        $mailServiceMock->expects($this->once())
+            ->method('sendAlarm')
+            ->with(
+                'Scheduler Disabled (Failure Threshold)',
+                $this->logicalAnd(
+                    $this->stringContains('password=[REDACTED]'),
+                    $this->stringContains('token=[REDACTED]'),
+                    $this->stringContains('SessionID=[REDACTED]'),
+                    $this->stringContains('authorization=[REDACTED]'),
+                    $this->stringContains('UserLogin=[REDACTED]'),
+                    $this->logicalNot($this->stringContains('CR003')),
+                    $this->stringContains('Exception:')
+                )
+            );
+        $this->app->instance(MailNotificationService::class, $mailServiceMock);
+
+        Cache::put('scheduled_tasks_consecutive_failures', 2);
+        $processor = app(ScheduledZnunyTaskRunProcessor::class);
+        $processor->processNextBatch(1, 10);
+
+        $this->run->refresh();
+        $this->task->refresh();
+
+        $this->assertEquals('failed', $this->run->status);
+        $this->assertEquals(3, Cache::get('scheduled_tasks_consecutive_failures'));
+        $this->assertFalse(app(SchedulerSafetyService::class)->isSchedulerEnabled());
+
+        // Assert error_summary does not contain secrets
+        $this->assertStringNotContainsString('CR003', $this->run->error_summary);
+        $this->assertStringContainsString('password=[REDACTED]', $this->run->error_summary);
+        $this->assertStringContainsString('token=[REDACTED]', $this->run->error_summary);
+        $this->assertLessThanOrEqual(255, mb_strlen($this->run->error_summary));
+
+        // Assert error_details does not contain secrets or trace
+        $this->assertStringNotContainsString('CR003', $this->run->error_details);
+        $this->assertStringContainsString('password=[REDACTED]', $this->run->error_details);
+        $this->assertStringContainsString('token=[REDACTED]', $this->run->error_details);
+        $this->assertStringContainsString('SessionID=[REDACTED]', $this->run->error_details);
+        $this->assertStringContainsString('authorization=[REDACTED]', $this->run->error_details);
+        $this->assertStringContainsString('UserLogin=[REDACTED]', $this->run->error_details);
+        $this->assertStringNotContainsString('app/Services', $this->run->error_details);
+        $this->assertStringNotContainsString('ScheduledZnunyTaskRunProcessorTest', $this->run->error_details);
+        $this->assertStringContainsString('Exception:', $this->run->error_details);
+        $this->assertLessThanOrEqual(1000, mb_strlen($this->run->error_details));
+
+        // Assert task error summary
+        $this->assertStringNotContainsString('CR003', $this->task->last_error_summary);
+        $this->assertStringContainsString('password=[REDACTED]', $this->task->last_error_summary);
+        $this->assertLessThanOrEqual(255, mb_strlen($this->task->last_error_summary));
     }
 }
