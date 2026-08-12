@@ -79,8 +79,8 @@ class ScheduledZnunyTaskRunResourceTest extends TestCase
         $this->actingAs($admin);
 
         Livewire::test(ManageScheduledZnunyTaskRuns::class)
-            ->assertTableActionExists('view')
-            ->callTableAction('view', $run)
+            ->assertTableActionHidden('view', $run)
+            ->mountTableAction('view', $run)
             ->assertSuccessful();
     }
 
@@ -115,9 +115,9 @@ class ScheduledZnunyTaskRunResourceTest extends TestCase
         $mockService->expects($this->never())->method('createTicketFromTask');
         $this->app->instance(ScheduledZnunyTicketCreationService::class, $mockService);
 
-        Livewire::test(ManageScheduledZnunyTaskRuns::class)
-            ->assertTableActionExists('requeue_failed_run')
-            ->callTableAction('requeue_failed_run', $run)
+        Livewire::test(\App\Filament\Resources\ScheduledZnunyTaskRuns\Pages\ReviewScheduledZnunyTaskRunAttempt::class, ['record' => $run->id])
+            ->assertActionExists('manual_retry')
+            ->callAction('manual_retry')
             ->assertNotified();
 
         $this->assertEquals('failed', $run->fresh()->status);
@@ -134,30 +134,52 @@ class ScheduledZnunyTaskRunResourceTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
         $this->actingAs($admin);
 
+        $task = ScheduledZnunyTask::create([
+            'name' => 'Test Task',
+            'enabled' => false,
+        ]);
+
         $run = ScheduledZnunyTaskRun::create([
-            'task_name_snapshot' => 'Test',
+            'scheduled_znuny_task_id' => $task->id,
+            'task_name_snapshot' => $task->name,
             'run_type' => 'manual',
             'scheduled_for' => now(),
             'status' => 'uncertain',
             'error_details' => 'Initial error',
         ]);
 
-        $mockService = $this->createMock(ScheduledZnunyTicketCreationService::class);
-        $mockService->expects($this->never())->method('createTicketFromTask');
-        $this->app->instance(ScheduledZnunyTicketCreationService::class, $mockService);
+        $attempt = \App\Models\ZnunyTicketCreationAttempt::create([
+            'source_type' => 'scheduled_run',
+            'source_id' => $run->id,
+            'marker' => 'M_'.$run->id,
+            'status' => \App\Enums\ZnunyTicketCreationAttemptStatus::Uncertain->value,
+            'subject_original' => 'Subject',
+            'body_original' => 'Body',
+            'subject_sent' => 'Subject',
+            'body_sent' => 'Body',
+        ]);
 
-        Livewire::test(ManageScheduledZnunyTaskRuns::class)
-            ->assertTableActionExists('resolve_uncertain_run')
-            ->callTableAction('resolve_uncertain_run', $run, data: [
-                'note' => 'I checked Znuny, no ticket created.',
-            ])
-            ->assertNotified();
+        Livewire::test(
+            \App\Filament\Resources\ScheduledZnunyTaskRuns\Pages\ReviewScheduledZnunyTaskRunAttempt::class,
+            ['record' => $run->id]
+        )
+            ->assertActionExists('manual_close')
+            ->callAction('manual_close')
+            ->assertNotified(__('scheduled_znuny_task_runs.review.notifications.manual_close_success.title'));
 
         $run->refresh();
-        $this->assertEquals('skipped', $run->status);
-        $this->assertStringContainsString('Uncertain run manually reviewed', $run->error_summary);
-        $this->assertStringContainsString('I checked Znuny, no ticket created.', $run->error_details);
-        $this->assertStringContainsString('Initial error', $run->error_details);
+        $attempt->refresh();
+        $task->refresh();
+
+        $this->assertEquals('uncertain', $run->status);
+        $this->assertEquals('manual_closed', $run->resolution_type);
+        $this->assertNotNull($run->resolved_at);
+        $this->assertEquals(
+            \App\Enums\ZnunyTicketCreationAttemptStatus::ResolvedWithoutTicket,
+            $attempt->status
+        );
+        $this->assertEquals('success', $task->last_status);
+        $this->assertNull($task->last_error_summary);
     }
 
     public function test_open_ticket_action_only_visible_with_ticket_id()

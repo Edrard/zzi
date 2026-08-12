@@ -59,8 +59,7 @@ class ScheduledZnunyTaskRunResourceLocalizationTest extends TestCase
         $this->assertStringContainsString('TextInput::make(\'name\')', $formContent);
         $this->assertStringContainsString('Toggle::make(\'enabled\')', $formContent);
 
-        $this->assertStringContainsString('__(\'scheduled_znuny_task_runs.actions.requeue_run\')', $runContent);
-        $this->assertStringContainsString('Action::make(\'requeue_failed_run\')', $runContent);
-        $this->assertStringContainsString('Action::make(\'resolve_uncertain_run\')', $runContent);
+        $this->assertStringContainsString('__(\'scheduled_znuny_task_runs.actions.review_attempt\')', $runContent);
+        $this->assertStringContainsString('Action::make(\'review_attempt\')', $runContent);
     }
 }

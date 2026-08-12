@@ -6,6 +6,7 @@ use App\Enums\ScheduledZnunyTicketMarkerLookupStatus;
 use App\Enums\ZnunyTicketCreationAttemptStatus;
 use App\Filament\Resources\ScheduledZnunyTaskRuns\Pages\ReviewScheduledZnunyTaskRunAttempt;
 use App\Models\ScheduledZnunyTask;
+use App\Filament\Resources\ScheduledZnunyTaskRuns\ScheduledZnunyTaskRunResource;
 use App\Models\ScheduledZnunyTaskRun;
 use App\Models\User;
 use App\Models\ZnunyTicketCreationAttempt;
@@ -140,6 +141,10 @@ class ReviewScheduledZnunyTaskRunAttemptRetryChainTest extends TestCase
 
         Livewire::actingAs($this->user)
             ->test(ReviewScheduledZnunyTaskRunAttempt::class, ['record' => $child->id])
+            ->assertRedirect(ScheduledZnunyTaskRunResource::getUrl('review', ['record' => $root->id]));
+
+        Livewire::actingAs($this->user)
+            ->test(ReviewScheduledZnunyTaskRunAttempt::class, ['record' => $root->id])
             ->assertSeeHtmlInOrder([
                 'data-run-id="'.$root->id.'"',
                 'data-run-id="'.$child->id.'"',
@@ -274,27 +279,8 @@ class ReviewScheduledZnunyTaskRunAttemptRetryChainTest extends TestCase
             ->test(ReviewScheduledZnunyTaskRunAttempt::class, ['record' => $root->id])
             ->assertActionHidden('manual_retry');
 
-        // 5. Malformed Lineage (Hidden, throws error)
+        // 5. Malformed Lineage (Moved to separate test method)
         $root->update(['status' => 'failed', 'resolved_at' => null, 'resolution_type' => null]);
-        $malformed = ScheduledZnunyTaskRun::create([
-            'scheduled_znuny_task_id' => $this->task->id,
-            'task_name_snapshot' => 'T',
-            'run_type' => 'manual_retry',
-            'status' => 'failed',
-            'scheduled_for' => now()->addSeconds(10),
-            'root_run_id' => $root->id,
-            'parent_run_id' => $root->id,
-            'retry_sequence' => 0, // Invalid retry sequence! Duplicate sequence 0
-        ]);
-        $this->createAttemptForRun($malformed);
-
-        Livewire::actingAs($this->user)
-            ->test(ReviewScheduledZnunyTaskRunAttempt::class, ['record' => $malformed->id])
-            ->assertNotified(__('scheduled_znuny_task_runs.review.notifications.malformed_lineage.title'))
-            ->assertActionHidden('manual_retry')
-            ->assertSee(__('scheduled_znuny_task_runs.review.notifications.malformed_lineage.body'));
-
-        $malformed->delete();
 
         // 6. Eligibility state checks
         $this->mockState = [
@@ -350,4 +336,41 @@ class ReviewScheduledZnunyTaskRunAttemptRetryChainTest extends TestCase
 
         $this->assertEquals($initialRunCount, ScheduledZnunyTaskRun::count());
     }
+
+    public function test_malformed_lineage_throws_exception()
+    {
+        $root = ScheduledZnunyTaskRun::create([
+            'scheduled_znuny_task_id' => $this->task->id,
+            'task_name_snapshot' => 'T',
+            'run_type' => 'scheduled',
+            'status' => 'failed',
+            'scheduled_for' => now(),
+            'root_run_id' => null,
+            'parent_run_id' => null,
+            'retry_sequence' => 0,
+        ]);
+        $this->createAttemptForRun($root);
+
+        $malformed = ScheduledZnunyTaskRun::create([
+            'scheduled_znuny_task_id' => $this->task->id,
+            'task_name_snapshot' => 'T',
+            'run_type' => 'manual_retry',
+            'status' => 'failed',
+            'scheduled_for' => now()->addSeconds(10),
+            'root_run_id' => $root->id,
+            'parent_run_id' => $root->id,
+            'retry_sequence' => 0,
+        ]);
+        $this->createAttemptForRun($malformed);
+
+        $this->expectException(\Illuminate\View\ViewException::class);
+        $this->expectExceptionMessage(
+            "Malformed lineage: Run {$malformed->id} claims to be a descendant but has no parent or an invalid retry sequence."
+        );
+
+        Livewire::actingAs($this->user)
+            ->test(ReviewScheduledZnunyTaskRunAttempt::class, ['record' => $malformed->id]);
+    }
+
+
 }
