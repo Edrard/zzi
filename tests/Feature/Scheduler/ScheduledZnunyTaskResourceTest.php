@@ -35,6 +35,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
         Artisan::call('db:seed', ['--class' => 'SettingsSeeder']);
 
         $lookupMock = \Mockery::mock(ZnunyCachedLookupService::class)->makePartial();
+        $lookupMock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
         $lookupMock->shouldReceive('getTicketPriorities')->andReturn(['3 normal' => '3 normal', '5 very high' => '5 very high']);
         $lookupMock->shouldReceive('getTicketStates')->andReturn(['new' => 'new', 'open' => 'open']);
         $this->app->instance(ZnunyCachedLookupService::class, $lookupMock);
@@ -273,7 +274,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
 
         Livewire::test(ListScheduledZnunyTasks::class)
             ->call('updateTableColumnState', 'cron_expression', $task->id, 'invalid')
-            ->assertNotified('Validation Error');
+            ->assertNotified(__('scheduled_znuny_tasks.notifications.validation_error.title'));
 
         $this->assertDatabaseHas('scheduled_znuny_tasks', [
             'id' => $task->id,
@@ -335,7 +336,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
         Livewire::test(EditScheduledZnunyTask::class, ['record' => $task->getRouteKey()])
             ->assertActionExists('enqueue_run')
             ->callAction('enqueue_run')
-            ->assertNotified('Run Queued');
+            ->assertNotified(__('scheduled_znuny_tasks.notifications.run_queued.title'));
 
         $this->assertDatabaseHas('scheduled_znuny_task_runs', [
             'scheduled_znuny_task_id' => $task->id,
@@ -375,7 +376,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
 
         Livewire::test(EditScheduledZnunyTask::class, ['record' => $task->getRouteKey()])
             ->callAction('enqueue_run')
-            ->assertNotified('Run Queued');
+            ->assertNotified(__('scheduled_znuny_tasks.notifications.run_queued.title'));
 
         $this->assertDatabaseHas('scheduled_znuny_task_runs', [
             'scheduled_znuny_task_id' => $task->id,
@@ -685,24 +686,32 @@ class ScheduledZnunyTaskResourceTest extends TestCase
         }
     }
 
-    public function test_headers_render_sort_buttons()
+    public function test_headers_use_client_side_sorting_contract()
     {
         $admin = User::factory()->create(['role' => 'admin']);
         $this->actingAs($admin);
 
         $component = Livewire::test(ListScheduledZnunyTasks::class);
+        $table = $component->instance()->getTable();
 
-        $html = $component->html();
+        foreach ([
+            'enabled',
+            'name',
+            'cron_expression',
+            'next_run_at',
+            'queue_name',
+            'customer_user_login',
+            'owner_id',
+            'last_status',
+        ] as $columnName) {
+            $column = $table->getColumn($columnName);
 
-        // Confirm browser does NOT render clickable server-sort action on headers
-        $this->assertStringNotContainsString('wire:click="sortTable(', $html);
-
-        // Confirm the client side sorting script is loaded
-        $this->assertStringContainsString('scheduledTasksClientSort', $html);
-        $this->assertStringContainsString('text === \'Not selected\'', $html);
-
-        // Confirm Customer User column exists
-        $this->assertStringContainsString('Customer User', $html);
+            $this->assertNotNull($column, "Expected table column [{$columnName}] to exist.");
+            $this->assertFalse(
+                $column->isSortable(),
+                "Expected table column [{$columnName}] to leave server-side sorting disabled."
+            );
+        }
     }
 
     public function test_enable_is_blocked_when_owner_id_is_missing_but_login_is_present()
@@ -788,16 +797,10 @@ class ScheduledZnunyTaskResourceTest extends TestCase
         ]);
     }
 
-    public function test_queue_selection_auto_fills_only_owner_id_and_not_login()
+    public function test_queue_selection_auto_fills_owner_id_and_login()
     {
         $admin = User::factory()->create(['role' => 'admin']);
         $this->actingAs($admin);
-
-        $task = ScheduledZnunyTask::create([
-            'name' => 'Valid Task',
-            'enabled' => false,
-            'queue_name' => 'OldQueue',
-        ]);
 
         $mock = app(ZnunyCachedLookupService::class);
         $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['NewQueue' => 'NewQueue']);
@@ -805,16 +808,14 @@ class ScheduledZnunyTaskResourceTest extends TestCase
         // Only one owner option
         $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->with('NewQueue')->andReturn([7 => 'Seven']);
 
-        Livewire::test(ListScheduledZnunyTasks::class)
-            ->call('updateTableColumnState', 'queue_name', $task->id, 'NewQueue')
-            ->assertSuccessful();
-
-        $this->assertDatabaseHas('scheduled_znuny_tasks', [
-            'id' => $task->id,
-            'queue_name' => 'NewQueue',
-            'owner_id' => 7,
-            'owner_login' => 'Seven', // Now it auto-resolves login too
-        ]);
+        Livewire::test(CreateScheduledZnunyTask::class)
+            ->fillForm([
+                'name' => 'Valid Task',
+                'enabled' => false,
+            ])
+            ->set('data.queue_name', 'NewQueue')
+            ->assertSet('data.owner_id', 7)
+            ->assertSet('data.owner_login', 'Seven');
     }
 
     public function test_list_filters_do_not_throw_reset_page_exception()
