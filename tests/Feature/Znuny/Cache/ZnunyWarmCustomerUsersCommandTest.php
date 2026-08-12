@@ -371,7 +371,7 @@ class ZnunyWarmCustomerUsersCommandTest extends TestCase
 
         // Mock ZnunyClient instead of Http::fake because ZnunyClient normalizes raw rows.
         // If we want malformed normalized rows, we must bypass ZnunyClient's normalizer.
-        $mockClient = $this->createMock(ZnunyClient::class);
+        $mockClient = $this->createStub(ZnunyClient::class);
         $mockClient->method('searchCustomerUsers')->willReturn([
             ['login' => 123, 'label' => 'Label'], // login is not a string
         ]);

@@ -943,7 +943,7 @@ final class ScheduledZnunyTicketCreationAttemptManualLinkServiceTest extends Tes
 
     private function prepareChainSuccess(ZnunyTicketCreationAttempt $attempt): ScheduledZnunyTicketCreationAttemptManualLinkService
     {
-        $reader = $this->createMock(ZnunyTicketWorkspaceCacheReader::class);
+        $reader = $this->createStub(ZnunyTicketWorkspaceCacheReader::class);
         $reader->method('getTickets')->willReturn([[
             'TicketID' => 99,
             'TicketNumber' => 'TN99',

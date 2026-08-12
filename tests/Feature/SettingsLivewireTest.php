@@ -1269,13 +1269,13 @@ class SettingsLivewireTest extends TestCase
         $mappings = array_values($data['znuny_queue_host_mappings'] ?? []);
         $this->assertEquals('OLD_ENGLISH_NOTE', $mappings[0]['note'] ?? null);
 
-        $queueService = $this->createMock(ZnunyQueueService::class);
+        $queueService = $this->createStub(ZnunyQueueService::class);
         $queueService->method('getQueues')->willReturn([['name' => 'ExistingQueue']]);
 
-        $ruleService = $this->createMock(ZnunyTicketDefaultRuleService::class);
+        $ruleService = $this->createStub(ZnunyTicketDefaultRuleService::class);
         $ruleService->method('detectQueueFromHost')->willReturn('NewClient');
 
-        $problemCache = $this->createMock(ZabbixProblemCache::class);
+        $problemCache = $this->createStub(ZabbixProblemCache::class);
         $problemCache->method('all')->willReturn([
             ['hosts' => [['name' => 'NewClient-Server01']]],
         ]);

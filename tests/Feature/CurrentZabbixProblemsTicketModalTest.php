@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use Tests\TestCase;
 
 class CurrentZabbixProblemsTicketModalTest extends TestCase
@@ -1590,6 +1591,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->assertSet('ownerManuallyChanged', false);
     }
 
+    #[RunInSeparateProcess]
     public function test_selector_failure_does_not_break_modal()
     {
         $admin = User::factory()->create(['role' => 'admin']);
