@@ -52,7 +52,8 @@ class MailNotificationService
                     ->subject("[{$prefix}] {$subject}");
             });
         } catch (\Throwable $e) {
-            Log::error('Failed to send email notification: '.$e->getMessage());
+            $safeError = 'Failed to send email notification: '.$this->sanitizeTransportException($e, $configData);
+            Log::error(mb_substr($safeError, 0, 1000));
         }
     }
 
@@ -101,5 +102,52 @@ class MailNotificationService
             'mail.from.address' => $configData['mail_from_address'] ?? 'noreply@example.com',
             'mail.from.name' => $configData['mail_from_name'] ?? 'System Alerts',
         ]);
+    }
+
+    private function sanitizeTransportException(\Throwable $e, array $configData): string
+    {
+        $message = $e->getMessage();
+
+        foreach (['mail_smtp_password', 'mail_smtp_username'] as $key) {
+            $credential = (string) ($configData[$key] ?? '');
+
+            if ($credential !== '') {
+                $message = str_replace($credential, '[REDACTED]', $message);
+            }
+        }
+
+        $message = preg_replace(
+            '/(Authorization\s*[:=]\s*)(?:(?:Bearer|Basic|Token)\s+)?([^\s,&"\'\r\n]+)/i',
+            '$1[REDACTED]',
+            $message
+        ) ?? $message;
+
+        $message = preg_replace(
+            '/(Bearer\s+)([^\s,&"\'\r\n]+)/i',
+            '$1[REDACTED]',
+            $message
+        ) ?? $message;
+
+        $keys = 'password|token|secret|api_key|apikey';
+
+        $message = preg_replace(
+            '/(["\']?(?:'.$keys.')["\']?\s*[=:]\s*)(["\'])(.*?)\2/i',
+            '$1$2[REDACTED]$2',
+            $message
+        ) ?? $message;
+
+        $message = preg_replace(
+            '/(["\']?(?:'.$keys.')["\']?\s*[=:]\s*)(?!["\'])([^\s&,\r\n]+)/i',
+            '$1[REDACTED]',
+            $message
+        ) ?? $message;
+
+        $message = preg_replace(
+            '/([a-z0-9+.-]+:\/\/)([^:@\/\s]+):([^@\/\s]+)(@)/i',
+            '$1[REDACTED]:[REDACTED]$4',
+            $message
+        ) ?? $message;
+
+        return mb_substr(get_class($e).': '.trim($message), 0, 1000);
     }
 }

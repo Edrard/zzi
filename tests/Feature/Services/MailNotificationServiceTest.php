@@ -96,4 +96,46 @@ class MailNotificationServiceTest extends TestCase
         $service = app(MailNotificationService::class);
         $service->sendWarning('Test Warning', 'Body');
     }
+
+    public function test_transport_exception_redacts_credentials_from_log()
+    {
+        Setting::updateOrCreate(['key' => 'mail_notifications_enabled'], ['value' => 'true']);
+        Setting::updateOrCreate(['key' => 'mail_transport'], ['value' => 'smtp']);
+        Setting::updateOrCreate(['key' => 'mail_smtp_username'], ['value' => 'CR005_SMTP_USER_SECRET']);
+
+        $secret = 'CR005_SMTP_PASSWORD_SECRET';
+        $encrypted = SettingsService::encryptForStorage('mail_smtp_password', $secret);
+        Setting::updateOrCreate(['key' => 'mail_smtp_password'], ['value' => $encrypted]);
+
+        Setting::updateOrCreate(['key' => 'mail_admin_recipients'], ['value' => 'admin@test.local']);
+
+        SettingsService::clearAllCaches();
+
+        Mail::shouldReceive('raw')
+            ->once()
+            ->andThrow(new \Exception(
+                'Connection failed for CR005_SMTP_USER_SECRET with CR005_SMTP_PASSWORD_SECRET, '
+                .'token=CR005_TOKEN_SECRET and Authorization: Bearer CR005_BEARER_SECRET '
+                .'at scheme://CR005_SMTP_USER_SECRET:CR005_SMTP_PASSWORD_SECRET@host.local '
+                .str_repeat('X', 1200)
+            ));
+
+        \Illuminate\Support\Facades\Log::shouldReceive('error')
+            ->once()
+            ->withArgs(function ($message) {
+                return ! str_contains($message, 'CR005_SMTP_USER_SECRET')
+                    && ! str_contains($message, 'CR005_SMTP_PASSWORD_SECRET')
+                    && ! str_contains($message, 'CR005_TOKEN_SECRET')
+                    && ! str_contains($message, 'CR005_BEARER_SECRET')
+                    && str_contains($message, '[REDACTED]')
+                    && str_contains($message, 'Exception:')
+                    && str_contains($message, 'Connection failed')
+                    && mb_strlen($message) <= 1000
+                    && ! str_contains($message, 'Stack trace:')
+                    && ! str_contains($message, "\n#0 ");
+            });
+
+        $service = app(MailNotificationService::class);
+        $service->sendAlarm('Test Alarm', 'Body');
+    }
 }
