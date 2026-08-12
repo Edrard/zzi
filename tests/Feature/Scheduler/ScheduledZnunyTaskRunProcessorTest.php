@@ -700,7 +700,7 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
         $this->ticketServiceMock->expects($this->once())
             ->method('createTicketFromTask')
             ->willThrowException(new \Exception(
-                'Database Error: password=CR003_PASSWORD_SECRET token=CR003_TOKEN_SECRET SessionID=CR003_SESSION_SECRET authorization=CR003_AUTH_SECRET UserLogin=CR003_LOGIN_SECRET'
+                'Database Error: password=CR003_PASSWORD_SECRET token=CR003_TOKEN_SECRET SessionID=CR003_SESSION_SECRET authorization=CR003_AUTH_SECRET UserLogin=CR003_LOGIN_SECRET Authorization: Bearer CR003_BEARER_SECRET Bearer CR003_BARE_BEARER_SECRET postgres://admin:CR003_DSN_SECRET@example.internal api_key=CR003_API_KEY_SECRET client_secret=CR003_CLIENT_SECRET access_token=CR003_ACCESS_TOKEN_SECRET refresh_token=CR003_REFRESH_TOKEN_SECRET'
             ));
 
         $mailServiceMock = $this->createMock(MailNotificationService::class);
@@ -744,6 +744,13 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
         $this->assertStringContainsString('SessionID=[REDACTED]', $this->run->error_details);
         $this->assertStringContainsString('authorization=[REDACTED]', $this->run->error_details);
         $this->assertStringContainsString('UserLogin=[REDACTED]', $this->run->error_details);
+        $this->assertStringContainsString('Authorization: [REDACTED]', $this->run->error_details);
+        $this->assertStringContainsString('Bearer [REDACTED]', $this->run->error_details);
+        $this->assertStringContainsString('postgres://[REDACTED]:[REDACTED]@example.internal', $this->run->error_details);
+        $this->assertStringContainsString('api_key=[REDACTED]', $this->run->error_details);
+        $this->assertStringContainsString('client_secret=[REDACTED]', $this->run->error_details);
+        $this->assertStringContainsString('access_token=[REDACTED]', $this->run->error_details);
+        $this->assertStringContainsString('refresh_token=[REDACTED]', $this->run->error_details);
         $this->assertStringNotContainsString('app/Services', $this->run->error_details);
         $this->assertStringNotContainsString('ScheduledZnunyTaskRunProcessorTest', $this->run->error_details);
         $this->assertStringContainsString('Exception:', $this->run->error_details);

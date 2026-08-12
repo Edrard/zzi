@@ -115,9 +115,37 @@ class ZnunyTicketCreationReliabilityService
 
     public function sanitizeExceptionMessage(string $message): string
     {
-        $pattern = '/(token|password|sessionid|authorization|userlogin)\s*[:=]\s*[^\s,;&]*/i';
+        $message = preg_replace(
+            '/(Authorization\s*[:=]\s*)(?:(?:Bearer|Basic|Token)\s+)?([^\s,&"\'\r\n]+)/i',
+            '$1[REDACTED]',
+            $message
+        ) ?? $message;
 
-        return preg_replace($pattern, '$1=[REDACTED]', $message);
+        $message = preg_replace(
+            '/(Bearer\s+)([^\s,&"\'\r\n]+)/i',
+            '$1[REDACTED]',
+            $message
+        ) ?? $message;
+
+        $keys = 'password|token|secret|api_key|apikey|access_token|refresh_token|client_secret|sessionid|session_id|userlogin';
+
+        $message = preg_replace(
+            '/(["\']?(?:'.$keys.')["\']?\s*[=:]\s*)(["\'])(.*?)\2/i',
+            '$1$2[REDACTED]$2',
+            $message
+        ) ?? $message;
+
+        $message = preg_replace(
+            '/(["\']?(?:'.$keys.')["\']?\s*[=:]\s*)(?!["\'])([^\s&,\r\n]+)/i',
+            '$1[REDACTED]',
+            $message
+        ) ?? $message;
+
+        return preg_replace(
+            '/([a-z0-9+.-]+:\/\/)([^:@\/\s]+):([^@\/\s]+)(@)/i',
+            '$1[REDACTED]:[REDACTED]$4',
+            $message
+        ) ?? $message;
     }
 
     public function sanitizedResponse(array $apiResult): array
@@ -128,7 +156,20 @@ class ZnunyTicketCreationReliabilityService
                 return;
             }
             $lowerKey = strtolower($key);
-            if (in_array($lowerKey, ['userlogin', 'password', 'token', 'sessionid', 'authorization'])) {
+            if (in_array($lowerKey, [
+                'userlogin',
+                'password',
+                'token',
+                'secret',
+                'api_key',
+                'apikey',
+                'access_token',
+                'refresh_token',
+                'client_secret',
+                'sessionid',
+                'session_id',
+                'authorization',
+            ], true)) {
                 $value = '[REDACTED]';
             }
         });

@@ -169,7 +169,7 @@ class ZnunyTicketCreationResultClassifierTest extends TestCase
         $sanitized = $reliability->sanitizeExceptionMessage('Error token=secret-value password: mypass');
 
         $this->assertStringContainsString('token=[REDACTED]', $sanitized);
-        $this->assertStringContainsString('password=[REDACTED]', $sanitized);
+        $this->assertStringContainsString('password: [REDACTED]', $sanitized);
         $this->assertStringNotContainsString('secret-value', $sanitized);
         $this->assertStringNotContainsString('mypass', $sanitized);
     }

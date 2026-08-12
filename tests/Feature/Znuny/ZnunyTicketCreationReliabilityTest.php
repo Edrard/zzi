@@ -301,6 +301,12 @@ class ZnunyTicketCreationReliabilityTest extends TestCase
                 'ticket_id' => 124,
                 'ticket_number' => '1234568',
                 'SessionID' => 'secret_token_456',
+                'api_key' => 'CR003_API_KEY_SECRET',
+                'client_secret' => 'CR003_CLIENT_SECRET',
+                'access_token' => 'CR003_ACCESS_TOKEN_SECRET',
+                'refresh_token' => 'CR003_REFRESH_TOKEN_SECRET',
+                'session_id' => 'CR003_SESSION_ID_SECRET',
+                'secret' => 'CR003_GENERIC_SECRET',
             ]);
 
         $this->app->instance(ZnunyClient::class, $mockClient);
@@ -316,6 +322,12 @@ class ZnunyTicketCreationReliabilityTest extends TestCase
         $this->assertEquals(124, $attempt->ticket_id);
         $this->assertEquals('1234568', $attempt->ticket_number);
         $this->assertEquals('[REDACTED]', $attempt->response_snapshot['SessionID']);
+        $this->assertEquals('[REDACTED]', $attempt->response_snapshot['api_key']);
+        $this->assertEquals('[REDACTED]', $attempt->response_snapshot['client_secret']);
+        $this->assertEquals('[REDACTED]', $attempt->response_snapshot['access_token']);
+        $this->assertEquals('[REDACTED]', $attempt->response_snapshot['refresh_token']);
+        $this->assertEquals('[REDACTED]', $attempt->response_snapshot['session_id']);
+        $this->assertEquals('[REDACTED]', $attempt->response_snapshot['secret']);
     }
 
     public function test_scheduled_processor_uncertain_run_stores_marked_payload_snapshot()
