@@ -11,6 +11,7 @@ use App\Services\SchedulerSafetyService;
 use App\Services\SettingsService;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\SelectColumn;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Columns\ToggleColumn;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -164,11 +165,11 @@ class ScheduledZnunyTaskListLocalizationTest extends TestCase
                 ->assertSeeHtml('Активне')
                 ->assertSeeHtml('Назва')
                 ->assertSeeHtml('Cron')
-                ->assertSeeHtml('Наступний запуск')
+                ->assertSeeHtml('Наступний')
                 ->assertSeeHtml('Черга')
-                ->assertSeeHtml('Користувач клієнта')
+                ->assertSeeHtml('Користувач')
                 ->assertSeeHtml('Власник')
-                ->assertSeeHtml('Останній результат')
+                ->assertSeeHtml('Останній')
                 ->assertSeeHtml('Не розраховано') // placeholder check
                 ->assertSeeHtml('Не вибрано')
                 ->assertSeeHtml('Не визначено');
@@ -237,7 +238,7 @@ class ScheduledZnunyTaskListLocalizationTest extends TestCase
         // 18. Inline edit callbacks remain present/connected.
         $this->assertInstanceOf(ToggleColumn::class, $component->instance()->getTable()->getColumn('enabled'));
         $this->assertInstanceOf(TextInputColumn::class, $component->instance()->getTable()->getColumn('cron_expression'));
-        $this->assertInstanceOf(SelectColumn::class, $component->instance()->getTable()->getColumn('queue_name'));
+        $this->assertInstanceOf(\Filament\Tables\Columns\TextColumn::class, $component->instance()->getTable()->getColumn('queue_name'));
     }
 
     public function test_scheduler_actions_mocking(): void

@@ -330,13 +330,13 @@ class LocalizationFoundationTest extends TestCase
         App::setLocale('en');
 
         $this->assertEquals('Dashboard', Dashboard::getNavigationLabel());
-        $this->assertEquals('Create Ticket', CreateTicket::getNavigationLabel());
-        $this->assertEquals('Current Problems', CurrentZabbixProblems::getNavigationLabel());
-        $this->assertEquals('Ticket Workspace', ZnunyTicketWorkspace::getNavigationLabel());
-        $this->assertEquals('Linked Ticket', ZabbixTicketResource::getModelLabel());
-        $this->assertEquals('Scheduler Log', ScheduledZnunyTaskRunResource::getModelLabel());
+        $this->assertEquals('Create ticket', CreateTicket::getNavigationLabel());
+        $this->assertEquals('Current problems', CurrentZabbixProblems::getNavigationLabel());
+        $this->assertEquals('Ticket workspace', ZnunyTicketWorkspace::getNavigationLabel());
+        $this->assertEquals('Linked ticket', ZabbixTicketResource::getModelLabel());
+        $this->assertEquals('Run log entry', ScheduledZnunyTaskRunResource::getModelLabel());
         $this->assertEquals('Audit Log', AuditLogResource::getModelLabel());
-        $this->assertEquals('Ignore Filter', ZabbixProblemFilterResource::getModelLabel());
+        $this->assertEquals('Ignore filter', ZabbixProblemFilterResource::getModelLabel());
     }
 
     public function test_classes_resolve_ukrainian_metadata_correctly(): void
@@ -349,7 +349,7 @@ class LocalizationFoundationTest extends TestCase
         $this->assertEquals('Робоча область звернень', ZnunyTicketWorkspace::getNavigationLabel());
         $this->assertEquals('Пов’язане звернення', ZabbixTicketResource::getModelLabel());
         $this->assertEquals('Запис журналу запусків', ScheduledZnunyTaskRunResource::getModelLabel());
-        $this->assertEquals('Запис журналу аудиту', AuditLogResource::getModelLabel());
+        $this->assertEquals('Журнал аудиту', AuditLogResource::getModelLabel());
         $this->assertEquals('Фільтр ігнорування', ZabbixProblemFilterResource::getModelLabel());
     }
 

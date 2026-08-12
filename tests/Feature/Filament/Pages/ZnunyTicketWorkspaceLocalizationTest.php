@@ -26,7 +26,7 @@ class ZnunyTicketWorkspaceLocalizationTest extends TestCase
 
         try {
             app()->setLocale('en');
-            $this->assertEquals('Close Ticket', __('znuny_ticket_workspace.management_actions.close_ticket'));
+            $this->assertEquals('Close', __('znuny_ticket_workspace.management_actions.close_ticket'));
             $this->assertEquals('Ticket ID missing', __('znuny_ticket_workspace.management_actions.ticket_id_missing'));
             $this->assertEquals('Reopen Ticket', __('znuny_ticket_workspace.management_actions.reopen_ticket'));
             $this->assertEquals('Change', __('znuny_ticket_workspace.management_actions.change_assignment_action'));
@@ -34,10 +34,10 @@ class ZnunyTicketWorkspaceLocalizationTest extends TestCase
             $this->assertEquals('Sender', __('znuny_ticket_workspace.accordion.sender'));
 
             app()->setLocale('uk');
-            $this->assertEquals('Закрити звернення', __('znuny_ticket_workspace.management_actions.close_ticket'));
+            $this->assertEquals('Закрити', __('znuny_ticket_workspace.management_actions.close_ticket'));
             $this->assertEquals('Відсутній ID звернення', __('znuny_ticket_workspace.management_actions.ticket_id_missing'));
             $this->assertEquals('Повторно відкрити звернення Znuny', __('znuny_ticket_workspace.management_actions.reopen_ticket'));
-            $this->assertEquals('Змінити призначення', __('znuny_ticket_workspace.management_actions.change_assignment_action'));
+            $this->assertEquals('Змінити', __('znuny_ticket_workspace.management_actions.change_assignment_action'));
             $this->assertEquals('Створено', __('znuny_ticket_workspace.accordion.created'));
             $this->assertEquals('Відправник', __('znuny_ticket_workspace.accordion.sender'));
         } finally {
@@ -71,6 +71,6 @@ class ZnunyTicketWorkspaceLocalizationTest extends TestCase
 
         $this->assertStringContainsString('@foreach ($articles as $index => $article)', $accordionContent);
         $this->assertStringContainsString('x-data="{', $accordionContent);
-        $this->assertStringContainsString('{{ app(\App\Services\Support\DateTimeDisplayService::class)->formatDateTime($article[\'created_at\']) }}', $accordionContent);
+        $this->assertStringContainsString('{{ app(\App\Services\Support\DateTimeDisplayService::class)->formatLocalizedDateTime($article[\'created_at\']) }}', $accordionContent);
     }
 }

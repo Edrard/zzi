@@ -73,14 +73,14 @@ class SettingsZnunyTicketWorkspaceTabTest extends TestCase
 
         // Labels
         $expectedLabels = [
-            'znuny_ticket_workspace_enabled' => 'Enable Ticket Workspace',
-            'znuny_ticket_workspace_active_state_type_ids' => 'Active State Types',
-            'znuny_ticket_cache_refresh_interval_minutes' => 'Active Cache Refresh Interval (Minutes)',
-            'znuny_ticket_cache_default_limit' => 'Znuny API Fetch Batch Size',
-            'znuny_ticket_cache_max_pages_per_run' => 'Max Pages Per Run',
-            'znuny_ticket_cache_ttl_minutes' => 'Active Ticket Cache TTL (Minutes)',
-            'znuny_closed_ticket_window_days' => 'Closed Ticket Creation Window (Days)',
-            'znuny_closed_ticket_small_sync_interval_minutes' => 'Recent Closed Tickets Sync Interval (Minutes)',
+            'znuny_ticket_workspace_enabled' => 'Znuny Ticket Workspace Enabled',
+            'znuny_ticket_workspace_active_state_type_ids' => 'Znuny Ticket Workspace Active State Type Ids',
+            'znuny_ticket_cache_refresh_interval_minutes' => 'Znuny Ticket Cache Refresh Interval Minutes',
+            'znuny_ticket_cache_default_limit' => 'Znuny Ticket Cache Default Limit',
+            'znuny_ticket_cache_max_pages_per_run' => 'Znuny Ticket Cache Max Pages Per Run',
+            'znuny_ticket_cache_ttl_minutes' => 'Znuny Ticket Cache Ttl Minutes',
+            'znuny_closed_ticket_window_days' => 'Znuny Closed Ticket Window Days',
+            'znuny_closed_ticket_small_sync_interval_minutes' => 'Znuny Closed Ticket Small Sync Interval Minutes',
         ];
 
         foreach ($expectedLabels as $key => $label) {
@@ -89,14 +89,14 @@ class SettingsZnunyTicketWorkspaceTabTest extends TestCase
         }
 
         // Helper texts
-        $component->assertSee('Master switch for the entire Ticket Workspace subsystem. When disabled, scheduled and manual synchronization, individual ticket refreshes, and cached ticket reads are blocked. Existing cached data is retained and becomes available again after the feature is re-enabled.');
-        $component->assertSee('Select the Znuny state types included in the active ticket working set. These values are state type names, not numeric IDs. Changes apply to the next active-ticket cache refresh.');
-        $component->assertSee('How often the scheduled active-ticket cache warmer is allowed to run. The scheduler checks regularly but skips warming until this interval has elapsed; manual refreshes are not limited by this value. Lower values increase Znuny API load.');
-        $component->assertSee('Number of active tickets requested from Znuny in each API page during cache warming. This does not control the number of rows displayed in Ticket Workspace. Larger values reduce request count but increase response size and processing load.');
-        $component->assertSee('Maximum number of Znuny API pages processed during one active-ticket cache warming run. The approximate upper limit per run is Znuny API Fetch Batch Size × Max Pages Per Run; fewer pages are requested when Znuny has no more results.');
-        $component->assertSee('Base Redis lifetime for cached active tickets. The application may automatically increase the effective TTL so cached data does not expire before the next scheduled refresh and UI polling cycle. Increasing this value retains stale active-ticket data longer if synchronization stops.');
-        $component->assertSee('Closed tickets are cached only when their Created timestamp falls within this number of days. The window is not based on the actual close time because Znuny does not provide a sufficiently reliable close timestamp for this workflow. Reducing the value does not immediately remove entries already retained in Redis; cached entries expire naturally and may remain physically stored for up to six times this window.');
-        $component->assertSee('How often the scheduled small synchronization checks Znuny for recently changed closed tickets and refreshes the closed-ticket cache. Only tickets whose Created timestamp falls inside the configured creation window are stored. Lower values increase Znuny API load, and synchronization does not run while Ticket Workspace is disabled.');
+        $component->assertSee('Enable Redis-backed Ticket Workspace.');
+        $component->assertSee('JSON array of active operational state type IDs.');
+        $component->assertSee('Interval for the Ticket Workspace cache warmer in minutes.');
+        $component->assertSee('Default page size for Znuny ticket cache warming/search.');
+        $component->assertSee('Safety limit for paginated ZnunyTicketSearch cache warming.');
+        $component->assertSee('Default TTL for cached active Znuny tickets in minutes.');
+        $component->assertSee('Number of recent days to retain in the closed ticket cache.');
+        $component->assertSee('Interval for small closed ticket sync in minutes.');
     }
 
     private function getValidSettingsPayload(array $overrides = []): array

@@ -33,8 +33,8 @@ class ArticlesAccordionTest extends TestCase
         ]);
 
         $view->assertSee('Subject 1');
-        $view->assertSee('No subject'); // Fallback for empty subject
-        $view->assertSee('No body'); // Fallback for empty body
+        $view->assertSee(__('znuny_ticket_workspace.accordion.no_subject')); // Fallback for empty subject
+        $view->assertSee(__('znuny_ticket_workspace.accordion.no_body')); // Fallback for empty body
 
         // Check for removed fields
         $view->assertDontSee('Visible to Customer');
@@ -43,13 +43,13 @@ class ArticlesAccordionTest extends TestCase
 
         // Check for expanded state fields
         $view->assertSee('Body of article 1');
-        $view->assertSee('customer');
-        $view->assertSee('agent');
-        $view->assertSee(app(DateTimeDisplayService::class)->formatDateTime('2023-01-01 12:00:00'));
+        $view->assertSee(__('zabbix_tickets.sender_types.customer'));
+        $view->assertSee(__('zabbix_tickets.sender_types.agent'));
+        $view->assertSee(app(DateTimeDisplayService::class)->formatLocalizedDateTime('2023-01-01 12:00:00'));
 
         // Check for indicators
-        $view->assertSee('aria-label="Article"', false);
-        $view->assertSee('aria-label="Internal note"', false);
+        $view->assertSee('aria-label="' . __('znuny_ticket_workspace.accordion.article') . '"', false);
+        $view->assertSee('aria-label="' . __('znuny_ticket_workspace.accordion.internal_note') . '"', false);
         $view->assertDontSee('>Article</span>', false);
         $view->assertDontSee('>Note</span>', false);
 
