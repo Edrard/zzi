@@ -175,7 +175,7 @@ class ZnunyClientTest extends TestCase
             'https://example.invalid/api/Health*' => Http::response(['Success' => 1], 200),
             'https://example.invalid/api/SystemConfig*' => Http::response(['Plugin' => 'ZnunyAgentList'], 200),
             'https://example.invalid/api/Agent*' => Http::response(['Agents' => [['UserID' => 1, 'UserLogin' => 'agent1']]], 200),
-            'https://example.invalid/api/Queue*' => Http::response(['Queues' => [['QueueID' => 1, 'Name' => 'q1']]], 200),
+            'https://example.invalid/api/Queue*' => Http::response(['Queues' => [['QueueID' => 1, 'Name' => 'q1', 'ValidID' => 1]]], 200),
             'https://example.invalid/api/TicketState*' => Http::response(['TicketStates' => [['ID' => 1, 'Name' => 'new']]], 200),
         ]);
 
@@ -200,7 +200,7 @@ class ZnunyClientTest extends TestCase
             'https://example.invalid/api/Health*' => Http::response(['Success' => 1], 200),
             'https://example.invalid/api/SystemConfig*' => Http::response(['Plugin' => 'ZnunyAgentList'], 200),
             'https://example.invalid/api/Agent*' => Http::response(['Agents' => [['UserID' => 1, 'UserLogin' => 'agent1']]], 200),
-            'https://example.invalid/api/Queue*' => Http::response(['Queues' => [['QueueID' => 1, 'Name' => 'q1']]], 200),
+            'https://example.invalid/api/Queue*' => Http::response(['Queues' => [['QueueID' => 1, 'Name' => 'q1', 'ValidID' => 1]]], 200),
             'https://example.invalid/api/TicketState*' => Http::response(['TicketStates' => [['ID' => 1, 'Name' => 'new']]], 200),
             'https://example.invalid/api/ZnunyAgentListTicket/123*' => Http::response([
                 'Error' => [

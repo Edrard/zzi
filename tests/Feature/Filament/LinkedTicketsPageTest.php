@@ -96,7 +96,7 @@ class LinkedTicketsPageTest extends TestCase
         $this->assertArrayHasKey('open_ticket', $footerActions, 'open_ticket should be in extra footer actions');
 
         $openAction = $footerActions['open_ticket'];
-        $this->assertEquals('Open Ticket', $openAction->getLabel());
+        $this->assertEquals('Open', $openAction->getLabel());
 
         $attributes = $openAction->getExtraAttributes();
         $this->assertArrayHasKey('class', $attributes);

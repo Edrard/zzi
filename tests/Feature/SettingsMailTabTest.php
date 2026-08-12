@@ -114,6 +114,7 @@ class SettingsMailTabTest extends TestCase
     {
         $admin = User::factory()->create(['role' => 'admin']);
         $component = Livewire::actingAs($admin)->test(Settings::class)
+            ->set('data.mail_notifications_enabled', true)
             ->set('data.mail_transport', 'sendmail')
             ->set('data.mail_sendmail_path', '')
             ->call('save');
@@ -126,6 +127,7 @@ class SettingsMailTabTest extends TestCase
     {
         $admin = User::factory()->create(['role' => 'admin']);
         $component = Livewire::actingAs($admin)->test(Settings::class)
+            ->set('data.mail_notifications_enabled', true)
             ->set('data.mail_transport', 'smtp')
             ->set('data.mail_smtp_host', '')
             ->set('data.mail_sendmail_path', '')

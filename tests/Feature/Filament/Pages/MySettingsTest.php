@@ -65,8 +65,8 @@ class MySettingsTest extends TestCase
 
         Livewire::actingAs($viewer)
             ->test(MySettings::class)
-            ->assertSee('Current Problems')
-            ->assertDontSeeHtml('value="create-ticket"'); // It's a select option, so it shouldn't have this value
+            ->assertSee('Current problems')
+            ->assertDontSee('Create Ticket');
     }
 
     public function test_user_can_change_own_password()

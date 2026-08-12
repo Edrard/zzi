@@ -53,6 +53,7 @@ class ZnunyTicketDefaultRuleTest extends TestCase
     public function test_resolve_candidates_for_no_match_host()
     {
         Setting::where('key', 'znuny_queue_from_host_regex')->update(['value' => '^(?<queue>[0-9]+)$']); // Force to expect numbers
+        \App\Services\SettingsService::clearAllCaches();
         $service = new ZnunyTicketDefaultRuleService;
         $result = $service->resolveCandidates('TestCompany swiss test01');
 
@@ -67,6 +68,7 @@ class ZnunyTicketDefaultRuleTest extends TestCase
     public function test_invalid_regex_handled_gracefully()
     {
         Setting::where('key', 'znuny_queue_from_host_regex')->update(['value' => '^(?<queue>[unclosed']);
+        \App\Services\SettingsService::clearAllCaches();
         $service = new ZnunyTicketDefaultRuleService;
         $result = $service->resolveCandidates('TestCompany swiss test01');
 

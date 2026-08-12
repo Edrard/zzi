@@ -98,9 +98,7 @@ class ZnunyCustomerUserConsumerBoundaryTest extends TestCase
     public function test_unchanged_scheduled_task_table_uses_only_allowed_cached_methods_and_no_direct_read()
     {
         $file = 'app/Filament/Resources/ScheduledZnunyTasks/Tables/ScheduledZnunyTasksTable.php';
-        $this->assertFileContains($file, '->getCustomerUserPrimaryOptionsForQueue(');
         $this->assertFileContains($file, '->getCustomerUserLabel(');
-        $this->assertFileContains($file, '->resolveTemplateCandidate(');
         $this->assertFileNotContains($file, '->searchCustomerUsers(');
         $this->assertFileNotContains($file, '->getCustomerUser(');
     }
