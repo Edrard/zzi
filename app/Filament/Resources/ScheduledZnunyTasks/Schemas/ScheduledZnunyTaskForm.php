@@ -128,7 +128,7 @@ class ScheduledZnunyTaskForm
                                         $set('customer_user_login', $candidate);
                                     }
 
-                                    $ownerOptions = $lookupService->getAssignableOwnerOptionsForQueue($state);
+                                    $ownerOptions = $lookupService->getAssignableHumanOwnerOptionsForQueue($state);
                                     if (count($ownerOptions) === 1) {
                                         $onlyOwnerKey = array_key_first($ownerOptions);
                                         $onlyOwnerLabel = $ownerOptions[$onlyOwnerKey];
@@ -190,7 +190,7 @@ class ScheduledZnunyTaskForm
                                     return;
                                 }
                                 try {
-                                    $options = $lookupService->getAssignableOwnerOptionsForQueue($get('queue_name') ?? '');
+                                    $options = $lookupService->getAssignableHumanOwnerOptionsForQueue($get('queue_name') ?? '');
                                     $label = $options[$state] ?? null;
                                     $set('owner_login', $label ? (string) $label : null);
                                 } catch (\Throwable $e) {
@@ -199,15 +199,15 @@ class ScheduledZnunyTaskForm
                             })
                             ->options(function ($get, ZnunyCachedLookupService $lookupService) {
                                 try {
-                                    $options = $lookupService->getAssignableOwnerOptionsForQueue($get('queue_name') ?? '');
+                                    $options = $lookupService->getAssignableHumanOwnerOptionsForQueue($get('queue_name') ?? '');
                                 } catch (\Throwable $e) {
                                     $options = [];
                                 }
 
                                 $current = $get('owner_id');
-                                $currentDisplay = $get('owner_login') ?: $current;
                                 if ($current && ! isset($options[$current])) {
-                                    $options[$current] = (string) $currentDisplay;
+                                    $fallback = $get('owner_login') ?: null;
+                                    $options[$current] = $lookupService->getCanonicalOwnerLabel((int) $current, $fallback);
                                 }
 
                                 return $options;

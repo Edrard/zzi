@@ -64,42 +64,15 @@ class ListScheduledZnunyTasks extends ListRecords
             ->select('owner_id', 'owner_login', 'queue_name')
             ->get();
 
-        $options = [];
-        $unresolved = [];
-
-        // First pass: try to resolve from owner_login
-        foreach ($tasks as $task) {
-            $isRawId = (string) $task->owner_login === (string) $task->owner_id;
-            if (! empty($task->owner_login) && ! $isRawId) {
-                $options[$task->owner_id] = $task->owner_login;
-            } elseif (! isset($options[$task->owner_id])) {
-                $unresolved[$task->owner_id] = $task->queue_name;
-            }
-        }
-
-        // Second pass: try to resolve missing from lookup service
         $lookupService = app(ZnunyCachedLookupService::class);
-        foreach ($unresolved as $ownerId => $queueName) {
-            if (isset($options[$ownerId])) {
-                continue; // was resolved by another task
-            }
+        $options = [];
 
-            $resolved = false;
-            if ($queueName) {
-                try {
-                    $queueOptions = $lookupService->getAssignableOwnerOptionsForQueue($queueName);
+        foreach ($tasks as $task) {
+            $ownerId = (int) $task->owner_id;
 
-                    if (isset($queueOptions[$ownerId])) {
-                        $options[$ownerId] = (string) $queueOptions[$ownerId];
-                        $resolved = true;
-                    }
-                } catch (\Throwable $e) {
-                    // Ignore API/cache errors and fallback
-                }
-            }
-
-            if (! $resolved) {
-                $options[$ownerId] = "Owner ID: {$ownerId}";
+            if (! isset($options[$ownerId])) {
+                $fallback = ! empty($task->owner_login) ? $task->owner_login : null;
+                $options[$ownerId] = $lookupService->getCanonicalOwnerLabel($ownerId, $fallback);
             }
         }
 

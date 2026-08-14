@@ -29,9 +29,16 @@ class ScheduledZnunyTaskInfolist
                 TextEntry::make('queue_name')
                     ->placeholder('-'),
                 TextEntry::make('owner_id')
-                    ->numeric()
-                    ->placeholder('-'),
-                TextEntry::make('owner_login')
+                    ->label(__('scheduled_znuny_tasks.table.owner'))
+                    ->getStateUsing(function (ScheduledZnunyTask $record) {
+                        if (empty($record->owner_id)) {
+                            return null;
+                        }
+
+                        $fallback = ! empty($record->owner_login) ? $record->owner_login : null;
+
+                        return app(\App\Services\Znuny\ZnunyCachedLookupService::class)->getCanonicalOwnerLabel((int) $record->owner_id, $fallback);
+                    })
                     ->placeholder('-'),
                 TextEntry::make('customer_user_login')
                     ->placeholder('-'),

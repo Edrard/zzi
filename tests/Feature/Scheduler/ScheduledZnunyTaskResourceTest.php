@@ -593,7 +593,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
         $lookupMock = $this->app->make(ZnunyCachedLookupService::class);
         $lookupMock->shouldReceive('getFilteredQueueOptions')->andReturn([])->byDefault();
         $lookupMock->shouldReceive('getCustomerUserPrimaryOptionsForQueue')->andReturn([])->byDefault();
-        $lookupMock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([])->byDefault();
+        $lookupMock->shouldReceive('getAssignableHumanOwnerOptionsForQueue')->andReturn([])->byDefault();
 
         $originalTimezone = Setting::where('key', 'app_display_timezone')->value('value');
 
@@ -750,7 +750,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
         $mock = app(ZnunyCachedLookupService::class);
         $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['Support' => 'Support']);
         $mock->shouldReceive('resolveTemplateCandidate')->andReturn(null);
-        $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([5 => 'Five']);
+        $mock->shouldReceive('getAssignableHumanOwnerOptionsForQueue')->andReturn([5 => 'Five']);
 
         Livewire::test(CreateScheduledZnunyTask::class)
             ->fillForm([
@@ -784,7 +784,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
         ]);
 
         $mock = app(ZnunyCachedLookupService::class);
-        $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([9 => 'Nine']);
+        $mock->shouldReceive('getAssignableHumanOwnerOptionsForQueue')->andReturn([9 => 'Nine']);
 
         Livewire::test(ListScheduledZnunyTasks::class)
             ->call('updateTableColumnState', 'owner_id', $task->id, 9)
@@ -806,7 +806,7 @@ class ScheduledZnunyTaskResourceTest extends TestCase
         $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['NewQueue' => 'NewQueue']);
         $mock->shouldReceive('resolveTemplateCandidate')->with('NewQueue')->andReturn(null);
         // Only one owner option
-        $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->with('NewQueue')->andReturn([7 => 'Seven']);
+        $mock->shouldReceive('getAssignableHumanOwnerOptionsForQueue')->with('NewQueue')->andReturn([7 => 'Seven']);
 
         Livewire::test(CreateScheduledZnunyTask::class)
             ->fillForm([
@@ -881,33 +881,28 @@ class ScheduledZnunyTaskResourceTest extends TestCase
         ]);
 
         $mock = app(ZnunyCachedLookupService::class);
-        $mock->shouldReceive('getAssignableOwnerOptionsForQueue')
-            ->with('Queue B')
-            ->andReturn(['11' => 'Bob API']); // string key
-
-        $mock->shouldReceive('getAssignableOwnerOptionsForQueue')
-            ->with('Queue C')
-            ->andReturn([99 => 'Other API']);
-
-        $mock->shouldReceive('getAssignableOwnerOptionsForQueue')
-            ->with('Queue D')
-            ->andReturn(['13' => 'Charlie API']); // Should resolve this via API because '13' == 13 is ignored
+        $mock->shouldReceive('getAssignableHumanOwnerOptionsForQueue')
+            ->with(null)
+            ->andReturn([
+                '11' => 'Bob Human',
+                13 => 'Charlie Human',
+            ]);
 
         $component = Livewire::test(ListScheduledZnunyTasks::class);
 
         $options = $component->instance()->getOwnerOptions();
 
         $this->assertArrayHasKey(10, $options);
-        $this->assertEquals('Alice', $options[10]);
+        $this->assertEquals('Alice', $options[10]); // Fallback legacy
 
         $this->assertArrayHasKey(11, $options);
-        $this->assertEquals('Bob API', $options[11]);
+        $this->assertEquals('Bob Human', $options[11]); // Canonical
 
         $this->assertArrayHasKey(12, $options);
-        $this->assertEquals('Owner ID: 12', $options[12]);
+        $this->assertEquals('Owner ID: 12', $options[12]); // Fallback ID
 
         $this->assertArrayHasKey(13, $options);
-        $this->assertEquals('Charlie API', $options[13]);
+        $this->assertEquals('Charlie Human', $options[13]); // Canonical ignores legacy '13'
 
         // Ensure selecting an owner filter applies successfully and doesn't crash
         $component->set('ownerFilter', 11)

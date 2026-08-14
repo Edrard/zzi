@@ -58,10 +58,10 @@ class ZnunyPrewarmCacheMissUxBoundaryTest extends TestCase
 
         $this->assertFileContainsFragment($file, "
             \$current = \$get('owner_id');
-            \$currentDisplay = \$get('owner_login') ?: \$current;
-            if (\$current && ! isset(\$options[\$current])) {
-                \$options[\$current] = (string) \$currentDisplay;
-            }
+if (\$current && ! isset(\$options[\$current])) {
+    \$fallback = \$get('owner_login') ?: null;
+    \$options[\$current] = \$lookupService->getCanonicalOwnerLabel((int) \$current, \$fallback);
+}
         ");
 
         $this->assertFileContainsFragment($file, "

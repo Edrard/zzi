@@ -166,6 +166,26 @@ class ZnunyCachedLookupService
         return app(ZnunyAssignmentDependencyService::class)->getOwnerOptionsForQueue($queueName);
     }
 
+    public function getCanonicalOwnerLabel(int $ownerId, ?string $fallback = null): string
+    {
+        try {
+            $owners = $this->getAssignableHumanOwnerOptionsForQueue(null);
+            $canonical = $owners[$ownerId] ?? $owners[(string) $ownerId] ?? null;
+            if (! empty($canonical)) {
+                return (string) $canonical;
+            }
+        } catch (\Throwable $e) {
+            // Safe fallback
+        }
+
+        $fallback = trim((string) $fallback);
+        if ($fallback !== '' && $fallback !== (string) $ownerId) {
+            return $fallback;
+        }
+
+        return "Owner ID: {$ownerId}";
+    }
+
     private function normalizeDictionaryOptions(array $items, array $nameKeys = ['name', 'Name', 'label', 'Label', 'value', 'Value']): array
     {
         if (isset($items['Data']) && is_array($items['Data'])) {

@@ -212,11 +212,10 @@ class ScheduledZnunyTasksTable
                         if (empty($value)) {
                             return null;
                         }
-                        if ($value == $record->owner_id && ! empty($record->owner_login)) {
-                            return $record->owner_login;
-                        }
 
-                        return (string) $value;
+                        $fallback = ! empty($record->owner_login) ? $record->owner_login : null;
+
+                        return app(ZnunyCachedLookupService::class)->getCanonicalOwnerLabel((int) $value, $fallback);
                     })
                     ->options(function (ScheduledZnunyTask $record) {
                         $queue = $record->queue_name ?? '';
@@ -229,7 +228,7 @@ class ScheduledZnunyTasksTable
                         }
 
                         try {
-                            $options = app(ZnunyCachedLookupService::class)->getAssignableOwnerOptionsForQueue($queue);
+                            $options = app(ZnunyCachedLookupService::class)->getAssignableHumanOwnerOptionsForQueue($queue);
                         } catch (\Throwable $e) {
                             $options = [];
                         }
@@ -237,7 +236,8 @@ class ScheduledZnunyTasksTable
                         try {
                             $current = $record->owner_id;
                             if ($current && ! isset($options[$current])) {
-                                $options[$current] = $record->owner_login ?: $current;
+                                $fallback = ! empty($record->owner_login) ? $record->owner_login : null;
+                                $options[$current] = app(ZnunyCachedLookupService::class)->getCanonicalOwnerLabel((int) $current, $fallback);
                             }
 
                             return $options;
@@ -258,7 +258,7 @@ class ScheduledZnunyTasksTable
                         } else {
                             $record->owner_id = (int) $state;
                             try {
-                                $options = app(ZnunyCachedLookupService::class)->getAssignableOwnerOptionsForQueue($record->queue_name ?? '');
+                                $options = app(ZnunyCachedLookupService::class)->getAssignableHumanOwnerOptionsForQueue($record->queue_name ?? '');
                                 $label = $options[$state] ?? null;
                                 $record->owner_login = $label ? (string) $label : null;
                             } catch (\Throwable $e) {
