@@ -517,6 +517,8 @@ class CurrentZabbixProblems extends Page
             $this->ticketQueueOptions = $dependencyService->getQueueOptionsForOwnerId($this->ticketOwnerId);
         }
 
+        $this->sortTicketQueueOptions();
+
         $textBuilder = app(ZnunyTicketTextBuilder::class);
         $text = $textBuilder->build($problem);
 
@@ -554,18 +556,6 @@ class CurrentZabbixProblems extends Page
     public function updatedTicketOwnerId(?string $ownerId): void
     {
         $this->ownerManuallyChanged = true;
-
-        $dependencyService = app(ZnunyAssignmentDependencyService::class);
-        $this->ticketQueueOptions = $dependencyService->getQueueOptionsForOwnerId($ownerId);
-
-        if ($this->ticketQueue && ! array_key_exists($this->ticketQueue, $this->ticketQueueOptions)) {
-            $this->ticketQueue = null;
-            Notification::make()
-                ->title(__('current_zabbix_problems.notifications.queue_cleared'))
-                ->body(__('current_zabbix_problems.notifications.queue_cleared_body'))
-                ->warning()
-                ->send();
-        }
     }
 
     protected function applyOwnerSuggestion(): void
@@ -619,6 +609,7 @@ class CurrentZabbixProblems extends Page
                         $this->ownerSuggestionApplied = true;
 
                         $this->ticketQueueOptions = $dependencyService->getQueueOptionsForOwnerId($this->ticketOwnerId);
+                        $this->sortTicketQueueOptions();
                     }
 
                     $newOptions = [];
@@ -699,6 +690,11 @@ class CurrentZabbixProblems extends Page
         }
 
         return '';
+    }
+
+    protected function sortTicketQueueOptions(): void
+    {
+        natcasesort($this->ticketQueueOptions);
     }
 
     public bool $isCreatingTicket = false;

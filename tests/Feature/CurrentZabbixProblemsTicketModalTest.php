@@ -1229,59 +1229,54 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->assertNotified('Owner Cleared');
     }
 
-    public function test_current_problems_modal_owner_changes_queue_options_restricted()
+    public function test_current_problems_modal_owner_changes_preserves_queue_and_options()
     {
         $admin = User::factory()->create(['role' => 'admin']);
-        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
-        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
-        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
 
-        Http::fake([
-            '*example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
-            '*example.invalid/api/Agent/10/AssignableQueues*' => Http::response([
-                'Queues' => [
-                    ['QueueID' => 5, 'Name' => 'ValidQueue', 'FullName' => 'ValidQueue'],
-                ],
-            ], 200),
-        ]);
+        $this->mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, function ($mock) {
+            $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn([]);
+            $mock->shouldReceive('getQueueOptionsForOwnerId')->andReturn([
+                'Z_Queue' => 'Zebra Queue',
+                'A_Queue' => 'Apple Queue',
+            ]);
+            $mock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
+            $mock->shouldReceive('getAssignableAgentsForQueue')->andReturn([]);
+        });
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001');
+
+        // 4. Queue options exposed/rendered for the modal are alphabetically sorted by visible label.
+        $options = $component->get('ticketQueueOptions');
+        $this->assertEquals(['A_Queue' => 'Apple Queue', 'Z_Queue' => 'Zebra Queue'], $options);
+
+        // 3. Change the owner more than once: ticketQueue remains unchanged.
+        $component->set('ticketQueue', 'Z_Queue')
+            ->set('ticketOwnerId', '10')
+            ->assertSet('ticketQueue', 'Z_Queue')
+            ->set('ticketOwnerId', '20')
+            ->assertSet('ticketQueue', 'Z_Queue');
+    }
+
+    public function test_current_problems_modal_owner_changes_preserves_invalid_queue()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
 
         $this->mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, function ($mock) {
             $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn([]);
             $mock->shouldReceive('getQueueOptionsForOwnerId')->andReturn(['ValidQueue' => 'ValidQueue']);
-            $mock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
+            $mock->shouldReceive('isOwnerValidForQueue')->andReturn(false);
             $mock->shouldReceive('getAssignableAgentsForQueue')->andReturn([]);
         });
 
         Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
-            ->set('ticketOwnerId', '10')
-            ->assertSet('ticketQueueOptions.ValidQueue', 'ValidQueue');
-    }
-
-    public function test_current_problems_modal_owner_changes_clears_invalid_queue()
-    {
-        $admin = User::factory()->create(['role' => 'admin']);
-        Setting::updateOrCreate(['key' => 'znuny_api_url'], ['value' => 'https://example.invalid/api']);
-        Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
-        Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
-
-        Http::fake([
-            '*example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
-            '*example.invalid/api/Agent/10/AssignableQueues*' => Http::response([
-                'Queues' => [
-                    ['QueueID' => 5, 'Name' => 'ValidQueue', 'FullName' => 'ValidQueue'],
-                ],
-            ], 200),
-            '*example.invalid/api/QueueByName/InvalidQueue*' => Http::response([], 200),
-            '*example.invalid/api/QueueByName*' => Http::response([], 200),
-        ]);
-
-        Livewire::actingAs($admin)
-            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001')
             ->set('ticketQueue', 'InvalidQueue') // Invalid for agent 10
             ->set('ticketOwnerId', '10')
-            ->assertSet('ticketQueue', null)
-            ->assertNotified('Queue Cleared');
+            ->assertSet('ticketQueue', 'InvalidQueue') // Queue must NOT be cleared automatically!
+            ->assertNotNotified('Queue Cleared');
     }
 
     public function test_current_problems_modal_view_uses_live_bindings()
