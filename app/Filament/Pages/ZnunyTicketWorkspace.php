@@ -84,6 +84,12 @@ class ZnunyTicketWorkspace extends Page
                     if (($row['TicketID'] ?? 0) === (int) $ticketId) {
                         $row['__key'] = $row['TicketID'];
 
+                        // Mark as seen for the current user
+                        if ($ticketId) {
+                            $user = auth()->user();
+                            app(\App\Services\Znuny\TicketTrackingService::class)->markTicketAsSeen($user, (int) $ticketId);
+                        }
+
                         return $row;
                     }
                 }
@@ -102,6 +108,12 @@ class ZnunyTicketWorkspace extends Page
                 if ($rawTicket) {
                     $row = $reader->normalizeSingleTicket($rawTicket);
                     $row['__key'] = $row['TicketID'];
+
+                    // Mark as seen for the current user
+                    if ($ticketId) {
+                        $user = auth()->user();
+                        app(\App\Services\Znuny\TicketTrackingService::class)->markTicketAsSeen($user, (int) $ticketId);
+                    }
 
                     return $row;
                 }
@@ -200,6 +212,23 @@ class ZnunyTicketWorkspace extends Page
             $this->sortField,
             $this->sortDirection
         );
+
+        if (! empty($data['rows'])) {
+            $user = auth()->user();
+            $trackingService = app(\App\Services\Znuny\TicketTrackingService::class);
+            if ($trackingService->isTrackingEnabled($user)) {
+                $ticketIds = array_column($data['rows'], 'TicketID');
+                $seenIds = $trackingService->getSeenTicketIds($user, $ticketIds);
+
+                foreach ($data['rows'] as $index => $row) {
+                    $data['rows'][$index]['is_new_for_user'] = $trackingService->isTicketNew($user, $row, $seenIds);
+                }
+            } else {
+                foreach ($data['rows'] as $index => $row) {
+                    $data['rows'][$index]['is_new_for_user'] = false;
+                }
+            }
+        }
 
         return $data;
     }

@@ -52,6 +52,7 @@ class MySettings extends Page implements HasForms
             'show_znuny_closed_ticket_status_panel' => $user->show_znuny_closed_ticket_status_panel,
             'show_scheduled_tasks_status_panel' => $user->show_scheduled_tasks_status_panel,
             'ui_locale' => $user->ui_locale ?? '__system__',
+            'track_new_tickets' => $user->track_new_tickets,
         ]);
     }
 
@@ -87,6 +88,9 @@ class MySettings extends Page implements HasForms
                     ->heading(__('settings.my_settings.sections.personalization.title'))
                     ->description(__('settings.my_settings.sections.personalization.description'))
                     ->schema([
+                        Toggle::make('track_new_tickets')
+                            ->label(__('settings.my_settings.fields.track_new_tickets.label'))
+                            ->helperText(__('settings.my_settings.fields.track_new_tickets.helper_text')),
                         Select::make('ui_locale')
                             ->label(__('settings.my_settings.ui_locale.label'))
                             ->helperText(__('settings.my_settings.ui_locale.helper_text'))
@@ -164,6 +168,14 @@ class MySettings extends Page implements HasForms
             $user->ui_locale = $data['ui_locale'] === '__system__' ? null : $data['ui_locale'];
         }
 
+        $wasTracking = $user->track_new_tickets;
+        $isTrackingNow = $data['track_new_tickets'] ?? false;
+        $user->track_new_tickets = $isTrackingNow;
+
+        if ($isTrackingNow && ! $wasTracking) {
+            $user->ticket_tracking_since = \Illuminate\Support\Carbon::now();
+        }
+
         $user->save();
         $user->refresh();
 
@@ -177,6 +189,7 @@ class MySettings extends Page implements HasForms
             'show_znuny_closed_ticket_status_panel' => $user->show_znuny_closed_ticket_status_panel,
             'show_scheduled_tasks_status_panel' => $user->show_scheduled_tasks_status_panel,
             'ui_locale' => $user->ui_locale ?? '__system__',
+            'track_new_tickets' => $user->track_new_tickets,
             'current_password' => null,
             'new_password' => null,
             'new_password_confirmation' => null,

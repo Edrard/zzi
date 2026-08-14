@@ -1872,4 +1872,79 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->assertSeeHtml('wire:poll')
             ->assertActionVisible('refresh');
     }
+
+    public function test_new_ticket_tracking_assigns_stars_correctly()
+    {
+        $userA = User::factory()->create(['role' => 'operator', 'track_new_tickets' => true, 'ticket_tracking_since' => now()->subHours(2)]);
+        $userB = User::factory()->create(['role' => 'operator', 'track_new_tickets' => true, 'ticket_tracking_since' => now()->subHours(2)]);
+        $userDisabled = User::factory()->create(['role' => 'operator', 'track_new_tickets' => false]);
+
+        $this->seedTicket([
+            'TicketID' => 300,
+            'TicketNumber' => 'TN300',
+            'Created' => now()->subHour()->toDateTimeString(), // Newer than tracking_since
+            'is_linked_to_zabbix_problem' => false,
+        ]);
+
+        $this->seedTicket([
+            'TicketID' => 301,
+            'TicketNumber' => 'TN301',
+            'Created' => now()->subHours(3)->toDateTimeString(), // Older than tracking_since
+            'is_linked_to_zabbix_problem' => false,
+        ]);
+
+        $this->seedTicket([
+            'TicketID' => 302,
+            'TicketNumber' => 'TN302',
+            'Created' => now()->toDateTimeString(),
+        ]);
+        \App\Models\ZabbixTicket::create([
+            'znuny_ticket_id' => 302,
+            'znuny_ticket_number' => 'TN302',
+            'zabbix_event_id' => '123456',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'Problem 1',
+        ]);
+
+        // User A context
+        $componentA = Livewire::actingAs($userA)->test(ZnunyTicketWorkspace::class);
+        $dataA = $componentA->instance()->ticketData();
+        $ticket300A = collect($dataA['rows'])->firstWhere('TicketID', 300);
+        $this->assertTrue($ticket300A['is_new_for_user']);
+
+        $ticket301A = collect($dataA['rows'])->firstWhere('TicketID', 301);
+        $this->assertFalse($ticket301A['is_new_for_user']); // Too old
+
+        $ticket302A = collect($dataA['rows'])->firstWhere('TicketID', 302);
+        $this->assertFalse($ticket302A['is_new_for_user']); // Zabbix linked
+
+        // User B context (should see same)
+        $componentB = Livewire::actingAs($userB)->test(ZnunyTicketWorkspace::class);
+        $dataB = $componentB->instance()->ticketData();
+        $this->assertTrue(collect($dataB['rows'])->firstWhere('TicketID', 300)['is_new_for_user']);
+
+        // User Disabled context (should see none)
+        $componentDisabled = Livewire::actingAs($userDisabled)->test(ZnunyTicketWorkspace::class);
+        $dataDisabled = $componentDisabled->instance()->ticketData();
+        $this->assertFalse(collect($dataDisabled['rows'])->firstWhere('TicketID', 300)['is_new_for_user']);
+
+        // User A opens ticket 300
+        \Illuminate\Support\Facades\Auth::login($userA);
+        $componentA->call('mountAction', 'viewTicket', ['znuny_ticket_id' => 300]);
+        $actionA = $componentA->instance()->getMountedAction();
+        if ($actionA) {
+            $actionA->evaluate($actionA->getRecord(), ['arguments' => $actionA->getArguments()]);
+        }
+
+        // Re-fetch data for User A
+        $dataA2 = $componentA->instance()->ticketData();
+        $this->assertFalse(collect($dataA2['rows'])->firstWhere('TicketID', 300)['is_new_for_user']); // Star gone for A
+
+        // Switch to User B to verify B's state
+        \Illuminate\Support\Facades\Auth::login($userB);
+
+        // Re-fetch data for User B
+        $dataB2 = $componentB->instance()->ticketData();
+        $this->assertTrue(collect($dataB2['rows'])->firstWhere('TicketID', 300)['is_new_for_user']); // Star still there for B
+    }
 }

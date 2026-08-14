@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password', 'role', 'is_active', 'show_current_problems_status_panel', 'show_znuny_closed_ticket_status_panel', 'show_scheduled_tasks_status_panel', 'default_landing_page', 'ui_locale'])]
+#[Fillable(['name', 'email', 'password', 'role', 'is_active', 'show_current_problems_status_panel', 'show_znuny_closed_ticket_status_panel', 'show_scheduled_tasks_status_panel', 'default_landing_page', 'ui_locale', 'track_new_tickets', 'ticket_tracking_since'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements FilamentUser
 {
@@ -49,6 +49,11 @@ class User extends Authenticatable implements FilamentUser
         return $this->is_active !== false && $this->role === 'admin';
     }
 
+    public function seenZnunyTickets()
+    {
+        return $this->hasMany(ZnunyTicketSeenStatus::class);
+    }
+
     /**
      * Get the attributes that should be cast.
      *
@@ -63,6 +68,8 @@ class User extends Authenticatable implements FilamentUser
             'show_current_problems_status_panel' => 'boolean',
             'show_znuny_closed_ticket_status_panel' => 'boolean',
             'show_scheduled_tasks_status_panel' => 'boolean',
+            'track_new_tickets' => 'boolean',
+            'ticket_tracking_since' => 'datetime',
         ];
     }
 }

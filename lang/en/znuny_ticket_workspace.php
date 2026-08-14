@@ -28,6 +28,7 @@ return [
         'active' => 'Linked to active Zabbix problem',
         'resolved' => 'Linked to resolved Zabbix problem',
         'warning' => 'Active problem on closed/merged ticket',
+        'new_unseen' => 'New ticket, not yet opened by you',
     ],
     'cache_diagnostics' => [
         'title' => 'Recent closed-ticket cache status',

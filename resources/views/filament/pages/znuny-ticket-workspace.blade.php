@@ -340,6 +340,11 @@
                 <x-filament::icon icon="heroicon-s-exclamation-triangle" class="zbx-legend-icon zbx-icon-warning" />
                 <span>{{ __('znuny_ticket_workspace.legend.warning') }}</span>
             </span>
+
+            <span class="zbx-legend-item">
+                <x-filament::icon icon="heroicon-s-star" class="zbx-legend-icon" style="color: #eab308;" />
+                <span>{{ __('znuny_ticket_workspace.legend.new_unseen') }}</span>
+            </span>
         </div>
 
         @if(auth()->user()->canViewZnunyClosedTicketStatusPanel())
@@ -568,7 +573,7 @@
                     <tbody>
                         @foreach($tickets as $ticket)
                             <tr class="zbx-problem-row" style="cursor: pointer;" wire:click="mountAction('viewTicket', { znuny_ticket_id: {{ $ticket['TicketID'] }} })">
-                                <td style="text-align: center;">
+                                <td style="text-align: center; white-space: nowrap;">
                                     @if($ticket['is_linked_to_zabbix_problem'])
                                         <div class="zbx-link-icon-wrap"
                                              title="{{ __('znuny_ticket_workspace.tooltips.zabbix.host') }}: {{ $ticket['linked_problem_host'] ?? __('znuny_ticket_workspace.tooltips.zabbix.na') }}&#10;{{ __('znuny_ticket_workspace.tooltips.zabbix.problem') }}: {{ $ticket['linked_problem_summary'] ?? __('znuny_ticket_workspace.tooltips.zabbix.na') }}&#10;{{ __('znuny_ticket_workspace.tooltips.zabbix.state') }}: {{ $ticket['linked_problem_is_active'] ? __('znuny_ticket_workspace.tooltips.zabbix.active') : __('znuny_ticket_workspace.tooltips.zabbix.resolved') }}&#10;{{ __('znuny_ticket_workspace.tooltips.zabbix.age') }}: {{ $ticket['linked_problem_age_label'] ?? __('znuny_ticket_workspace.tooltips.zabbix.na') }}">
@@ -579,6 +584,11 @@
                                             @else
                                                 <x-filament::icon icon="heroicon-o-link" class="zbx-link-icon zbx-icon-resolved" />
                                             @endif
+                                        </div>
+                                    @endif
+                                    @if($ticket['is_new_for_user'] ?? false)
+                                        <div class="zbx-link-icon-wrap" title="{{ __('znuny_ticket_workspace.legend.new_unseen') }}">
+                                            <x-filament::icon icon="heroicon-s-star" class="zbx-link-icon" style="color: #eab308;" />
                                         </div>
                                     @endif
                                 </td>
