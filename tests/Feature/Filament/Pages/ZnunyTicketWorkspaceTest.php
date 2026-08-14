@@ -158,23 +158,115 @@ class ZnunyTicketWorkspaceTest extends TestCase
             ->assertSee('TN101');
     }
 
-    public function test_queue_and_owner_filters_work()
+    public function test_queue_and_owner_filters_have_faceted_semantics()
     {
         $user = User::factory()->create(['role' => 'operator']);
 
-        $this->seedTicket(['TicketID' => 101, 'TicketNumber' => 'TN101', 'Title' => 'Q10_O20', 'QueueID' => 10, 'OwnerID' => 20, 'StateType' => 'new']);
-        $this->seedTicket(['TicketID' => 102, 'TicketNumber' => 'TN102', 'Title' => 'Q11_O21', 'QueueID' => 11, 'OwnerID' => 21, 'StateType' => 'new']);
+        // Q10: O20, O21
+        // Q11: O21, O22
+        $this->seedTicket(['TicketID' => 101, 'TicketNumber' => 'TN101', 'QueueID' => 10, 'OwnerID' => 20, 'StateType' => 'new']);
+        $this->seedTicket(['TicketID' => 102, 'TicketNumber' => 'TN102', 'QueueID' => 10, 'OwnerID' => 21, 'StateType' => 'new']);
+        $this->seedTicket(['TicketID' => 103, 'TicketNumber' => 'TN103', 'QueueID' => 11, 'OwnerID' => 21, 'StateType' => 'new']);
+        $this->seedTicket(['TicketID' => 104, 'TicketNumber' => 'TN104', 'QueueID' => 11, 'OwnerID' => 22, 'StateType' => 'new']);
 
-        Livewire::actingAs($user)
+        $component = Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
-            ->set('stateTypeFilter', ['new'])
-            ->set('queueFilter', 10)
+            ->set('stateTypeFilter', ['new']);
+
+        // 1. Initial state
+        $data = $component->instance()->ticketData();
+        $this->assertFacetKeys([10, 11], $data['filter_options']['queues']);
+        $this->assertFacetKeys([20, 21, 22], $data['filter_options']['owners']);
+
+        // Assert DOM identity (wire:key) contract
+        $component->assertSeeHtml('wire:key="workspace-queue-option-any"')
+            ->assertSeeHtml('wire:key="workspace-queue-option-10"')
+            ->assertSeeHtml('wire:key="workspace-queue-option-11"')
+            ->assertSeeHtml('wire:key="workspace-owner-option-any"')
+            ->assertSeeHtml('wire:key="workspace-owner-option-20"')
+            ->assertSeeHtml('wire:key="workspace-owner-option-21"')
+            ->assertSeeHtml('wire:key="workspace-owner-option-22"');
+
+        // 2. Select Queue 10
+        $component->set('queueFilter', 10)
+            ->assertSet('queueFilter', 10)
             ->assertSee('TN101')
-            ->assertDontSee('TN102')
-            ->set('queueFilter', null)
-            ->set('ownerFilter', 21)
             ->assertSee('TN102')
+            ->assertDontSee('TN103')
+            ->assertDontSee('TN104');
+
+        $data = $component->instance()->ticketData();
+        $this->assertFacetKeys([10, 11], $data['filter_options']['queues'], 'Queue options should not be self-filtered');
+        $this->assertFacetKeys([20, 21], $data['filter_options']['owners'], 'Owner options should be restricted by active queue filter');
+
+        // 3. Clear Queue 10 directly
+        $component->set('queueFilter', '')
+            ->assertSet('queueFilter', '')
+            ->assertSee('TN101')
+            ->assertSee('TN104');
+
+        $data = $component->instance()->ticketData();
+        $this->assertFacetKeys([20, 21, 22], $data['filter_options']['owners'], 'Owner options should expand after queue cleared');
+
+        // 4. Select Owner 22
+        $component->set('ownerFilter', 22)
+            ->assertSet('ownerFilter', 22)
+            ->assertSee('TN104')
             ->assertDontSee('TN101');
+
+        $data = $component->instance()->ticketData();
+        $this->assertFacetKeys([20, 21, 22], $data['filter_options']['owners'], 'Owner options should not be self-filtered');
+        $this->assertFacetKeys([11], $data['filter_options']['queues'], 'Queue options should be restricted by active owner filter');
+
+        // 5. Clear Owner 22
+        $component->set('ownerFilter', '')
+            ->assertSet('ownerFilter', '')
+            ->assertSee('TN101')
+            ->assertSee('TN104');
+
+        // 6. Select Queue 11 + Owner 21
+        $component->set('queueFilter', 11)
+            ->set('ownerFilter', 21)
+            ->assertSee('TN103')
+            ->assertDontSee('TN101')
+            ->assertDontSee('TN102')
+            ->assertDontSee('TN104');
+
+        $data = $component->instance()->ticketData();
+        // Queue options = tickets under owner 21 = Queue 10, 11
+        $this->assertFacetKeys([10, 11], $data['filter_options']['queues']);
+        // Owner options = tickets under queue 11 = Owner 21, 22
+        $this->assertFacetKeys([21, 22], $data['filter_options']['owners']);
+
+        // 7. Clear queue while owner remains active
+        $component->set('queueFilter', '')
+            ->assertSee('TN102')
+            ->assertSee('TN103')
+            ->assertDontSee('TN101')
+            ->assertDontSee('TN104');
+
+        $data = $component->instance()->ticketData();
+        $this->assertFacetKeys([10, 11], $data['filter_options']['queues']);
+        $this->assertFacetKeys([20, 21, 22], $data['filter_options']['owners']);
+
+        // 8. Clear owner while queue remains active (reset to Q11)
+        $component->set('ownerFilter', '')
+            ->set('queueFilter', 11)
+            ->assertSee('TN103')
+            ->assertSee('TN104')
+            ->assertDontSee('TN101');
+
+        $data = $component->instance()->ticketData();
+        $this->assertFacetKeys([10, 11], $data['filter_options']['queues']);
+        $this->assertFacetKeys([21, 22], $data['filter_options']['owners']);
+    }
+
+    protected function assertFacetKeys(array $expected, array $actualOptions, string $message = ''): void
+    {
+        $actual = array_keys($actualOptions);
+        sort($expected);
+        sort($actual);
+        $this->assertEquals($expected, $actual, $message);
     }
 
     public function test_clicking_row_opens_details_modal_with_cached_data()

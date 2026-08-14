@@ -96,28 +96,42 @@ class ZnunyTicketWorkspaceCacheReader
             $closedStIds = [];
         }
 
-        // 2. Apply Queue & Owner index intersections to Active tickets ONLY
+        // 2. Faceted IDs for Options
+        $qIds = !empty($filters['queue']) ? $redis->zrange("znuny:index:queue:{$filters['queue']}", 0, -1) : null;
+        $oIds = !empty($filters['owner']) ? $redis->zrange("znuny:index:owner:{$filters['owner']}", 0, -1) : null;
+
+        $queueFacetIds = $activeStIds;
+        if ($oIds !== null) {
+            $queueFacetIds = array_intersect($queueFacetIds, $oIds);
+        }
+
+        $ownerFacetIds = $activeStIds;
+        if ($qIds !== null) {
+            $ownerFacetIds = array_intersect($ownerFacetIds, $qIds);
+        }
+
+        // Apply both Queue & Owner to final results
         $filteredActiveIds = $activeStIds;
-        if (! empty($filters['queue'])) {
-            $qIds = $redis->zrange("znuny:index:queue:{$filters['queue']}", 0, -1);
+        if ($qIds !== null) {
             $filteredActiveIds = array_intersect($filteredActiveIds, $qIds);
         }
-        if (! empty($filters['owner'])) {
-            $oIds = $redis->zrange("znuny:index:owner:{$filters['owner']}", 0, -1);
+        if ($oIds !== null) {
             $filteredActiveIds = array_intersect($filteredActiveIds, $oIds);
         }
 
-        // Build filter options (use a sample of both)
-        $optionIdsActive = array_slice($filteredActiveIds, 0, 500);
+        // Build filter options (use a sample of both facets)
+        $optionIdsActiveQueue = array_slice($queueFacetIds, 0, 500);
+        $optionIdsActiveOwner = array_slice($ownerFacetIds, 0, 500);
         $optionIdsClosed = array_slice($closedStIds, 0, 500);
 
-        $optionKeysActive = array_map(fn ($id) => "znuny:ticket:{$id}", $optionIdsActive);
+        $optionKeysQueue = array_map(fn ($id) => "znuny:ticket:{$id}", $optionIdsActiveQueue);
+        $optionKeysOwner = array_map(fn ($id) => "znuny:ticket:{$id}", $optionIdsActiveOwner);
         $optionKeysClosed = array_map(fn ($id) => "znuny:closed_ticket:ticket:{$id}", $optionIdsClosed);
 
-        $optionKeys = array_merge($optionKeysActive, $optionKeysClosed);
+        $optionKeys = array_unique(array_merge($optionKeysQueue, $optionKeysOwner, $optionKeysClosed));
         $optionTickets = [];
         if (! empty($optionKeys)) {
-            $payloads = $redis->mget($optionKeys);
+            $payloads = $redis->mget(array_values($optionKeys));
             foreach ($payloads as $p) {
                 if ($p) {
                     $t = json_decode($p, true);
@@ -127,7 +141,7 @@ class ZnunyTicketWorkspaceCacheReader
                 }
             }
         }
-        $filterOptions = $this->extractFilterOptions($optionTickets);
+        $filterOptions = $this->extractFilterOptions($optionTickets, $filters);
 
         // 3. Decide if we can paginate before mget
         $hasTextSearch = ! empty($filters['search']);
@@ -257,16 +271,21 @@ class ZnunyTicketWorkspaceCacheReader
         ];
     }
 
-    protected function extractFilterOptions(array $tickets): array
+    protected function extractFilterOptions(array $tickets, array $filters = []): array
     {
         $queues = [];
         $ownerIds = [];
+        $selectedQueue = $filters['queue'] ?? null;
+        $selectedOwner = $filters['owner'] ?? null;
 
         foreach ($tickets as $ticket) {
-            if (! empty($ticket['QueueID'])) {
+            $matchesOwner = empty($selectedOwner) || ((string) ($ticket['OwnerID'] ?? '') === (string) $selectedOwner);
+            if ($matchesOwner && ! empty($ticket['QueueID'])) {
                 $queues[$ticket['QueueID']] = $ticket['Queue'] ?? ('Queue '.$ticket['QueueID']);
             }
-            if (! empty($ticket['OwnerID'])) {
+
+            $matchesQueue = empty($selectedQueue) || ((string) ($ticket['QueueID'] ?? '') === (string) $selectedQueue);
+            if ($matchesQueue && ! empty($ticket['OwnerID'])) {
                 $ownerIds[(int) $ticket['OwnerID']] = $ticket['Owner'] ?? ('Owner '.$ticket['OwnerID']);
             }
         }

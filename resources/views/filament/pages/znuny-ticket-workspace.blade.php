@@ -451,9 +451,9 @@
                 <div class="zbx-toolbar-select">
                     <x-filament::input.wrapper>
                         <x-filament::input.select wire:model.live="queueFilter">
-                            <option value="">{{ __('znuny_ticket_workspace.filters.queue.any') }}</option>
+                            <option wire:key="workspace-queue-option-any" value="">{{ __('znuny_ticket_workspace.filters.queue.any') }}</option>
                             @foreach($filterOptions['queues'] as $val => $label)
-                                <option value="{{ $val }}">{{ $label }}</option>
+                                <option wire:key="workspace-queue-option-{{ $val }}" value="{{ $val }}">{{ $label }}</option>
                             @endforeach
                         </x-filament::input.select>
                     </x-filament::input.wrapper>
@@ -462,9 +462,9 @@
                 <div class="zbx-toolbar-select">
                     <x-filament::input.wrapper>
                         <x-filament::input.select wire:model.live="ownerFilter">
-                            <option value="">{{ __('znuny_ticket_workspace.filters.owner.any') }}</option>
+                            <option wire:key="workspace-owner-option-any" value="">{{ __('znuny_ticket_workspace.filters.owner.any') }}</option>
                             @foreach($filterOptions['owners'] as $val => $label)
-                                <option value="{{ $val }}">{{ $label }}</option>
+                                <option wire:key="workspace-owner-option-{{ $val }}" value="{{ $val }}">{{ $label }}</option>
                             @endforeach
                         </x-filament::input.select>
                     </x-filament::input.wrapper>
