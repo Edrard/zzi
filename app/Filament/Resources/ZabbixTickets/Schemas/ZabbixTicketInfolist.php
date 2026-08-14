@@ -5,6 +5,7 @@ namespace App\Filament\Resources\ZabbixTickets\Schemas;
 use App\Filament\Resources\ZabbixTickets\ZabbixTicketResource;
 use App\Filament\Support\TicketDetailsPayload;
 use App\Services\Support\DateTimeDisplayService;
+use App\Services\Znuny\ZnunyAssignmentDependencyService;
 use App\Services\Znuny\ZnunyTicketArticleCacheService;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Components\ViewEntry;
@@ -86,7 +87,21 @@ class ZabbixTicketInfolist
                                 ->compact()
                                 ->schema([
                                     TextEntry::make('znuny_queue_name')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.queue')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_queue_name)->inlineLabel()->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
-                                    TextEntry::make('znuny_owner_name')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.owner')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_owner_name)->inlineLabel()->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
+                                    TextEntry::make('znuny_owner_name')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.owner')))->state(function ($record) {
+                                        $payload = TicketDetailsPayload::fromRecord($record);
+                                        $displayOwner = $payload->znuny_owner_name;
+                                        if ($payload->znuny_owner_id) {
+                                            try {
+                                                $ownerOptions = app(ZnunyAssignmentDependencyService::class)->getOwnerOptionsForQueue(null);
+                                                if (isset($ownerOptions[$payload->znuny_owner_id])) {
+                                                    $displayOwner = $ownerOptions[$payload->znuny_owner_id];
+                                                }
+                                            } catch (\Throwable $e) {
+                                            }
+                                        }
+
+                                        return $displayOwner;
+                                    })->inlineLabel()->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
                                     TextEntry::make('customer_user')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.customer')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->customer_user)->inlineLabel()->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->customer_user !== null)->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
                                     TextEntry::make('znuny_priority')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.priority')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_priority)->inlineLabel()->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
                                     TextEntry::make('znuny_state_name')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.state')))->state(function ($record) {

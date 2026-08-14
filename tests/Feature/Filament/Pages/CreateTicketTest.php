@@ -10,6 +10,7 @@ use App\Services\Znuny\ZnunyStandaloneTicketCreationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Mockery\MockInterface;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class CreateTicketTest extends TestCase
@@ -20,7 +21,7 @@ class CreateTicketTest extends TestCase
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
-        $this->mock(ZnunyCachedLookupService::class, function (\Mockery\MockInterface $mock) {
+        $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
             $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
             $mock->shouldReceive('getTicketStates')->andReturn(['new' => 'new'])->byDefault();
             $mock->shouldReceive('getTicketPriorities')->andReturn(['3 normal' => '3 normal'])->byDefault();
@@ -44,7 +45,7 @@ class CreateTicketTest extends TestCase
             $mock->shouldReceive('getFilteredQueueOptions')->andReturn([
                 'Raw' => 'Raw',
             ]);
-            $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([
+            $mock->shouldReceive('getAssignableHumanOwnerOptionsForQueue')->andReturn([
                 1 => 'John Doe <johndoe>',
             ]);
             $mock->shouldReceive('getCustomerUserPrimaryOptionsForQueue')->andReturn([
@@ -118,7 +119,7 @@ class CreateTicketTest extends TestCase
             $mock->shouldReceive('getFilteredQueueOptions')->andReturn([
                 'Raw' => 'Raw',
             ]);
-            $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([
+            $mock->shouldReceive('getAssignableHumanOwnerOptionsForQueue')->andReturn([
                 1 => 'John Doe <johndoe>',
             ]);
             $mock->shouldReceive('getCustomerUserPrimaryOptionsForQueue')->andReturn([
@@ -183,13 +184,13 @@ class CreateTicketTest extends TestCase
                 'Raw' => 'Raw',
                 'Network' => 'Network',
             ]);
-            $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->with('Raw')->andReturn([
+            $mock->shouldReceive('getAssignableHumanOwnerOptionsForQueue')->with('Raw')->andReturn([
                 1 => 'John Doe',
             ]);
-            $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->with('Network')->andReturn([
+            $mock->shouldReceive('getAssignableHumanOwnerOptionsForQueue')->with('Network')->andReturn([
                 2 => 'Jane Doe',
             ]);
-            $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([]);
+            $mock->shouldReceive('getAssignableHumanOwnerOptionsForQueue')->andReturn([]);
             $mock->shouldReceive('getCustomerUserPrimaryOptionsForQueue')->with('Raw')->andReturn([
                 'johndoe' => 'John Doe <johndoe>',
             ]);
@@ -236,7 +237,7 @@ class CreateTicketTest extends TestCase
         $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
             $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
             $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['Raw' => 'Raw']);
-            $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([]);
+            $mock->shouldReceive('getAssignableHumanOwnerOptionsForQueue')->andReturn([]);
             $mock->shouldReceive('getTicketStates')->andReturn([]);
             $mock->shouldReceive('getTicketPriorities')->andReturn([]);
             $mock->shouldReceive('resolveTemplateCandidate')->andReturn(null);
@@ -272,7 +273,7 @@ class CreateTicketTest extends TestCase
         $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
             $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
             $mock->shouldReceive('getFilteredQueueOptions')->andReturn([]);
-            $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([]);
+            $mock->shouldReceive('getAssignableHumanOwnerOptionsForQueue')->andReturn([]);
             $mock->shouldReceive('getTicketStates')->andReturn([]);
             $mock->shouldReceive('getTicketPriorities')->andReturn([]);
             $mock->shouldReceive('resolveTemplateCandidate')->andReturn(null);
@@ -305,7 +306,7 @@ class CreateTicketTest extends TestCase
         $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
             $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
             $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['Raw' => 'Raw']);
-            $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([]);
+            $mock->shouldReceive('getAssignableHumanOwnerOptionsForQueue')->andReturn([]);
             $mock->shouldReceive('getTicketStates')->andReturn([]);
             $mock->shouldReceive('getTicketPriorities')->andReturn([]);
             $mock->shouldReceive('resolveTemplateCandidate')->andReturn(null);
@@ -344,7 +345,7 @@ class CreateTicketTest extends TestCase
         $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
             $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
             $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['Raw' => 'Raw']);
-            $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([]);
+            $mock->shouldReceive('getAssignableHumanOwnerOptionsForQueue')->andReturn([]);
             $mock->shouldReceive('getTicketStates')->andReturn([]);
             $mock->shouldReceive('getTicketPriorities')->andReturn([]);
             $mock->shouldReceive('resolveTemplateCandidate')->andReturn('unknownuser');
@@ -388,7 +389,7 @@ class CreateTicketTest extends TestCase
         $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
             $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
             $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['Raw' => 'Raw']);
-            $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([]);
+            $mock->shouldReceive('getAssignableHumanOwnerOptionsForQueue')->andReturn([]);
             $mock->shouldReceive('getTicketStates')->andReturn([]);
             $mock->shouldReceive('getTicketPriorities')->andReturn([]);
             $mock->shouldReceive('resolveTemplateCandidate')->andReturn(null);
@@ -442,7 +443,7 @@ class CreateTicketTest extends TestCase
         $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
             $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
             $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['Raw' => 'Raw']);
-            $mock->shouldReceive('getAssignableOwnerOptionsForQueue')->andReturn([1 => 'John Doe <johndoe>']);
+            $mock->shouldReceive('getAssignableHumanOwnerOptionsForQueue')->andReturn([1 => 'John Doe <johndoe>']);
             $mock->shouldReceive('getCustomerUserPrimaryOptionsForQueue')->andReturn(['johndoe' => 'John Doe <johndoe>']);
             $mock->shouldReceive('resolveTemplateCandidate')->andReturn('johndoe');
             $mock->shouldReceive('getTicketStates')->andReturn(['open' => 'open']);
@@ -507,12 +508,12 @@ class CreateTicketTest extends TestCase
             $mock->shouldNotReceive('createTicket');
         });
 
-        $page = new CreateTicket();
+        $page = new CreateTicket;
 
         try {
             $page->create(app(ZnunyStandaloneTicketCreationService::class));
             $this->fail('Expected 403 exception');
-        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+        } catch (HttpException $e) {
             $this->assertEquals(403, $e->getStatusCode());
         }
     }

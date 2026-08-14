@@ -98,7 +98,7 @@ class ZnunyTicketCreationSchema
                         })
                         ->options(function ($get, ZnunyCachedLookupService $lookupService) {
                             try {
-                                return $lookupService->getAssignableOwnerOptionsForQueue($get('queue') ?? '');
+                                return $lookupService->getAssignableHumanOwnerOptionsForQueue($get('queue') ?? '');
                             } catch (\Throwable $e) {
                                 report($e);
 

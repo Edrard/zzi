@@ -43,6 +43,38 @@ class ZnunyAssignmentDependencyService
         return $this->agentService->getSelectableAssignableAgentsForQueue($queue['id']);
     }
 
+    private function extractHumanOwnerOptions(array $agents): array
+    {
+        $options = [];
+        foreach ($agents as $agent) {
+            if (! isset($agent['id'])) {
+                continue;
+            }
+
+            $firstName = trim((string) ($agent['first_name'] ?? ''));
+            $lastName = trim((string) ($agent['last_name'] ?? ''));
+            $name = trim((string) ($agent['name'] ?? ''));
+            $login = trim((string) ($agent['login'] ?? ''));
+
+            $humanName = '';
+            if ($firstName !== '' && $lastName !== '') {
+                $humanName = "{$firstName} {$lastName}";
+            } elseif ($firstName !== '') {
+                $humanName = $firstName;
+            } elseif ($lastName !== '') {
+                $humanName = $lastName;
+            } elseif ($name !== '') {
+                $humanName = $name;
+            }
+
+            $options[$agent['id']] = $humanName !== '' ? $humanName : $login;
+        }
+
+        asort($options);
+
+        return $options;
+    }
+
     /**
      * @return array<string|int, string> Key is agent ID, value is label
      */
@@ -51,7 +83,7 @@ class ZnunyAssignmentDependencyService
         if (empty($queueName)) {
             $agents = $this->agentService->getSelectableAgents();
 
-            $options = collect($agents)->pluck('label', 'id')->toArray();
+            $options = $this->extractHumanOwnerOptions($agents);
 
             return app(ZnunyUiFilterService::class)->filterOwnerOptionsForUi($options, $agents);
         }
@@ -60,14 +92,14 @@ class ZnunyAssignmentDependencyService
         if (empty($queue['id'])) {
             $agents = $this->agentService->getSelectableAgents();
 
-            $options = collect($agents)->pluck('label', 'id')->toArray();
+            $options = $this->extractHumanOwnerOptions($agents);
 
             return app(ZnunyUiFilterService::class)->filterOwnerOptionsForUi($options, $agents);
         }
 
         $agents = $this->agentService->getSelectableAssignableAgentsForQueue($queue['id']);
 
-        $options = collect($agents)->pluck('label', 'id')->toArray();
+        $options = $this->extractHumanOwnerOptions($agents);
 
         return app(ZnunyUiFilterService::class)->filterOwnerOptionsForUi($options, $agents);
     }
@@ -88,7 +120,7 @@ class ZnunyAssignmentDependencyService
 
         $agents = $this->agentService->getSelectableAssignableAgentsForQueue($queue['id']);
 
-        $options = collect($agents)->pluck('label', 'id')->toArray();
+        $options = $this->extractHumanOwnerOptions($agents);
 
         return app(ZnunyUiFilterService::class)->filterOwnerOptionsForUi($options, $agents);
     }
@@ -149,6 +181,38 @@ class ZnunyAssignmentDependencyService
         return array_key_exists((string) $ownerId, $options);
     }
 
+    private function extractHumanOwnerLoginOptions(array $agents): array
+    {
+        $options = [];
+        foreach ($agents as $agent) {
+            $login = trim((string) ($agent['login'] ?? ''));
+            if ($login === '') {
+                continue;
+            }
+
+            $firstName = trim((string) ($agent['first_name'] ?? ''));
+            $lastName = trim((string) ($agent['last_name'] ?? ''));
+            $name = trim((string) ($agent['name'] ?? ''));
+
+            $humanName = '';
+            if ($firstName !== '' && $lastName !== '') {
+                $humanName = "{$firstName} {$lastName}";
+            } elseif ($firstName !== '') {
+                $humanName = $firstName;
+            } elseif ($lastName !== '') {
+                $humanName = $lastName;
+            } elseif ($name !== '') {
+                $humanName = $name;
+            }
+
+            $options[$login] = $humanName !== '' ? $humanName : $login;
+        }
+
+        asort($options);
+
+        return $options;
+    }
+
     /**
      * @return array<string, string> Key is agent login, value is label
      */
@@ -157,7 +221,7 @@ class ZnunyAssignmentDependencyService
         if (empty($queueName)) {
             $agents = $this->agentService->getSelectableAgents();
 
-            $options = collect($agents)->pluck('label', 'login')->toArray();
+            $options = $this->extractHumanOwnerLoginOptions($agents);
 
             return app(ZnunyUiFilterService::class)->filterOwnerOptionsForUi($options, $agents);
         }
@@ -166,14 +230,14 @@ class ZnunyAssignmentDependencyService
         if (empty($queue['id'])) {
             $agents = $this->agentService->getSelectableAgents();
 
-            $options = collect($agents)->pluck('label', 'login')->toArray();
+            $options = $this->extractHumanOwnerLoginOptions($agents);
 
             return app(ZnunyUiFilterService::class)->filterOwnerOptionsForUi($options, $agents);
         }
 
         $agents = $this->agentService->getSelectableAssignableAgentsForQueue($queue['id']);
 
-        $options = collect($agents)->pluck('label', 'login')->toArray();
+        $options = $this->extractHumanOwnerLoginOptions($agents);
 
         return app(ZnunyUiFilterService::class)->filterOwnerOptionsForUi($options, $agents);
     }

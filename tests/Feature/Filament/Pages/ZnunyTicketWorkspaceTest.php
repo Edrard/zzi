@@ -3,17 +3,22 @@
 namespace Tests\Feature\Filament\Pages;
 
 use App\Filament\Pages\ZnunyTicketWorkspace;
+use App\Filament\Resources\ZabbixTickets\Schemas\ZabbixTicketInfolist;
 use App\Models\AuditLog;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\SettingsService;
 use App\Services\Znuny\ClosedTicketCacheService;
 use App\Services\Znuny\ClosedTicketSyncService;
+use App\Services\Znuny\ZnunyAgentService;
+use App\Services\Znuny\ZnunyAssignmentDependencyService;
+use App\Services\Znuny\ZnunyCachedLookupService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyLinkedTicketReopenService;
 use App\Services\Znuny\ZnunyTicketArticleWriteService;
 use App\Services\Znuny\ZnunyTicketCacheService;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Schema;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
@@ -34,19 +39,19 @@ class ZnunyTicketWorkspaceTest extends TestCase
 
     protected function setupChangeAssignmentDependencies(array $validOwners = ['new.owner' => 'new.owner', 'old.owner' => 'old.owner'], array $validQueues = ['Different Queue' => 'Different Queue', 'old.queue' => 'old.queue', 'new.queue' => 'new.queue'])
     {
-        $lookupMock = \Mockery::mock(\App\Services\Znuny\ZnunyCachedLookupService::class)->makePartial();
+        $lookupMock = \Mockery::mock(ZnunyCachedLookupService::class)->makePartial();
         $lookupMock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
         $lookupMock->shouldReceive('getCustomerUserLabel')->with('customer.1')->andReturn('customer.1')->byDefault();
-        $this->app->instance(\App\Services\Znuny\ZnunyCachedLookupService::class, $lookupMock);
+        $this->app->instance(ZnunyCachedLookupService::class, $lookupMock);
 
-        $depMock = \Mockery::mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class)->makePartial();
+        $depMock = \Mockery::mock(ZnunyAssignmentDependencyService::class)->makePartial();
         $depMock->shouldReceive('getOwnerLoginOptionsForQueue')->andReturn($validOwners)->byDefault();
         $depMock->shouldReceive('getQueueOptionsForOwnerLogin')->andReturn($validQueues)->byDefault();
-        $this->app->instance(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, $depMock);
+        $this->app->instance(ZnunyAssignmentDependencyService::class, $depMock);
 
-        $agentMock = \Mockery::mock(\App\Services\Znuny\ZnunyAgentService::class)->makePartial();
+        $agentMock = \Mockery::mock(ZnunyAgentService::class)->makePartial();
         $agentMock->shouldReceive('isLoginExcluded')->andReturn(false)->byDefault();
-        $this->app->instance(\App\Services\Znuny\ZnunyAgentService::class, $agentMock);
+        $this->app->instance(ZnunyAgentService::class, $agentMock);
     }
 
     protected function seedTicket(array $ticketOverrides): void
@@ -267,6 +272,90 @@ class ZnunyTicketWorkspaceTest extends TestCase
         sort($expected);
         sort($actual);
         $this->assertEquals($expected, $actual, $message);
+    }
+
+    public function test_ticket_details_modal_renders_human_owner_name()
+    {
+        $user = User::factory()->create(['role' => 'operator']);
+
+        $this->setupChangeAssignmentDependencies(
+            ['old.owner' => 'old.owner', 'ara@vamark.com' => 'Роман Андрушевич', 'unknown@vamark.com' => 'unknown@vamark.com'],
+            ['Raw' => 'Raw']
+        );
+
+        app(ZnunyAssignmentDependencyService::class)
+            ->shouldReceive('getOwnerOptionsForQueue')
+            ->with(null)
+            ->andReturn([99 => 'Роман Андрушевич'])
+            ->byDefault();
+
+        $this->seedTicket([
+            'TicketID' => 101,
+            'TicketNumber' => 'TN101',
+            'Title' => 'Test Details',
+            'StateType' => 'new',
+            'Queue' => 'Raw',
+            'OwnerID' => 99,
+            'Owner' => 'ara@vamark.com',
+            'CustomerUserID' => '2od@simple.eu',
+            'Priority' => '3 normal',
+        ]);
+
+        $component = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['new'])
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 101])
+            ->assertActionMounted('viewTicket');
+
+        $action = $component->instance()->getMountedAction();
+        $schema = Schema::make($component->instance());
+        ZabbixTicketInfolist::configure($schema);
+
+        $record = $action->evaluate($action->getRecord());
+        $schema->record($record);
+
+        $this->assertEquals('Роман Андрушевич', $schema->getComponent('znuny_owner_name')->getState());
+        $this->assertEquals('2od@simple.eu', $schema->getComponent('customer_user')->getState());
+        $this->assertEquals('Raw', $schema->getComponent('znuny_queue_name')->getState());
+        $this->assertEquals('3 normal', $schema->getComponent('znuny_priority')->getState());
+
+        // Test unresolvable
+        $this->seedTicket([
+            'TicketID' => 102,
+            'TicketNumber' => 'TN102',
+            'Title' => 'Test Details 2',
+            'StateType' => 'new',
+            'Queue' => 'Raw',
+            'OwnerID' => 100, // not in dependencies
+            'Owner' => 'unknown@vamark.com',
+            'CustomerUserID' => '2od@simple.eu',
+        ]);
+
+        // Exercise the fallback as a fresh modal open. Reusing the same mounted
+        // Filament action can retain the previous action record/state in the test harness.
+        \App\Filament\Support\TicketDetailsPayload::clearCache();
+
+        $component102 = Livewire::actingAs($user)
+            ->test(ZnunyTicketWorkspace::class)
+            ->set('stateTypeFilter', ['new'])
+            ->mountAction('viewTicket', ['znuny_ticket_id' => 102])
+            ->assertActionMounted('viewTicket');
+
+        $action102 = $component102->instance()->getMountedAction();
+        $record102 = $action102->evaluate($action102->getRecord());
+
+        // Prove the mounted action itself resolved the second ticket before
+        // evaluating the infolist display state.
+        $payload102 = \App\Filament\Support\TicketDetailsPayload::fromRecord($record102);
+        $this->assertEquals(100, $payload102->znuny_owner_id);
+        $this->assertEquals('unknown@vamark.com', $payload102->znuny_owner_name);
+
+        $schema102 = Schema::make($component102->instance());
+        ZabbixTicketInfolist::configure($schema102);
+        $schema102->record($record102);
+
+        $this->assertEquals('unknown@vamark.com', $schema102->getComponent('znuny_owner_name')->getState());
+
     }
 
     public function test_clicking_row_opens_details_modal_with_cached_data()
@@ -990,8 +1079,8 @@ class ZnunyTicketWorkspaceTest extends TestCase
                 'created_at' => now()->toIso8601String(),
             ],
         ]);
-                $this->setupChangeAssignmentDependencies();
-$this->app->instance(ZnunyClient::class, $mockClient);
+        $this->setupChangeAssignmentDependencies();
+        $this->app->instance(ZnunyClient::class, $mockClient);
 
         $component = Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
@@ -1042,8 +1131,8 @@ $this->app->instance(ZnunyClient::class, $mockClient);
 
         $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
         $mockClient->shouldReceive('closeTicket')->with(101, \Mockery::any())->andReturn(['success' => false, 'errors' => ['Znuny rejected close']]);
-                $this->setupChangeAssignmentDependencies();
-$this->app->instance(ZnunyClient::class, $mockClient);
+        $this->setupChangeAssignmentDependencies();
+        $this->app->instance(ZnunyClient::class, $mockClient);
 
         Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
@@ -1084,8 +1173,8 @@ $this->app->instance(ZnunyClient::class, $mockClient);
                 'created_at' => now()->toIso8601String(),
             ],
         ]);
-                $this->setupChangeAssignmentDependencies();
-$this->app->instance(ZnunyClient::class, $mockClient);
+        $this->setupChangeAssignmentDependencies();
+        $this->app->instance(ZnunyClient::class, $mockClient);
 
         // For ZnunyLinkedTicketReopenService to use the mock
         $reopenServiceMock = \Mockery::mock(ZnunyLinkedTicketReopenService::class)->makePartial();
@@ -1150,8 +1239,8 @@ $this->app->instance(ZnunyClient::class, $mockClient);
             'Changed' => now()->toIso8601String(),
         ]);
         $mockClient->shouldReceive('getTicketArticles')->with(104)->andReturn([]);
-                $this->setupChangeAssignmentDependencies();
-$this->app->instance(ZnunyClient::class, $mockClient);
+        $this->setupChangeAssignmentDependencies();
+        $this->app->instance(ZnunyClient::class, $mockClient);
 
         $component = Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
@@ -1233,8 +1322,8 @@ $this->app->instance(ZnunyClient::class, $mockClient);
             'Changed' => now()->toIso8601String(),
         ]);
         $mockClient->shouldReceive('getTicketArticles')->with(203)->andReturn([]);
-                $this->setupChangeAssignmentDependencies();
-$this->app->instance(ZnunyClient::class, $mockClient);
+        $this->setupChangeAssignmentDependencies();
+        $this->app->instance(ZnunyClient::class, $mockClient);
 
         $component = Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
@@ -1271,8 +1360,8 @@ $this->app->instance(ZnunyClient::class, $mockClient);
             'Changed' => now()->toIso8601String(),
         ]);
         $mockClient->shouldReceive('getTicketArticles')->with(204)->andReturn([]);
-                $this->setupChangeAssignmentDependencies();
-$this->app->instance(ZnunyClient::class, $mockClient);
+        $this->setupChangeAssignmentDependencies();
+        $this->app->instance(ZnunyClient::class, $mockClient);
 
         $component = Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
@@ -1299,8 +1388,8 @@ $this->app->instance(ZnunyClient::class, $mockClient);
 
         $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
         $mockClient->shouldReceive('lockTicket')->with(205)->andReturn(['success' => false, 'errors' => ['Znuny is offline']]);
-                $this->setupChangeAssignmentDependencies();
-$this->app->instance(ZnunyClient::class, $mockClient);
+        $this->setupChangeAssignmentDependencies();
+        $this->app->instance(ZnunyClient::class, $mockClient);
 
         $component = Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
@@ -1333,8 +1422,8 @@ $this->app->instance(ZnunyClient::class, $mockClient);
         ]);
         $mockClient->shouldReceive('validateTicketMoveAssign')->once()->andReturn(['Valid' => 1]);
         $mockClient->shouldReceive('moveAssignTicket')->once()->andReturn(['Success' => 1]);
-                $this->setupChangeAssignmentDependencies();
-$this->app->instance(ZnunyClient::class, $mockClient);
+        $this->setupChangeAssignmentDependencies();
+        $this->app->instance(ZnunyClient::class, $mockClient);
 
         $component = Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
@@ -1365,8 +1454,8 @@ $this->app->instance(ZnunyClient::class, $mockClient);
         $this->seedTicket(['TicketID' => 306, 'TicketNumber' => 'TN306', 'StateType' => 'open']);
 
         $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
-                $this->setupChangeAssignmentDependencies();
-$this->app->instance(ZnunyClient::class, $mockClient);
+        $this->setupChangeAssignmentDependencies();
+        $this->app->instance(ZnunyClient::class, $mockClient);
 
         $component = Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
@@ -1408,8 +1497,8 @@ $this->app->instance(ZnunyClient::class, $mockClient);
             return $payload['Note'] === 'Assignment changed from integration UI.';
         }))->once()->andReturn(['Valid' => 1]);
         $mockClient->shouldReceive('moveAssignTicket')->once()->andReturn(['Success' => 1]);
-                $this->setupChangeAssignmentDependencies();
-$this->app->instance(ZnunyClient::class, $mockClient);
+        $this->setupChangeAssignmentDependencies();
+        $this->app->instance(ZnunyClient::class, $mockClient);
 
         $articleServiceMock = \Mockery::mock(ZnunyTicketArticleWriteService::class);
         $articleServiceMock->shouldReceive('createTicketArticle')->never();
@@ -1453,8 +1542,8 @@ $this->app->instance(ZnunyClient::class, $mockClient);
             return $payload['Note'] === 'My new note';
         }))->once()->andReturn(['Valid' => 1]);
         $mockClient->shouldReceive('moveAssignTicket')->once()->andReturn(['Success' => 1]);
-                $this->setupChangeAssignmentDependencies();
-$this->app->instance(ZnunyClient::class, $mockClient);
+        $this->setupChangeAssignmentDependencies();
+        $this->app->instance(ZnunyClient::class, $mockClient);
 
         $articleServiceMock = \Mockery::mock(ZnunyTicketArticleWriteService::class);
         $articleServiceMock->shouldReceive('createTicketArticle')->once()->with('307', 'Assignment changed', 'My new note', false)->andReturn(['success' => true]);
@@ -1498,8 +1587,8 @@ $this->app->instance(ZnunyClient::class, $mockClient);
             return ! isset($payload['Note']);
         }))->once()->andReturn(['Valid' => 1]);
         $mockClient->shouldReceive('moveAssignTicket')->once()->andReturn(['Success' => 1]);
-                $this->setupChangeAssignmentDependencies();
-$this->app->instance(ZnunyClient::class, $mockClient);
+        $this->setupChangeAssignmentDependencies();
+        $this->app->instance(ZnunyClient::class, $mockClient);
 
         $articleServiceMock = \Mockery::mock(ZnunyTicketArticleWriteService::class);
         $articleServiceMock->shouldReceive('createTicketArticle')->once()->with('307', 'Assignment changed', 'Queue changed note', false)->andReturn(['success' => true]);
@@ -1534,8 +1623,8 @@ $this->app->instance(ZnunyClient::class, $mockClient);
 
         $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
         $mockClient->shouldReceive('validateTicketMoveAssign')->once()->andReturn(['Valid' => 0, 'Errors' => ['Invalid Queue']]);
-                $this->setupChangeAssignmentDependencies();
-$this->app->instance(ZnunyClient::class, $mockClient);
+        $this->setupChangeAssignmentDependencies();
+        $this->app->instance(ZnunyClient::class, $mockClient);
 
         $articleServiceMock = \Mockery::mock(ZnunyTicketArticleWriteService::class);
         $articleServiceMock->shouldReceive('createTicketArticle')->never();
@@ -1571,8 +1660,8 @@ $this->app->instance(ZnunyClient::class, $mockClient);
         $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
         $mockClient->shouldReceive('validateTicketMoveAssign')->once()->andReturn(['Valid' => 1]);
         $mockClient->shouldReceive('moveAssignTicket')->once()->andReturn(['Success' => 0, 'Errors' => ['System error']]);
-                $this->setupChangeAssignmentDependencies();
-$this->app->instance(ZnunyClient::class, $mockClient);
+        $this->setupChangeAssignmentDependencies();
+        $this->app->instance(ZnunyClient::class, $mockClient);
 
         $articleServiceMock = \Mockery::mock(ZnunyTicketArticleWriteService::class);
         $articleServiceMock->shouldReceive('createTicketArticle')->never();
@@ -1606,8 +1695,8 @@ $this->app->instance(ZnunyClient::class, $mockClient);
         $this->seedTicket(['TicketID' => 308, 'TicketNumber' => 'TN308', 'StateType' => 'open', 'Queue' => 'old.queue', 'Owner' => 'old.owner']);
 
         $mockClient = \Mockery::mock(ZnunyClient::class)->makePartial();
-                $this->setupChangeAssignmentDependencies();
-$this->app->instance(ZnunyClient::class, $mockClient);
+        $this->setupChangeAssignmentDependencies();
+        $this->app->instance(ZnunyClient::class, $mockClient);
 
         $component = Livewire::actingAs($user)
             ->test(ZnunyTicketWorkspace::class)
@@ -1639,8 +1728,8 @@ $this->app->instance(ZnunyClient::class, $mockClient);
         $mockClient->shouldReceive('validateTicketMoveAssign')->once()->andReturn(['Valid' => 1]);
         $mockClient->shouldReceive('moveAssignTicket')->once()->andReturn(['Success' => 1]);
         $mockClient->shouldReceive('getTicket')->andThrow(new \Exception('API offline'));
-                $this->setupChangeAssignmentDependencies();
-$this->app->instance(ZnunyClient::class, $mockClient);
+        $this->setupChangeAssignmentDependencies();
+        $this->app->instance(ZnunyClient::class, $mockClient);
 
         $articleServiceMock = \Mockery::mock(ZnunyTicketArticleWriteService::class);
         $articleServiceMock->shouldReceive('createTicketArticle')->once()->with('309', 'Assignment changed', 'refresh fail test', false)->andReturn(['success' => true]);
@@ -1701,7 +1790,7 @@ $this->app->instance(ZnunyClient::class, $mockClient);
             ['Q1' => 'Q1'],
         );
 
-        $agentMock = \Mockery::mock(\App\Services\Znuny\ZnunyAgentService::class);
+        $agentMock = \Mockery::mock(ZnunyAgentService::class);
         $agentMock->shouldReceive('getAgentNameMap')
             ->andReturn([
                 1 => 'old.owner',
@@ -1710,7 +1799,7 @@ $this->app->instance(ZnunyClient::class, $mockClient);
         $agentMock->shouldReceive('isLoginExcluded')
             ->andReturnUsing(fn ($login): bool => strcasecmp((string) $login, 'excluded.owner') === 0)
             ->byDefault();
-        $this->app->instance(\App\Services\Znuny\ZnunyAgentService::class, $agentMock);
+        $this->app->instance(ZnunyAgentService::class, $agentMock);
 
         $this->app->instance(ZnunyClient::class, $mockClient);
 

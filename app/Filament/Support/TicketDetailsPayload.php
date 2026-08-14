@@ -58,6 +58,8 @@ class TicketDetailsPayload
 
     public ?string $znuny_owner_name = null;
 
+    public ?int $znuny_owner_id = null;
+
     public ?string $customer_user = null;
 
     public ?string $znuny_priority = null;
@@ -143,6 +145,9 @@ class TicketDetailsPayload
             $payload->zabbix_event_id = $record->zabbix_event_id;
             $payload->znuny_queue_name = $record->znuny_queue_name;
             $payload->znuny_owner_name = $record->znuny_owner_name;
+            // The Eloquent model might not have znuny_owner_id natively mapped,
+            // but we add it if available in case future schemas add it.
+            $payload->znuny_owner_id = $record->znuny_owner_id ?? null;
             $payload->znuny_priority = $record->znuny_priority;
             $payload->znuny_state_name = $record->znuny_state_name;
             $payload->state_type_str = $record->znuny_ticket_state_type;
@@ -188,6 +193,7 @@ class TicketDetailsPayload
         $payload->zabbix_event_id = $arr['linked_problem_event_id'] ?? null;
         $payload->znuny_queue_name = $arr['Queue'] ?? null;
         $payload->znuny_owner_name = $arr['Owner'] ?? null;
+        $payload->znuny_owner_id = isset($arr['OwnerID']) ? (int) $arr['OwnerID'] : null;
         $payload->customer_user = $arr['CustomerUserID'] ?? null;
         $payload->znuny_priority = $arr['Priority'] ?? null;
         $payload->znuny_state_name = $arr['State'] ?? null;

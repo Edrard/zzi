@@ -161,6 +161,11 @@ class ZnunyCachedLookupService
         }
     }
 
+    public function getAssignableHumanOwnerOptionsForQueue(?string $queueName, bool $throwOnFailure = false): array
+    {
+        return app(ZnunyAssignmentDependencyService::class)->getOwnerOptionsForQueue($queueName);
+    }
+
     private function normalizeDictionaryOptions(array $items, array $nameKeys = ['name', 'Name', 'label', 'Label', 'value', 'Value']): array
     {
         if (isset($items['Data']) && is_array($items['Data'])) {

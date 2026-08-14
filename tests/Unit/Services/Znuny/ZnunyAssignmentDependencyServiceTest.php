@@ -42,9 +42,9 @@ class ZnunyAssignmentDependencyServiceTest extends TestCase
     private function getBaseAgents()
     {
         return [
-            ['id' => 10, 'login' => 'agent1', 'label' => 'Agent 1', 'valid_id' => 1],
-            ['id' => 20, 'login' => 'agent2', 'label' => 'Agent 2', 'valid_id' => 1],
-            ['id' => 30, 'login' => 'agent3', 'label' => 'Agent 3', 'valid_id' => 0], // invalid
+            ['id' => 10, 'login' => 'agent1', 'name' => 'Agent 1', 'label' => 'Agent 1', 'valid_id' => 1],
+            ['id' => 20, 'login' => 'agent2', 'name' => 'Agent 2', 'label' => 'Agent 2', 'valid_id' => 1],
+            ['id' => 30, 'login' => 'agent3', 'name' => 'Agent 3', 'label' => 'Agent 3', 'valid_id' => 0], // invalid
         ];
     }
 
@@ -420,5 +420,30 @@ class ZnunyAssignmentDependencyServiceTest extends TestCase
         $service = app(ZnunyAssignmentDependencyService::class);
         $options = $service->getOwnerOptionsForQueue('Q1');
         $this->assertEquals([], $options);
+    }
+
+    public function test_owner_options_are_formatted_properly_with_human_names()
+    {
+        $this->mock(ZnunyQueueCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getQueues')->andReturn($this->getBaseQueues());
+        });
+
+        $this->mock(ZnunyAgentCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getAgentIdsForQueue')->with(1)->andReturn([10, 20, 30, 40]);
+            $mock->shouldReceive('getAgents')->andReturn([
+                ['id' => 10, 'login' => 'drobin', 'first_name' => 'Ігор', 'last_name' => 'Дробін', 'name' => 'Ігор Дробін <drobin>', 'valid_id' => 1],
+                ['id' => 20, 'login' => 'no_last', 'first_name' => 'Іван', 'name' => 'Іван <no_last>', 'valid_id' => 1],
+                ['id' => 30, 'login' => 'no_human', 'valid_id' => 1],
+                ['id' => 40, 'login' => 'full_only', 'name' => 'Jane Doe', 'valid_id' => 1],
+            ]);
+        });
+
+        $service = app(ZnunyAssignmentDependencyService::class);
+        $options = $service->getOwnerOptionsForQueue('Q1');
+
+        $this->assertEquals('Ігор Дробін', $options[10]);
+        $this->assertEquals('Іван', $options[20]);
+        $this->assertEquals('no_human', $options[30]);
+        $this->assertEquals('Jane Doe', $options[40]);
     }
 }

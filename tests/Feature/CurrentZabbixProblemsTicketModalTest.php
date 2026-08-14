@@ -10,11 +10,13 @@ use App\Models\ZabbixTicket;
 use App\Services\OwnerSuggestion\OwnerSuggestionSelector;
 use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixProblemCache;
+use App\Services\Znuny\Cache\ZnunyQueueCacheReadService;
 use App\Services\Znuny\ZnunyAgentService;
 use App\Services\Znuny\ZnunyAssignmentDependencyService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyTicketArticleWriteService;
 use App\Services\Znuny\ZnunyTicketCreationService;
+use App\Services\Znuny\ZnunyTicketModalStateBuilder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
@@ -198,7 +200,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
         Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
 
-        $stateBuilderMock = $this->mock(\App\Services\Znuny\ZnunyTicketModalStateBuilder::class);
+        $stateBuilderMock = $this->mock(ZnunyTicketModalStateBuilder::class);
         $stateBuilderMock->shouldReceive('buildState')
             ->once()
             ->with('TestCompany swiss test01')
@@ -216,12 +218,12 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
                 'lock' => 'lock',
             ]);
 
-        $this->mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, function ($mock) {
-            $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One <agent1>']);
+        $this->mock(ZnunyAssignmentDependencyService::class, function ($mock) {
+            $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One']);
             $mock->shouldReceive('getQueueOptionsForOwnerId')->andReturn(['TestCompany' => 'TestCompany']);
             $mock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
             $mock->shouldReceive('getAssignableAgentsForQueue')->andReturn([
-                ['id' => '10', 'login' => 'agent1']
+                ['id' => '10', 'login' => 'agent1'],
             ]);
         });
 
@@ -232,7 +234,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $component->assertDispatched('open-modal')
             ->assertSet('ticketModalEventId', '1001')
             ->assertSet('ticketOwnerId', null)
-            ->assertSet('ticketOwnerOptions.10', 'Agent One <agent1>')
+            ->assertSet('ticketOwnerOptions.10', 'Agent One')
             ->assertSet('ticketQueue', 'TestCompany')
             ->assertSet('ticketCustomerUser', 'TestCompanyClients')
             ->assertSet('ticketDefaultPriority', '3 normal')
@@ -328,12 +330,12 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         Setting::updateOrCreate(['key' => 'znuny_username'], ['value' => 'agent']);
         Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => app(SettingsService::class)->encryptForStorage('znuny_password', 'secret'), 'type' => 'string']);
 
-        $this->mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, function ($mock) {
-            $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One <agent1>']);
+        $this->mock(ZnunyAssignmentDependencyService::class, function ($mock) {
+            $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One']);
             $mock->shouldReceive('getQueueOptionsForOwnerId')->andReturn([]);
             $mock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
             $mock->shouldReceive('getAssignableAgentsForQueue')->andReturn([
-                ['id' => '10', 'login' => 'agent1']
+                ['id' => '10', 'login' => 'agent1'],
             ]);
         });
 
@@ -441,7 +443,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
-        $serviceMock = $this->mock(\App\Services\Znuny\ZnunyTicketCreationService::class);
+        $serviceMock = $this->mock(ZnunyTicketCreationService::class);
         $serviceMock->shouldReceive('createTicketForProblem')
             ->once()
             ->with(
@@ -470,7 +472,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
                 'orphaned' => false,
             ]);
 
-        $this->mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, function ($mock) {
+        $this->mock(ZnunyAssignmentDependencyService::class, function ($mock) {
             $mock->shouldReceive('getOwnerOptionsForQueue')
                 ->with('TestCompany')
                 ->andReturn(['10' => 'Agent One']);
@@ -1182,19 +1184,19 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ], 200),
         ]);
 
-        $this->mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, function ($mock) {
-            $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One <agent1>']);
+        $this->mock(ZnunyAssignmentDependencyService::class, function ($mock) {
+            $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One']);
             $mock->shouldReceive('getQueueOptionsForOwnerId')->andReturn([]);
             $mock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
             $mock->shouldReceive('getAssignableAgentsForQueue')->andReturn([
-                ['id' => '10', 'login' => 'agent1']
+                ['id' => '10', 'login' => 'agent1'],
             ]);
         });
 
         Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
             ->set('ticketQueue', 'TestQueue')
-            ->assertSet('ticketOwnerOptions.10', 'Agent One <agent1>');
+            ->assertSet('ticketOwnerOptions.10', 'Agent One');
     }
 
     public function test_current_problems_modal_queue_changes_clears_invalid_owner()
@@ -1233,7 +1235,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
-        $this->mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, function ($mock) {
+        $this->mock(ZnunyAssignmentDependencyService::class, function ($mock) {
             $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn([]);
             $mock->shouldReceive('getQueueOptionsForOwnerId')->andReturn([
                 'Z_Queue' => 'Zebra Queue',
@@ -1263,7 +1265,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
-        $this->mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, function ($mock) {
+        $this->mock(ZnunyAssignmentDependencyService::class, function ($mock) {
             $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn([]);
             $mock->shouldReceive('getQueueOptionsForOwnerId')->andReturn(['ValidQueue' => 'ValidQueue']);
             $mock->shouldReceive('isOwnerValidForQueue')->andReturn(false);
@@ -1346,13 +1348,13 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
         $this->setupMocksForSuggestionTests();
 
-        $this->mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, function ($mock) {
+        $this->mock(ZnunyAssignmentDependencyService::class, function ($mock) {
             $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One', '20' => 'Agent Two']);
             $mock->shouldReceive('getQueueOptionsForOwnerId')->andReturn([]);
             $mock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
             $mock->shouldReceive('getAssignableAgentsForQueue')->andReturn([
                 ['id' => '10', 'login' => 'agent1'],
-                ['id' => '20', 'login' => 'agent2']
+                ['id' => '20', 'login' => 'agent2'],
             ]);
         });
 
@@ -1390,13 +1392,13 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
         $this->setupMocksForSuggestionTests();
 
-        $this->mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, function ($mock) {
+        $this->mock(ZnunyAssignmentDependencyService::class, function ($mock) {
             $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One', '20' => 'Agent Two']);
             $mock->shouldReceive('getQueueOptionsForOwnerId')->andReturn([]);
             $mock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
             $mock->shouldReceive('getAssignableAgentsForQueue')->andReturn([
                 ['id' => '10', 'login' => 'agent1'],
-                ['id' => '20', 'login' => 'agent2']
+                ['id' => '20', 'login' => 'agent2'],
             ]);
         });
 
@@ -1460,13 +1462,13 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
         $this->setupMocksForSuggestionTests();
 
-        $this->mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, function ($mock) {
+        $this->mock(ZnunyAssignmentDependencyService::class, function ($mock) {
             $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One', '20' => 'Agent Two']);
             $mock->shouldReceive('getQueueOptionsForOwnerId')->andReturn([]);
             $mock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
             $mock->shouldReceive('getAssignableAgentsForQueue')->andReturn([
                 ['id' => '10', 'login' => 'agent1'],
-                ['id' => '20', 'login' => 'agent2']
+                ['id' => '20', 'login' => 'agent2'],
             ]);
         });
 
@@ -1506,7 +1508,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $this->setupMocksForSuggestionTests();
 
         // Initial queue state: mirror the known-good preselection fixture exactly.
-        $this->mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, function ($mock) {
+        $this->mock(ZnunyAssignmentDependencyService::class, function ($mock) {
             $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One', '20' => 'Agent Two']);
             $mock->shouldReceive('getQueueOptionsForOwnerId')->andReturn([]);
             $mock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
@@ -1541,7 +1543,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->assertSet('ownerManuallyChanged', false);
 
         // Queue B state: replace only the container services resolved by updatedTicketQueue().
-        $this->mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, function ($mock) {
+        $this->mock(ZnunyAssignmentDependencyService::class, function ($mock) {
             $mock->shouldReceive('getOwnerOptionsForQueue')
                 ->with('Queue B')
                 ->andReturn(['10' => 'Agent One', '30' => 'Agent Three']);
@@ -1620,13 +1622,13 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
         $this->setupMocksForSuggestionTests();
 
-        $this->mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, function ($mock) {
+        $this->mock(ZnunyAssignmentDependencyService::class, function ($mock) {
             $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One', '20' => 'Agent Two']);
             $mock->shouldReceive('getQueueOptionsForOwnerId')->andReturn([]);
             $mock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
             $mock->shouldReceive('getAssignableAgentsForQueue')->andReturn([
                 ['id' => '10', 'login' => 'agent1'],
-                ['id' => '20', 'login' => 'agent2']
+                ['id' => '20', 'login' => 'agent2'],
             ]);
         });
 
@@ -1650,7 +1652,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
         $this->setupMocksForSuggestionTests();
 
-        $this->mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, function ($mock) {
+        $this->mock(ZnunyAssignmentDependencyService::class, function ($mock) {
             $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One', '20' => 'Agent Two']);
             $mock->shouldReceive('getQueueOptionsForOwnerId')->andReturn([]);
             $mock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
@@ -1691,7 +1693,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
         $this->setupMocksForSuggestionTests();
 
-        $this->mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, function ($mock) {
+        $this->mock(ZnunyAssignmentDependencyService::class, function ($mock) {
             $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One', '20' => 'Agent Two']);
             $mock->shouldReceive('getQueueOptionsForOwnerId')->andReturn([]);
             $mock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
@@ -1744,7 +1746,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ['host_prefix' => 'SocialProduct', 'queue_name' => 'TestCompany'],
         ]), 'type' => 'json']);
 
-        $this->mock(\App\Services\Znuny\Cache\ZnunyQueueCacheReadService::class, function ($mock) {
+        $this->mock(ZnunyQueueCacheReadService::class, function ($mock) {
             $mock->shouldReceive('getQueues')->andReturn([
                 [
                     'id' => 99,
@@ -1795,7 +1797,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ['host_prefix' => 'SocialProduct', 'queue_name' => 'TestCompany'],
         ]), 'type' => 'json']);
 
-        $this->mock(\App\Services\Znuny\Cache\ZnunyQueueCacheReadService::class, function ($mock) {
+        $this->mock(ZnunyQueueCacheReadService::class, function ($mock) {
             $mock->shouldReceive('getQueues')->andReturn([
                 [
                     'id' => 99,
@@ -1866,13 +1868,13 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
         $this->setupMocksForSuggestionTests();
 
-        $this->mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, function ($mock) {
+        $this->mock(ZnunyAssignmentDependencyService::class, function ($mock) {
             $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One', '20' => 'Agent Two']);
             $mock->shouldReceive('getQueueOptionsForOwnerId')->andReturn([]);
             $mock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
             $mock->shouldReceive('getAssignableAgentsForQueue')->andReturn([
                 ['id' => '10', 'login' => 'agent1'],
-                ['id' => '20', 'login' => 'agent2']
+                ['id' => '20', 'login' => 'agent2'],
             ]);
         });
 
@@ -1929,13 +1931,13 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
         $this->setupMocksForSuggestionTests();
 
-        $this->mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, function ($mock) {
+        $this->mock(ZnunyAssignmentDependencyService::class, function ($mock) {
             $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One', '20' => 'Agent Two']);
             $mock->shouldReceive('getQueueOptionsForOwnerId')->andReturn([]);
             $mock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
             $mock->shouldReceive('getAssignableAgentsForQueue')->andReturn([
                 ['id' => '10', 'login' => 'agent1'],
-                ['id' => '20', 'login' => 'agent2']
+                ['id' => '20', 'login' => 'agent2'],
             ]);
         });
 
@@ -2017,13 +2019,13 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
         $this->setupMocksForSuggestionTests();
 
-        $this->mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, function ($mock) {
+        $this->mock(ZnunyAssignmentDependencyService::class, function ($mock) {
             $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One', '20' => 'Agent Two']);
             $mock->shouldReceive('getQueueOptionsForOwnerId')->andReturn([]);
             $mock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
             $mock->shouldReceive('getAssignableAgentsForQueue')->andReturn([
                 ['id' => '10', 'login' => 'agent1'],
-                ['id' => '20', 'login' => 'agent2']
+                ['id' => '20', 'login' => 'agent2'],
             ]);
         });
 
@@ -2079,13 +2081,13 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
         $this->setupMocksForSuggestionTests();
 
-        $this->mock(\App\Services\Znuny\ZnunyAssignmentDependencyService::class, function ($mock) {
+        $this->mock(ZnunyAssignmentDependencyService::class, function ($mock) {
             $mock->shouldReceive('getOwnerOptionsForQueue')->andReturn(['10' => 'Agent One', '20' => 'Agent Two']);
             $mock->shouldReceive('getQueueOptionsForOwnerId')->andReturn([]);
             $mock->shouldReceive('isOwnerValidForQueue')->andReturn(true);
             $mock->shouldReceive('getAssignableAgentsForQueue')->andReturn([
                 ['id' => '10', 'login' => 'agent1'],
-                ['id' => '20', 'login' => 'agent2']
+                ['id' => '20', 'login' => 'agent2'],
             ]);
         });
 

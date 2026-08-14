@@ -386,6 +386,8 @@ class ZnunyClient
                     'id' => $id,
                     'login' => $login,
                     'name' => $fullname,
+                    'first_name' => trim((string) ($agent['UserFirstname'] ?? '')),
+                    'last_name' => trim((string) ($agent['UserLastname'] ?? '')),
                     'label' => $label,
                 ];
             }
@@ -395,6 +397,7 @@ class ZnunyClient
                 if ($cmp === 0) {
                     return $a['id'] <=> $b['id'];
                 }
+
                 return $cmp;
             });
 
@@ -919,6 +922,7 @@ class ZnunyClient
                 if ($cmp === 0) {
                     return $a['id'] <=> $b['id'];
                 }
+
                 return $cmp;
             });
 
@@ -1098,6 +1102,7 @@ class ZnunyClient
                 if ($cmp === 0) {
                     return $a['id'] <=> $b['id'];
                 }
+
                 return $cmp;
             });
 

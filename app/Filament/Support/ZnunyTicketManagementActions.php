@@ -505,19 +505,32 @@ class ZnunyTicketManagementActions
                 return [
                     Placeholder::make('current_assignment_summary')
                         ->hiddenLabel()
-                        ->content(new HtmlString('
+                        ->content(function () use ($payload) {
+                            $displayOwner = htmlspecialchars((string) $payload->znuny_owner_name);
+                            if ($payload->znuny_owner_id) {
+                                try {
+                                    $ownerOptions = app(ZnunyAssignmentDependencyService::class)->getOwnerOptionsForQueue(null);
+                                    if (isset($ownerOptions[$payload->znuny_owner_id])) {
+                                        $displayOwner = htmlspecialchars($ownerOptions[$payload->znuny_owner_id]);
+                                    }
+                                } catch (\Throwable $e) {
+                                }
+                            }
+
+                            return new HtmlString('
                             <div class="hidden lg:flex items-center gap-1.5 text-sm">
                                 <span class="text-gray-500 dark:text-gray-500">'.__('znuny_ticket_workspace.management_actions.current').'</span>
                                 <span class="text-gray-500 dark:text-gray-400">'.__('znuny_ticket_workspace.management_actions.queue').'</span>
                                 <span class="font-semibold text-gray-700 dark:text-gray-300">'.htmlspecialchars((string) $payload->znuny_queue_name).'</span>
                                 <span class="text-gray-300 dark:text-gray-600">&middot;</span>
                                 <span class="text-gray-500 dark:text-gray-400">'.__('znuny_ticket_workspace.management_actions.owner').'</span>
-                                <span class="font-semibold text-gray-700 dark:text-gray-300">'.htmlspecialchars((string) $payload->znuny_owner_name).'</span>
+                                <span class="font-semibold text-gray-700 dark:text-gray-300">'.$displayOwner.'</span>
                                 <span class="text-gray-300 dark:text-gray-600">&middot;</span>
                                 <span class="text-gray-500 dark:text-gray-400">'.__('znuny_ticket_workspace.management_actions.customer').'</span>
                                 <span class="font-semibold text-gray-700 dark:text-gray-300">'.htmlspecialchars((string) $payload->customer_user).'</span>
                             </div>
-                        ')),
+                        ');
+                        }),
                     Select::make('target_queue')
                         ->label(__('znuny_ticket_workspace.management_actions.target_queue'))
                         ->default($payload->znuny_queue_name)
