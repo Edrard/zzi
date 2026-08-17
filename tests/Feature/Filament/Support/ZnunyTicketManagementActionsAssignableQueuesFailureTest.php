@@ -238,6 +238,13 @@ class ZnunyTicketManagementActionsAssignableQueuesFailureTest extends TestCase
         }
     }
 
+    public function test_target_queue_has_increased_options_limit()
+    {
+        [$component, $closure] = $this->extractTargetQueueOptionsComponentAndClosure(123);
+
+        $this->assertEquals(1000, $component->getOptionsLimit(), 'The Target Queue options limit should be exactly 1000 to show all prewarmed queues initially');
+    }
+
     private function extractTargetQueueOptionsComponentAndClosure(int $ticketId): array
     {
         $action = ZnunyTicketManagementActions::changeAssignmentAction('change_assignment');

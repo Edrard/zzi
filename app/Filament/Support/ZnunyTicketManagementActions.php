@@ -614,6 +614,7 @@ class ZnunyTicketManagementActions
                             return $options;
                         })
                         ->searchable()
+                        ->optionsLimit(1000)
                         ->live()
                         ->afterStateUpdated(function ($set, $get, ?string $state) {
                             $owner = $get('target_owner');
