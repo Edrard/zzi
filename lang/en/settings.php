@@ -58,6 +58,10 @@ return [
             'default_landing_page' => [
                 'label' => 'Default landing page',
             ],
+            'track_new_tickets' => [
+                'label' => 'Track new tickets',
+                'helper_text' => 'Show a star next to new unlinked tickets you have not opened yet.',
+            ],
             'show_current_problems_status_panel' => [
                 'label' => 'Show Current Problems polling status panel',
             ],
