@@ -702,6 +702,9 @@ class ZnunyTicketManagementActions
                     Select::make('target_customer')
                         ->label(__('znuny_ticket_workspace.management_actions.target_customer'))
                         ->default($payload->customer_user)
+                        ->options(function ($get) use ($payload) {
+                            return self::getTargetCustomerDefaultOptions($get('target_queue'), $payload->customer_user);
+                        })
                         ->searchable()
                         ->noOptionsMessage(function (ZnunyCachedLookupService $lookupService) {
                             $state = $lookupService->getPrewarmDatasetState('customer_users');
@@ -725,21 +728,14 @@ class ZnunyTicketManagementActions
 
                             return null;
                         })
-                        ->getSearchResultsUsing(function (string $search, $get) {
+                        ->getSearchResultsUsing(function (string $search, $get) use ($payload) {
                             $query = trim($search);
-                            $lookupService = app(ZnunyCachedLookupService::class);
                             if ($query === '') {
-                                $queue = $get('target_queue');
-                                if (blank($queue)) {
-                                    return [];
-                                }
-                                try {
-                                    return $lookupService->getCustomerUserPrimaryOptionsForQueue($queue);
-                                } catch (\Throwable $e) {
-                                    return [];
-                                }
+                                return self::getTargetCustomerDefaultOptions($get('target_queue'), $payload->customer_user);
                             }
                             try {
+                                $lookupService = app(ZnunyCachedLookupService::class);
+
                                 return $lookupService->searchCustomerUserOptions($query, 20);
                             } catch (\Throwable $e) {
                                 return [];
@@ -913,5 +909,33 @@ class ZnunyTicketManagementActions
                         ->send();
                 }
             });
+    }
+
+    public static function getTargetCustomerDefaultOptions(?string $queue, ?string $currentCustomer): array
+    {
+        $lookupService = app(ZnunyCachedLookupService::class);
+        $options = [];
+        if (! blank($queue)) {
+            try {
+                $options = $lookupService->getCustomerUserPrimaryOptionsForQueue($queue);
+            } catch (\Throwable $e) {
+                $options = [];
+            }
+        }
+
+        if (! blank($currentCustomer) && ! array_key_exists($currentCustomer, $options)) {
+            $label = $currentCustomer;
+            try {
+                $resolvedLabel = $lookupService->getCustomerUserLabel($currentCustomer);
+                if (! blank($resolvedLabel)) {
+                    $label = $resolvedLabel;
+                }
+            } catch (\Throwable $e) {
+                // Keep the raw login as label
+            }
+            $options[$currentCustomer] = (string) $label;
+        }
+
+        return $options;
     }
 }
