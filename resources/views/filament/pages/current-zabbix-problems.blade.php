@@ -783,6 +783,13 @@
         :is(.dark) .zbx-empty-state p {
             color: #9ca3af;
         }
+
+        /* Mobile specific layout below 500px */
+        @media (max-width: 499.98px) {
+            .mobile-hidden {
+                display: none !important;
+            }
+        }
     </style>
 
     <div wire:poll.{{ $this->getRefreshIntervalString() }} class="zbx-page-stack">
@@ -879,7 +886,7 @@
             $totalCount = $this->totalCachedCount;
         @endphp
         <div class="zbx-toolbar" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-            <div class="zbx-toolbar-search">
+            <div class="zbx-toolbar-search mobile-hidden">
                 <x-filament::input.wrapper icon="heroicon-m-magnifying-glass">
                     <x-filament::input
                         type="text"
@@ -889,7 +896,7 @@
                 </x-filament::input.wrapper>
             </div>
 
-            <div class="zbx-toolbar-presets" style="display: flex; gap: 0.375rem; flex-wrap: wrap; flex: 1;">
+            <div class="zbx-toolbar-presets mobile-hidden" style="display: flex; gap: 0.375rem; flex-wrap: wrap; flex: 1;">
                 @foreach(['all', 'high', 'warning', 'average', 'information', 'tickets', 'reopen', 'flapping'] as $preset)
                     <button
                         type="button"
@@ -901,7 +908,7 @@
                 @endforeach
             </div>
 
-            <div class="zbx-toolbar-count" style="white-space: nowrap;">
+            <div class="zbx-toolbar-count mobile-hidden" style="white-space: nowrap;">
                 @if(empty($this->search) && $this->problemPreset === 'all')
                     {{ trans_choice('current_zabbix_problems.count', $totalCount) }}
                 @else

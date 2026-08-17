@@ -13,7 +13,42 @@ class CurrentZabbixProblemsMobileLayoutTest extends TestCase
 
         $this->assertStringNotContainsString('style="flex: 0 0 350px;"', $bladeContent);
         $this->assertStringNotContainsString('style="flex: 0 1 350px;"', $bladeContent);
-        $this->assertStringContainsString('<div class="zbx-toolbar-search">', $bladeContent);
+
+        // Verify the media query exists
+        $this->assertMatchesRegularExpression(
+            '/@media\s*\(\s*max-width:\s*499\.98px\s*\)/is',
+            $bladeContent
+        );
+
+        // Verify .mobile-hidden is display: none inside the mobile breakpoint
+        $this->assertMatchesRegularExpression(
+            '/@media\s*\(\s*max-width:\s*499\.98px\s*\)[^{]*\{[^}]*\.mobile-hidden\s*\{\s*display:\s*none\s*!important;\s*\}/is',
+            $bladeContent
+        );
+
+        // Verify search control has both zbx-toolbar-search and mobile-hidden classes
+        $this->assertMatchesRegularExpression(
+            '/<div[^>]*class="(?=[^"]*\bzbx-toolbar-search\b)(?=[^"]*\bmobile-hidden\b)[^"]*"[^>]*>/is',
+            $bladeContent
+        );
+
+        // Verify presets/filter group has both zbx-toolbar-presets and mobile-hidden classes
+        $this->assertMatchesRegularExpression(
+            '/<div[^>]*class="(?=[^"]*\bzbx-toolbar-presets\b)(?=[^"]*\bmobile-hidden\b)[^"]*"[^>]*>/is',
+            $bladeContent
+        );
+
+        // Verify toolbar count has both zbx-toolbar-count and mobile-hidden classes
+        $this->assertMatchesRegularExpression(
+            '/<div[^>]*class="(?=[^"]*\bzbx-toolbar-count\b)(?=[^"]*\bmobile-hidden\b)[^"]*"[^>]*>/is',
+            $bladeContent
+        );
+
+        // Verify problems table container does NOT have mobile-hidden class
+        $this->assertDoesNotMatchRegularExpression(
+            '/<div[^>]*class="(?=[^"]*\bzbx-table-container\b)(?=[^"]*\bmobile-hidden\b)[^"]*"[^>]*>/is',
+            $bladeContent
+        );
 
         $expectedBaseRules = [
             'flex: 0 1 auto;',
