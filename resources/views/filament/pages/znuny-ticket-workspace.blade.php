@@ -299,6 +299,35 @@
             }
         }
 
+        /* Mobile specific layout below 500px */
+        @media (max-width: 499.98px) {
+            .mobile-hidden {
+                display: none !important;
+            }
+            .zbx-preset-row {
+                flex-wrap: nowrap;
+                gap: 8px;
+                width: 100%;
+            }
+            .zbx-preset-btn:not(.mobile-hidden) {
+                flex: 1 1 0;
+            }
+            .zbx-toolbar {
+                margin-top: 5px;
+                margin-bottom: 5px;
+            }
+            .zbx-toolbar-filters {
+                flex-direction: row;
+                flex-wrap: nowrap;
+                gap: 8px;
+            }
+            .zbx-toolbar-select:not(.mobile-hidden) {
+                flex: 1 1 0;
+                min-width: 0;
+                max-width: none;
+            }
+        }
+
     </style>
 
     @if(! $this->isTicketWorkspaceEnabled())
@@ -392,19 +421,19 @@
             </button>
             <button type="button"
                     wire:click="applyStatePreset('merged')"
-                    class="zbx-preset-btn {{ $this->activeStatePreset() === 'merged' ? 'active' : '' }}">
+                    class="zbx-preset-btn mobile-hidden {{ $this->activeStatePreset() === 'merged' ? 'active' : '' }}">
                 {{ __('znuny_ticket_workspace.presets.merged') }}
             </button>
             <button type="button"
                     wire:click="applyStatePreset('all')"
-                    class="zbx-preset-btn {{ $this->activeStatePreset() === 'all' ? 'active' : '' }}">
+                    class="zbx-preset-btn mobile-hidden {{ $this->activeStatePreset() === 'all' ? 'active' : '' }}">
                 {{ __('znuny_ticket_workspace.presets.all') }}
             </button>
         </div>
 
         <div class="zbx-toolbar">
             <div class="zbx-toolbar-filters">
-                <div class="zbx-toolbar-search">
+                <div class="zbx-toolbar-search mobile-hidden">
                     <x-filament::input.wrapper icon="heroicon-m-magnifying-glass">
                         <x-filament::input
                             type="text"
@@ -414,7 +443,7 @@
                     </x-filament::input.wrapper>
                 </div>
 
-                <div class="zbx-toolbar-select">
+                <div class="zbx-toolbar-select mobile-hidden">
                     <x-filament::input.wrapper>
                         <x-filament::input.select wire:model.live="linkFilter">
                             @foreach($filterOptions['link_status'] as $val => $label)
@@ -424,7 +453,7 @@
                     </x-filament::input.wrapper>
                 </div>
 
-                <div class="zbx-toolbar-select" x-data="{ open: false }" @click.outside="open = false" style="position: relative;">
+                <div class="zbx-toolbar-select mobile-hidden" x-data="{ open: false }" @click.outside="open = false" style="position: relative;">
                     @php
                         $selectedCount = count($this->stateTypeFilter);
                         if ($selectedCount === 0) {
@@ -476,7 +505,7 @@
                 </div>
             </div>
 
-            <div class="zbx-toolbar-count" style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+            <div class="zbx-toolbar-count mobile-hidden" style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
                 <span>{{ __('znuny_ticket_workspace.pagination.showing', ['from' => $startCount, 'to' => $endCount, 'total' => $total]) }}</span>
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span>{{ __('znuny_ticket_workspace.pagination.per_page') }}:</span>
@@ -642,7 +671,7 @@
 
             @if($total > 0)
                 <div style="padding: 16px; border-top: 1px solid var(--border-color, #e5e7eb); display: flex; justify-content: space-between; align-items: center; font-size: 0.875rem;">
-                    <div style="color: #6b7280;">
+                    <div style="color: #6b7280;" class="mobile-hidden">
                         {{ __('znuny_ticket_workspace.pagination.showing', ['from' => $startCount, 'to' => $endCount, 'total' => $total]) }}
                     </div>
                     <div style="display: flex; gap: 8px;">
