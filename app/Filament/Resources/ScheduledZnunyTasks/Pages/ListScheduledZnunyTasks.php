@@ -55,7 +55,14 @@ class ListScheduledZnunyTasks extends ListRecords
 
     public function getQueueOptions(): array
     {
-        return ScheduledZnunyTask::whereNotNull('queue_name')->distinct()->pluck('queue_name')->toArray();
+        $options = ScheduledZnunyTask::whereNotNull('queue_name')
+            ->distinct()
+            ->pluck('queue_name', 'queue_name')
+            ->toArray();
+
+        asort($options, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return $options;
     }
 
     public function getOwnerOptions(): array

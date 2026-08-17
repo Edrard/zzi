@@ -909,6 +909,45 @@ class ScheduledZnunyTaskResourceTest extends TestCase
             ->assertSuccessful();
     }
 
+    public function test_queue_options_are_sorted_alphabetically()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin);
+
+        ScheduledZnunyTask::create([
+            'name' => 'Task Z',
+            'enabled' => false,
+            'queue_name' => 'zulu',
+        ]);
+        ScheduledZnunyTask::create([
+            'name' => 'Task A',
+            'enabled' => false,
+            'queue_name' => 'Alpha',
+        ]);
+        ScheduledZnunyTask::create([
+            'name' => 'Task B',
+            'enabled' => false,
+            'queue_name' => 'bravo',
+        ]);
+        ScheduledZnunyTask::create([
+            'name' => 'Task M',
+            'enabled' => false,
+            'queue_name' => 'Media Holding',
+        ]);
+
+        $component = Livewire::test(ListScheduledZnunyTasks::class);
+
+        $options = $component->instance()->getQueueOptions();
+
+        $expected = ['Alpha', 'bravo', 'Media Holding', 'zulu'];
+
+        $this->assertEquals($expected, array_keys($options));
+        $this->assertEquals($expected, array_values($options));
+
+        $component->set('queueFilter', 'Media Holding')
+            ->assertSuccessful();
+    }
+
     public function test_owner_filter_correctly_filters_by_owner_id()
     {
         $admin = User::factory()->create(['role' => 'admin']);
