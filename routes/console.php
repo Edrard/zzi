@@ -121,3 +121,5 @@ foreach ($prewarmDatasets as $dataset => $config) {
         }
     })->everyMinute()->name('znuny-prewarm-'.$dataset);
 }
+
+Schedule::command('znuny:cleanup-inline-drafts')->daily();

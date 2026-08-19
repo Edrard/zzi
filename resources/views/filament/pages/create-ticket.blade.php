@@ -1,4 +1,9 @@
 <x-filament-panels::page>
+    <style>
+        .znuny-ticket-body-editor [contenteditable="true"] {
+            min-height: 320px;
+        }
+    </style>
     <form wire:submit="create">
         {{ $this->form }}
 

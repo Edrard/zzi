@@ -68,7 +68,7 @@ class CreateTicketLocalizationTest extends TestCase
             };
             $search($components);
 
-            $this->assertArrayHasKey('Ticket details', $sections);
+            $this->assertArrayNotHasKey('Ticket details', $sections);
             $this->assertArrayHasKey('Advanced ticket options', $sections);
 
             $fields = collect($component->instance()->form->getFlatComponents());
@@ -133,7 +133,7 @@ class CreateTicketLocalizationTest extends TestCase
             };
             $search($components);
 
-            $this->assertArrayHasKey('Деталі звернення', $sections);
+            $this->assertArrayNotHasKey('Деталі звернення', $sections);
             $this->assertArrayHasKey('Додаткові параметри звернення', $sections);
 
             $fields = collect($component->instance()->form->getFlatComponents());

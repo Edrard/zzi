@@ -6,6 +6,7 @@ use App\Filament\Pages\CreateTicket;
 use App\Models\User;
 use App\Services\Znuny\ZnunyCachedLookupService;
 use App\Services\Znuny\ZnunyClient;
+use App\Services\Znuny\ZnunyInlineImagePayloadService;
 use App\Services\Znuny\ZnunyStandaloneTicketCreationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -79,10 +80,12 @@ class CreateTicketTest extends TestCase
                     'Raw',
                     'johndoe',
                     'Test Subject',
-                    'Test Body',
+                    '<p>Test Body</p>',
                     'open',
                     '3 normal',
-                    'unlock'
+                    'unlock',
+                    [],
+                    'text/html; charset=utf-8'
                 )
                 ->andReturn([
                     'success' => true,
@@ -511,7 +514,7 @@ class CreateTicketTest extends TestCase
         $page = new CreateTicket;
 
         try {
-            $page->create(app(ZnunyStandaloneTicketCreationService::class));
+            $page->create(app(ZnunyStandaloneTicketCreationService::class), app(ZnunyInlineImagePayloadService::class));
             $this->fail('Expected 403 exception');
         } catch (HttpException $e) {
             $this->assertEquals(403, $e->getStatusCode());

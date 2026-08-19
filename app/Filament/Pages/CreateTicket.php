@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Schemas\ZnunyTicketCreationSchema;
+use App\Services\Znuny\ZnunyInlineImagePayloadService;
 use App\Services\Znuny\ZnunyStandaloneTicketCreationService;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
@@ -10,6 +11,9 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Livewire\Attributes\Locked;
 
 class CreateTicket extends Page implements HasForms
 {
@@ -115,15 +119,19 @@ class CreateTicket extends Page implements HasForms
 
     public ?array $data = [];
 
+    #[Locked]
+    public ?string $draftToken = null;
+
     public function mount(): void
     {
+        $this->draftToken = Str::uuid()->toString();
         $this->form->fill();
     }
 
     public function form(Schema $schema): Schema
     {
         return $schema
-            ->schema(ZnunyTicketCreationSchema::schema())
+            ->schema(ZnunyTicketCreationSchema::schema($this->draftToken))
             ->statePath('data');
     }
 
@@ -132,21 +140,37 @@ class CreateTicket extends Page implements HasForms
         return auth()->user()?->canManageZnunyTickets() ?? false;
     }
 
-    public function create(ZnunyStandaloneTicketCreationService $creationService): void
+    public function create(ZnunyStandaloneTicketCreationService $creationService, ZnunyInlineImagePayloadService $imageService): void
     {
         abort_unless(auth()->user()?->canManageZnunyTickets(), 403);
 
         $data = $this->form->getState();
+        $userId = auth()->id() ?? 'guest';
+        $draftDirectory = "znuny-ticket-inline/{$userId}/{$this->draftToken}";
+
+        try {
+            $processed = $imageService->processHtml($data['body'] ?? '', $draftDirectory);
+        } catch (\InvalidArgumentException $e) {
+            Notification::make()
+                ->title(__('create_ticket.notifications.creation_failed.title'))
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+
+            return;
+        }
 
         $result = $creationService->createTicket(
             ownerId: $data['owner'] ?? '',
             queue: $data['queue'] ?? '',
             customerUser: $data['customer_user'] ?? '',
             title: $data['title'] ?? '',
-            articleBody: $data['body'] ?? '',
+            articleBody: $processed['html'],
             state: $data['state'] ?? null,
             priority: $data['priority'] ?? null,
-            lock: $data['lock'] ?? null
+            lock: $data['lock'] ?? null,
+            attachments: $processed['attachments'],
+            articleContentType: 'text/html; charset=utf-8'
         );
 
         if (! $result['success']) {
@@ -168,6 +192,10 @@ class CreateTicket extends Page implements HasForms
             ->success()
             ->send();
 
+        // Cleanup temporary files on success
+        Storage::disk('local')->deleteDirectory($draftDirectory);
+
         $this->form->fill();
+        $this->draftToken = Str::uuid()->toString();
     }
 }

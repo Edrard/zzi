@@ -53,7 +53,9 @@ class ZnunyStandaloneTicketCreationService
         string $articleBody,
         ?string $state = null,
         ?string $priority = null,
-        ?string $lock = null
+        ?string $lock = null,
+        array $attachments = [],
+        ?string $articleContentType = null
     ): array {
         $result = [
             'success' => false,
@@ -145,15 +147,21 @@ class ZnunyStandaloneTicketCreationService
                 'Priority' => $priority,
             ];
 
+            $contentType = $articleContentType ?? 'text/plain; charset=utf8';
+
             $payload = [
                 'Ticket' => $ticket,
                 'Article' => [
                     'Subject' => $title,
                     'Body' => $articleBody,
-                    'ContentType' => 'text/plain; charset=utf8',
+                    'ContentType' => $contentType,
                     'IsVisibleForCustomer' => 1,
                 ],
             ];
+
+            if (! empty($attachments)) {
+                $payload['Attachment'] = $attachments;
+            }
 
             $apiResult = $this->client->createTicket($payload);
 
