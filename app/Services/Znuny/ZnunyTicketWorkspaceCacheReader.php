@@ -97,8 +97,8 @@ class ZnunyTicketWorkspaceCacheReader
         }
 
         // 2. Faceted IDs for Options
-        $qIds = !empty($filters['queue']) ? $redis->zrange("znuny:index:queue:{$filters['queue']}", 0, -1) : null;
-        $oIds = !empty($filters['owner']) ? $redis->zrange("znuny:index:owner:{$filters['owner']}", 0, -1) : null;
+        $qIds = ! empty($filters['queue']) ? $redis->zrange("znuny:index:queue:{$filters['queue']}", 0, -1) : null;
+        $oIds = ! empty($filters['owner']) ? $redis->zrange("znuny:index:owner:{$filters['owner']}", 0, -1) : null;
 
         $queueFacetIds = $activeStIds;
         if ($oIds !== null) {
@@ -395,6 +395,18 @@ class ZnunyTicketWorkspaceCacheReader
         return $enriched[0] ?? $normalized;
     }
 
+    private function normalizeInlineAttachmentCount(mixed $value): int
+    {
+        if (is_int($value) && $value >= 0) {
+            return $value;
+        }
+        if (is_string($value) && $value !== '' && ctype_digit($value)) {
+            return (int) $value;
+        }
+
+        return 0;
+    }
+
     protected function normalizeTicket(array $ticket): array
     {
         return [
@@ -418,6 +430,7 @@ class ZnunyTicketWorkspaceCacheReader
             'LockID' => $ticket['LockID'] ?? null,
             'Lock' => $ticket['Lock'] ?? null,
             'ArticleCount' => $ticket['ArticleCount'] ?? 0,
+            'InlineAttachmentCount' => $this->normalizeInlineAttachmentCount($ticket['InlineAttachmentCount'] ?? null),
             'LastArticleCreated' => $ticket['LastArticleCreated'] ?? null,
             'SyncFingerprint' => $ticket['SyncFingerprint'] ?? null,
 

@@ -267,4 +267,31 @@ class ZnunyTicketWorkspaceCacheReaderTest extends TestCase
         $this->assertTrue($t104['linked_problem_is_resolved']);
         $this->assertFalse($t104['linked_problem_has_warning']);
     }
+
+    public function test_it_normalizes_inline_attachment_count()
+    {
+        $this->seedTicket(['TicketID' => 201, 'StateType' => 'open', 'InlineAttachmentCount' => 3]);
+        $this->seedTicket(['TicketID' => 202, 'StateType' => 'open', 'InlineAttachmentCount' => '3']);
+        $this->seedTicket(['TicketID' => 203, 'StateType' => 'open']);
+        $this->seedTicket(['TicketID' => 204, 'StateType' => 'open', 'InlineAttachmentCount' => null]);
+        $this->seedTicket(['TicketID' => 205, 'StateType' => 'open', 'InlineAttachmentCount' => -1]);
+        $this->seedTicket(['TicketID' => 206, 'StateType' => 'open', 'InlineAttachmentCount' => '3abc']);
+        $this->seedTicket(['TicketID' => 207, 'StateType' => 'open', 'InlineAttachmentCount' => 3.5]);
+        $this->seedTicket(['TicketID' => 208, 'StateType' => 'open', 'InlineAttachmentCount' => true]);
+        $this->seedTicket(['TicketID' => 209, 'StateType' => 'open', 'InlineAttachmentCount' => [3]]);
+
+        $reader = app(ZnunyTicketWorkspaceCacheReader::class);
+        $res = $reader->getTicketsPaginated(['state_types' => ['open']], 1, 50);
+        $tickets = collect($res['rows'])->keyBy('TicketID');
+
+        $this->assertEquals(3, $tickets[201]['InlineAttachmentCount']);
+        $this->assertEquals(3, $tickets[202]['InlineAttachmentCount']);
+        $this->assertEquals(0, $tickets[203]['InlineAttachmentCount']);
+        $this->assertEquals(0, $tickets[204]['InlineAttachmentCount']);
+        $this->assertEquals(0, $tickets[205]['InlineAttachmentCount']);
+        $this->assertEquals(0, $tickets[206]['InlineAttachmentCount']);
+        $this->assertEquals(0, $tickets[207]['InlineAttachmentCount']);
+        $this->assertEquals(0, $tickets[208]['InlineAttachmentCount']);
+        $this->assertEquals(0, $tickets[209]['InlineAttachmentCount']);
+    }
 }

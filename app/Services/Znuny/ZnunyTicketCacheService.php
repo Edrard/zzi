@@ -91,6 +91,18 @@ class ZnunyTicketCacheService
         $this->updateIndexes($ticket, $ttl);
     }
 
+    private function normalizeInlineAttachmentCount(mixed $value): int
+    {
+        if (is_int($value) && $value >= 0) {
+            return $value;
+        }
+        if (is_string($value) && $value !== '' && ctype_digit($value)) {
+            return (int) $value;
+        }
+
+        return 0;
+    }
+
     public function upsertOrRefreshFromSearchResult(array $ticket): string
     {
         if (! $this->isEnabled()) {
@@ -112,7 +124,12 @@ class ZnunyTicketCacheService
         $newFingerprint = $ticket['SyncFingerprint'] ?? null;
         $oldFingerprint = $existingData['SyncFingerprint'] ?? null;
 
-        if ($existingData && $newFingerprint && $oldFingerprint && $newFingerprint === $oldFingerprint) {
+        $newInlineCount = $this->normalizeInlineAttachmentCount($ticket['InlineAttachmentCount'] ?? null);
+
+        $hasOldInlineCount = is_array($existingData) && array_key_exists('InlineAttachmentCount', $existingData);
+        $oldInlineCount = $hasOldInlineCount ? $this->normalizeInlineAttachmentCount($existingData['InlineAttachmentCount']) : null;
+
+        if ($existingData && $newFingerprint && $oldFingerprint && $newFingerprint === $oldFingerprint && $hasOldInlineCount && $newInlineCount === $oldInlineCount) {
             // refresh TTLs
             Redis::expire($key, max(1, $ttl));
 

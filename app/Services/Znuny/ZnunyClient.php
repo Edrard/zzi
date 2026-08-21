@@ -675,6 +675,18 @@ class ZnunyClient
         ];
     }
 
+    private function normalizeInlineAttachmentCount(mixed $value): int
+    {
+        if (is_int($value) && $value >= 0) {
+            return $value;
+        }
+        if (is_string($value) && $value !== '' && ctype_digit($value)) {
+            return (int) $value;
+        }
+
+        return 0;
+    }
+
     private function mapTicketResponse(array $ticket): array
     {
         return [
@@ -706,6 +718,7 @@ class ZnunyClient
             'Created' => $ticket['Created'] ?? null,
             'Changed' => $ticket['Changed'] ?? null,
             'ArticleCount' => isset($ticket['ArticleCount']) ? (int) $ticket['ArticleCount'] : null,
+            'InlineAttachmentCount' => $this->normalizeInlineAttachmentCount($ticket['InlineAttachmentCount'] ?? null),
             'LastArticleID' => isset($ticket['LastArticleID']) ? (int) $ticket['LastArticleID'] : null,
             'LastArticleCreated' => $ticket['LastArticleCreated'] ?? null,
             'SyncFingerprint' => $ticket['SyncFingerprint'] ?? null,

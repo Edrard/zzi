@@ -22,6 +22,7 @@ class ClosedTicketCacheServiceTest extends TestCase
         $ticket = [
             'TicketID' => 123,
             'Created' => '2023-10-01 12:00:00',
+            'InlineAttachmentCount' => 2,
         ];
 
         $retentionDays = 180; // 30 * 6

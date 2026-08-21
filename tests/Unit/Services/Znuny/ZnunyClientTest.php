@@ -8,6 +8,7 @@ use App\Services\Znuny\ZnunyClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class ZnunyClientTest extends TestCase
@@ -706,5 +707,55 @@ class ZnunyClientTest extends TestCase
 
         $this->assertArrayHasKey('tickets', $response);
         $this->assertArrayNotHasKey('errors', $response);
+    }
+
+    public static function provideInlineAttachmentCounts(): array
+    {
+        return [
+            'valid integer' => [3, 3],
+            'valid numeric string' => ['3', 3],
+            'zero integer' => [0, 0],
+            'zero numeric string' => ['0', 0],
+            'missing field' => [null, 0],
+            'negative integer' => [-1, 0],
+            'negative string' => ['-1', 0],
+            'empty string' => ['', 0],
+            'partially numeric string' => ['3abc', 0],
+            'float' => [3.5, 0],
+            'boolean true' => [true, 0],
+            'boolean false' => [false, 0],
+            'array' => [[3], 0],
+        ];
+    }
+
+    #[DataProvider('provideInlineAttachmentCounts')]
+    public function test_search_tickets_normalizes_inline_attachment_count($inputValue, int $expectedValue)
+    {
+        $ticketPayload = [
+            'TicketID' => 111,
+            'Title' => 'Test',
+        ];
+
+        // Only add if not null to test the missing key case
+        if ($inputValue !== null) {
+            $ticketPayload['InlineAttachmentCount'] = $inputValue;
+        }
+
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/ZnunyAgentListTicketSearch*' => Http::response([
+                'Tickets' => [
+                    $ticketPayload,
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $response = $client->searchTickets(['Queue' => 'Raw']);
+
+        $this->assertCount(1, $response);
+        $this->assertEquals(111, $response[0]['TicketID']);
+        $this->assertEquals('Test', $response[0]['Title']);
+        $this->assertEquals($expectedValue, $response[0]['InlineAttachmentCount']);
     }
 }

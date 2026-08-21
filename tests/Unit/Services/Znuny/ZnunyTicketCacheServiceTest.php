@@ -209,9 +209,10 @@ class ZnunyTicketCacheServiceTest extends TestCase
         $ticket = [
             'TicketID' => 600,
             'SyncFingerprint' => 'fp_same',
+            'InlineAttachmentCount' => 0,
         ];
 
-        $existing = json_encode(['TicketID' => 600, 'SyncFingerprint' => 'fp_same']);
+        $existing = json_encode(['TicketID' => 600, 'SyncFingerprint' => 'fp_same', 'InlineAttachmentCount' => 0]);
 
         Redis::shouldReceive('get')->with('znuny:ticket:600')->andReturn($existing);
         Redis::shouldReceive('get')->with('znuny:ticket_indexes:600')->andReturn(json_encode(['znuny:index:queue:1']));
@@ -279,5 +280,136 @@ class ZnunyTicketCacheServiceTest extends TestCase
         $this->assertContains('znuny:index:type:5', $keys);
         $this->assertContains('znuny:index:service:6', $keys);
         $this->assertContains('znuny:index:sla:7', $keys);
+    }
+
+    public function test_upsert_or_refresh_refreshed_unchanged_with_inline_attachment_count(): void
+    {
+        $ticket = [
+            'TicketID' => 601,
+            'SyncFingerprint' => 'fp_same',
+            'InlineAttachmentCount' => 3,
+        ];
+
+        $existing = json_encode(['TicketID' => 601, 'SyncFingerprint' => 'fp_same', 'InlineAttachmentCount' => 3]);
+
+        Redis::shouldReceive('get')->with('znuny:ticket:601')->andReturn($existing);
+        Redis::shouldReceive('get')->with('znuny:ticket_indexes:601')->andReturn(json_encode(['znuny:index:queue:1']));
+
+        // Should just expire
+        Redis::shouldReceive('expire')->with('znuny:ticket:601', 600)->once();
+        Redis::shouldReceive('expire')->with('znuny:ticket_indexes:601', \Mockery::any())->once();
+        Redis::shouldReceive('expire')->with('znuny:index:queue:1', \Mockery::any())->once();
+
+        // Should not set payload or rebuild indexes
+        Redis::shouldReceive('setex')->never();
+        Redis::shouldReceive('zadd')->never();
+
+        $result = $this->service->upsertOrRefreshFromSearchResult($ticket);
+        $this->assertEquals('refreshed_unchanged', $result);
+    }
+
+    public function test_upsert_or_refresh_updated_changed_with_different_inline_attachment_count(): void
+    {
+        $ticket = [
+            'TicketID' => 701,
+            'SyncFingerprint' => 'fp_same',
+            'InlineAttachmentCount' => 3,
+        ];
+
+        $existing = json_encode(['TicketID' => 701, 'SyncFingerprint' => 'fp_same', 'InlineAttachmentCount' => 2]);
+
+        Redis::shouldReceive('get')->with('znuny:ticket:701')->andReturn($existing);
+        Redis::shouldReceive('get')->with('znuny:ticket_indexes:701')->andReturn(json_encode(['znuny:index:queue:1']));
+        Redis::shouldReceive('zrem')->with('znuny:index:queue:1', 701)->once();
+
+        Redis::shouldReceive('setex')
+            ->once()
+            ->with('znuny:ticket:701', 600, json_encode($ticket));
+
+        Redis::shouldReceive('setex')
+            ->once()
+            ->with('znuny:ticket_indexes:701', \Mockery::any(), \Mockery::any());
+
+        $result = $this->service->upsertOrRefreshFromSearchResult($ticket);
+        $this->assertEquals('updated_changed', $result);
+    }
+
+    public function test_upsert_or_refresh_updated_changed_when_inline_attachment_count_is_missing_in_existing(): void
+    {
+        $ticket = [
+            'TicketID' => 702,
+            'SyncFingerprint' => 'fp_same',
+            'InlineAttachmentCount' => 0, // Incoming count 0
+        ];
+
+        // Legacy cached payload without InlineAttachmentCount
+        $existing = json_encode(['TicketID' => 702, 'SyncFingerprint' => 'fp_same']);
+
+        Redis::shouldReceive('get')->with('znuny:ticket:702')->andReturn($existing);
+        Redis::shouldReceive('get')->with('znuny:ticket_indexes:702')->andReturn(json_encode(['znuny:index:queue:1']));
+        Redis::shouldReceive('zrem')->with('znuny:index:queue:1', 702)->once();
+
+        Redis::shouldReceive('setex')
+            ->once()
+            ->with('znuny:ticket:702', 600, json_encode($ticket));
+
+        Redis::shouldReceive('setex')
+            ->once()
+            ->with('znuny:ticket_indexes:702', \Mockery::any(), \Mockery::any());
+
+        $result = $this->service->upsertOrRefreshFromSearchResult($ticket);
+        $this->assertEquals('updated_changed', $result);
+    }
+
+    public function test_upsert_or_refresh_treats_malformed_existing_payload_as_cached_new_or_updated(): void
+    {
+        $ticket = [
+            'TicketID' => 703,
+            'SyncFingerprint' => 'fp_same',
+            'InlineAttachmentCount' => 3,
+        ];
+
+        // Malformed non-array JSON payload
+        $existing = '"not-an-array"';
+
+        Redis::shouldReceive('get')->with('znuny:ticket:703')->andReturn($existing);
+        Redis::shouldReceive('get')->with('znuny:ticket_indexes:703')->andReturn(null);
+
+        Redis::shouldReceive('setex')
+            ->once()
+            ->with('znuny:ticket:703', 600, json_encode($ticket));
+
+        Redis::shouldReceive('setex')
+            ->once()
+            ->with('znuny:ticket_indexes:703', \Mockery::any(), \Mockery::any());
+
+        $result = $this->service->upsertOrRefreshFromSearchResult($ticket);
+        $this->assertEquals('updated_changed', $result);
+    }
+
+    public function test_upsert_or_refresh_strict_count_comparison_with_invalid_existing_value(): void
+    {
+        $ticket = [
+            'TicketID' => 704,
+            'SyncFingerprint' => 'fp_same',
+            'InlineAttachmentCount' => 0,
+        ];
+
+        // Existing payload has field but with a value that normalizes to 0 (e.g. invalid string)
+        $existing = json_encode(['TicketID' => 704, 'SyncFingerprint' => 'fp_same', 'InlineAttachmentCount' => '3abc']);
+
+        Redis::shouldReceive('get')->with('znuny:ticket:704')->andReturn($existing);
+        Redis::shouldReceive('get')->with('znuny:ticket_indexes:704')->andReturn(json_encode(['znuny:index:queue:1']));
+
+        // Should just expire because both normalize to 0
+        Redis::shouldReceive('expire')->with('znuny:ticket:704', 600)->once();
+        Redis::shouldReceive('expire')->with('znuny:ticket_indexes:704', \Mockery::any())->once();
+        Redis::shouldReceive('expire')->with('znuny:index:queue:1', \Mockery::any())->once();
+
+        Redis::shouldReceive('setex')->never();
+        Redis::shouldReceive('zadd')->never();
+
+        $result = $this->service->upsertOrRefreshFromSearchResult($ticket);
+        $this->assertEquals('refreshed_unchanged', $result);
     }
 }
