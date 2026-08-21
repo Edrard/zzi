@@ -758,4 +758,170 @@ class ZnunyClientTest extends TestCase
         $this->assertEquals('Test', $response[0]['Title']);
         $this->assertEquals($expectedValue, $response[0]['InlineAttachmentCount']);
     }
+
+    public function test_get_inline_attachment_success()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/ZnunyAgentListTicket/123/Article/456/InlineAttachment*' => Http::response([
+                'Found' => 1,
+                'TicketID' => '123',
+                'ArticleID' => '456',
+                'Filename' => 'image.png',
+                'ContentType' => 'image/png',
+                'ContentID' => 'image1@domain.com',
+                'FilesizeRaw' => 1234,
+                'Content' => base64_encode('fake_image_bytes'),
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $result = $client->getInlineAttachment(123, 456, 'image1@domain.com');
+
+        $this->assertEquals([
+            'found' => true,
+            'ticket_id' => '123',
+            'article_id' => '456',
+            'filename' => 'image.png',
+            'content_type' => 'image/png',
+            'content_id' => 'image1@domain.com',
+            'filesize_raw' => 1234,
+            'content_base64' => base64_encode('fake_image_bytes'),
+        ], $result);
+
+        Http::assertSent(function (Request $request) {
+            $path = parse_url($request->url(), PHP_URL_PATH);
+            return $path === '/api/ZnunyAgentListTicket/123/Article/456/InlineAttachment' &&
+                   !str_contains($path, 'image1') &&
+                   $request['SessionID'] === 'fake_session' &&
+                   $request['ContentID'] === 'image1@domain.com';
+        });
+    }
+
+    public function test_get_inline_attachment_not_found()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/ZnunyAgentListTicket/123/Article/456/InlineAttachment*' => Http::response([
+                'Found' => 0,
+                'TicketID' => '123',
+                'ArticleID' => '456',
+                'Errors' => ['Not found error'],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $result = $client->getInlineAttachment(123, 456, 'image1@domain.com');
+
+        $this->assertEquals([
+            'found' => false,
+            'ticket_id' => '123',
+            'article_id' => '456',
+            'errors' => ['Not found error'],
+        ], $result);
+    }
+
+    public function test_get_inline_attachment_throws_on_http_failure()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/ZnunyAgentListTicket/*' => Http::response('Server Error', 500),
+        ]);
+
+        $client = new ZnunyClient;
+
+        $this->expectException(\Exception::class);
+        $client->getInlineAttachment(123, 456, 'image1@domain.com');
+    }
+
+    public function test_get_inline_attachment_throws_on_malformed_found()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/ZnunyAgentListTicket/*' => Http::response([
+                'Found' => 2, // invalid
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+
+        $this->expectException(\Exception::class);
+        $client->getInlineAttachment(123, 456, 'image1@domain.com');
+    }
+
+    public function test_get_inline_attachment_throws_on_missing_fields()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/ZnunyAgentListTicket/*' => Http::response([
+                'Found' => 1,
+                'TicketID' => '123',
+                'ArticleID' => '456',
+                // Missing ContentType, ContentID, Content
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+
+        $this->expectException(\Exception::class);
+        $client->getInlineAttachment(123, 456, 'image1@domain.com');
+    }
+
+    public function test_get_inline_attachment_throws_on_ticket_id_mismatch()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/ZnunyAgentListTicket/*' => Http::response([
+                'Found' => 1,
+                'TicketID' => '999', // Mismatch
+                'ArticleID' => '456',
+                'ContentType' => 'image/png',
+                'ContentID' => 'image1@domain.com',
+                'Content' => base64_encode('fake_image_bytes'),
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+
+        $this->expectException(\Exception::class);
+        $client->getInlineAttachment(123, 456, 'image1@domain.com');
+    }
+
+    public function test_get_inline_attachment_throws_on_article_id_mismatch()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/ZnunyAgentListTicket/*' => Http::response([
+                'Found' => 1,
+                'TicketID' => '123',
+                'ArticleID' => '999', // Mismatch
+                'ContentType' => 'image/png',
+                'ContentID' => 'image1@domain.com',
+                'Content' => base64_encode('fake_image_bytes'),
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+
+        $this->expectException(\Exception::class);
+        $client->getInlineAttachment(123, 456, 'image1@domain.com');
+    }
+
+    public function test_get_inline_attachment_rejects_invalid_ticket_id()
+    {
+        $client = new ZnunyClient;
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Invalid TicketID provided.');
+        $client->getInlineAttachment(0, 456, 'image1@domain.com');
+    }
+
+    public function test_get_inline_attachment_rejects_invalid_article_id()
+    {
+        $client = new ZnunyClient;
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Invalid TicketID provided.'); // Since normalizeTicketId is called for both
+        $client->getInlineAttachment(123, 0, 'image1@domain.com');
+    }
 }

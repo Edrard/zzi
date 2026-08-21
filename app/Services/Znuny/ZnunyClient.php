@@ -1560,4 +1560,65 @@ class ZnunyClient
             ];
         });
     }
+
+    public function getInlineAttachment(int|string $ticketId, int|string $articleId, string $contentId): array
+    {
+        $normalizedTicketId = $this->normalizeTicketId($ticketId);
+        $normalizedArticleId = $this->normalizeTicketId($articleId); // Same logic applies
+
+        if (empty($contentId)) {
+            throw new \InvalidArgumentException('ContentID cannot be empty.');
+        }
+
+        return $this->withSessionRetry(function ($session) use ($normalizedTicketId, $normalizedArticleId, $contentId) {
+            $payload = [
+                'SessionID' => $session,
+                'ContentID' => $contentId,
+            ];
+
+            $response = $this->buildPendingRequest()->get($this->apiUrl()."/ZnunyAgentListTicket/{$normalizedTicketId}/Article/{$normalizedArticleId}/InlineAttachment", $payload);
+            $data = $this->processResponse($response);
+
+            $rawFound = $data['Found'] ?? null;
+            if ($rawFound !== 0 && $rawFound !== '0' && $rawFound !== 1 && $rawFound !== '1') {
+                throw new \RuntimeException('Malformed Found value in upstream response.');
+            }
+            $found = (int) $rawFound === 1;
+
+            if (! $found) {
+                return [
+                    'found' => false,
+                    'ticket_id' => $data['TicketID'] ?? null,
+                    'article_id' => $data['ArticleID'] ?? null,
+                    'errors' => $data['Errors'] ?? ['Inline attachment not found.'],
+                ];
+            }
+
+            $returnedTicketId = $data['TicketID'] ?? null;
+            $returnedArticleId = $data['ArticleID'] ?? null;
+
+            if ((string) $returnedTicketId !== (string) $normalizedTicketId || (string) $returnedArticleId !== (string) $normalizedArticleId) {
+                throw new \RuntimeException('Mismatch in returned TicketID or ArticleID.');
+            }
+
+            $contentType = $data['ContentType'] ?? null;
+            $returnedContentId = $data['ContentID'] ?? null;
+            $content = $data['Content'] ?? null;
+
+            if (empty($contentType) || empty($returnedContentId) || empty($content)) {
+                throw new \RuntimeException('Missing ContentType, ContentID, or Content in response.');
+            }
+
+            return [
+                'found' => true,
+                'ticket_id' => $returnedTicketId,
+                'article_id' => $returnedArticleId,
+                'filename' => $data['Filename'] ?? null,
+                'content_type' => $contentType,
+                'content_id' => $returnedContentId,
+                'filesize_raw' => isset($data['FilesizeRaw']) ? (int) $data['FilesizeRaw'] : null,
+                'content_base64' => $content,
+            ];
+        });
+    }
 }

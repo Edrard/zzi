@@ -64,12 +64,25 @@
 
                 container.scrollTo({ top: targetScrollTop, behavior });
             },
+            activateInlineImages(index) {
+                const item = this.$refs.articlesAccordion.querySelector(`[data-article-index='${index}']`);
+                if (!item) return;
+
+                const images = item.querySelectorAll('img[data-znuny-inline-src]');
+                images.forEach(img => {
+                    if (!img.getAttribute('src')) {
+                        img.setAttribute('src', img.getAttribute('data-znuny-inline-src'));
+                        img.removeAttribute('data-znuny-inline-src');
+                    }
+                });
+            },
             toggleArticle(index) {
                 if (this.activeArticle === index) {
                     this.activeArticle = null;
                 } else {
                     this.activeArticle = index;
                     this.$nextTick(() => {
+                        this.activateInlineImages(index);
                         this.scrollOpenedArticleIntoFocus(index, 'smooth');
                         requestAnimationFrame(() => {
                             this.scrollOpenedArticleIntoFocus(index, 'smooth');
@@ -142,10 +155,17 @@
                             @endif
                         </div>
                         @php
-                            $bodyText = trim((string) ($article['body'] ?? ''));
-                            $bodyText = $bodyText !== '' ? $bodyText : __('znuny_ticket_workspace.accordion.no_body');
+                            $renderer = app(\App\Services\Znuny\ZnunyArticleBodyRenderer::class);
+                            $rendered = $renderer->render($article);
+                            $bodyContent = $rendered['content'];
                         @endphp
-                        <div class="zbx-ticket-article-text whitespace-pre-wrap break-words rounded-md bg-gray-50 dark:bg-white/5 text-sm leading-snug ring-1 ring-gray-950/5 dark:ring-white/10 overflow-x-auto">{{ $bodyText }}</div>
+                        @if ($bodyContent === '')
+                            <div class="zbx-ticket-article-text whitespace-pre-wrap break-words rounded-md bg-gray-50 dark:bg-white/5 text-sm leading-snug ring-1 ring-gray-950/5 dark:ring-white/10 overflow-x-auto">{{ __('znuny_ticket_workspace.accordion.no_body') }}</div>
+                        @elseif ($rendered['is_html'])
+                            <div class="zbx-ticket-article-html zbx-ticket-article-text break-words rounded-md bg-white dark:bg-gray-900 text-sm leading-snug ring-1 ring-gray-950/5 dark:ring-white/10 overflow-x-auto p-3">{!! $bodyContent !!}</div>
+                        @else
+                            <div class="zbx-ticket-article-text whitespace-pre-wrap break-words rounded-md bg-gray-50 dark:bg-white/5 text-sm leading-snug ring-1 ring-gray-950/5 dark:ring-white/10 overflow-x-auto p-3">{{ $bodyContent }}</div>
+                        @endif
                     </div>
                 </div>
             </div>
