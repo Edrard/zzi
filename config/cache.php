@@ -84,6 +84,11 @@ return [
             'lock_connection' => env('REDIS_CACHE_LOCK_CONNECTION', 'default'),
         ],
 
+        'znuny_inline_images' => [
+            'driver' => 'redis',
+            'connection' => 'inline_images',
+        ],
+
         'dynamodb' => [
             'driver' => 'dynamodb',
             'key' => env('AWS_ACCESS_KEY_ID'),

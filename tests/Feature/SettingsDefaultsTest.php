@@ -131,4 +131,28 @@ class SettingsDefaultsTest extends TestCase
         Artisan::call('app:ensure-settings-defaults');
         $this->assertDatabaseHas('settings', ['key' => 'ui_locale', 'value' => 'uk']);
     }
+
+    public function test_inline_image_default_keys_exist()
+    {
+        $defaults = DefaultSettings::all();
+        $keys = array_column($defaults, 'key');
+
+        $this->assertContains('znuny_inline_image_cache_ttl_minutes', $keys);
+        $this->assertContains('znuny_inline_image_warmer_enabled', $keys);
+        $this->assertContains('znuny_inline_image_warmer_interval_minutes', $keys);
+
+        $this->assertNotContains('znuny_inline_image_warmer_batch_size', $keys);
+        $this->assertNotContains('znuny_inline_image_warmer_hot_percentage', $keys);
+        $ttl = collect($defaults)->firstWhere('key', 'znuny_inline_image_cache_ttl_minutes');
+        $this->assertEquals(60, $ttl['value']);
+        $this->assertEquals('integer', $ttl['type']);
+
+        $enabled = collect($defaults)->firstWhere('key', 'znuny_inline_image_warmer_enabled');
+        $this->assertEquals('false', $enabled['value']);
+        $this->assertEquals('boolean', $enabled['type']);
+
+        $interval = collect($defaults)->firstWhere('key', 'znuny_inline_image_warmer_interval_minutes');
+        $this->assertEquals(5, $interval['value']);
+        $this->assertEquals('integer', $interval['type']);
+    }
 }

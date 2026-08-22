@@ -102,6 +102,9 @@ class DefaultSettings
             // Caching
             ['key' => 'znuny_ticket_article_cache_ttl_minutes', 'value' => '15', 'type' => 'integer', 'description' => 'Lifetime in minutes for cached Znuny ticket article data. Set to 0 to bypass persistent ticket article caching.'],
             ['key' => 'znuny_ticket_snapshot_cache_ttl_minutes', 'value' => '5', 'type' => 'integer', 'description' => 'How long linked ticket snapshots may be cached. 0 disables this cache.'],
+            ['key' => 'znuny_inline_image_cache_ttl_minutes', 'value' => '60', 'type' => 'integer', 'description' => 'Lifetime in minutes for cached Znuny inline images. Converts to seconds for the response Cache-Control max-age.'],
+            ['key' => 'znuny_inline_image_warmer_enabled', 'value' => 'false', 'type' => 'boolean', 'description' => 'Enable background caching of frequently accessed inline images.'],
+            ['key' => 'znuny_inline_image_warmer_interval_minutes', 'value' => '5', 'type' => 'integer', 'description' => 'Interval in minutes for the inline image cache warmer.'],
 
             // Prewarm intervals
             ['key' => 'znuny_prewarm_queues_interval_minutes', 'value' => '5', 'type' => 'integer', 'description' => 'Interval in minutes for queues cache prewarm.'],

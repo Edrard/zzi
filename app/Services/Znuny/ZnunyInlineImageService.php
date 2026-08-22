@@ -2,6 +2,7 @@
 
 namespace App\Services\Znuny;
 
+use App\Services\SettingsService;
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Support\Facades\Cache;
 
@@ -123,7 +124,7 @@ class ZnunyInlineImageService
             'content' => $decodedBinary,
         ];
 
-        $store->put($cacheKey, $cachePayload, $this->getTtl());
+        $store->put($cacheKey, $cachePayload, $this->getCacheTtlSeconds());
 
         return $cachePayload;
     }
@@ -135,8 +136,11 @@ class ZnunyInlineImageService
         return 'znuny:inline-image:v1:'.hash('sha256', $identity);
     }
 
-    private function getTtl(): int
+    public function getCacheTtlSeconds(): int
     {
-        return 3600; // 1 hour for Stage 3
+        $minutes = SettingsService::int('znuny_inline_image_cache_ttl_minutes', 60);
+        $minutes = max(1, min(10080, $minutes));
+
+        return $minutes * 60;
     }
 }

@@ -64,10 +64,12 @@ class ZnunyInlineImageController extends Controller
             return abort(404);
         }
 
+        $ttlSeconds = $this->inlineImageService->getCacheTtlSeconds();
+
         return response($imageResult['content'], 200)
             ->header('Content-Type', $imageResult['content_type'])
             ->header('Content-Disposition', 'inline')
             ->header('X-Content-Type-Options', 'nosniff')
-            ->header('Cache-Control', 'private, max-age=3600');
+            ->header('Cache-Control', "private, max-age={$ttlSeconds}");
     }
 }

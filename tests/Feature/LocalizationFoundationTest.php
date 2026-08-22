@@ -98,6 +98,41 @@ class LocalizationFoundationTest extends TestCase
         ], $service->options());
     }
 
+    public function test_inline_images_settings_translations(): void
+    {
+        $en = require base_path('lang/en/settings.php');
+        $uk = require base_path('lang/uk/settings.php');
+
+        $this->assertEquals('Inline Images', $en['settings_page']['sections']['inline_images']['heading']);
+        $this->assertEquals('Вбудовані зображення', $uk['settings_page']['sections']['inline_images']['heading']);
+
+        $keys = [
+            'znuny_inline_image_cache_ttl_minutes',
+            'znuny_inline_image_warmer_enabled',
+            'znuny_inline_image_warmer_interval_minutes',
+        ];
+
+        foreach ($keys as $key) {
+            $this->assertArrayHasKey($key, $en['metadata']);
+            $this->assertArrayHasKey('label', $en['metadata'][$key]);
+            $this->assertArrayHasKey('description', $en['metadata'][$key]);
+
+            $this->assertArrayHasKey($key, $uk['metadata']);
+            $this->assertArrayHasKey('label', $uk['metadata'][$key]);
+            $this->assertArrayHasKey('description', $uk['metadata'][$key]);
+        }
+
+        $staleKeys = [
+            'znuny_inline_image_warmer_batch_size',
+            'znuny_inline_image_warmer_hot_percentage',
+        ];
+
+        foreach ($staleKeys as $key) {
+            $this->assertArrayNotHasKey($key, $en['metadata']);
+            $this->assertArrayNotHasKey($key, $uk['metadata']);
+        }
+    }
+
     public function test_default_settings_contains_exactly_one_ui_locale_row(): void
     {
         $defaults = DefaultSettings::all();

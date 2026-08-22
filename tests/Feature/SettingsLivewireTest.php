@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Pages\Settings;
 use App\Models\Setting;
 use App\Models\User;
+use App\Services\SettingsService;
 use App\Services\Zabbix\ZabbixProblemCache;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyQueueHostMappingService;
@@ -1352,5 +1353,116 @@ class SettingsLivewireTest extends TestCase
                 ->title($expectedTitle)
                 ->success()
         );
+    }
+
+    public function test_inline_image_numeric_bounds()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+        $form = $component->instance()->getForm('form');
+
+        $fields = [
+            'znuny_inline_image_cache_ttl_minutes' => ['min' => 1, 'max' => 10080],
+            'znuny_inline_image_warmer_interval_minutes' => ['min' => 1, 'max' => 1440],
+        ];
+
+        foreach ($fields as $fieldName => $bounds) {
+            $field = $form->getComponent($fieldName);
+            $this->assertNotNull($field, "Field $fieldName not found");
+            $this->assertEquals($bounds['min'], $field->getMinValue());
+            $this->assertEquals($bounds['max'], $field->getMaxValue());
+        }
+    }
+
+    public function test_inline_image_hierarchy()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+        $form = $component->instance()->getForm('form');
+        $schema = $form->getComponents();
+
+        $foundTopLevelInlineImagesTab = false;
+        $foundWorkspaceInlineImagesSection = false;
+        $orderedFields = [];
+
+        $search = function ($components, $parentTabId = null) use (&$search, &$foundTopLevelInlineImagesTab, &$foundWorkspaceInlineImagesSection, &$orderedFields) {
+            foreach ($components as $c) {
+                $type = class_basename($c);
+                $label = method_exists($c, 'getLabel') ? $c->getLabel() : null;
+                $heading = method_exists($c, 'getHeading') ? $c->getHeading() : null;
+
+                if ($type === 'Tab' && $label === __('settings.settings_page.sections.inline_images.heading')) {
+                    $foundTopLevelInlineImagesTab = true;
+                }
+
+                if ($type === 'Tab' && $label === __('settings.settings_page.tabs.ticket_workspace')) {
+                    $parentTabId = 'ticket_workspace';
+                }
+
+                if ($type === 'Section' && $heading === __('settings.settings_page.sections.inline_images.heading')) {
+                    if ($parentTabId === 'ticket_workspace') {
+                        $foundWorkspaceInlineImagesSection = true;
+                        if (method_exists($c, 'getChildComponents')) {
+                            foreach ($c->getChildComponents() as $child) {
+                                $childName = method_exists($child, 'getName') ? $child->getName() : null;
+                                if ($childName) {
+                                    $orderedFields[] = $childName;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents(), $parentTabId);
+                }
+            }
+        };
+
+        $search($schema);
+
+        $this->assertFalse($foundTopLevelInlineImagesTab, 'There should be no separate top-level Inline Images tab');
+        $this->assertTrue($foundWorkspaceInlineImagesSection, 'Inline Images section should be inside Ticket Workspace tab');
+
+        $this->assertEquals([
+            'znuny_inline_image_warmer_enabled',
+            'znuny_inline_image_cache_ttl_minutes',
+            'znuny_inline_image_warmer_interval_minutes',
+        ], $orderedFields, 'Inline image fields should be ordered correctly within the section');
+    }
+
+    public function test_stale_legacy_db_rows_do_not_render()
+    {
+        Setting::updateOrCreate(['key' => 'znuny_inline_image_warmer_batch_size'], ['value' => '100', 'type' => 'integer']);
+        Setting::updateOrCreate(['key' => 'znuny_inline_image_warmer_hot_percentage'], ['value' => '20', 'type' => 'integer']);
+        SettingsService::clearAllCaches();
+
+        $admin = User::factory()->create(['role' => 'admin']);
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+        $form = $component->instance()->getForm('form');
+        $schema = $form->getComponents();
+
+        $foundBatch = false;
+        $foundHot = false;
+
+        $search = function ($components) use (&$search, &$foundBatch, &$foundHot) {
+            foreach ($components as $c) {
+                $name = method_exists($c, 'getName') ? $c->getName() : null;
+                if ($name === 'znuny_inline_image_warmer_batch_size') {
+                    $foundBatch = true;
+                }
+                if ($name === 'znuny_inline_image_warmer_hot_percentage') {
+                    $foundHot = true;
+                }
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents());
+                }
+            }
+        };
+
+        $search($schema);
+
+        $this->assertFalse($foundBatch, 'znuny_inline_image_warmer_batch_size should not render');
+        $this->assertFalse($foundHot, 'znuny_inline_image_warmer_hot_percentage should not render');
     }
 }

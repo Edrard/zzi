@@ -66,6 +66,9 @@ class ZnunyInlineImageControllerTest extends TestCase
                 'content' => 'fake_bytes',
             ]);
 
+        $this->inlineImageService->shouldReceive('getCacheTtlSeconds')
+            ->andReturn(7200);
+
         $response = $this->actingAs($user)->get(route('znuny.inline-image.show', ['ticketId' => 123, 'articleId' => 456, 'token' => $this->token]));
 
         $response->assertOk();
@@ -80,7 +83,7 @@ class ZnunyInlineImageControllerTest extends TestCase
         sort($cacheControl);
 
         $this->assertSame(
-            ['max-age=3600', 'private'],
+            ['max-age=7200', 'private'],
             $cacheControl
         );
     }
@@ -99,6 +102,9 @@ class ZnunyInlineImageControllerTest extends TestCase
                 'content_type' => 'image/png',
                 'content' => 'fake_bytes',
             ]);
+
+        $this->inlineImageService->shouldReceive('getCacheTtlSeconds')
+            ->andReturn(3600);
 
         foreach ($roles as $role) {
             $user = User::factory()->create(['role' => $role]);
@@ -119,6 +125,9 @@ class ZnunyInlineImageControllerTest extends TestCase
                 'content_type' => 'image/jpeg',
                 'content' => 'fake_bytes',
             ]);
+
+        $this->inlineImageService->shouldReceive('getCacheTtlSeconds')
+            ->andReturn(3600);
 
         $response = $this->actingAs($user)->get(route('znuny.inline-image.show', ['ticketId' => 123, 'articleId' => 456, 'token' => $this->token]));
 

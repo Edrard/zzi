@@ -249,6 +249,9 @@ return [
                 'heading' => 'Recent Closed Tickets',
                 'description' => 'Controls how closed tickets are synchronized and retained for Ticket Workspace. Eligibility is based on the ticket creation time, not the actual close or last-modified time, so later edits do not cause very old closed tickets to appear as recent.',
             ],
+            'inline_images' => [
+                'heading' => 'Inline Images',
+            ],
             'queue_host_prefix_mappings' => [
                 'heading' => 'Queue Host Prefix Mappings',
                 'description' => 'Fallback Queue mapping for standardized Zabbix host prefixes. CustomerUser is still generated from the original host prefix.',
@@ -784,6 +787,18 @@ return [
         'znuny_ticket_workspace_enabled' => [
             'label' => 'Znuny Ticket Workspace Enabled',
             'description' => 'Enable Redis-backed Ticket Workspace.',
+        ],
+        'znuny_inline_image_cache_ttl_minutes' => [
+            'label' => 'Cache TTL (minutes)',
+            'description' => 'Time-to-live in minutes for cached Znuny inline images. Converted to seconds for the Cache-Control max-age header.',
+        ],
+        'znuny_inline_image_warmer_enabled' => [
+            'label' => 'Enable background warmer',
+            'description' => 'Enable background caching of frequently accessed inline images.',
+        ],
+        'znuny_inline_image_warmer_interval_minutes' => [
+            'label' => 'Warmer interval (minutes)',
+            'description' => 'Interval in minutes for the inline image cache warmer.',
         ],
         'znuny_ticket_cache_refresh_interval_minutes' => [
             'label' => 'Znuny Ticket Cache Refresh Interval Minutes',

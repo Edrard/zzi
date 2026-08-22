@@ -755,6 +755,12 @@ class Settings extends Page implements HasForms
                 } elseif ($setting->key === 'owner_suggestion_rebuild_interval_minutes') {
                     $min = 10;
                     $max = 1440;
+                } elseif ($setting->key === 'znuny_inline_image_cache_ttl_minutes') {
+                    $min = 1;
+                    $max = 10080;
+                } elseif ($setting->key === 'znuny_inline_image_warmer_interval_minutes') {
+                    $min = 1;
+                    $max = 1440;
                 }
 
                 if ($setting->key === 'owner_suggestion_similarity_threshold') {
@@ -997,6 +1003,10 @@ class Settings extends Page implements HasForms
                 $groups['Znuny Ticket Defaults'][$setting->key] = $component;
             } elseif (in_array($setting->key, ['znuny_ticket_workspace_enabled', 'znuny_ticket_cache_refresh_interval_minutes', 'znuny_ticket_cache_max_pages_per_run', 'znuny_ticket_cache_ttl_minutes', 'znuny_ticket_cache_default_limit', 'znuny_ticket_workspace_active_state_type_ids', 'znuny_closed_ticket_window_days', 'znuny_closed_ticket_small_sync_interval_minutes'])) {
                 $groups['Znuny']['Ticket Workspace'][$setting->key] = $component;
+            } elseif (in_array($setting->key, ['znuny_inline_image_warmer_enabled', 'znuny_inline_image_cache_ttl_minutes', 'znuny_inline_image_warmer_interval_minutes'])) {
+                $groups['Znuny']['Ticket Workspace'][$setting->key] = $component;
+            } elseif (in_array($setting->key, ['znuny_inline_image_warmer_batch_size', 'znuny_inline_image_warmer_hot_percentage'])) {
+                continue;
             } elseif (in_array($setting->key, ['znuny_ticket_snapshot_cache_ttl_minutes', 'znuny_prewarm_queues_interval_minutes', 'znuny_prewarm_agents_interval_minutes', 'znuny_prewarm_lookups_interval_minutes', 'znuny_prewarm_customer_users_interval_minutes']) || str_contains($setting->key, '_cache_')) {
                 $groups['Cache'][] = $component;
             } elseif (in_array($setting->key, ['znuny_detailed_sync_audit_enabled', 'zabbix_problem_sync_audit_enabled', 'znuny_ticket_workspace_sync_audit_enabled', 'znuny_closed_ticket_sync_audit_auto_enabled'])) {
@@ -1415,6 +1425,17 @@ class Settings extends Page implements HasForms
                     ->heading(__('settings.settings_page.sections.recent_closed_tickets.heading'))
                     ->description(__('settings.settings_page.sections.recent_closed_tickets.description'))
                     ->schema($recentFields)->columns(1);
+            }
+
+            $inlineImageFields = array_filter([
+                $ws['znuny_inline_image_warmer_enabled'] ?? null,
+                $ws['znuny_inline_image_cache_ttl_minutes'] ?? null,
+                $ws['znuny_inline_image_warmer_interval_minutes'] ?? null,
+            ]);
+            if (! empty($inlineImageFields)) {
+                $workspaceSchema[] = Section::make('inline_images')
+                    ->heading(__('settings.settings_page.sections.inline_images.heading'))
+                    ->schema($inlineImageFields)->columns(1);
             }
 
             $tabs[] = Tab::make('ticket_workspace')
