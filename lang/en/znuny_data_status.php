@@ -9,6 +9,7 @@ return [
         'agents' => 'Agents and Queue Access',
         'lookups' => 'Lookups',
         'customer_users' => 'CustomerUsers by Queues',
+        'inline_images' => 'Inline Images Cache',
     ],
 
     'fields' => [
@@ -21,6 +22,9 @@ return [
         'active_generation' => 'Active Generation',
         'interval' => 'Refresh Interval',
         'last_error' => 'Last Error',
+        'tail_offset' => 'Tail Offset',
+        'ttl' => 'Cache TTL',
+        'warmer_parameters' => 'Warmer Parameters',
     ],
 
     'status' => [
@@ -30,6 +34,9 @@ return [
         'failed' => 'Failed',
         'missing' => 'Missing',
         'unknown' => 'Unknown',
+        'disabled' => 'Disabled',
+        'pending' => 'Pending',
+        'stale_inline' => 'Stale',
     ],
 
     'notifications' => [
@@ -37,6 +44,11 @@ return [
         'skipped_locked_title' => 'Refresh skipped because process is already running',
         'timeout_title' => 'Timeout refreshing ":dataset"',
         'error_title' => 'Error refreshing ":dataset"',
+        'inline_disabled_title' => 'Warming ":dataset" is disabled',
+        'inline_warning_title' => 'Warming ":dataset" completed with warnings',
+        'inline_warning_body' => 'Processing errors: :count.',
+        'inline_skipped_title' => 'Warming ":dataset" was not performed',
+        'inline_skipped_body' => 'The current configuration does not allow warming to run.',
     ],
 
     'descriptions' => [
@@ -44,6 +56,9 @@ return [
         'agents' => 'Number of agents. The matrix of agent access to queues is stored in the dataset but not counted separately.',
         'lookups' => 'Total number of states, priorities, and types.',
         'customer_users' => 'Sum of final CustomerUsers variants across all queues. This is not the number of globally unique users.',
+        'inline_images' => 'Number of cached inline images.',
+        'tail_offset' => 'Rotating cursor position for the tail ticket window.',
+        'warmer_parameters' => 'Maximum batch / hot ticket percentage.',
     ],
 
     'actions' => [
@@ -54,6 +69,7 @@ return [
         'never' => 'Never',
         'none' => 'None',
         'minutes' => 'min',
+        'unknown' => 'Unknown',
     ],
 
     'consumer' => [
