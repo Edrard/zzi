@@ -338,6 +338,93 @@ class ZnunyClient
     }
 
     /**
+     * Get ticket article inline attachment references via TicketGet.
+     * Does NOT download binary base64 contents (uses GetAttachmentContents=0).
+     */
+    public function getTicketInlineAttachmentReferences(int|string $ticketId): array
+    {
+        return $this->withSessionRetry(function ($session) use ($ticketId) {
+            $normalizedId = $this->normalizeTicketId($ticketId);
+
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/Ticket/'.rawurlencode((string) $normalizedId), [
+                'SessionID' => $session,
+                'AllArticles' => 1,
+                'DynamicFields' => 0,
+                'Attachments' => 1,
+                'GetAttachmentContents' => 0,
+            ]);
+
+            $data = $this->processResponse($response);
+
+            $ticketData = [];
+            if (isset($data['Ticket']) && is_array($data['Ticket'])) {
+                if (isset($data['Ticket'][0]) && is_array($data['Ticket'][0])) {
+                    $ticketData = $data['Ticket'][0];
+                } elseif (isset($data['Ticket']['TicketID'])) {
+                    $ticketData = $data['Ticket'];
+                }
+            } elseif (isset($data[0]) && is_array($data[0])) {
+                $ticketData = $data[0];
+            }
+
+            $articles = [];
+            if (isset($ticketData['Article']) && is_array($ticketData['Article'])) {
+                $articles = array_is_list($ticketData['Article'])
+                    ? $ticketData['Article']
+                    : [$ticketData['Article']];
+            }
+
+            $references = [];
+
+            foreach ($articles as $article) {
+                if (! is_array($article)) {
+                    continue;
+                }
+
+                try {
+                    $articleId = $this->normalizeStrictPositiveId($article['ArticleID'] ?? null, 'ArticleID');
+                } catch (Throwable $e) {
+                    continue;
+                }
+
+                $attachments = $article['Attachment'] ?? [];
+                if (! is_array($attachments) || $attachments === []) {
+                    continue;
+                }
+
+                if (! array_is_list($attachments)) {
+                    $attachments = [$attachments];
+                }
+
+                foreach ($attachments as $attachment) {
+                    if (! is_array($attachment)) {
+                        continue;
+                    }
+
+                    $rawContentId = $attachment['ContentID'] ?? null;
+                    if (! is_string($rawContentId) || trim($rawContentId) === '') {
+                        continue;
+                    }
+
+                    try {
+                        $contentId = ZnunyInlineImageContentId::normalize($rawContentId);
+                    } catch (Throwable $e) {
+                        continue;
+                    }
+
+                    $references[] = [
+                        'TicketID' => $normalizedId,
+                        'ArticleID' => $articleId,
+                        'ContentID' => $contentId,
+                    ];
+                }
+            }
+
+            return $references;
+        });
+    }
+
+    /**
      * Get list of agents from Znuny Agent endpoint.
      */
     public function getAgents(bool $isRetry = false): array

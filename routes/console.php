@@ -30,6 +30,7 @@ try {
 
 if ($isTicketWorkspaceEnabled) {
     Schedule::command('znuny:warm-ticket-workspace-cache --scheduled')->everyMinute()->withoutOverlapping();
+    Schedule::command('znuny:warm-inline-image-cache --scheduled')->everyMinute()->withoutOverlapping();
     Schedule::command('znuny:sync-closed-ticket-cache')->everyMinute()->withoutOverlapping();
     Schedule::command('znuny:sync-closed-ticket-cache --full')->dailyAt('02:30')->withoutOverlapping();
 }

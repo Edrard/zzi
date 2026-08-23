@@ -791,8 +791,9 @@ class ZnunyClientTest extends TestCase
 
         Http::assertSent(function (Request $request) {
             $path = parse_url($request->url(), PHP_URL_PATH);
+
             return $path === '/api/ZnunyAgentListTicket/123/Article/456/InlineAttachment' &&
-                   !str_contains($path, 'image1') &&
+                   ! str_contains($path, 'image1') &&
                    $request['SessionID'] === 'fake_session' &&
                    $request['ContentID'] === 'image1@domain.com';
         });
@@ -923,5 +924,112 @@ class ZnunyClientTest extends TestCase
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('Invalid TicketID provided.'); // Since normalizeTicketId is called for both
         $client->getInlineAttachment(123, 0, 'image1@domain.com');
+    }
+
+    public function test_get_ticket_inline_attachment_references_extracts_only_safe_metadata_without_binary_fetch(): void
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/Ticket/123*' => Http::response([
+                'Ticket' => [
+                    'TicketID' => 123,
+                    'Article' => [
+                        [
+                            'ArticleID' => 456,
+                            'Attachment' => [
+                                ['ContentID' => 'image1@domain.com'],
+                                ['ContentID' => '<image2@domain.com>'],
+                                ['Filename' => 'no_content_id.pdf'],
+                            ],
+                        ],
+                        [
+                            'ArticleID' => '457',
+                            'Attachment' => [
+                                'ContentID' => 'image3@domain.com',
+                            ],
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $refs = $client->getTicketInlineAttachmentReferences(123);
+
+        $this->assertSame([
+            ['TicketID' => 123, 'ArticleID' => 456, 'ContentID' => 'image1@domain.com'],
+            ['TicketID' => 123, 'ArticleID' => 456, 'ContentID' => 'image2@domain.com'],
+            ['TicketID' => 123, 'ArticleID' => 457, 'ContentID' => 'image3@domain.com'],
+        ], $refs);
+
+        Http::assertSent(function (Request $request) {
+            $path = parse_url($request->url(), PHP_URL_PATH);
+
+            if ($path !== '/api/Ticket/123') {
+                return true;
+            }
+
+            return $request->method() === 'GET'
+                && (int) $request['AllArticles'] === 1
+                && (int) $request['Attachments'] === 1
+                && (int) $request['GetAttachmentContents'] === 0;
+        });
+
+        Http::assertNotSent(
+            fn (Request $request) => str_contains(parse_url($request->url(), PHP_URL_PATH) ?? '', '/InlineAttachment')
+        );
+    }
+
+    public function test_get_ticket_inline_attachment_references_skips_invalid_article_and_content_ids(): void
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/Ticket/123*' => Http::response([
+                'Ticket' => [
+                    'TicketID' => 123,
+                    'Article' => [
+                        [
+                            'ArticleID' => 0,
+                            'Attachment' => [['ContentID' => 'ignored1@domain.com']],
+                        ],
+                        [
+                            'Attachment' => [['ContentID' => 'ignored2@domain.com']],
+                        ],
+                        [
+                            'ArticleID' => 789,
+                            'Attachment' => [
+                                ['ContentID' => ''],
+                                ['ContentID' => "bad\ncontent-id"],
+                                ['ContentID' => 123],
+                                ['Filename' => 'missing.txt'],
+                                ['ContentID' => 'valid@domain.com'],
+                            ],
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+
+        $this->assertSame([
+            ['TicketID' => 123, 'ArticleID' => 789, 'ContentID' => 'valid@domain.com'],
+        ], $client->getTicketInlineAttachmentReferences(123));
+    }
+
+    public function test_get_ticket_inline_attachment_references_handles_no_articles_safely(): void
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/Ticket/123*' => Http::response([
+                'Ticket' => [
+                    'TicketID' => 123,
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+
+        $this->assertSame([], $client->getTicketInlineAttachmentReferences(123));
     }
 }
