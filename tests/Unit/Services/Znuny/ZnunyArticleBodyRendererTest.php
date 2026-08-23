@@ -126,6 +126,103 @@ class ZnunyArticleBodyRendererTest extends TestCase
         $this->assertStringNotContainsString('image1@domain.com', $result['content']); // Raw ID not in route
     }
 
+    public function test_real_plaintext_single_marker_regression(): void
+    {
+        $article = [
+            'mime_type' => 'text/plain',
+            'ticket_id' => 59234,
+            'article_id' => 355030,
+            'body' => '[cid:image001.png@01DD3159.C57C2200]',
+        ];
+
+        $result = $this->renderer->render($article);
+
+        $this->assertTrue($result['is_html']);
+
+        $canonicalCid = 'image001.png@01DD3159.C57C2200';
+        $token = ZnunyInlineImageContentId::encodeToken($canonicalCid);
+        $expectedUrl = route('znuny.inline-image.show', ['ticketId' => 59234, 'articleId' => 355030, 'token' => $token], false);
+
+        $images = $this->getParsedImages($result['content']);
+        $this->assertEquals(1, $images->length);
+        $img = $images->item(0);
+
+        $this->assertFalse($img->hasAttribute('src'), 'No real src attribute should exist');
+        $this->assertSame($expectedUrl, $img->getAttribute('data-znuny-inline-src'));
+        $this->assertSame('lazy', $img->getAttribute('loading'));
+
+        $this->assertSame($canonicalCid, ZnunyInlineImageContentId::decodeToken($token));
+    }
+
+    public function test_multiple_plaintext_markers(): void
+    {
+        $article = [
+            'mime_type' => 'text/plain',
+            'ticket_id' => 123,
+            'article_id' => 456,
+            'body' => "First image: [cid:first@domain.com]\nSecond image: [cid:second@domain.com]",
+        ];
+
+        $result = $this->renderer->render($article);
+
+        $this->assertTrue($result['is_html']);
+
+        $token1 = ZnunyInlineImageContentId::encodeToken('first@domain.com');
+        $token2 = ZnunyInlineImageContentId::encodeToken('second@domain.com');
+
+        $pos1 = strpos($result['content'], $token1);
+        $pos2 = strpos($result['content'], $token2);
+
+        $this->assertNotFalse($pos1);
+        $this->assertNotFalse($pos2);
+        $this->assertLessThan($pos2, $pos1);
+    }
+
+    public function test_plaintext_safety_with_markers(): void
+    {
+        $article = [
+            'mime_type' => 'text/plain',
+            'ticket_id' => 123,
+            'article_id' => 456,
+            'body' => '<script>alert(1)</script> / <b>text</b> [cid:image1@domain.com]',
+        ];
+
+        $result = $this->renderer->render($article);
+
+        $this->assertTrue($result['is_html']);
+        $this->assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt; / &lt;b&gt;text&lt;/b&gt;', $result['content']);
+        $this->assertStringContainsString('data-znuny-inline-src', $result['content']);
+    }
+
+    public function test_no_marker_in_plaintext_remains_unchanged(): void
+    {
+        $article = [
+            'mime_type' => 'text/plain',
+            'ticket_id' => 123,
+            'article_id' => 456,
+            'body' => 'This is just plain text without any markers.',
+        ];
+
+        $result = $this->renderer->render($article);
+
+        $this->assertFalse($result['is_html']);
+        $this->assertSame('This is just plain text without any markers.', $result['content']);
+    }
+
+    public function test_invalid_or_missing_ids_in_plaintext_fail_safe(): void
+    {
+        $article = [
+            'mime_type' => 'text/plain',
+            'ticket_id' => 0, // Invalid
+            'article_id' => 456,
+            'body' => '[cid:image1@domain.com]',
+        ];
+
+        $result = $this->renderer->render($article);
+        $this->assertFalse($result['is_html']);
+        $this->assertSame('[cid:image1@domain.com]', $result['content']);
+    }
+
     public function test_multiple_cid_images_preserve_order(): void
     {
         $article = [

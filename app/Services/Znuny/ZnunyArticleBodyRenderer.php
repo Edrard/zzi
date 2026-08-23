@@ -13,10 +13,10 @@ class ZnunyArticleBodyRenderer
         $body = $article['body'] ?? '';
 
         if (! $this->isHtmlArticle($article)) {
-            return [
-                'is_html' => false,
-                'content' => $body,
-            ];
+            $ticketId = $article['ticket_id'] ?? null;
+            $articleId = $article['article_id'] ?? null;
+
+            return $this->processPlaintextBody($body, $ticketId, $articleId);
         }
 
         if (trim($body) === '') {
@@ -57,6 +57,73 @@ class ZnunyArticleBodyRenderer
         $parts = explode(';', $header);
 
         return strtolower(trim($parts[0]));
+    }
+
+    private function processPlaintextBody(string $body, int|string|null $ticketId, int|string|null $articleId): array
+    {
+        if (trim($body) === '') {
+            return [
+                'is_html' => false,
+                'content' => $body,
+            ];
+        }
+
+        if (! $this->isValidId($ticketId) || ! $this->isValidId($articleId)) {
+            return [
+                'is_html' => false,
+                'content' => $body,
+            ];
+        }
+
+        $pattern = '/\[cid:([^\]\r\n]{1,512})\]/i';
+
+        $hasMatches = preg_match_all($pattern, $body, $matches, PREG_OFFSET_CAPTURE);
+        if (! $hasMatches) {
+            return [
+                'is_html' => false,
+                'content' => $body,
+            ];
+        }
+
+        $html = '';
+        $lastPos = 0;
+        $convertedAny = false;
+
+        foreach ($matches[0] as $index => $match) {
+            $fullMatch = $match[0];
+            $pos = $match[1];
+            $cid = $matches[1][$index][0];
+
+            $url = $this->buildLaravelRouteUrl($cid, $ticketId, $articleId);
+
+            if ($url !== null) {
+                $textBefore = substr($body, $lastPos, $pos - $lastPos);
+                if ($textBefore !== '') {
+                    $html .= '<span class="whitespace-pre-wrap">'.e($textBefore).'</span>';
+                }
+
+                $html .= '<img data-znuny-inline-src="'.e($url).'" loading="lazy">';
+                $convertedAny = true;
+                $lastPos = $pos + strlen($fullMatch);
+            }
+        }
+
+        if (! $convertedAny) {
+            return [
+                'is_html' => false,
+                'content' => $body,
+            ];
+        }
+
+        $textAfter = substr($body, $lastPos);
+        if ($textAfter !== '') {
+            $html .= '<span class="whitespace-pre-wrap">'.e($textAfter).'</span>';
+        }
+
+        return [
+            'is_html' => true,
+            'content' => $html,
+        ];
     }
 
     private function processHtmlBody(string $html, int|string|null $ticketId, int|string|null $articleId): string
