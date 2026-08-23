@@ -5,6 +5,7 @@ namespace Tests\Feature\Console\Commands;
 use App\Models\Setting;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyInlineImageService;
+use App\Services\Znuny\ZnunyTicketWorkspaceCacheReader;
 use App\Services\Znuny\ZnunyTicketWorkspaceStateTypeMapper;
 use Carbon\Carbon;
 use Illuminate\Console\Scheduling\Schedule;
@@ -54,6 +55,10 @@ class WarmZnunyInlineImageCacheCommandTest extends TestCase
         $client->shouldNotReceive('getTicketInlineAttachmentReferences');
         $this->app->instance(ZnunyClient::class, $client);
 
+        $reader = Mockery::mock(ZnunyTicketWorkspaceCacheReader::class);
+        $reader->shouldNotReceive('getTickets');
+        $this->app->instance(ZnunyTicketWorkspaceCacheReader::class, $reader);
+
         $this->artisan('znuny:warm-inline-image-cache')
             ->expectsOutput('Inline image warmer is disabled in settings. Exiting cleanly.')
             ->assertSuccessful();
@@ -72,6 +77,10 @@ class WarmZnunyInlineImageCacheCommandTest extends TestCase
 
         $marker = Carbon::now()->subMinute()->timestamp;
         Redis::set('znuny:inline_image_warmer:last_run_at', $marker);
+
+        $reader = Mockery::mock(ZnunyTicketWorkspaceCacheReader::class);
+        $reader->shouldNotReceive('getTickets');
+        $this->app->instance(ZnunyTicketWorkspaceCacheReader::class, $reader);
 
         $client = Mockery::mock(ZnunyClient::class);
         $client->shouldNotReceive('searchTicketsWithMetadata');
@@ -97,11 +106,15 @@ class WarmZnunyInlineImageCacheCommandTest extends TestCase
         $oldMarker = Carbon::now()->subMinutes(6)->timestamp;
         Redis::set('znuny:inline_image_warmer:last_run_at', $oldMarker);
 
-        $client = Mockery::mock(ZnunyClient::class);
-        $client->shouldReceive('searchTicketsWithMetadata')
+        $reader = Mockery::mock(ZnunyTicketWorkspaceCacheReader::class);
+        $reader->shouldReceive('getTickets')
             ->once()
-            ->with(['StateType' => 'open', 'CountOnly' => 1])
-            ->andReturn(['total_count' => 0]);
+            ->with(['state_types' => ['open']])
+            ->andReturn([]);
+        $this->app->instance(ZnunyTicketWorkspaceCacheReader::class, $reader);
+
+        $client = Mockery::mock(ZnunyClient::class);
+        $client->shouldNotReceive('searchTicketsWithMetadata');
         $this->app->instance(ZnunyClient::class, $client);
 
         $this->artisan('znuny:warm-inline-image-cache', ['--scheduled' => true])
@@ -121,11 +134,15 @@ class WarmZnunyInlineImageCacheCommandTest extends TestCase
         $recent = Carbon::now()->timestamp;
         Redis::set('znuny:inline_image_warmer:last_run_at', $recent);
 
-        $client = Mockery::mock(ZnunyClient::class);
-        $client->shouldReceive('searchTicketsWithMetadata')
+        $reader = Mockery::mock(ZnunyTicketWorkspaceCacheReader::class);
+        $reader->shouldReceive('getTickets')
             ->once()
-            ->with(['StateType' => 'open', 'CountOnly' => 1])
-            ->andReturn(['total_count' => 0]);
+            ->with(['state_types' => ['open']])
+            ->andReturn([]);
+        $this->app->instance(ZnunyTicketWorkspaceCacheReader::class, $reader);
+
+        $client = Mockery::mock(ZnunyClient::class);
+        $client->shouldNotReceive('searchTicketsWithMetadata');
         $this->app->instance(ZnunyClient::class, $client);
 
         $this->artisan('znuny:warm-inline-image-cache')
@@ -153,20 +170,21 @@ class WarmZnunyInlineImageCacheCommandTest extends TestCase
         config()->set('znuny.inline_image_warmer_batch_size', 50);
         config()->set('znuny.inline_image_warmer_hot_percentage', 10);
 
-        $client = Mockery::mock(ZnunyClient::class);
-        $client->shouldReceive('searchTicketsWithMetadata')
+        $tickets = [];
+        for ($i = 0; $i < 100; $i++) {
+            $tickets[] = ['TicketID' => $i + 1, 'InlineAttachmentCount' => 0]; // No attachments, so 0 eligible
+        }
+
+        $reader = Mockery::mock(ZnunyTicketWorkspaceCacheReader::class);
+        $reader->shouldReceive('getTickets')
             ->once()
-            ->with(['StateType' => 'open', 'CountOnly' => 1])
-            ->andReturn(['total_count' => 100]);
+            ->with(['state_types' => ['open']])
+            ->andReturn($tickets);
+        $this->app->instance(ZnunyTicketWorkspaceCacheReader::class, $reader);
 
-        $client->shouldReceive('searchTicketsWithMetadata')
-            ->twice()
-            ->with(Mockery::on(fn ($args) => ! isset($args['CountOnly'])
-                && $args['SortBy'] === 'Changed'
-                && $args['SortDirection'] === 'DESC'
-                && $args['Limit'] === 50))
-            ->andReturn(['tickets' => []]);
-
+        $client = Mockery::mock(ZnunyClient::class);
+        $client->shouldNotReceive('searchTicketsWithMetadata');
+        $client->shouldNotReceive('getTicketInlineAttachmentReferences');
         $this->app->instance(ZnunyClient::class, $client);
 
         $this->artisan('znuny:warm-inline-image-cache')
@@ -176,6 +194,93 @@ class WarmZnunyInlineImageCacheCommandTest extends TestCase
             ->assertSuccessful();
     }
 
+    public function test_batch_50_selects_all_25_eligible_tickets_from_138_local_active_tickets(): void
+    {
+        $this->enableWarmer();
+        $this->bindMapper();
+        config()->set('znuny.inline_image_warmer_batch_size', 50);
+        config()->set('znuny.inline_image_warmer_hot_percentage', 10);
+
+        $tickets = [];
+        for ($id = 1; $id <= 138; $id++) {
+            $tickets[] = [
+                'TicketID' => $id,
+                'InlineAttachmentCount' => $id <= 25 ? 1 : 0,
+            ];
+        }
+
+        $reader = Mockery::mock(ZnunyTicketWorkspaceCacheReader::class);
+        $reader->shouldReceive('getTickets')
+            ->once()
+            ->with(['state_types' => ['open']])
+            ->andReturn($tickets);
+        $this->app->instance(ZnunyTicketWorkspaceCacheReader::class, $reader);
+
+        $selectedTicketIds = [];
+
+        $client = Mockery::mock(ZnunyClient::class);
+        $client->shouldNotReceive('searchTicketsWithMetadata');
+        $client->shouldReceive('getTicketInlineAttachmentReferences')
+            ->times(25)
+            ->andReturnUsing(function (int $ticketId) use (&$selectedTicketIds): array {
+                $selectedTicketIds[] = $ticketId;
+
+                return [];
+            });
+        $this->app->instance(ZnunyClient::class, $client);
+
+        $this->artisan('znuny:warm-inline-image-cache')
+            ->expectsOutput('- Total active tickets: 138')
+            ->expectsOutput('- Hot slots max: 5')
+            ->expectsOutput('- Tail slots max: 45')
+            ->expectsOutput('- Selected unique tickets: 25')
+            ->assertSuccessful();
+
+        sort($selectedTicketIds);
+        $this->assertSame(range(1, 25), $selectedTicketIds);
+        $this->assertSame('0', (string) Redis::get('znuny:inline_image_warmer:tail_offset'));
+    }
+
+    public function test_batch_50_never_selects_more_than_50_eligible_tickets(): void
+    {
+        $this->enableWarmer();
+        $this->bindMapper();
+        config()->set('znuny.inline_image_warmer_batch_size', 50);
+        config()->set('znuny.inline_image_warmer_hot_percentage', 10);
+
+        $tickets = [];
+        for ($id = 1; $id <= 80; $id++) {
+            $tickets[] = [
+                'TicketID' => $id,
+                'InlineAttachmentCount' => 1,
+            ];
+        }
+
+        $reader = Mockery::mock(ZnunyTicketWorkspaceCacheReader::class);
+        $reader->shouldReceive('getTickets')->once()->andReturn($tickets);
+        $this->app->instance(ZnunyTicketWorkspaceCacheReader::class, $reader);
+
+        $selectedTicketIds = [];
+
+        $client = Mockery::mock(ZnunyClient::class);
+        $client->shouldNotReceive('searchTicketsWithMetadata');
+        $client->shouldReceive('getTicketInlineAttachmentReferences')
+            ->times(50)
+            ->andReturnUsing(function (int $ticketId) use (&$selectedTicketIds): array {
+                $selectedTicketIds[] = $ticketId;
+
+                return [];
+            });
+        $this->app->instance(ZnunyClient::class, $client);
+
+        $this->artisan('znuny:warm-inline-image-cache')
+            ->expectsOutput('- Selected unique tickets: 50')
+            ->assertSuccessful();
+
+        $this->assertCount(50, array_unique($selectedTicketIds));
+        $this->assertSame('45', (string) Redis::get('znuny:inline_image_warmer:tail_offset'));
+    }
+
     public function test_batch_one_and_hot_hundred_have_no_tail(): void
     {
         $this->enableWarmer();
@@ -183,18 +288,23 @@ class WarmZnunyInlineImageCacheCommandTest extends TestCase
         config()->set('znuny.inline_image_warmer_batch_size', 1);
         config()->set('znuny.inline_image_warmer_hot_percentage', 100);
 
+        $tickets = [];
+        for ($i = 0; $i < 10; $i++) {
+            $tickets[] = ['TicketID' => $i + 1, 'InlineAttachmentCount' => 1];
+        }
+
+        $reader = Mockery::mock(ZnunyTicketWorkspaceCacheReader::class);
+        $reader->shouldReceive('getTickets')
+            ->once()
+            ->with(['state_types' => ['open']])
+            ->andReturn($tickets);
+        $this->app->instance(ZnunyTicketWorkspaceCacheReader::class, $reader);
+
         $client = Mockery::mock(ZnunyClient::class);
-        $client->shouldReceive('searchTicketsWithMetadata')
-            ->once()
-            ->with(['StateType' => 'open', 'CountOnly' => 1])
-            ->andReturn(['total_count' => 10]);
-        $client->shouldReceive('searchTicketsWithMetadata')
-            ->once()
-            ->with(Mockery::on(fn ($args) => ($args['Offset'] ?? null) === 0
-                && ($args['Limit'] ?? null) === 1
-                && ($args['SortBy'] ?? null) === 'Changed'
-                && ($args['SortDirection'] ?? null) === 'DESC'))
-            ->andReturn(['tickets' => []]);
+        $client->shouldReceive('getTicketInlineAttachmentReferences')
+            ->once() // only 1 ticket selected
+            ->andReturn([]);
+        $client->shouldNotReceive('searchTicketsWithMetadata');
         $this->app->instance(ZnunyClient::class, $client);
 
         $this->artisan('znuny:warm-inline-image-cache')
@@ -205,53 +315,38 @@ class WarmZnunyInlineImageCacheCommandTest extends TestCase
         $this->assertNull(Redis::get('znuny:inline_image_warmer:tail_offset'));
     }
 
-    public function test_hot_underfill_does_not_expand_tail_quota_and_filters_non_positive_counts(): void
+    public function test_filters_non_positive_counts_and_caps_selection_to_batch(): void
     {
         $this->enableWarmer();
         $this->bindMapper();
         config()->set('znuny.inline_image_warmer_batch_size', 10);
-        config()->set('znuny.inline_image_warmer_hot_percentage', 20);
+        config()->set('znuny.inline_image_warmer_hot_percentage', 20); // 2 hot, 8 tail
+
+        $tickets = [
+            ['TicketID' => 1, 'InlineAttachmentCount' => 1],
+            ['TicketID' => 2, 'InlineAttachmentCount' => 0],
+            ['TicketID' => 3, 'InlineAttachmentCount' => null],
+            ['TicketID' => 4],
+            ['TicketID' => 5, 'InlineAttachmentCount' => -1],
+        ];
+
+        for ($i = 10; $i <= 20; $i++) { // 11 more eligible
+            $tickets[] = ['TicketID' => $i, 'InlineAttachmentCount' => 1];
+        }
+
+        $reader = Mockery::mock(ZnunyTicketWorkspaceCacheReader::class);
+        $reader->shouldReceive('getTickets')->once()->andReturn($tickets);
+        $this->app->instance(ZnunyTicketWorkspaceCacheReader::class, $reader);
 
         $client = Mockery::mock(ZnunyClient::class);
-        $client->shouldReceive('searchTicketsWithMetadata')
-            ->once()
-            ->with(['StateType' => 'open', 'CountOnly' => 1])
-            ->andReturn(['total_count' => 100]);
-
-        $nonCountCall = 0;
-        $client->shouldReceive('searchTicketsWithMetadata')
-            ->twice()
-            ->with(Mockery::on(fn ($args) => ! isset($args['CountOnly'])
-                && ($args['SortBy'] ?? null) === 'Changed'
-                && ($args['SortDirection'] ?? null) === 'DESC'))
-            ->andReturnUsing(function () use (&$nonCountCall) {
-                $nonCountCall++;
-
-                if ($nonCountCall === 1) {
-                    return ['tickets' => [
-                        ['TicketID' => 1, 'InlineAttachmentCount' => 1],
-                        ['TicketID' => 2, 'InlineAttachmentCount' => 0],
-                        ['TicketID' => 3, 'InlineAttachmentCount' => null],
-                        ['TicketID' => 4],
-                        ['TicketID' => 5, 'InlineAttachmentCount' => -1],
-                    ]];
-                }
-
-                $tickets = [];
-                for ($id = 10; $id <= 19; $id++) {
-                    $tickets[] = ['TicketID' => $id, 'InlineAttachmentCount' => 1];
-                }
-
-                return ['tickets' => $tickets];
-            });
-
-        $client->shouldReceive('getTicketInlineAttachmentReferences')->times(9)->andReturn([]);
+        $client->shouldNotReceive('searchTicketsWithMetadata');
+        $client->shouldReceive('getTicketInlineAttachmentReferences')->times(10)->andReturn([]);
         $this->app->instance(ZnunyClient::class, $client);
 
         $this->artisan('znuny:warm-inline-image-cache')
             ->expectsOutput('- Hot slots max: 2')
             ->expectsOutput('- Tail slots max: 8')
-            ->expectsOutput('- Selected unique tickets: 9')
+            ->expectsOutput('- Selected unique tickets: 10')
             ->assertSuccessful();
 
         $this->assertSame('8', (string) Redis::get('znuny:inline_image_warmer:tail_offset'));
@@ -262,26 +357,25 @@ class WarmZnunyInlineImageCacheCommandTest extends TestCase
         $this->enableWarmer();
         $this->bindMapper();
         config()->set('znuny.inline_image_warmer_batch_size', 4);
-        config()->set('znuny.inline_image_warmer_hot_percentage', 50);
+        config()->set('znuny.inline_image_warmer_hot_percentage', 50); // 2 hot, 2 tail
+
+        $tickets = [
+            ['TicketID' => 1, 'InlineAttachmentCount' => 1],
+            ['TicketID' => 2, 'InlineAttachmentCount' => 1],
+            ['TicketID' => 3, 'InlineAttachmentCount' => 1],
+            ['TicketID' => 4, 'InlineAttachmentCount' => 1],
+            ['TicketID' => 5, 'InlineAttachmentCount' => 1],
+            ['TicketID' => 6, 'InlineAttachmentCount' => 1],
+        ]; // Total eligible = 6. > 4.
+
+        Redis::set('znuny:inline_image_warmer:tail_offset', 0);
+
+        $reader = Mockery::mock(ZnunyTicketWorkspaceCacheReader::class);
+        $reader->shouldReceive('getTickets')->once()->andReturn($tickets);
+        $this->app->instance(ZnunyTicketWorkspaceCacheReader::class, $reader);
 
         $client = Mockery::mock(ZnunyClient::class);
-        $client->shouldReceive('searchTicketsWithMetadata')
-            ->once()
-            ->with(['StateType' => 'open', 'CountOnly' => 1])
-            ->andReturn(['total_count' => 10]);
-        $client->shouldReceive('searchTicketsWithMetadata')
-            ->once()
-            ->andReturn(['tickets' => [
-                ['TicketID' => 1, 'InlineAttachmentCount' => 1],
-                ['TicketID' => 2, 'InlineAttachmentCount' => 1],
-            ]]);
-        $client->shouldReceive('searchTicketsWithMetadata')
-            ->once()
-            ->andReturn(['tickets' => [
-                ['TicketID' => 1, 'InlineAttachmentCount' => 1],
-                ['TicketID' => 3, 'InlineAttachmentCount' => 1],
-                ['TicketID' => 4, 'InlineAttachmentCount' => 1],
-            ]]);
+        $client->shouldNotReceive('searchTicketsWithMetadata');
         $client->shouldReceive('getTicketInlineAttachmentReferences')->times(4)->andReturn([]);
         $this->app->instance(ZnunyClient::class, $client);
 
@@ -295,36 +389,20 @@ class WarmZnunyInlineImageCacheCommandTest extends TestCase
         $this->enableWarmer();
         $this->bindMapper();
         config()->set('znuny.inline_image_warmer_batch_size', 2);
-        config()->set('znuny.inline_image_warmer_hot_percentage', 50);
+        config()->set('znuny.inline_image_warmer_hot_percentage', 50); // 1 hot, 1 tail
 
-        $nonCountCall = 0;
-        $seenOffsets = [];
+        $tickets = [
+            ['TicketID' => 1, 'InlineAttachmentCount' => 1],
+            ['TicketID' => 2, 'InlineAttachmentCount' => 1],
+            ['TicketID' => 3, 'InlineAttachmentCount' => 1],
+        ]; // 3 eligible
+
+        $reader = Mockery::mock(ZnunyTicketWorkspaceCacheReader::class);
+        $reader->shouldReceive('getTickets')->twice()->andReturn($tickets);
+        $this->app->instance(ZnunyTicketWorkspaceCacheReader::class, $reader);
 
         $client = Mockery::mock(ZnunyClient::class);
-        $client->shouldReceive('searchTicketsWithMetadata')
-            ->twice()
-            ->with(['StateType' => 'open', 'CountOnly' => 1])
-            ->andReturn(['total_count' => 10]);
-
-        $client->shouldReceive('searchTicketsWithMetadata')
-            ->times(4)
-            ->with(Mockery::on(function ($args) use (&$seenOffsets) {
-                $seenOffsets[] = $args['Offset'] ?? null;
-
-                return ($args['SortBy'] ?? null) === 'Changed'
-                    && ($args['SortDirection'] ?? null) === 'DESC';
-            }))
-            ->andReturnUsing(function () use (&$nonCountCall) {
-                $nonCountCall++;
-
-                return match ($nonCountCall) {
-                    1 => ['tickets' => [['TicketID' => 1, 'InlineAttachmentCount' => 1]]],
-                    2 => ['tickets' => [['TicketID' => 2, 'InlineAttachmentCount' => 1]]],
-                    3 => ['tickets' => [['TicketID' => 1, 'InlineAttachmentCount' => 1]]],
-                    default => ['tickets' => [['TicketID' => 3, 'InlineAttachmentCount' => 1]]],
-                };
-            });
-
+        $client->shouldNotReceive('searchTicketsWithMetadata');
         $client->shouldReceive('getTicketInlineAttachmentReferences')->times(4)->andReturn([]);
         $this->app->instance(ZnunyClient::class, $client);
 
@@ -332,9 +410,7 @@ class WarmZnunyInlineImageCacheCommandTest extends TestCase
         $this->assertSame('1', (string) Redis::get('znuny:inline_image_warmer:tail_offset'));
 
         $this->artisan('znuny:warm-inline-image-cache')->assertSuccessful();
-        $this->assertSame('2', (string) Redis::get('znuny:inline_image_warmer:tail_offset'));
-
-        $this->assertSame([0, 0, 0, 1], $seenOffsets);
+        $this->assertSame('0', (string) Redis::get('znuny:inline_image_warmer:tail_offset'));
     }
 
     public function test_tail_cursor_wraps_to_zero_at_total(): void
@@ -342,21 +418,22 @@ class WarmZnunyInlineImageCacheCommandTest extends TestCase
         $this->enableWarmer();
         $this->bindMapper();
         config()->set('znuny.inline_image_warmer_batch_size', 2);
-        config()->set('znuny.inline_image_warmer_hot_percentage', 50);
-        Redis::set('znuny:inline_image_warmer:tail_offset', 2);
+        config()->set('znuny.inline_image_warmer_hot_percentage', 50); // 1 hot, 1 tail
+
+        $tickets = [
+            ['TicketID' => 1, 'InlineAttachmentCount' => 1],
+            ['TicketID' => 2, 'InlineAttachmentCount' => 1],
+            ['TicketID' => 3, 'InlineAttachmentCount' => 1],
+        ]; // 3 eligible
+
+        Redis::set('znuny:inline_image_warmer:tail_offset', 1);
+
+        $reader = Mockery::mock(ZnunyTicketWorkspaceCacheReader::class);
+        $reader->shouldReceive('getTickets')->once()->andReturn($tickets);
+        $this->app->instance(ZnunyTicketWorkspaceCacheReader::class, $reader);
 
         $client = Mockery::mock(ZnunyClient::class);
-        $client->shouldReceive('searchTicketsWithMetadata')
-            ->once()
-            ->with(['StateType' => 'open', 'CountOnly' => 1])
-            ->andReturn(['total_count' => 3]);
-        $client->shouldReceive('searchTicketsWithMetadata')
-            ->once()
-            ->andReturn(['tickets' => [['TicketID' => 1, 'InlineAttachmentCount' => 1]]]);
-        $client->shouldReceive('searchTicketsWithMetadata')
-            ->once()
-            ->with(Mockery::on(fn ($args) => ($args['Offset'] ?? null) === 2))
-            ->andReturn(['tickets' => [['TicketID' => 3, 'InlineAttachmentCount' => 1]]]);
+        $client->shouldNotReceive('searchTicketsWithMetadata');
         $client->shouldReceive('getTicketInlineAttachmentReferences')->times(2)->andReturn([]);
         $this->app->instance(ZnunyClient::class, $client);
 
@@ -372,18 +449,17 @@ class WarmZnunyInlineImageCacheCommandTest extends TestCase
         config()->set('znuny.inline_image_warmer_batch_size', 2);
         config()->set('znuny.inline_image_warmer_hot_percentage', 100);
 
-        $client = Mockery::mock(ZnunyClient::class);
-        $client->shouldReceive('searchTicketsWithMetadata')
-            ->once()
-            ->with(['StateType' => 'open', 'CountOnly' => 1])
-            ->andReturn(['total_count' => 2]);
-        $client->shouldReceive('searchTicketsWithMetadata')
-            ->once()
-            ->andReturn(['tickets' => [
-                ['TicketID' => 1, 'InlineAttachmentCount' => 2],
-                ['TicketID' => 2, 'InlineAttachmentCount' => 1],
-            ]]);
+        $tickets = [
+            ['TicketID' => 1, 'InlineAttachmentCount' => 2],
+            ['TicketID' => 2, 'InlineAttachmentCount' => 1],
+        ]; // 2 eligible => selects both as batch <= eligible
 
+        $reader = Mockery::mock(ZnunyTicketWorkspaceCacheReader::class);
+        $reader->shouldReceive('getTickets')->once()->andReturn($tickets);
+        $this->app->instance(ZnunyTicketWorkspaceCacheReader::class, $reader);
+
+        $client = Mockery::mock(ZnunyClient::class);
+        $client->shouldNotReceive('searchTicketsWithMetadata');
         $client->shouldReceive('getTicketInlineAttachmentReferences')
             ->once()
             ->with(1)

@@ -15,6 +15,8 @@ class ZnunyInlineImageWarmerService
 
     private ZnunyTicketWorkspaceStateTypeMapper $stateTypeMapper;
 
+    private ZnunyTicketWorkspaceCacheReader $workspaceReader;
+
     private const TAIL_OFFSET_KEY = 'znuny:inline_image_warmer:tail_offset';
 
     private const LAST_RUN_KEY = 'znuny:inline_image_warmer:last_run_at';
@@ -22,11 +24,13 @@ class ZnunyInlineImageWarmerService
     public function __construct(
         ZnunyClient $client,
         ZnunyInlineImageService $inlineImageService,
-        ZnunyTicketWorkspaceStateTypeMapper $stateTypeMapper
+        ZnunyTicketWorkspaceStateTypeMapper $stateTypeMapper,
+        ZnunyTicketWorkspaceCacheReader $workspaceReader
     ) {
         $this->client = $client;
         $this->inlineImageService = $inlineImageService;
         $this->stateTypeMapper = $stateTypeMapper;
+        $this->workspaceReader = $workspaceReader;
     }
 
     public function warm(): array
@@ -48,21 +52,47 @@ class ZnunyInlineImageWarmerService
             return $this->result(0, 0, 0, 0, 0, 0, 'no mapped state types found');
         }
 
-        $combinedStateTypes = implode(',', $mappedStateTypes);
-
-        // Find total active tickets
-        $countMetadata = $this->client->searchTicketsWithMetadata([
-            'StateType' => $combinedStateTypes,
-            'CountOnly' => 1,
-        ]);
-
-        $totalActive = $countMetadata['total_count'] ?? 0;
+        // 1. Candidate Discovery (Local Workspace Cache)
+        $allActiveTickets = $this->workspaceReader->getTickets(['state_types' => $mappedStateTypes]);
+        $totalActive = count($allActiveTickets);
 
         if ($totalActive === 0) {
             Redis::set(self::LAST_RUN_KEY, time());
 
             return $this->result(0, 0, 0, 0, 0, 0, 'success');
         }
+
+        // Filter and deduplicate eligible tickets locally while preserving Changed DESC order
+        // from ZnunyTicketWorkspaceCacheReader::getTickets().
+        $eligibleByTicketId = [];
+        foreach ($allActiveTickets as $ticket) {
+            $rawTicketId = $ticket['TicketID'] ?? null;
+            if (is_int($rawTicketId)) {
+                $ticketId = $rawTicketId;
+            } elseif (is_string($rawTicketId) && ctype_digit($rawTicketId)) {
+                $ticketId = (int) $rawTicketId;
+            } else {
+                continue;
+            }
+
+            $rawInlineCount = $ticket['InlineAttachmentCount'] ?? 0;
+            if (is_int($rawInlineCount)) {
+                $inlineCount = $rawInlineCount;
+            } elseif (is_string($rawInlineCount) && ctype_digit($rawInlineCount)) {
+                $inlineCount = (int) $rawInlineCount;
+            } else {
+                $inlineCount = 0;
+            }
+
+            if ($ticketId <= 0 || $inlineCount <= 0 || isset($eligibleByTicketId[$ticketId])) {
+                continue;
+            }
+
+            $eligibleByTicketId[$ticketId] = $ticket;
+        }
+
+        $eligibleTickets = array_values($eligibleByTicketId);
+        $totalEligible = count($eligibleTickets);
 
         $batchSize = max(1, min(1000, (int) config('znuny.inline_image_warmer_batch_size', 50)));
         $hotPercentage = max(1, min(100, (int) config('znuny.inline_image_warmer_hot_percentage', 10)));
@@ -72,68 +102,48 @@ class ZnunyInlineImageWarmerService
         $tailCountMax = $batchSize - $hotCountMax;
 
         $candidates = [];
-
-        // 1. Hot Window Selection
-        $hotMetadata = $this->client->searchTicketsWithMetadata([
-            'StateType' => $combinedStateTypes,
-            'SortBy' => 'Changed',
-            'SortDirection' => 'DESC',
-            'Offset' => 0,
-            'Limit' => $batchSize, // Query enough to find candidates
-        ]);
-
         $hotInspected = 0;
-        if (! empty($hotMetadata['tickets'])) {
-            foreach ($hotMetadata['tickets'] as $ticket) {
-                if (count($candidates) >= $hotCountMax) {
-                    break;
-                }
-                $hotInspected++;
-                if (isset($ticket['InlineAttachmentCount']) && (int) $ticket['InlineAttachmentCount'] > 0) {
-                    $candidates[$ticket['TicketID']] = $ticket;
-                }
-            }
-        }
-
-        // 2. Tail Window Selection
-        $tailOffset = (int) Redis::get(self::TAIL_OFFSET_KEY);
-        if ($tailOffset >= $totalActive) {
-            $tailOffset = 0;
-        }
-
         $tailInspected = 0;
-        if ($tailCountMax > 0) {
-            $tailMetadata = $this->client->searchTicketsWithMetadata([
-                'StateType' => $combinedStateTypes,
-                'SortBy' => 'Changed',
-                'SortDirection' => 'DESC',
-                'Offset' => $tailOffset,
-                'Limit' => $batchSize, // Query enough to find candidates
-            ]);
 
-            $tailAdded = 0;
-            if (! empty($tailMetadata['tickets'])) {
-                foreach ($tailMetadata['tickets'] as $ticket) {
+        if ($totalEligible <= $batchSize) {
+            foreach ($eligibleTickets as $ticket) {
+                $candidates[$ticket['TicketID']] = $ticket;
+            }
+
+            $hotInspected = $totalEligible;
+            Redis::set(self::TAIL_OFFSET_KEY, 0);
+        } else {
+            // Hot candidates are always the newest eligible tickets.
+            $hotWindow = array_slice($eligibleTickets, 0, $hotCountMax);
+            foreach ($hotWindow as $ticket) {
+                $candidates[$ticket['TicketID']] = $ticket;
+                $hotInspected++;
+            }
+
+            // Rotation is only across the remaining eligible (non-hot) population.
+            $tailPool = array_slice($eligibleTickets, $hotCountMax);
+            $tailPoolCount = count($tailPool);
+            $tailOffset = (int) Redis::get(self::TAIL_OFFSET_KEY);
+
+            if ($tailOffset < 0 || $tailOffset >= $tailPoolCount) {
+                $tailOffset = 0;
+            }
+
+            if ($tailCountMax > 0 && $tailPoolCount > 0) {
+                $take = min($tailCountMax, $tailPoolCount);
+
+                for ($i = 0; $i < $take; $i++) {
+                    $idx = ($tailOffset + $i) % $tailPoolCount;
+                    $ticket = $tailPool[$idx];
+                    $candidates[$ticket['TicketID']] = $ticket;
                     $tailInspected++;
-                    // Deduplicate
-                    if (! isset($candidates[$ticket['TicketID']])) {
-                        if (isset($ticket['InlineAttachmentCount']) && (int) $ticket['InlineAttachmentCount'] > 0) {
-                            $candidates[$ticket['TicketID']] = $ticket;
-                            $tailAdded++;
-                            if ($tailAdded >= $tailCountMax) {
-                                break;
-                            }
-                        }
-                    }
                 }
-            }
 
-            // Advance cursor
-            $newTailOffset = $tailOffset + $tailInspected;
-            if ($newTailOffset >= $totalActive) {
-                $newTailOffset = 0;
+                Redis::set(
+                    self::TAIL_OFFSET_KEY,
+                    ($tailOffset + $tailInspected) % $tailPoolCount
+                );
             }
-            Redis::set(self::TAIL_OFFSET_KEY, $newTailOffset);
         }
 
         $selectedCount = count($candidates);
