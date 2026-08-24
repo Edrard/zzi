@@ -280,14 +280,14 @@ class ZnunyClient
     }
 
     /**
-     * Get ticket articles through standard TicketGet operation
+     * Get ticket articles through the custom ZnunyAgentList Ticket::Get operation.
      */
     public function getTicketArticles(int|string $ticketId): array
     {
         return $this->withSessionRetry(function ($session) use ($ticketId) {
             $normalizedId = $this->normalizeTicketId($ticketId);
 
-            $response = $this->buildPendingRequest()->get($this->apiUrl().'/Ticket/'.rawurlencode((string) $normalizedId), [
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/ZnunyAgentListTicket/'.rawurlencode((string) $normalizedId), [
                 'SessionID' => $session,
                 'AllArticles' => 1,
                 'DynamicFields' => 0,
@@ -296,28 +296,21 @@ class ZnunyClient
 
             $data = $this->processResponse($response);
 
-            $ticketData = [];
-            if (isset($data['Ticket']) && is_array($data['Ticket'])) {
-                if (isset($data['Ticket'][0]) && is_array($data['Ticket'][0])) {
-                    $ticketData = $data['Ticket'][0];
-                } elseif (isset($data['Ticket']['TicketID'])) {
-                    $ticketData = $data['Ticket'];
-                }
-            } elseif (isset($data[0]) && is_array($data[0])) {
-                $ticketData = $data[0];
+            $rawFound = $data['Found'] ?? null;
+            if ($rawFound !== null && ! in_array($rawFound, [0, '0', 1, '1'], true)) {
+                throw new Exception('Malformed Found value in Znuny article response.');
+            }
+            if ($rawFound === 0 || $rawFound === '0') {
+                throw new Exception('Ticket not found in Znuny.');
             }
 
             $articles = [];
-            if (isset($ticketData['Article']) && is_array($ticketData['Article'])) {
-                $articles = $ticketData['Article'];
-                // Handle case where single article is returned as dict instead of list of dicts
-                if (isset($articles['ArticleID'])) {
-                    $articles = [$articles];
-                }
+            if (isset($data['Articles']) && is_array($data['Articles'])) {
+                $articles = $data['Articles'];
             }
 
             return array_map(function ($article) {
-                return [
+                $result = [
                     'article_id' => isset($article['ArticleID']) ? (int) $article['ArticleID'] : null,
                     'article_number' => isset($article['ArticleNumber']) ? (int) $article['ArticleNumber'] : null,
                     'ticket_id' => isset($article['TicketID']) ? (int) $article['TicketID'] : null,
@@ -330,9 +323,39 @@ class ZnunyClient
                     'is_visible_for_customer' => isset($article['IsVisibleForCustomer']) ? (bool) $article['IsVisibleForCustomer'] : false,
                     'mime_type' => $article['MimeType'] ?? null,
                     'content_type' => $article['ContentType'] ?? null,
-                    'created_at' => $article['CreateTime'] ?? null,
-                    'changed_at' => $article['ChangeTime'] ?? null,
+                    'created_at' => $article['Created'] ?? $article['CreateTime'] ?? null,
+                    'changed_at' => $article['Changed'] ?? $article['ChangeTime'] ?? null,
+                    'html_body_available' => false,
                 ];
+
+                $htmlBodyAvailable = (int) ($article['HTMLBodyAvailable'] ?? 0);
+                if ($htmlBodyAvailable === 1) {
+                    $htmlContentType = $article['HTMLBodyContentType'] ?? null;
+                    $htmlContentBase64 = $article['HTMLBodyContent'] ?? null;
+
+                    if (is_string($htmlContentType) && is_string($htmlContentBase64)) {
+                        $decodedBytes = base64_decode($htmlContentBase64, true);
+                        if ($decodedBytes !== false) {
+                            $charset = 'UTF-8';
+                            if (preg_match('/charset\s*=\s*(?:["\']?)([^"\';\s]+)(?:["\']?)/i', $htmlContentType, $matches)) {
+                                $charset = trim($matches[1]);
+                            }
+
+                            try {
+                                $converted = mb_convert_encoding($decodedBytes, 'UTF-8', $charset);
+                                if ($converted !== false) {
+                                    $result['html_body_available'] = true;
+                                    $result['html_body'] = $converted;
+                                    $result['html_body_content_type'] = $htmlContentType;
+                                }
+                            } catch (Throwable $e) {
+                                // Fall back to false if conversion fails
+                            }
+                        }
+                    }
+                }
+
+                return $result;
             }, $articles);
         });
     }
@@ -774,6 +797,18 @@ class ZnunyClient
         return 0;
     }
 
+    private function normalizeHTMLBodyArticleCount(mixed $value): int
+    {
+        if (is_int($value) && $value >= 0) {
+            return $value;
+        }
+        if (is_string($value) && $value !== '' && ctype_digit($value)) {
+            return (int) $value;
+        }
+
+        return 0;
+    }
+
     private function mapTicketResponse(array $ticket): array
     {
         return [
@@ -806,6 +841,7 @@ class ZnunyClient
             'Changed' => $ticket['Changed'] ?? null,
             'ArticleCount' => isset($ticket['ArticleCount']) ? (int) $ticket['ArticleCount'] : null,
             'InlineAttachmentCount' => $this->normalizeInlineAttachmentCount($ticket['InlineAttachmentCount'] ?? null),
+            'HTMLBodyArticleCount' => $this->normalizeHTMLBodyArticleCount($ticket['HTMLBodyArticleCount'] ?? null),
             'LastArticleID' => isset($ticket['LastArticleID']) ? (int) $ticket['LastArticleID'] : null,
             'LastArticleCreated' => $ticket['LastArticleCreated'] ?? null,
             'SyncFingerprint' => $ticket['SyncFingerprint'] ?? null,

@@ -103,6 +103,18 @@ class ZnunyTicketCacheService
         return 0;
     }
 
+    private function normalizeHTMLBodyArticleCount(mixed $value): int
+    {
+        if (is_int($value) && $value >= 0) {
+            return $value;
+        }
+        if (is_string($value) && $value !== '' && ctype_digit($value)) {
+            return (int) $value;
+        }
+
+        return 0;
+    }
+
     public function upsertOrRefreshFromSearchResult(array $ticket): string
     {
         if (! $this->isEnabled()) {
@@ -125,11 +137,19 @@ class ZnunyTicketCacheService
         $oldFingerprint = $existingData['SyncFingerprint'] ?? null;
 
         $newInlineCount = $this->normalizeInlineAttachmentCount($ticket['InlineAttachmentCount'] ?? null);
+        $newHtmlCount = $this->normalizeHTMLBodyArticleCount($ticket['HTMLBodyArticleCount'] ?? null);
 
         $hasOldInlineCount = is_array($existingData) && array_key_exists('InlineAttachmentCount', $existingData);
         $oldInlineCount = $hasOldInlineCount ? $this->normalizeInlineAttachmentCount($existingData['InlineAttachmentCount']) : null;
 
-        if ($existingData && $newFingerprint && $oldFingerprint && $newFingerprint === $oldFingerprint && $hasOldInlineCount && $newInlineCount === $oldInlineCount) {
+        $hasOldHtmlCount = is_array($existingData) && array_key_exists('HTMLBodyArticleCount', $existingData);
+        $oldHtmlCount = $hasOldHtmlCount ? $this->normalizeHTMLBodyArticleCount($existingData['HTMLBodyArticleCount']) : null;
+
+        $fingerprintUnchanged = $existingData && $newFingerprint && $oldFingerprint && $newFingerprint === $oldFingerprint;
+        $inlineCountUnchanged = $hasOldInlineCount && $newInlineCount === $oldInlineCount;
+        $htmlCountUnchanged = $hasOldHtmlCount && $newHtmlCount === $oldHtmlCount;
+
+        if ($fingerprintUnchanged && $inlineCountUnchanged && $htmlCountUnchanged) {
             // refresh TTLs
             Redis::expire($key, max(1, $ttl));
 

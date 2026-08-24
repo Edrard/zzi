@@ -19,6 +19,18 @@
     </source>
     <php>
         <env name="APP_ENV" value="testing"/>
+        <env name="REDIS_CLIENT" value="phpredis"/>
+        <env name="REDIS_HOST" value="127.0.0.1"/>
+        <env name="REDIS_PORT" value="6399"/>
+        <env name="REDIS_USERNAME" value=""/>
+        <env name="REDIS_PASSWORD" value=""/>
+        <env name="REDIS_URL" value=""/>
+        <env name="REDIS_DB" value="0"/>
+        <env name="REDIS_CACHE_DB" value="1"/>
+        <env name="REDIS_INLINE_IMAGE_DB" value="2"/>
+        <env name="REDIS_PREFIX" value="work_phpunit_"/>
+        <env name="CACHE_PREFIX" value="work_phpunit_cache_"/>
+        <env name="ZNUNY_INLINE_IMAGE_CACHE_STORE" value="array"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>

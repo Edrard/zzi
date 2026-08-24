@@ -10,6 +10,17 @@ class ZnunyArticleBodyRenderer
 {
     public function render(array $article): array
     {
+        if (! empty($article['html_body_available']) && isset($article['html_body'])) {
+            $ticketId = $article['ticket_id'] ?? null;
+            $articleId = $article['article_id'] ?? null;
+            $content = $this->processHtmlBody($article['html_body'], $ticketId, $articleId);
+
+            return [
+                'is_html' => true,
+                'content' => $content,
+            ];
+        }
+
         $body = $article['body'] ?? '';
 
         if (! $this->isHtmlArticle($article)) {

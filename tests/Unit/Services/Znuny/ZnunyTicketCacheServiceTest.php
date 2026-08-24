@@ -210,9 +210,10 @@ class ZnunyTicketCacheServiceTest extends TestCase
             'TicketID' => 600,
             'SyncFingerprint' => 'fp_same',
             'InlineAttachmentCount' => 0,
+            'HTMLBodyArticleCount' => 0,
         ];
 
-        $existing = json_encode(['TicketID' => 600, 'SyncFingerprint' => 'fp_same', 'InlineAttachmentCount' => 0]);
+        $existing = json_encode(['TicketID' => 600, 'SyncFingerprint' => 'fp_same', 'InlineAttachmentCount' => 0, 'HTMLBodyArticleCount' => 0]);
 
         Redis::shouldReceive('get')->with('znuny:ticket:600')->andReturn($existing);
         Redis::shouldReceive('get')->with('znuny:ticket_indexes:600')->andReturn(json_encode(['znuny:index:queue:1']));
@@ -288,9 +289,10 @@ class ZnunyTicketCacheServiceTest extends TestCase
             'TicketID' => 601,
             'SyncFingerprint' => 'fp_same',
             'InlineAttachmentCount' => 3,
+            'HTMLBodyArticleCount' => 2,
         ];
 
-        $existing = json_encode(['TicketID' => 601, 'SyncFingerprint' => 'fp_same', 'InlineAttachmentCount' => 3]);
+        $existing = json_encode(['TicketID' => 601, 'SyncFingerprint' => 'fp_same', 'InlineAttachmentCount' => 3, 'HTMLBodyArticleCount' => 2]);
 
         Redis::shouldReceive('get')->with('znuny:ticket:601')->andReturn($existing);
         Redis::shouldReceive('get')->with('znuny:ticket_indexes:601')->andReturn(json_encode(['znuny:index:queue:1']));
@@ -314,9 +316,10 @@ class ZnunyTicketCacheServiceTest extends TestCase
             'TicketID' => 701,
             'SyncFingerprint' => 'fp_same',
             'InlineAttachmentCount' => 3,
+            'HTMLBodyArticleCount' => 2,
         ];
 
-        $existing = json_encode(['TicketID' => 701, 'SyncFingerprint' => 'fp_same', 'InlineAttachmentCount' => 2]);
+        $existing = json_encode(['TicketID' => 701, 'SyncFingerprint' => 'fp_same', 'InlineAttachmentCount' => 2, 'HTMLBodyArticleCount' => 2]);
 
         Redis::shouldReceive('get')->with('znuny:ticket:701')->andReturn($existing);
         Redis::shouldReceive('get')->with('znuny:ticket_indexes:701')->andReturn(json_encode(['znuny:index:queue:1']));
@@ -340,6 +343,7 @@ class ZnunyTicketCacheServiceTest extends TestCase
             'TicketID' => 702,
             'SyncFingerprint' => 'fp_same',
             'InlineAttachmentCount' => 0, // Incoming count 0
+            'HTMLBodyArticleCount' => 0,
         ];
 
         // Legacy cached payload without InlineAttachmentCount
@@ -367,6 +371,7 @@ class ZnunyTicketCacheServiceTest extends TestCase
             'TicketID' => 703,
             'SyncFingerprint' => 'fp_same',
             'InlineAttachmentCount' => 3,
+            'HTMLBodyArticleCount' => 2,
         ];
 
         // Malformed non-array JSON payload
@@ -393,10 +398,11 @@ class ZnunyTicketCacheServiceTest extends TestCase
             'TicketID' => 704,
             'SyncFingerprint' => 'fp_same',
             'InlineAttachmentCount' => 0,
+            'HTMLBodyArticleCount' => 0,
         ];
 
-        // Existing payload has field but with a value that normalizes to 0 (e.g. invalid string)
-        $existing = json_encode(['TicketID' => 704, 'SyncFingerprint' => 'fp_same', 'InlineAttachmentCount' => '3abc']);
+        // existing value is explicitly invalid (e.g. string that does not cast cleanly)
+        $existing = json_encode(['TicketID' => 704, 'SyncFingerprint' => 'fp_same', 'InlineAttachmentCount' => '3abc', 'HTMLBodyArticleCount' => '2xyz']);
 
         Redis::shouldReceive('get')->with('znuny:ticket:704')->andReturn($existing);
         Redis::shouldReceive('get')->with('znuny:ticket_indexes:704')->andReturn(json_encode(['znuny:index:queue:1']));
@@ -411,5 +417,58 @@ class ZnunyTicketCacheServiceTest extends TestCase
 
         $result = $this->service->upsertOrRefreshFromSearchResult($ticket);
         $this->assertEquals('refreshed_unchanged', $result);
+    }
+
+    public function test_upsert_or_refresh_updates_when_html_body_article_count_is_missing_in_existing(): void
+    {
+        $ticket = [
+            'TicketID' => 705,
+            'SyncFingerprint' => 'fp_same',
+            'InlineAttachmentCount' => 0,
+            'HTMLBodyArticleCount' => 2,
+        ];
+
+        $existing = json_encode([
+            'TicketID' => 705,
+            'SyncFingerprint' => 'fp_same',
+            'InlineAttachmentCount' => 0,
+        ]);
+
+        Redis::shouldReceive('get')->with('znuny:ticket:705')->andReturn($existing);
+        Redis::shouldReceive('get')->with('znuny:ticket_indexes:705')->andReturn(json_encode(['znuny:index:queue:1']));
+        Redis::shouldReceive('zrem')->with('znuny:index:queue:1', 705)->once();
+        Redis::shouldReceive('setex')->with('znuny:ticket:705', 600, json_encode($ticket))->once();
+        Redis::shouldReceive('setex')->with('znuny:ticket_indexes:705', \Mockery::any(), \Mockery::any())->once();
+
+        $result = $this->service->upsertOrRefreshFromSearchResult($ticket);
+
+        $this->assertEquals('updated_changed', $result);
+    }
+
+    public function test_upsert_or_refresh_updates_when_html_body_article_count_changes(): void
+    {
+        $ticket = [
+            'TicketID' => 706,
+            'SyncFingerprint' => 'fp_same',
+            'InlineAttachmentCount' => 0,
+            'HTMLBodyArticleCount' => 2,
+        ];
+
+        $existing = json_encode([
+            'TicketID' => 706,
+            'SyncFingerprint' => 'fp_same',
+            'InlineAttachmentCount' => 0,
+            'HTMLBodyArticleCount' => 1,
+        ]);
+
+        Redis::shouldReceive('get')->with('znuny:ticket:706')->andReturn($existing);
+        Redis::shouldReceive('get')->with('znuny:ticket_indexes:706')->andReturn(json_encode(['znuny:index:queue:1']));
+        Redis::shouldReceive('zrem')->with('znuny:index:queue:1', 706)->once();
+        Redis::shouldReceive('setex')->with('znuny:ticket:706', 600, json_encode($ticket))->once();
+        Redis::shouldReceive('setex')->with('znuny:ticket_indexes:706', \Mockery::any(), \Mockery::any())->once();
+
+        $result = $this->service->upsertOrRefreshFromSearchResult($ticket);
+
+        $this->assertEquals('updated_changed', $result);
     }
 }

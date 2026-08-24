@@ -20,7 +20,7 @@ class ZnunyTicketWorkspaceCacheReaderTest extends TestCase
     {
         parent::setUp();
         SettingsService::clearAllCaches();
-        Redis::flushall();
+        Redis::flushdb();
     }
 
     protected function tearDown(): void

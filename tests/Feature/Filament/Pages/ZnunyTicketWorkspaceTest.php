@@ -34,7 +34,7 @@ class ZnunyTicketWorkspaceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        Redis::flushall();
+        Redis::flushdb();
     }
 
     protected function setupChangeAssignmentDependencies(array $validOwners = ['new.owner' => 'new.owner', 'old.owner' => 'old.owner'], array $validQueues = ['Different Queue' => 'Different Queue', 'old.queue' => 'old.queue', 'new.queue' => 'new.queue'])

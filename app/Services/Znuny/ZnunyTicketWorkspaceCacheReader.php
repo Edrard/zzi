@@ -407,6 +407,18 @@ class ZnunyTicketWorkspaceCacheReader
         return 0;
     }
 
+    private function normalizeHTMLBodyArticleCount(mixed $value): int
+    {
+        if (is_int($value) && $value >= 0) {
+            return $value;
+        }
+        if (is_string($value) && $value !== '' && ctype_digit($value)) {
+            return (int) $value;
+        }
+
+        return 0;
+    }
+
     protected function normalizeTicket(array $ticket): array
     {
         return [
@@ -431,6 +443,7 @@ class ZnunyTicketWorkspaceCacheReader
             'Lock' => $ticket['Lock'] ?? null,
             'ArticleCount' => $ticket['ArticleCount'] ?? 0,
             'InlineAttachmentCount' => $this->normalizeInlineAttachmentCount($ticket['InlineAttachmentCount'] ?? null),
+            'HTMLBodyArticleCount' => $this->normalizeHTMLBodyArticleCount($ticket['HTMLBodyArticleCount'] ?? null),
             'LastArticleCreated' => $ticket['LastArticleCreated'] ?? null,
             'SyncFingerprint' => $ticket['SyncFingerprint'] ?? null,
 

@@ -378,4 +378,36 @@ class ZnunyArticleBodyRendererTest extends TestCase
         $this->assertStringNotContainsString('onerror', $result['content']);
         $this->assertStringContainsString('data-znuny-inline-src', $result['content']);
     }
+
+    public function test_preferred_html_body_uses_existing_sanitizer_and_cid_lazy_path(): void
+    {
+        $article = [
+            'ticket_id' => 123,
+            'article_id' => 456,
+            'body' => 'PLAIN FALLBACK',
+            'mime_type' => 'text/plain',
+            'content_type' => 'text/plain; charset=utf-8',
+            'html_body_available' => true,
+            'html_body' => '<p onclick="alert(1)">Помилка</p><img src="cid:first@example"><script>alert(2)</script><img src="cid:second@example">',
+        ];
+
+        $result = $this->renderer->render($article);
+
+        $this->assertTrue($result['is_html']);
+        $this->assertStringContainsString('Помилка', $result['content']);
+        $this->assertStringNotContainsString('PLAIN FALLBACK', $result['content']);
+        $this->assertStringNotContainsString('onclick', $result['content']);
+        $this->assertStringNotContainsString('<script', $result['content']);
+        $this->assertStringContainsString('data-znuny-inline-src', $result['content']);
+        $this->assertStringNotContainsString('src="cid:', $result['content']);
+
+        $firstToken = ZnunyInlineImageContentId::encodeToken('first@example');
+        $secondToken = ZnunyInlineImageContentId::encodeToken('second@example');
+        $firstPos = strpos($result['content'], $firstToken);
+        $secondPos = strpos($result['content'], $secondToken);
+
+        $this->assertNotFalse($firstPos);
+        $this->assertNotFalse($secondPos);
+        $this->assertTrue($firstPos < $secondPos);
+    }
 }

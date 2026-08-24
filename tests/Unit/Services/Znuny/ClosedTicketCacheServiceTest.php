@@ -14,7 +14,7 @@ class ClosedTicketCacheServiceTest extends TestCase
     {
         parent::setUp();
         $this->service = new ClosedTicketCacheService;
-        Redis::flushall();
+        Redis::flushdb();
     }
 
     public function test_upsert_ticket_calculates_retention_correctly()
