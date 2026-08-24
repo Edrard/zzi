@@ -155,7 +155,7 @@ class ZnunyClientArticlesTest extends TestCase
 
     public function test_get_ticket_articles_converts_windows_1251_html_and_preserves_cid_order(): void
     {
-        $htmlUtf8 = '<p>Помилка: тест</p><img src="cid:first@example"><img src="cid:second@example">';
+        $htmlUtf8 = '<html><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1251"></head><body><p>Помилка: тест</p><img src="cid:first@example"><img src="cid:second@example"></body></html>';
         $htmlWindows1251 = mb_convert_encoding($htmlUtf8, 'Windows-1251', 'UTF-8');
 
         Http::fake([
@@ -200,7 +200,9 @@ class ZnunyClientArticlesTest extends TestCase
         $this->assertSame('text/plain', $articles[0]['mime_type']);
         $this->assertSame('text/plain; charset=utf-8', $articles[0]['content_type']);
         $this->assertTrue($articles[0]['html_body_available']);
-        $this->assertSame($htmlUtf8, $articles[0]['html_body']);
+        $this->assertStringContainsString('Помилка: тест', $articles[0]['html_body']);
+        $this->assertStringContainsString('charset=UTF-8', $articles[0]['html_body']);
+        $this->assertStringNotContainsString('charset=windows-1251', $articles[0]['html_body']);
 
         $firstPos = strpos($articles[0]['html_body'], 'cid:first@example');
         $secondPos = strpos($articles[0]['html_body'], 'cid:second@example');

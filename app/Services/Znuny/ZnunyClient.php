@@ -344,6 +344,14 @@ class ZnunyClient
                             try {
                                 $converted = mb_convert_encoding($decodedBytes, 'UTF-8', $charset);
                                 if ($converted !== false) {
+                                    // The bytes are UTF-8 now. Keep HTML metadata from forcing
+                                    // DOMDocument to reinterpret them using the original charset.
+                                    $converted = preg_replace(
+                                        '/(<meta\\b[^>]*\\bcharset\\s*=\\s*)(["\']?)[^"\';\\s>]+\\2/i',
+                                        '$1UTF-8',
+                                        $converted,
+                                    ) ?? $converted;
+
                                     $result['html_body_available'] = true;
                                     $result['html_body'] = $converted;
                                     $result['html_body_content_type'] = $htmlContentType;

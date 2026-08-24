@@ -136,7 +136,7 @@ class ArticlesAccordionTest extends TestCase
         $useErrors = libxml_use_internal_errors(true);
         libxml_clear_errors();
         try {
-            @$dom->loadHTML('<?xml encoding="UTF-8"><body>' . $html . '</body>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+            @$dom->loadHTML('<?xml encoding="UTF-8"><body>'.$html.'</body>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
         } finally {
             libxml_clear_errors();
             libxml_use_internal_errors($useErrors);
@@ -157,7 +157,12 @@ class ArticlesAccordionTest extends TestCase
         $view->assertSee('const images = item.querySelectorAll(\'img[data-znuny-inline-src]\');', false);
         $view->assertSee('if (!img.getAttribute(\'src\')) {', false);
         $view->assertSee('img.setAttribute(\'src\', img.getAttribute(\'data-znuny-inline-src\'));', false);
-        $view->assertSee('img.removeAttribute(\'data-znuny-inline-src\');', false);
+        $view->assertSee('inlineImageObserver: null', false);
+        $view->assertSee('new MutationObserver', false);
+        $view->assertSee('this.activateInlineImages(this.activeArticle);', false);
+        $view->assertSee("attributeFilter: ['src', 'data-znuny-inline-src']", false);
+        $view->assertSee('this.inlineImageObserver?.disconnect();', false);
+        $view->assertDontSee('img.removeAttribute(\'data-znuny-inline-src\');', false);
 
         // 11. existing accordion scroll logic remains present
         $view->assertSee('this.scrollOpenedArticleIntoFocus(index, \'smooth\');', false);

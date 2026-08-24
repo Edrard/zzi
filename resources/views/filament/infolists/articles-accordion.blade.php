@@ -10,6 +10,32 @@
     <div 
         x-data="{
             activeArticle: null,
+            inlineImageObserver: null,
+            init() {
+                this.$nextTick(() => {
+                    const root = this.$refs.articlesAccordion;
+                    if (!root) return;
+
+                    this.inlineImageObserver = new MutationObserver(() => {
+                        if (this.activeArticle === null) return;
+
+                        this.$nextTick(() => {
+                            this.activateInlineImages(this.activeArticle);
+                        });
+                    });
+
+                    this.inlineImageObserver.observe(root, {
+                        subtree: true,
+                        childList: true,
+                        attributes: true,
+                        attributeFilter: ['src', 'data-znuny-inline-src'],
+                    });
+                });
+            },
+            destroy() {
+                this.inlineImageObserver?.disconnect();
+                this.inlineImageObserver = null;
+            },
             findScrollableAncestor(el) {
                 while (el && el !== document.body && el !== document.documentElement) {
                     const overflowY = window.getComputedStyle(el).overflowY;
@@ -72,7 +98,6 @@
                 images.forEach(img => {
                     if (!img.getAttribute('src')) {
                         img.setAttribute('src', img.getAttribute('data-znuny-inline-src'));
-                        img.removeAttribute('data-znuny-inline-src');
                     }
                 });
             },
