@@ -133,7 +133,7 @@ ZZI connects to Zabbix via its native API. You will need:
 
 Operational settings are fully managed from the Filament administration UI (`/admin/settings`). Major configuration areas include:
 
-- **General**: UI display timezone, default language, and pagination options.
+- **General**: UI display timezone, default language, and pagination options. The interface currently supports two languages: English and Ukrainian.
 - **Data Storage**: Caching preferences, inline image storage configurations, and database cleanup policies.
 - **Audit Log**: Retention periods for the ticket creation audit logs.
 - **Zabbix**: API endpoints, authentication tokens, and problem URL templates.
