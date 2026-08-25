@@ -37,6 +37,7 @@ return [
         'disabled' => 'Вимкнено',
         'pending' => 'Очікує запуску',
         'stale_inline' => 'Прострочено',
+        'running' => 'Виконується',
     ],
 
     'notifications' => [

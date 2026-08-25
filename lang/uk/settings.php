@@ -558,7 +558,7 @@ return [
         ],
         'zabbix_problem_url_template' => [
             'label' => 'Шаблон URL проблеми Zabbix',
-            'description' => 'Використовується для створення прямих посилань на проблеми Zabbix у модальному вікні створення заявки та пов\'язаних поданнях. Точний підтримуваний токен заповнювача - {trigger_id}. Приклад: https://zabbix.example.com/tr_events.php?triggerid={trigger_id} Заповнювач замінюється під час виконання.',
+            'description' => 'Шаблон, який використовується для відкриття проблеми Zabbix у вебінтерфейсі Zabbix. Підтримувані заповнювачі: {trigger_id}, {event_id}. Приклад для Zabbix 7.0: https://zabbix.example.com/zabbix.php?show=1&action=problem.view&triggerids%5B%5D={trigger_id} Приклад з event id: https://zabbix.example.com/tr_events.php?triggerid={trigger_id}&eventid={event_id}',
         ],
         'zabbix_problem_sync_audit_enabled' => [
             'label' => 'Аудит синхронізації проблем Zabbix увімкнено',

@@ -215,14 +215,19 @@ class ZnunyDataStatus extends Page implements HasSchemas
         $markersAvailable = true;
         $markersValid = true;
         $lastRunAt = null;
+        $lastStartedAt = null;
+        $isRunning = false;
         $tailOffset = 0;
 
         try {
             $rawLastRunAt = Redis::get('znuny:inline_image_warmer:last_run_at');
+            $rawLastStartedAt = Redis::get('znuny:inline_image_warmer:last_started_at');
             $rawTailOffset = Redis::get('znuny:inline_image_warmer:tail_offset');
+            $isRunning = Redis::exists('znuny:inline_image_warmer:running');
         } catch (\Throwable) {
             $markersAvailable = false;
             $rawLastRunAt = null;
+            $rawLastStartedAt = null;
             $rawTailOffset = null;
         }
 
@@ -240,6 +245,20 @@ class ZnunyDataStatus extends Page implements HasSchemas
                     } catch (\Throwable) {
                         $markersValid = false;
                         $lastRunAt = null;
+                    }
+                }
+            }
+
+            if ($rawLastStartedAt !== null && $rawLastStartedAt !== '') {
+                $timestampStarted = filter_var($rawLastStartedAt, FILTER_VALIDATE_INT, [
+                    'options' => ['min_range' => 1],
+                ]);
+
+                if ($timestampStarted !== false) {
+                    try {
+                        $lastStartedAt = Carbon::createFromTimestamp((int) $timestampStarted);
+                    } catch (\Throwable) {
+                        $lastStartedAt = null;
                     }
                 }
             }
@@ -269,16 +288,24 @@ class ZnunyDataStatus extends Page implements HasSchemas
         $rawStatus = 'unknown';
         $statusColor = 'gray';
 
+        $latestActivityAt = $lastRunAt;
+        if ($lastStartedAt !== null && ($latestActivityAt === null || $lastStartedAt->greaterThan($latestActivityAt))) {
+            $latestActivityAt = $lastStartedAt;
+        }
+
         if (! $settingsHealthy) {
             $rawStatus = 'unknown';
         } elseif (! $enabled) {
             $rawStatus = 'disabled';
         } elseif (! $markersAvailable || ! $markersValid || ! $inlineCacheAvailable) {
             $rawStatus = 'unknown';
-        } elseif ($lastRunAt === null) {
+        } elseif ($isRunning) {
+            $rawStatus = 'running';
+            $statusColor = 'info';
+        } elseif ($latestActivityAt === null) {
             $rawStatus = 'pending';
             $statusColor = 'warning';
-        } elseif (Carbon::now()->greaterThan($lastRunAt->copy()->addMinutes($interval))) {
+        } elseif (Carbon::now()->greaterThan($latestActivityAt->copy()->addMinutes($ttl))) {
             $rawStatus = 'stale_inline';
             $statusColor = 'warning';
         } else {

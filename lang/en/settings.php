@@ -558,8 +558,8 @@ return [
             'description' => 'Exclude suppressed Zabbix problems from polling results',
         ],
         'zabbix_problem_url_template' => [
-            'label' => 'Zabbix Problem Url Template',
-            'description' => 'Used to generate direct links to Zabbix problems in the ticket creation modal and related views. The exact supported placeholder token is {trigger_id}. Example: https://zabbix.example.com/tr_events.php?triggerid={trigger_id} The placeholder is replaced at runtime.',
+            'label' => 'Zabbix Problem URL Template',
+            'description' => 'Template used to open a Zabbix problem in the Zabbix web UI. Supported placeholders: {trigger_id}, {event_id}. Example for Zabbix 7.0: https://zabbix.example.com/zabbix.php?show=1&action=problem.view&triggerids%5B%5D={trigger_id} Example with event id: https://zabbix.example.com/tr_events.php?triggerid={trigger_id}&eventid={event_id}',
         ],
         'zabbix_problem_sync_audit_enabled' => [
             'label' => 'Zabbix Problem Sync Audit Enabled',

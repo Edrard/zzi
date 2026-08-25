@@ -407,8 +407,14 @@ class ZnunyDataStatusTest extends TestCase
             ->with('znuny:inline_image_warmer:last_run_at')
             ->andReturn($lastRunAt);
         Redis::shouldReceive('get')
+            ->with('znuny:inline_image_warmer:last_started_at')
+            ->andReturn(null);
+        Redis::shouldReceive('get')
             ->with('znuny:inline_image_warmer:tail_offset')
             ->andReturn($tailOffset);
+        Redis::shouldReceive('exists')
+            ->with('znuny:inline_image_warmer:running')
+            ->andReturn(0);
 
         $connection = Mockery::mock();
         $connection->shouldReceive('dbSize')->andReturn($dbSize);
@@ -502,7 +508,7 @@ class ZnunyDataStatusTest extends TestCase
         try {
             $this->mockReferenceDatasetsForInlineImageStatus();
             $this->configureInlineImageStatusSettings(true, 5, 60);
-            $this->mockInlineImageRedis($now->copy()->subMinutes(6)->timestamp, 100, 34);
+            $this->mockInlineImageRedis($now->copy()->subMinutes(61)->timestamp, 100, 34);
 
             app()->setLocale('uk');
 
@@ -748,5 +754,119 @@ class ZnunyDataStatusTest extends TestCase
             }));
 
         app()->setLocale('en');
+    }
+
+    // --- Inline Image Status Regression Tests ---
+
+    public function test_inline_image_status_running_precedence()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Setting::updateOrCreate(['key' => 'znuny_inline_image_warmer_enabled'], ['value' => '1', 'type' => 'boolean']);
+        Setting::updateOrCreate(['key' => 'znuny_inline_image_cache_ttl_minutes'], ['value' => '60', 'type' => 'integer']);
+
+        Redis::set('znuny:inline_image_warmer:running', time());
+        Redis::set('znuny:inline_image_warmer:last_run_at', now()->subHours(2)->timestamp);
+
+        $html = Livewire::actingAs($admin)->test(ZnunyDataStatus::class)->html();
+
+        $this->assertStringContainsString('Running', $html);
+        $this->assertStringNotContainsString('Expired', $html);
+    }
+
+    public function test_inline_image_status_not_running_within_ttl()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Setting::updateOrCreate(['key' => 'znuny_inline_image_warmer_enabled'], ['value' => '1', 'type' => 'boolean']);
+        Setting::updateOrCreate(['key' => 'znuny_inline_image_cache_ttl_minutes'], ['value' => '60', 'type' => 'integer']);
+
+        Redis::del('znuny:inline_image_warmer:running');
+        Redis::del('znuny:inline_image_warmer:last_started_at');
+        Redis::set('znuny:inline_image_warmer:last_run_at', now()->subMinutes(30)->timestamp);
+
+        $html = Livewire::actingAs($admin)->test(ZnunyDataStatus::class)->html();
+
+        $this->assertStringNotContainsString('Running', $html);
+        $this->assertStringNotContainsString('Expired', $html);
+        $this->assertStringContainsString('Ready', $html);
+    }
+
+    public function test_inline_image_status_exactly_at_ttl_boundary()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $now = Carbon::create(2026, 8, 25, 11, 0, 0, 'Europe/Kyiv');
+        Carbon::setTestNow($now);
+
+        try {
+            Setting::updateOrCreate(['key' => 'znuny_inline_image_warmer_enabled'], ['value' => '1', 'type' => 'boolean']);
+            Setting::updateOrCreate(['key' => 'znuny_inline_image_cache_ttl_minutes'], ['value' => '60', 'type' => 'integer']);
+
+            Redis::del('znuny:inline_image_warmer:running');
+            Redis::del('znuny:inline_image_warmer:last_started_at');
+            Redis::set('znuny:inline_image_warmer:last_run_at', $now->copy()->subMinutes(60)->timestamp);
+
+            $html = Livewire::actingAs($admin)->test(ZnunyDataStatus::class)->html();
+
+            $this->assertStringNotContainsString('Expired', $html);
+            $this->assertStringContainsString('Ready', $html);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_inline_image_status_older_than_ttl()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Setting::updateOrCreate(['key' => 'znuny_inline_image_warmer_enabled'], ['value' => '1', 'type' => 'boolean']);
+        Setting::updateOrCreate(['key' => 'znuny_inline_image_cache_ttl_minutes'], ['value' => '60', 'type' => 'integer']);
+
+        Redis::del('znuny:inline_image_warmer:running');
+        Redis::del('znuny:inline_image_warmer:last_started_at');
+        Redis::set('znuny:inline_image_warmer:last_run_at', now()->subMinutes(61)->timestamp);
+
+        $html = Livewire::actingAs($admin)->test(ZnunyDataStatus::class)->html();
+
+        $this->assertStringContainsString('Expired', $html);
+    }
+
+    public function test_inline_image_status_non_default_ttl()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Setting::updateOrCreate(['key' => 'znuny_inline_image_warmer_enabled'], ['value' => '1', 'type' => 'boolean']);
+        Setting::updateOrCreate(['key' => 'znuny_inline_image_cache_ttl_minutes'], ['value' => '120', 'type' => 'integer']);
+
+        Redis::del('znuny:inline_image_warmer:running');
+        Redis::del('znuny:inline_image_warmer:last_started_at');
+        Redis::set('znuny:inline_image_warmer:last_run_at', now()->subMinutes(90)->timestamp);
+
+        $html = Livewire::actingAs($admin)->test(ZnunyDataStatus::class)->html();
+
+        $this->assertStringNotContainsString('Expired', $html);
+        $this->assertStringContainsString('Ready', $html);
+    }
+
+    public function test_inline_image_status_newer_start_than_success()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Setting::updateOrCreate(['key' => 'znuny_inline_image_warmer_enabled'], ['value' => '1', 'type' => 'boolean']);
+        Setting::updateOrCreate(['key' => 'znuny_inline_image_cache_ttl_minutes'], ['value' => '60', 'type' => 'integer']);
+
+        Redis::del('znuny:inline_image_warmer:running');
+        Redis::set('znuny:inline_image_warmer:last_run_at', now()->subMinutes(90)->timestamp);
+        Redis::set('znuny:inline_image_warmer:last_started_at', now()->subMinutes(30)->timestamp);
+
+        $html = Livewire::actingAs($admin)->test(ZnunyDataStatus::class)->html();
+
+        $this->assertStringNotContainsString('Expired', $html);
+        $this->assertStringContainsString('Ready', $html);
+    }
+
+    public function test_inline_image_status_disabled_remains_intact()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Setting::updateOrCreate(['key' => 'znuny_inline_image_warmer_enabled'], ['value' => '0', 'type' => 'boolean']);
+
+        $html = Livewire::actingAs($admin)->test(ZnunyDataStatus::class)->html();
+
+        $this->assertStringContainsString('Disabled', $html);
     }
 }

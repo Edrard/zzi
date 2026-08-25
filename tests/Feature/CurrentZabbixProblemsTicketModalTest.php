@@ -2541,4 +2541,39 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->call('setProblemPreset', 'invalid_preset')
             ->assertSet('problemPreset', 'all'); // Should be ignored and remain 'all'
     }
+
+    public function test_open_in_zabbix_button_hidden_when_event_id_missing()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Setting::updateOrCreate(['key' => 'zabbix_problem_url_template'], ['value' => 'https://zabbix.test/?trigger={trigger_id}&event={event_id}', 'type' => 'string']);
+
+        $cache = app(ZabbixProblemCache::class);
+        $cache->putMany([
+            [
+                'eventid' => '', // missing eventid
+                'objectid' => '2005',
+                'name' => 'Event ID missing problem',
+                'severity' => 4,
+                'host_name' => 'TestCompany switch',
+                'host_ip' => '10.0.0.1',
+                'hosts' => [
+                    [
+                        'name' => 'TestCompany switch',
+                        'host' => 'TestCompany switch',
+                        'hostid' => '2005',
+                        'status' => '0',
+                    ],
+                ],
+            ],
+        ], 3600);
+
+        $component = Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class);
+
+        $html = $component->html();
+
+        $this->assertStringNotContainsString('Open in Zabbix', $html);
+        $this->assertStringNotContainsString('https://zabbix.test', $html);
+    }
 }

@@ -597,7 +597,7 @@ class Settings extends Page implements HasForms
                 ],
                 'zabbix_problem_url_template' => [
                     'label' => 'Zabbix Problem URL Template',
-                    'description' => 'Template used to open a Zabbix problem in the Zabbix web UI. Use {trigger_id} as the trigger ID placeholder. Example for Zabbix 7.0: https://zabbix.example.com/zabbix.php?show=1&action=problem.view&triggerids%5B%5D={trigger_id}',
+                    'description' => 'Template used to open a Zabbix problem in the Zabbix web UI. Supported placeholders: {trigger_id}, {event_id}. Example for Zabbix 7.0: https://zabbix.example.com/zabbix.php?show=1&action=problem.view&triggerids%5B%5D={trigger_id} Example with event id: https://zabbix.example.com/tr_events.php?triggerid={trigger_id}&eventid={event_id}',
                 ],
                 'znuny_linked_ticket_sync_batch_size' => [
                     'label' => 'Linked Ticket Sync Batch Size',

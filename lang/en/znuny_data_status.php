@@ -36,7 +36,8 @@ return [
         'unknown' => 'Unknown',
         'disabled' => 'Disabled',
         'pending' => 'Pending',
-        'stale_inline' => 'Stale',
+        'stale_inline' => 'Expired',
+        'running' => 'Running',
     ],
 
     'notifications' => [

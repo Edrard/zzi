@@ -1135,7 +1135,14 @@
                                             $zabbixUrlTemplate = \App\Services\SettingsService::string('zabbix_problem_url_template', '');
                                             $zabbixProblemUrl = null;
                                             if (!empty($zabbixUrlTemplate) && !empty($triggerId)) {
-                                                $zabbixProblemUrl = str_replace('{trigger_id}', urlencode((string)$triggerId), $zabbixUrlTemplate);
+                                                $eventId = $problem['eventid'] ?? '';
+                                                $requiresEventId = str_contains($zabbixUrlTemplate, '{event_id}');
+
+                                                if (!$requiresEventId || !empty($eventId)) {
+                                                    $url = str_replace('{trigger_id}', urlencode((string)$triggerId), $zabbixUrlTemplate);
+                                                    $url = str_replace('{event_id}', urlencode((string)$eventId), $url);
+                                                    $zabbixProblemUrl = $url;
+                                                }
                                             }
                                         @endphp
 
