@@ -64,12 +64,12 @@ TEXT;
     {
         $problem = [
             'name' => 'Ping failure',
-            'host_ip' => '10.0.0.5',
+            'host_ip' => '198.51.100.5',
         ];
 
         $result = $this->builder->build($problem);
 
-        $this->assertStringContainsString("Host Name: Unknown host\nIP Address: 10.0.0.5\nSeverity:", $result['article_body']);
+        $this->assertStringContainsString("Host Name: Unknown host\nIP Address: 198.51.100.5\nSeverity:", $result['article_body']);
     }
 
     public function test_omits_ip_address_when_missing_or_empty()

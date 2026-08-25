@@ -41,7 +41,7 @@ class ProblemNameNormalizerTest extends TestCase
 
     public function test_replaces_ipv4()
     {
-        $this->assertSame('host <ip> is down', $this->normalizer->normalize('host 192.168.1.10 is down'));
+        $this->assertSame('host <ip> is down', $this->normalizer->normalize('host 192.0.2.10 is down'));
     }
 
     public function test_replaces_mac()
@@ -92,7 +92,7 @@ class ProblemNameNormalizerTest extends TestCase
 
     public function test_icmp_ping_unavailable_remains_meaningful()
     {
-        $this->assertSame('host <ip> is unavailable by icmp ping', $this->normalizer->normalize('Host 10.10.1.5 is unavailable by ICMP ping'));
+        $this->assertSame('host <ip> is unavailable by icmp ping', $this->normalizer->normalize('Host 198.51.100.5 is unavailable by ICMP ping'));
     }
 
     public function test_removes_meaningless_punctuation()

@@ -173,9 +173,11 @@ class ZnunyTicketCreationServiceTest extends TestCase
             ]);
         });
 
+        $appPath = base_path();
+
         $clientMock->shouldReceive('validateTicketCreate')
             ->once()
-            ->andThrow(new \Exception('Validation failed token=secret-value'));
+            ->andThrow(new \Exception('Validation failed token=secret-value in ' . $appPath . '/file.php'));
 
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
         $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
@@ -192,7 +194,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
         $this->assertStringContainsString('[REDACTED]', $errorStr);
         $this->assertStringNotContainsString('secret-value', $errorStr);
         $this->assertStringNotContainsString('Stack trace:', $errorStr);
-        $this->assertStringNotContainsString('/var/www/work.vamark.com/http', $errorStr);
+        $this->assertStringNotContainsString($appPath, $errorStr);
         $this->assertLessThanOrEqual(150 + strlen('Exception: '), strlen($errorStr));
 
         $this->assertEquals([], $result['warnings']);

@@ -26,7 +26,7 @@ class ZnunyStandaloneTicketCreationServiceTest extends TestCase
                 ->once()
                 ->andReturn([
                     'found' => true,
-                    'customer_id' => 'VamarkClients',
+                    'customer_id' => 'ExampleClients',
                 ]);
 
             $mock->shouldReceive('validateTicketCreate')
@@ -34,7 +34,7 @@ class ZnunyStandaloneTicketCreationServiceTest extends TestCase
                     'OwnerID' => 123,
                     'Queue' => 'Junk',
                     'CustomerUser' => 'testuser',
-                    'CustomerID' => 'VamarkClients',
+                    'CustomerID' => 'ExampleClients',
                     'State' => 'new',
                     'Lock' => 'unlock',
                     'Priority' => '3 normal',
@@ -52,7 +52,7 @@ class ZnunyStandaloneTicketCreationServiceTest extends TestCase
                         'Title' => 'Test',
                         'Queue' => 'Junk',
                         'CustomerUser' => 'testuser',
-                        'CustomerID' => 'VamarkClients',
+                        'CustomerID' => 'ExampleClients',
                         'State' => 'new',
                         'Lock' => 'unlock',
                         'OwnerID' => 123,

@@ -37,7 +37,7 @@ class SettingsEncryptionTest extends TestCase
 
     public function test_sensitive_plaintext_is_prepared_for_storage()
     {
-        $secret = 'super-secret';
+        $secret = 'test-super-secret';
         $prepared = SettingsService::encryptForStorage('znuny_password', $secret);
 
         $this->assertStringStartsWith('enc:v1:', $prepared);
@@ -46,7 +46,7 @@ class SettingsEncryptionTest extends TestCase
 
     public function test_sensitive_stored_ciphertext_is_transparently_decrypted()
     {
-        $secret = 'my-token';
+        $secret = 'test-my-token';
         $encrypted = SettingsService::encryptForStorage('zabbix_api_token', $secret);
 
         Setting::updateOrCreate(['key' => 'zabbix_api_token'], ['value' => $encrypted, 'type' => 'string']);
@@ -56,7 +56,7 @@ class SettingsEncryptionTest extends TestCase
 
     public function test_legacy_plaintext_sensitive_value_is_still_readable()
     {
-        $secret = 'legacy-secret';
+        $secret = 'test-legacy-secret';
         Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => $secret, 'type' => 'string']);
 
         $this->assertEquals($secret, SettingsService::string('znuny_password'));
@@ -90,7 +90,7 @@ class SettingsEncryptionTest extends TestCase
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
-        $secret = 'old-secret';
+        $secret = 'test-old-secret';
         $encrypted = SettingsService::encryptForStorage('znuny_password', $secret);
         Setting::updateOrCreate(['key' => 'znuny_password'], ['value' => $encrypted, 'type' => 'string']);
         Setting::updateOrCreate(['key' => 'zabbix_api_url'], ['value' => 'http://old.com', 'type' => 'string']);
@@ -123,7 +123,7 @@ class SettingsEncryptionTest extends TestCase
                 'zabbix_exclude_suppressed_problems' => true,
                 'default_close_delay_hours' => 4,
                 'default_reopen_window_hours' => 24,
-                'znuny_password' => 'old-secret', // unchanged secret
+                'znuny_password' => 'test-old-secret', // unchanged secret
             ])
             ->call('save')
             ->assertHasNoFormErrors();
@@ -159,7 +159,7 @@ class SettingsEncryptionTest extends TestCase
                 'zabbix_exclude_suppressed_problems' => true,
                 'default_close_delay_hours' => 4,
                 'default_reopen_window_hours' => 24,
-                'znuny_password' => 'new-secret', // changed secret
+                'znuny_password' => 'test-new-secret', // changed secret
             ])
             ->call('save')
             ->assertHasNoFormErrors();
@@ -167,7 +167,7 @@ class SettingsEncryptionTest extends TestCase
         $newValue = Setting::where('key', 'znuny_password')->value('value');
         $this->assertStringStartsWith('enc:v1:', $newValue);
         $this->assertNotEquals($encrypted, $newValue);
-        $this->assertEquals('new-secret', SettingsService::string('znuny_password'));
+        $this->assertEquals('test-new-secret', SettingsService::string('znuny_password'));
 
         // Check audit log contains [redacted]
         $log = AuditLog::where('action', 'settings.updated')->latest('id')->first();
@@ -218,7 +218,7 @@ class SettingsEncryptionTest extends TestCase
     public function test_smtp_password_is_blank_and_not_rendered_on_mount()
     {
         $admin = User::factory()->create(['role' => 'admin']);
-        $secret = 'old-smtp-secret';
+        $secret = 'test-old-smtp-secret';
         $encrypted = SettingsService::encryptForStorage('mail_smtp_password', $secret);
         Setting::updateOrCreate(['key' => 'mail_smtp_password'], ['value' => $encrypted, 'type' => 'string']);
         SettingsService::clearAllCaches();
@@ -233,21 +233,21 @@ class SettingsEncryptionTest extends TestCase
     public function test_new_smtp_password_is_encrypted_and_audit_redacted()
     {
         $admin = User::factory()->create(['role' => 'admin']);
-        $encryptedOld = SettingsService::encryptForStorage('mail_smtp_password', 'old-secret');
+        $encryptedOld = SettingsService::encryptForStorage('mail_smtp_password', 'test-old-secret');
         Setting::updateOrCreate(['key' => 'mail_smtp_password'], ['value' => $encryptedOld, 'type' => 'string']);
 
         Livewire::actingAs($admin)
             ->test(Settings::class)
             ->fillForm($this->getValidSettingsPayload([
-                'mail_smtp_password' => 'new-smtp-secret',
+                'mail_smtp_password' => 'test-new-smtp-secret',
             ]))
             ->call('save')
             ->assertHasNoFormErrors();
 
         $newValue = Setting::where('key', 'mail_smtp_password')->value('value');
         $this->assertStringStartsWith('enc:v1:', $newValue);
-        $this->assertStringNotContainsString('new-smtp-secret', $newValue);
-        $this->assertEquals('new-smtp-secret', SettingsService::string('mail_smtp_password'));
+        $this->assertStringNotContainsString('test-new-smtp-secret', $newValue);
+        $this->assertEquals('test-new-smtp-secret', SettingsService::string('mail_smtp_password'));
 
         $log = AuditLog::where('action', 'settings.updated')->latest('id')->first();
         $secretChange = collect($log->context['changes'])->firstWhere('key', 'mail_smtp_password');

@@ -85,7 +85,7 @@ class ZnunyInlineImagePayloadService
             $extension = (new MimeTypes)->getExtensions($mimeType)[0] ?? 'bin';
             $filename = 'image_'.Str::random(8).'.'.$extension;
             $uuid = Str::uuid()->toString();
-            $contentId = "znuny-inline-{$uuid}@work.vamark.com";
+            $contentId = "znuny-inline-{$uuid}@znuny-inline.invalid";
 
             $placeholderUrl = "https://znuny-inline.invalid/{$uuid}";
             $placeholders[$placeholderUrl] = $contentId;

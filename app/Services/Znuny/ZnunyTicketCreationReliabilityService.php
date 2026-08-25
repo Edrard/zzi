@@ -141,11 +141,18 @@ class ZnunyTicketCreationReliabilityService
             $message
         ) ?? $message;
 
-        return preg_replace(
+        $message = preg_replace(
             '/([a-z0-9+.-]+:\/\/)([^:@\/\s]+):([^@\/\s]+)(@)/i',
             '$1[REDACTED]:[REDACTED]$4',
             $message
         ) ?? $message;
+
+        $appPath = base_path();
+        if (!empty($appPath)) {
+            $message = str_replace($appPath, '', $message);
+        }
+
+        return $message;
     }
 
     public function sanitizedResponse(array $apiResult): array

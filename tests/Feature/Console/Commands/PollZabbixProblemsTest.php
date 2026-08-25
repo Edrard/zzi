@@ -52,7 +52,7 @@ class PollZabbixProblemsTest extends TestCase
         // Interface mapping: prefer main interface that is non-loopback
         $client->shouldReceive('getHostInterfaces')->with(['200'])->andReturn([
             ['hostid' => '200', 'ip' => '127.0.0.1', 'main' => '0', 'type' => '1'],
-            ['hostid' => '200', 'ip' => '192.168.1.50', 'main' => '1', 'type' => '1'],
+            ['hostid' => '200', 'ip' => '192.0.2.50', 'main' => '1', 'type' => '1'],
         ]);
 
         $client->shouldReceive('getTriggersForProblems')->andReturn([]);
@@ -63,7 +63,7 @@ class PollZabbixProblemsTest extends TestCase
                 return false;
             }
 
-            return $problems[0]['host_ip'] === '192.168.1.50';
+            return $problems[0]['host_ip'] === '192.0.2.50';
         })->once();
 
         $cache->shouldReceive('markLastPollSuccess')->once();
@@ -100,14 +100,14 @@ class PollZabbixProblemsTest extends TestCase
         ]);
 
         $client->shouldReceive('getHostInterfaces')->with(['201'])->andReturn([
-            ['hostid' => '201', 'ip' => '10.0.0.5', 'main' => '0', 'type' => '1'],
-            ['hostid' => '201', 'ip' => '10.0.0.6', 'main' => '0', 'type' => '1'],
+            ['hostid' => '201', 'ip' => '198.51.100.5', 'main' => '0', 'type' => '1'],
+            ['hostid' => '201', 'ip' => '198.51.100.6', 'main' => '0', 'type' => '1'],
         ]);
 
         $client->shouldReceive('getTriggersForProblems')->andReturn([]);
 
         $cache->shouldReceive('putMany')->withArgs(function ($problems) {
-            return $problems[0]['host_ip'] === '10.0.0.5';
+            return $problems[0]['host_ip'] === '198.51.100.5';
         })->once();
 
         $cache->shouldReceive('markLastPollSuccess')->once();

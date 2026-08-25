@@ -33,7 +33,7 @@ class ZabbixClientTest extends TestCase
             ->getMock();
 
         $expectedResponse = [
-            ['hostid' => '100', 'ip' => '192.168.1.10', 'main' => '1', 'type' => '1'],
+            ['hostid' => '100', 'ip' => '192.0.2.10', 'main' => '1', 'type' => '1'],
         ];
 
         $client->expects($this->once())

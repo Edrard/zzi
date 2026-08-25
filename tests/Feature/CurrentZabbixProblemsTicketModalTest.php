@@ -46,7 +46,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
                 'name' => 'TestCompany CPU Load',
                 'host_name' => 'TestCompany swiss test01',
                 'severity' => 4,
-                'host_ip' => '192.168.1.10',
+                'host_ip' => '192.0.2.10',
                 'hosts' => [
                     [
                         'name' => 'TestCompany swiss test01 Display',
@@ -82,7 +82,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         Livewire::actingAs($admin)
             ->test(CurrentZabbixProblems::class)
             ->assertSeeHtml('IP address:')
-            ->assertSeeHtml('192.168.1.10');
+            ->assertSeeHtml('192.0.2.10');
     }
 
     public function test_expanded_problem_hides_ip_address_when_missing()
@@ -93,7 +93,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->test(CurrentZabbixProblems::class);
 
         // It should NOT see an IP Address row for event 1002
-        // Since we assert the HTML output, we know '192.168.1.10' is there, but for 1002 it's absent.
+        // Since we assert the HTML output, we know '192.0.2.10' is there, but for 1002 it's absent.
         // We can't strictly assert the absence of a specific row easily without parsing, but we can assure
         // 'IP address:' is only present once.
         $html = $component->html();
@@ -2556,7 +2556,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
                 'name' => 'Event ID missing problem',
                 'severity' => 4,
                 'host_name' => 'TestCompany switch',
-                'host_ip' => '10.0.0.1',
+                'host_ip' => '198.51.100.1',
                 'hosts' => [
                     [
                         'name' => 'TestCompany switch',

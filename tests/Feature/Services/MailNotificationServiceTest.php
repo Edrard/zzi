@@ -7,6 +7,7 @@ use App\Services\MailNotificationService;
 use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -101,9 +102,9 @@ class MailNotificationServiceTest extends TestCase
     {
         Setting::updateOrCreate(['key' => 'mail_notifications_enabled'], ['value' => 'true']);
         Setting::updateOrCreate(['key' => 'mail_transport'], ['value' => 'smtp']);
-        Setting::updateOrCreate(['key' => 'mail_smtp_username'], ['value' => 'CR005_SMTP_USER_SECRET']);
+        Setting::updateOrCreate(['key' => 'mail_smtp_username'], ['value' => 'CR005_SMTP_USER_TEST']);
 
-        $secret = 'CR005_SMTP_PASSWORD_SECRET';
+        $secret = 'CR005_SMTP_PASSWORD_TEST';
         $encrypted = SettingsService::encryptForStorage('mail_smtp_password', $secret);
         Setting::updateOrCreate(['key' => 'mail_smtp_password'], ['value' => $encrypted]);
 
@@ -114,19 +115,19 @@ class MailNotificationServiceTest extends TestCase
         Mail::shouldReceive('raw')
             ->once()
             ->andThrow(new \Exception(
-                'Connection failed for CR005_SMTP_USER_SECRET with CR005_SMTP_PASSWORD_SECRET, '
-                .'token=CR005_TOKEN_SECRET and Authorization: Bearer CR005_BEARER_SECRET '
-                .'at scheme://CR005_SMTP_USER_SECRET:CR005_SMTP_PASSWORD_SECRET@host.local '
+                'Connection failed for CR005_SMTP_USER_TEST with CR005_SMTP_PASSWORD_TEST, '
+                .'token=CR005_TOKEN_TEST and Authorization: Bearer CR005_BEARER_TEST '
+                .'at scheme://CR005_SMTP_USER_TEST:CR005_SMTP_PASSWORD_TEST@host.local '
                 .str_repeat('X', 1200)
             ));
 
-        \Illuminate\Support\Facades\Log::shouldReceive('error')
+        Log::shouldReceive('error')
             ->once()
             ->withArgs(function ($message) {
-                return ! str_contains($message, 'CR005_SMTP_USER_SECRET')
-                    && ! str_contains($message, 'CR005_SMTP_PASSWORD_SECRET')
-                    && ! str_contains($message, 'CR005_TOKEN_SECRET')
-                    && ! str_contains($message, 'CR005_BEARER_SECRET')
+                return ! str_contains($message, 'CR005_SMTP_USER_TEST')
+                    && ! str_contains($message, 'CR005_SMTP_PASSWORD_TEST')
+                    && ! str_contains($message, 'CR005_TOKEN_TEST')
+                    && ! str_contains($message, 'CR005_BEARER_TEST')
                     && str_contains($message, '[REDACTED]')
                     && str_contains($message, 'Exception:')
                     && str_contains($message, 'Connection failed')

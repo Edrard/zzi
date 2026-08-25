@@ -279,14 +279,14 @@ class ZnunyTicketWorkspaceTest extends TestCase
         $user = User::factory()->create(['role' => 'operator']);
 
         $this->setupChangeAssignmentDependencies(
-            ['old.owner' => 'old.owner', 'ara@vamark.com' => 'Роман Андрушевич', 'unknown@vamark.com' => 'unknown@vamark.com'],
+            ['old.owner' => 'old.owner', 'operator@example.com' => 'Example Operator', 'unknown@example.com' => 'unknown@example.com'],
             ['Raw' => 'Raw']
         );
 
         app(ZnunyAssignmentDependencyService::class)
             ->shouldReceive('getOwnerOptionsForQueue')
             ->with(null)
-            ->andReturn([99 => 'Роман Андрушевич'])
+            ->andReturn([99 => 'Example Operator'])
             ->byDefault();
 
         $this->seedTicket([
@@ -296,8 +296,8 @@ class ZnunyTicketWorkspaceTest extends TestCase
             'StateType' => 'new',
             'Queue' => 'Raw',
             'OwnerID' => 99,
-            'Owner' => 'ara@vamark.com',
-            'CustomerUserID' => '2od@simple.eu',
+            'Owner' => 'operator@example.com',
+            'CustomerUserID' => 'customer@example.com',
             'Priority' => '3 normal',
         ]);
 
@@ -314,8 +314,8 @@ class ZnunyTicketWorkspaceTest extends TestCase
         $record = $action->evaluate($action->getRecord());
         $schema->record($record);
 
-        $this->assertEquals('Роман Андрушевич', $schema->getComponent('znuny_owner_name')->getState());
-        $this->assertEquals('2od@simple.eu', $schema->getComponent('customer_user')->getState());
+        $this->assertEquals('Example Operator', $schema->getComponent('znuny_owner_name')->getState());
+        $this->assertEquals('customer@example.com', $schema->getComponent('customer_user')->getState());
         $this->assertEquals('Raw', $schema->getComponent('znuny_queue_name')->getState());
         $this->assertEquals('3 normal', $schema->getComponent('znuny_priority')->getState());
 
@@ -327,8 +327,8 @@ class ZnunyTicketWorkspaceTest extends TestCase
             'StateType' => 'new',
             'Queue' => 'Raw',
             'OwnerID' => 100, // not in dependencies
-            'Owner' => 'unknown@vamark.com',
-            'CustomerUserID' => '2od@simple.eu',
+            'Owner' => 'unknown@example.com',
+            'CustomerUserID' => 'customer@example.com',
         ]);
 
         // Exercise the fallback as a fresh modal open. Reusing the same mounted
@@ -348,13 +348,13 @@ class ZnunyTicketWorkspaceTest extends TestCase
         // evaluating the infolist display state.
         $payload102 = \App\Filament\Support\TicketDetailsPayload::fromRecord($record102);
         $this->assertEquals(100, $payload102->znuny_owner_id);
-        $this->assertEquals('unknown@vamark.com', $payload102->znuny_owner_name);
+        $this->assertEquals('unknown@example.com', $payload102->znuny_owner_name);
 
         $schema102 = Schema::make($component102->instance());
         ZabbixTicketInfolist::configure($schema102);
         $schema102->record($record102);
 
-        $this->assertEquals('unknown@vamark.com', $schema102->getComponent('znuny_owner_name')->getState());
+        $this->assertEquals('unknown@example.com', $schema102->getComponent('znuny_owner_name')->getState());
 
     }
 

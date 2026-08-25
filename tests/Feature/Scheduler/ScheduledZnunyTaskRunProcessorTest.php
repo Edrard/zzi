@@ -484,7 +484,7 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
             ]);
 
         \App\Models\AuditLog::creating(function () {
-            throw new \Exception("postgres://admin:secret@example.internal token=abc123");
+            throw new \Exception("postgres://admin:secret@example.internal token=dummy123");
         });
 
         $alertServiceMock = $this->createMock(\App\Services\SystemAlertService::class);
@@ -502,7 +502,7 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
         $this->assertEquals("uncertain", $this->run->status);
         $this->assertEquals("error", $this->run->error_summary);
         $this->assertStringNotContainsString("postgres", $this->run->error_details ?? "");
-        $this->assertStringNotContainsString("abc123", $this->run->error_details ?? "");
+        $this->assertStringNotContainsString("dummy123", $this->run->error_details ?? "");
     }
 
     public function test_danger_alert_failure_does_not_prevent_other_side_effects()
@@ -517,7 +517,7 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
         $alertServiceMock = $this->createMock(\App\Services\SystemAlertService::class);
         $alertServiceMock->expects($this->once())
             ->method("danger")
-            ->willThrowException(new \Exception("postgres://admin:secret@example.internal token=abc123"));
+            ->willThrowException(new \Exception("postgres://admin:secret@example.internal token=dummy123"));
         $alertServiceMock->expects($this->once())->method("warning");
         $this->app->instance(\App\Services\SystemAlertService::class, $alertServiceMock);
 
@@ -550,7 +550,7 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
         $mailServiceMock = $this->createMock(MailNotificationService::class);
         $mailServiceMock->expects($this->once())
             ->method('sendAlarm')
-            ->willThrowException(new \Exception("postgres://admin:secret@example.internal token=abc123"));
+            ->willThrowException(new \Exception("postgres://admin:secret@example.internal token=dummy123"));
         $this->app->instance(MailNotificationService::class, $mailServiceMock);
 
         app(ScheduledZnunyTaskRunProcessor::class)->processNextBatch(1, 10);
@@ -574,7 +574,7 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
         $alertServiceMock->expects($this->once())->method("danger");
         $alertServiceMock->expects($this->once())
             ->method("warning")
-            ->willThrowException(new \Exception("postgres://admin:secret@example.internal token=abc123"));
+            ->willThrowException(new \Exception("postgres://admin:secret@example.internal token=dummy123"));
         $this->app->instance(\App\Services\SystemAlertService::class, $alertServiceMock);
 
         $mailServiceMock = $this->createMock(MailNotificationService::class);
@@ -643,7 +643,7 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
         Cache::shouldReceive('forget')
             ->once()
             ->with('scheduled_tasks_consecutive_failures')
-            ->andThrow(new \Exception('Cache cleanup failed with password=CR003_PASSWORD_SECRET'));
+            ->andThrow(new \Exception('Cache cleanup failed with password=CR003_PASSWORD_TEST'));
 
         $processor = app(ScheduledZnunyTaskRunProcessor::class);
         $processor->processNextBatch(1, 10);
@@ -676,7 +676,7 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
         ScheduledZnunyTask::updating(function () use (&$throw) {
             if ($throw) {
                 $throw = false;
-                throw new \Exception('Task update failure with token=CR003_TOKEN_SECRET');
+                throw new \Exception('Task update failure with token=CR003_TOKEN_TEST');
             }
         });
 
@@ -700,7 +700,7 @@ class ScheduledZnunyTaskRunProcessorTest extends TestCase
         $this->ticketServiceMock->expects($this->once())
             ->method('createTicketFromTask')
             ->willThrowException(new \Exception(
-                'Database Error: password=CR003_PASSWORD_SECRET token=CR003_TOKEN_SECRET SessionID=CR003_SESSION_SECRET authorization=CR003_AUTH_SECRET UserLogin=CR003_LOGIN_SECRET Authorization: Bearer CR003_BEARER_SECRET Bearer CR003_BARE_BEARER_SECRET postgres://admin:CR003_DSN_SECRET@example.internal api_key=CR003_API_KEY_SECRET client_secret=CR003_CLIENT_SECRET access_token=CR003_ACCESS_TOKEN_SECRET refresh_token=CR003_REFRESH_TOKEN_SECRET'
+                'Database Error: password=CR003_PASSWORD_TEST token=CR003_TOKEN_TEST SessionID=CR003_SESSION_TEST authorization=CR003_AUTH_TEST UserLogin=CR003_LOGIN_TEST Authorization: Bearer CR003_BEARER_TEST Bearer CR003_BARE_BEARER_TEST postgres://admin:CR003_DSN_TEST@example.internal api_key=CR003_API_KEY_TEST client_secret=CR003_CLIENT_TEST access_token=CR003_ACCESS_TOKEN_TEST refresh_token=CR003_REFRESH_TOKEN_TEST'
             ));
 
         $mailServiceMock = $this->createMock(MailNotificationService::class);

@@ -208,7 +208,7 @@ class SettingsMailTabTest extends TestCase
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
-        $secret = 'secret123';
+        $secret = 'test-secret123';
         $encrypted = SettingsService::encryptForStorage('mail_smtp_password', $secret);
         Setting::updateOrCreate(['key' => 'mail_smtp_password'], ['value' => $encrypted, 'type' => 'string']);
         SettingsService::clearAllCaches();
@@ -239,7 +239,7 @@ class SettingsMailTabTest extends TestCase
         $mock = $this->mock(MailNotificationService::class);
         $mock->shouldReceive('sendTestEmail')
             ->withArgs(function ($data) {
-                return $data['mail_smtp_password'] === 'new-secret';
+                return $data['mail_smtp_password'] === 'test-new-secret';
             })
             ->once();
 
@@ -249,7 +249,7 @@ class SettingsMailTabTest extends TestCase
                 'mail_from_address' => 'from@test.local',
                 'mail_admin_recipients' => 'admin@test.local',
                 'mail_smtp_host' => 'smtp.test.local',
-                'mail_smtp_password' => 'new-secret',
+                'mail_smtp_password' => 'test-new-secret',
             ])
             ->call('testMailConnectionAction')
             ->assertNotified('Test Email Sent');
@@ -259,7 +259,7 @@ class SettingsMailTabTest extends TestCase
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
-        $secret = 'secret123';
+        $secret = 'test-secret123';
         $encrypted = SettingsService::encryptForStorage('mail_smtp_password', $secret);
         Setting::updateOrCreate(['key' => 'mail_smtp_password'], ['value' => $encrypted, 'type' => 'string']);
         SettingsService::clearAllCaches();

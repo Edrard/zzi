@@ -388,13 +388,13 @@ class PrewarmSnapshotManagerTest extends TestCase
         $manager = new TestablePrewarmSnapshotManager('test_dataset');
         $cases = [
             'Basic error' => 'Basic error',
-            'password="mysecret"' => 'password="***"',
-            'api_key: mysecret' => 'api_key: ***',
+            'password="dummy_secret"' => 'password="***"',
+            'api_key: dummy_secret' => 'api_key: ***',
             'SessionID=abc12345' => 'SessionID=***',
             'api_key="sec ret"' => 'api_key="***"',
             'session_id: "abc"' => 'session_id: "***"',
-            'Bearer supersecrettoken' => 'Bearer ***',
-            'Authorization: Bearer supersecrettoken' => 'Authorization: Bearer ***',
+            'Bearer TEST_DUMMY_BEARER_TOKEN_123456' => 'Bearer ***',
+            'Authorization: Bearer TEST_DUMMY_BEARER_TOKEN_123456' => 'Authorization: Bearer ***',
             'Some token=123 value' => 'Some token=*** value',
             "Message\nStack trace:\n#0 file.php:123" => "Message",
             "Message\nSTACK TRACE:\n#0 file.php" => "Message",
