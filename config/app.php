@@ -1,0 +1,185 @@
+<?php
+
+$prewarmProcessTimeout = max(1, (int) env('ZNUNY_PREWARM_PROCESS_TIMEOUT_SECONDS', 600));
+$prewarmLockExpiryGrace = max(0, (int) env('ZNUNY_PREWARM_LOCK_EXPIRY_SECONDS', 60));
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Name
+    |--------------------------------------------------------------------------
+    |
+    | This value is the name of your application, which will be used when the
+    | framework needs to place the application's name in a notification or
+    | other UI elements where an application name needs to be displayed.
+    |
+    */
+
+    'name' => env('APP_NAME', 'Laravel'),
+
+    'version' => env('APP_VERSION', '1.1.0'),
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Environment
+    |--------------------------------------------------------------------------
+    |
+    | This value determines the "environment" your application is currently
+    | running in. This may determine how you prefer to configure various
+    | services the application utilizes. Set this in your ".env" file.
+    |
+    */
+
+    'env' => env('APP_ENV', 'production'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Debug Mode
+    |--------------------------------------------------------------------------
+    |
+    | When your application is in debug mode, detailed error messages with
+    | stack traces will be shown on every error that occurs within your
+    | application. If disabled, a simple generic error page is shown.
+    |
+    */
+
+    'debug' => (bool) env('APP_DEBUG', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application URL
+    |--------------------------------------------------------------------------
+    |
+    | This URL is used by the console to properly generate URLs when using
+    | the Artisan command line tool. You should set this to the root of
+    | the application so that it's available within Artisan commands.
+    |
+    */
+
+    'url' => env('APP_URL', 'http://localhost'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Timezone
+    |--------------------------------------------------------------------------
+    |
+    | Here you may specify the default timezone for your application, which
+    | will be used by the PHP date and date-time functions. The timezone
+    | is set to "UTC" by default as it is suitable for most use cases.
+    |
+    */
+
+    'timezone' => 'UTC',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Locale Configuration
+    |--------------------------------------------------------------------------
+    |
+    | The application locale determines the default locale that will be used
+    | by Laravel's translation / localization methods. This option can be
+    | set to any locale for which you plan to have translation strings.
+    |
+    */
+
+    'locale' => env('APP_LOCALE', 'en'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Fallback Locale
+    |--------------------------------------------------------------------------
+    |
+    | The fallback locale determines the locale to use when the current one
+    | is not available. You may change the value to correspond to any of
+    | the language folders that are provided through your application.
+    |
+    */
+
+    'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
+
+    'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Encryption Key
+    |--------------------------------------------------------------------------
+    |
+    | This key is utilized by Laravel's encryption services and should be set
+    | to a random, 32 character string to ensure that all encrypted values
+    | are secure. You should do this prior to deploying the application.
+    |
+    */
+
+    'cipher' => 'AES-256-CBC',
+
+    'key' => env('APP_KEY'),
+
+    'previous_keys' => [
+        ...array_filter(
+            explode(',', (string) env('APP_PREVIOUS_KEYS', ''))
+        ),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Maintenance Mode Driver
+    |--------------------------------------------------------------------------
+    |
+    | These configuration options determine the driver used to determine and
+    | manage Laravel's "maintenance mode" status. The "cache" driver will
+    | allow maintenance mode to be controlled across multiple machines.
+    |
+    | Supported drivers: "file", "cache"
+    |
+    */
+
+    'maintenance' => [
+        'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
+        'store' => env('APP_MAINTENANCE_STORE', 'database'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Znuny Prewarm Cache
+    |--------------------------------------------------------------------------
+    */
+    'znuny_prewarm' => [
+        'php_cli_binary' => env(
+            'ZNUNY_PREWARM_PHP_CLI_BINARY',
+            '/path/to/php',
+        ),
+        'cache_ttl_multiplier' => env('ZNUNY_PREWARM_CACHE_TTL_MULTIPLIER', 10),
+        'metadata_ttl_minutes' => env('ZNUNY_PREWARM_METADATA_TTL_MINUTES', 10080),
+        'process_timeout_seconds' => $prewarmProcessTimeout,
+        'lock_expiry_grace_seconds' => $prewarmLockExpiryGrace,
+        'lock_expiry_seconds' => $prewarmProcessTimeout + $prewarmLockExpiryGrace,
+        'default_refresh_interval_minutes' => 5,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Global UI Poll Interval
+    |--------------------------------------------------------------------------
+    |
+    | This value dictates the global default interval in seconds that UI
+    | components should wait before polling the server for new data.
+    |
+    */
+    'ui_poll_interval_seconds' => env('APP_UI_POLL_INTERVAL_SECONDS', 60),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Landing Pages
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for dynamic user landing pages upon login or visiting the
+    | admin root. Available landing pages is a comma-separated list of
+    | allowed Filament page/resource slugs.
+    |
+    */
+    'default_landing_page' => env('APP_DEFAULT_LANDING_PAGE', 'current-zabbix-problems'),
+    'available_landing_pages' => env('APP_AVAILABLE_LANDING_PAGES', 'current-zabbix-problems,znuny-ticket-workspace,zabbix-tickets,create-ticket'),
+
+];

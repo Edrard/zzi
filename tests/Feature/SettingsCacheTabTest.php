@@ -1,0 +1,309 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Filament\Pages\Settings;
+use App\Models\Setting;
+use App\Models\User;
+use App\Services\SettingsService;
+use App\Services\Znuny\ZnunyTicketArticleCacheService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
+use Livewire\Livewire;
+use Tests\TestCase;
+
+class SettingsCacheTabTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Artisan::call('app:ensure-settings-defaults');
+    }
+
+    public function test_cache_schema_is_rendered_in_correct_order_and_no_duplicates()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+        $schema = $component->instance()->getForm('form')->getComponents();
+
+        $cacheFieldsOrder = [];
+        $cacheFieldCounts = [];
+        $sectionsOrder = [];
+        $unwantedFieldsFound = [];
+
+        $unwantedKeys = [
+            'znuny_ticket_workspace_enabled',
+            'znuny_ticket_workspace_active_state_type_ids',
+            'znuny_ticket_workspace_default_per_page',
+            'znuny_ticket_cache_refresh_interval_minutes',
+            'znuny_ticket_cache_ttl_minutes',
+            'znuny_ticket_cache_default_limit',
+            'znuny_ticket_cache_max_pages_per_run',
+            'znuny_closed_ticket_window_days',
+            'znuny_closed_ticket_small_sync_interval_minutes',
+            'znuny_ticket_workspace_sync_audit_enabled',
+            'zabbix_problem_cache_ttl_minutes',
+        ];
+
+        $search = function ($components, $inCacheTab = false) use (&$search, &$cacheFieldsOrder, &$cacheFieldCounts, &$sectionsOrder, &$unwantedFieldsFound, $unwantedKeys) {
+            foreach ($components as $c) {
+                $type = class_basename($c);
+                $name = method_exists($c, 'getName') ? $c->getName() : null;
+                $label = method_exists($c, 'getLabel') ? $c->getLabel() : null;
+                $heading = method_exists($c, 'getHeading') ? $c->getHeading() : null;
+
+                $isThisTab = $inCacheTab || ($type === 'Tab' && $label === 'Cache');
+
+                if ($isThisTab && $type === 'Section' && $heading) {
+                    $sectionsOrder[] = $heading;
+                }
+
+                if ($isThisTab && $name) {
+                    if (in_array($name, [
+                        'znuny_ticket_article_cache_ttl_minutes',
+                        'znuny_ticket_snapshot_cache_ttl_minutes',
+                    ])) {
+                        $cacheFieldsOrder[] = $name;
+                        if (! isset($cacheFieldCounts[$name])) {
+                            $cacheFieldCounts[$name] = 0;
+                        }
+                        $cacheFieldCounts[$name]++;
+                    }
+
+                    if (in_array($name, $unwantedKeys)) {
+                        $unwantedFieldsFound[] = $name;
+                    }
+                }
+
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents(), $isThisTab);
+                }
+            }
+        };
+
+        $search($schema);
+
+        $expectedFieldsOrder = [
+            'znuny_ticket_article_cache_ttl_minutes',
+            'znuny_ticket_snapshot_cache_ttl_minutes',
+        ];
+
+        $this->assertEquals($expectedFieldsOrder, $cacheFieldsOrder);
+
+        $expectedSectionsOrder = [
+            'Znuny Reference Data',
+            'Znuny Linked Ticket Data',
+            'Runtime Cache Maintenance',
+        ];
+
+        $this->assertEquals($expectedSectionsOrder, $sectionsOrder);
+
+        foreach ($expectedFieldsOrder as $key) {
+            $this->assertEquals(1, $cacheFieldCounts[$key] ?? 0, "Field $key should be rendered exactly once.");
+        }
+
+        $this->assertEmpty($unwantedFieldsFound, 'Ticket Workspace or Zabbix problem cache fields should not be present in the Cache tab.');
+    }
+
+    public function test_cache_components_have_correct_type_and_labels_and_descriptions()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+        $schema = $component->instance()->getForm('form')->getComponents();
+
+        $componentsByName = [];
+        $componentsByHeading = [];
+
+        $search = function ($components) use (&$search, &$componentsByName, &$componentsByHeading) {
+            foreach ($components as $c) {
+                $name = method_exists($c, 'getName') ? $c->getName() : null;
+                if ($name && in_array($name, [
+                    'znuny_ticket_article_cache_ttl_minutes',
+                    'znuny_ticket_snapshot_cache_ttl_minutes',
+                ])) {
+                    $componentsByName[$name] = $c;
+                }
+
+                if (class_basename($c) === 'Section' && method_exists($c, 'getHeading') && $c->getHeading()) {
+                    $componentsByHeading[$c->getHeading()] = $c;
+                }
+
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents());
+                }
+            }
+        };
+
+        $search($schema);
+
+        $this->assertEquals('Ticket Article Cache Lifetime (minutes)', $componentsByName['znuny_ticket_article_cache_ttl_minutes']->getLabel());
+        $this->assertEquals('Linked Ticket Snapshot Cache Lifetime (minutes)', $componentsByName['znuny_ticket_snapshot_cache_ttl_minutes']->getLabel());
+
+        $this->assertEquals(
+            'Configure how long reusable Znuny agent, queue, and lookup reference data may be kept before the application requests updated data from Znuny. Shorter values provide fresher reference data but may increase API requests.',
+            $componentsByHeading['Znuny Reference Data']->getDescription()
+        );
+
+        $this->assertEquals(
+            'Configure caching for Znuny ticket articles and locally stored linked-ticket snapshots. These settings affect read performance and freshness only; they do not delete articles, ticket links, or data in Znuny.',
+            $componentsByHeading['Znuny Linked Ticket Data']->getDescription()
+        );
+
+        // Helper text assertions
+
+        $component->assertSee('How long Znuny ticket articles fetched for linked tickets may be cached. Set to 0 to bypass persistent ticket article caching.');
+        $component->assertSee('Configured lifetime for cached linked-ticket snapshot data. A snapshot may include locally stored Znuny ticket details such as state, owner, queue, priority, and synchronization metadata. This setting does not control Ticket Workspace caching and does not delete local ticket links or data in Znuny.');
+    }
+
+    public function test_unknown_future_setting_appears_under_additional_cache_settings()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        // Simulate an unknown cache setting
+        Setting::updateOrCreate(['key' => 'znuny_future_cache_ttl_minutes'], ['value' => '30', 'type' => 'integer']);
+
+        $component = Livewire::actingAs($admin)->test(Settings::class);
+        $schema = $component->instance()->getForm('form')->getComponents();
+
+        $unknownSettingFoundInSection = null;
+        $sectionsOrder = [];
+
+        $search = function ($components, $inCacheTab = false, $currentSection = null) use (&$search, &$unknownSettingFoundInSection, &$sectionsOrder) {
+            foreach ($components as $c) {
+                $type = class_basename($c);
+                $name = method_exists($c, 'getName') ? $c->getName() : null;
+                $label = method_exists($c, 'getLabel') ? $c->getLabel() : null;
+                $heading = method_exists($c, 'getHeading') ? $c->getHeading() : null;
+
+                $isThisTab = $inCacheTab || ($type === 'Tab' && $label === 'Cache');
+
+                if ($isThisTab && $type === 'Section' && $heading) {
+                    $currentSection = $heading;
+                    $sectionsOrder[] = $heading;
+                }
+
+                if ($isThisTab && $name === 'znuny_future_cache_ttl_minutes') {
+                    $unknownSettingFoundInSection = $currentSection;
+                }
+
+                if (method_exists($c, 'getChildComponents')) {
+                    $search($c->getChildComponents(), $isThisTab, $currentSection);
+                }
+            }
+        };
+
+        $search($schema);
+
+        $this->assertEquals('Additional Cache Settings', $unknownSettingFoundInSection);
+        $this->assertEquals('Runtime Cache Maintenance', end($sectionsOrder));
+    }
+
+    private function getValidSettingsPayload(array $overrides = []): array
+    {
+        return array_merge([
+            'znuny_username' => 'testuser',
+            'znuny_api_url' => 'http://api',
+            'znuny_web_url' => 'http://web',
+            'znuny_ticket_url_template' => 'url',
+            'znuny_api_verify_ssl' => true,
+            'znuny_api_timeout' => 10,
+
+            'znuny_ticket_article_cache_ttl_minutes' => 60,
+            'znuny_ticket_snapshot_cache_ttl_minutes' => 60,
+
+            'zabbix_api_url' => 'http://new.com',
+            'zabbix_api_token' => '',
+            'zabbix_api_timeout' => 10,
+            'zabbix_api_verify_ssl' => true,
+            'zabbix_poll_interval_minutes' => 5,
+            'zabbix_problem_cache_ttl_minutes' => 5,
+            'zabbix_problem_limit' => 100,
+            'zabbix_exclude_suppressed_problems' => true,
+
+            'mail_transport' => 'smtp',
+            'mail_smtp_host' => 'host',
+            'mail_smtp_port' => 25,
+            'mail_smtp_encryption' => 'tls',
+            'mail_smtp_timeout_seconds' => 10,
+            'mail_smtp_password' => '',
+            'mail_smtp_password_clear' => false,
+        ], $overrides);
+    }
+
+    public function test_persistence_of_cache_settings()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $payload = $this->getValidSettingsPayload([
+            'znuny_ticket_article_cache_ttl_minutes' => 45,
+            'znuny_ticket_snapshot_cache_ttl_minutes' => 45,
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(Settings::class)
+            ->fillForm($payload)
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertEquals('45', Setting::where('key', 'znuny_ticket_article_cache_ttl_minutes')->value('value'));
+        $this->assertEquals('45', Setting::where('key', 'znuny_ticket_snapshot_cache_ttl_minutes')->value('value'));
+    }
+
+    public function test_saving_changed_article_ttl_invalidates_article_cache_only()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        foreach ($this->getValidSettingsPayload(['znuny_ticket_article_cache_ttl_minutes' => 15]) as $k => $v) {
+            if ($k === 'mail_smtp_password_clear') {
+                continue;
+            }
+            $valStr = is_bool($v) ? ($v ? 'true' : 'false') : (string) $v;
+            Setting::updateOrCreate(['key' => $k], ['value' => $valStr, 'type' => is_bool($v) ? 'boolean' : (is_int($v) ? 'integer' : 'string')]);
+        }
+        app(SettingsService::class)->clearAllCaches();
+
+        $initialArticleVersion = app(ZnunyTicketArticleCacheService::class)->getGeneration();
+
+        $payload = $this->getValidSettingsPayload(['znuny_ticket_article_cache_ttl_minutes' => 99]);
+
+        Livewire::actingAs($admin)->test(Settings::class)
+            ->fillForm($payload)
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $newArticleVersion = app(ZnunyTicketArticleCacheService::class)->getGeneration();
+        $this->assertNotEquals($initialArticleVersion, $newArticleVersion);
+
+        $this->assertEquals('99', Setting::where('key', 'znuny_ticket_article_cache_ttl_minutes')->value('value'));
+    }
+
+    public function test_saving_unchanged_article_ttl_does_not_invalidate()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        foreach ($this->getValidSettingsPayload(['znuny_ticket_article_cache_ttl_minutes' => 15]) as $k => $v) {
+            if ($k === 'mail_smtp_password_clear') {
+                continue;
+            }
+            $valStr = is_bool($v) ? ($v ? 'true' : 'false') : (string) $v;
+            Setting::updateOrCreate(['key' => $k], ['value' => $valStr, 'type' => is_bool($v) ? 'boolean' : (is_int($v) ? 'integer' : 'string')]);
+        }
+        app(SettingsService::class)->clearAllCaches();
+
+        $initialArticleVersion = app(ZnunyTicketArticleCacheService::class)->getGeneration();
+
+        $payload = $this->getValidSettingsPayload(['znuny_ticket_article_cache_ttl_minutes' => 15]);
+
+        Livewire::actingAs($admin)->test(Settings::class)
+            ->fillForm($payload)
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $newArticleVersion = app(ZnunyTicketArticleCacheService::class)->getGeneration();
+        $this->assertEquals($initialArticleVersion, $newArticleVersion);
+    }
+}

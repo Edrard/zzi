@@ -1,0 +1,256 @@
+<?php
+
+return [
+    'singular' => 'Run log entry',
+    'plural' => 'Run log entries',
+    'navigation_label' => 'Run log',
+    'empty_state' => 'No run log entries found',
+
+    'table' => [
+        'created_at' => 'Time',
+        'task_name_snapshot' => 'Task',
+        'run_type' => 'Run type',
+        'scheduled_for' => 'Scheduled for',
+        'started_at' => 'Started at',
+        'finished_at' => 'Finished at',
+        'duration_ms' => 'Execution time',
+        'status' => 'Status',
+        'ticket_number' => 'Ticket number',
+        'error_summary' => 'Error summary',
+        'retries' => 'Retries',
+    ],
+
+    'chain_states' => [
+        'current_leaf' => 'Current attempt',
+        'historical_member' => 'Historical attempt',
+        'malformed_chain' => 'Malformed chain',
+        'detached_or_orphan' => 'Detached or orphaned',
+        'root_with_retries' => '{1} Original · 1 retry|[2,*] Original · :total retries',
+        'retry_position' => ':position of :total',
+        'current' => 'Current',
+    ],
+
+    'filters' => [
+        'scheduled_znuny_task_id' => 'Task',
+        'status' => 'Status',
+        'run_type' => 'Run type',
+        'has_ticket' => 'Has ticket',
+        'has_error' => 'Has error',
+        'created_at_from' => 'From',
+        'created_at_until' => 'Until',
+    ],
+
+    'statuses' => [
+        'pending' => 'Pending',
+        'running' => 'Running',
+        'success' => 'Success',
+        'failed' => 'Failed',
+        'skipped' => 'Skipped',
+        'duplicate' => 'Duplicate',
+        'uncertain' => 'Uncertain',
+    ],
+
+    'run_types' => [
+        'scheduled' => 'Scheduled',
+        'manual' => 'Manual',
+        'catch_up' => 'Catch-up',
+        'manual_retry' => 'Manual retry',
+    ],
+
+    'units' => [
+        'sec' => 'sec',
+    ],
+
+    'resolution_types' => [
+        'manual_closed' => 'Closed',
+        'retry_created' => 'Replaced by retry',
+        'manual_link' => 'Manually linked',
+    ],
+
+    'sections' => [
+        'run_information' => 'Run Information',
+        'ticket_details' => 'Ticket Details',
+        'errors' => 'Errors',
+        'snapshots' => 'Snapshots',
+    ],
+
+    'actions' => [
+        'requeue_run' => 'Requeue Run',
+        'run_requeued_title' => 'Run Requeued',
+        'run_requeued_body' => 'A new pending run has been created.',
+        'resolve_run' => 'Resolve Run',
+        'manual_review_note' => 'Manual Review Note',
+        'manual_review_help' => 'Explain how this uncertain run was resolved manually in Znuny.',
+        'run_resolved_title' => 'Run Resolved',
+        'open_ticket' => 'Open Ticket',
+        'open_task' => 'Open Task',
+        'review_attempt' => 'Review Attempt',
+    ],
+
+    'review' => [
+        'title' => 'Review Creation Attempt',
+        'sections' => [
+            'task' => 'Scheduled Task',
+            'run' => 'Original Run',
+            'attempt' => 'Creation Attempt',
+            'lookup' => 'Latest Lookup',
+            'matches' => 'Lookup Matches',
+            'retry_chain' => 'Retry Chain',
+        ],
+        'actions' => [
+            'review_attempt' => 'Review Attempt',
+            'recheck' => 'Fresh Recheck',
+            'manual_close' => [
+                'label' => 'Close',
+                'modal_heading' => 'Close run',
+                'modal_description' => 'Close this run without linking a Znuny ticket',
+                'submit' => 'Close',
+            ],
+            'manual_link' => [
+                'label' => 'Manual Link',
+                'modal_heading' => 'Link Znuny Ticket manually',
+                'modal_description_found' => 'The system will associate the existing Znuny ticket #:ticket_number (ID: :ticket_id) with this scheduled attempt. No new ticket will be created.',
+                'modal_description_multiple' => 'Please select the correct Znuny ticket. The system will associate it with this scheduled attempt. No new ticket will be created.',
+                'select_ticket_label' => 'Select Ticket',
+                'submit' => 'Link Ticket',
+                'errors' => [
+                    'invalid_id' => 'The selected Znuny TicketID is invalid.',
+                    'invalid_number' => 'The selected Znuny TicketNumber is invalid.',
+                    'not_found' => 'The selected attempt was not found.',
+                    'not_scheduled' => 'The attempt does not belong to a scheduled run.',
+                    'already_linked_different' => 'The attempt has already been manually linked to a different Znuny ticket.',
+                    'terminal_state' => 'The attempt is in a terminal state that cannot be manually linked.',
+                    'not_uncertain' => 'The attempt is not in an uncertain state.',
+                    'not_in_lookup' => 'The selected Znuny ticket is not present in the current marker lookup result.',
+                    'attempt_changed' => 'The Scheduled Znuny ticket creation attempt changed during manual linking.',
+                    'run_not_found' => 'The Scheduled Znuny task run linked to this attempt was not found.',
+                    'task_not_found' => 'The Scheduled Znuny task linked to this attempt was not found.',
+                    'transaction_error' => 'A transaction error occurred during manual link.',
+                ],
+            ],
+            'manual_retry' => [
+                'label' => 'Manual Retry',
+                'modal_heading' => 'Queue Manual Retry',
+                'modal_description' => 'This will queue a new pending run for this scheduled task. The original attempt will remain unchanged. Processing will occur normally through the scheduler. If the scheduler is currently paused or disabled, this run will wait until processing resumes.',
+                'submit' => 'Queue Retry',
+            ],
+        ],
+        'fields' => [
+            'task_id' => 'Task ID',
+            'task_name' => 'Task Name',
+            'task_enabled' => 'Task Enabled',
+            'run_id' => 'Run ID',
+            'run_type' => 'Run Type',
+            'run_status' => 'Run Status',
+            'scheduled_time' => 'Scheduled Time',
+            'start_time' => 'Start Time',
+            'finish_time' => 'Finish Time',
+            'attempt_id' => 'Attempt ID',
+            'attempt_status' => 'Attempt Status',
+            'source_type' => 'Source Type',
+            'marker' => 'Marker',
+            'subject_original' => 'Original Subject',
+            'subject_sent' => 'Sent Subject',
+            'check_count' => 'Check Count',
+            'started_time' => 'Started Time',
+            'last_checked_time' => 'Last Checked Time',
+            'stored_ticket_id' => 'Stored Ticket ID',
+            'stored_ticket_number' => 'Stored Ticket Number',
+            'lookup_status' => 'Lookup Status',
+            'lookup_reason' => 'Lookup Reason',
+            'refresh_attempted' => 'Refresh Attempted',
+            'refresh_succeeded' => 'Refresh Succeeded',
+            'refresh_exit_code' => 'Refresh Exit Code',
+            'last_rechecked_at' => 'Last Rechecked At',
+            'ticket_id' => 'Ticket ID',
+            'ticket_number' => 'Ticket Number',
+            'ticket_title' => 'Title',
+            'ticket_state' => 'State',
+            'ticket_state_type' => 'State Type',
+            'ticket_queue' => 'Queue',
+            'retry_sequence' => 'Attempt',
+            'resolution_type' => 'Resolution Type',
+            'resolved_at' => 'Resolved At',
+            'created_by' => 'Created By',
+            'current_leaf' => 'Current',
+            'yes' => 'Yes',
+            'no' => 'No',
+        ],
+        'lookup_statuses' => [
+            'found' => 'Found',
+            'multiple' => 'Multiple Matches',
+            'not_found' => 'Not Found',
+            'unavailable' => 'Unavailable',
+        ],
+        'notifications' => [
+            'found' => [
+                'title' => 'Ticket Found',
+                'body' => 'A matching ticket was found.',
+            ],
+            'multiple' => [
+                'title' => 'Multiple Tickets Found',
+                'body' => 'Multiple matching tickets were found. Please review the matches.',
+            ],
+            'not_found' => [
+                'title' => 'No Ticket Found',
+                'body' => 'No matching ticket was found.',
+            ],
+            'unavailable' => [
+                'title' => 'Lookup Unavailable',
+                'body' => 'The ticket system is currently unavailable.',
+            ],
+            'changed' => [
+                'title' => 'Attempt State Changed',
+                'body' => 'The attempt changed while the operation was being performed. The current state has been reloaded.',
+            ],
+            'manual_link_success' => [
+                'title' => 'Ticket linked successfully',
+            ],
+            'manual_link_idempotent' => [
+                'title' => 'Ticket already linked',
+                'body' => 'The attempt is already linked to the specified ticket.',
+            ],
+            'manual_link_conflict' => [
+                'title' => 'Link Conflict',
+                'body' => 'The ticket could not be linked.',
+            ],
+            'manual_close_success' => [
+                'title' => 'Run closed',
+            ],
+            'manual_close_failed' => [
+                'title' => 'Run could not be closed',
+                'body' => 'The run state changed or this run is no longer available for manual closing.',
+            ],
+            'manual_retry_success' => [
+                'title' => 'Retry queued successfully',
+                'body' => 'A new pending run (ID: :run_id) has been queued.',
+            ],
+            'manual_retry_idempotent' => [
+                'title' => 'Retry already queued',
+                'body' => 'An existing pending retry run (ID: :run_id) was found.',
+            ],
+            'manual_retry_conflict' => [
+                'title' => 'Retry Conflict',
+                'body' => 'A manual retry could not be queued.',
+            ],
+            'unexpected_error' => [
+                'title' => 'Unexpected Error',
+                'body' => 'An unexpected error occurred during the operation.',
+            ],
+            'malformed_lineage' => [
+                'title' => 'Lineage Error',
+                'body' => 'Malformed retry lineage for this run.',
+            ],
+            'chain_closed' => [
+                'title' => 'Chain Closed',
+                'body' => 'The retry chain is already closed or successfully completed.',
+            ],
+        ],
+        'empty' => [
+            'matches' => 'No matching tickets found.',
+            'reason' => 'No reason provided.',
+            'not_available' => 'Not available.',
+            'no_attempt' => 'No ticket creation attempt was created for this run.',
+        ],
+    ],
+];
