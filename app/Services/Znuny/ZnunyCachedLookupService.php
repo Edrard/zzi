@@ -256,6 +256,17 @@ class ZnunyCachedLookupService
         }
     }
 
+    public function getCustomerCompanies(): array
+    {
+        try {
+            return $this->lookupReader->getCustomerCompanies();
+        } catch (Throwable $e) {
+            report($e);
+
+            return [];
+        }
+    }
+
     public function getCustomerUserPrimaryOptionsForQueue(string $queueName): array
     {
         $queueName = trim($queueName);

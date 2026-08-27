@@ -29,13 +29,66 @@ class ZnunyWarmLookupsCommand extends Command
                 $priorities = $this->normalizeCategory($rawPriorities, 'priorities');
                 $types = $this->normalizeCategory($rawTypes, 'types');
 
+                $customerCompanies = [];
+                $offset = 0;
+                $limit = 100;
+                $expectedTotalCount = null;
+
+                while (true) {
+                    $page = $client->getCustomerCompaniesPage($offset, $limit);
+
+                    if ($page['offset'] !== $offset) {
+                        throw new \Exception("Pagination error: returned offset mismatch.");
+                    }
+                    if (count($page['companies']) !== $page['count']) {
+                        throw new \Exception("Pagination error: returned companies array size mismatch with Count.");
+                    }
+                    if ($page['limit'] !== $limit) {
+                        throw new \Exception("Pagination error: returned Limit mismatch.");
+                    }
+
+                    if ($expectedTotalCount === null) {
+                        $expectedTotalCount = $page['total_count'];
+                    } elseif ($expectedTotalCount !== $page['total_count']) {
+                        throw new \Exception("Pagination error: TotalCount changed during iteration.");
+                    }
+
+                    if ($offset + $page['count'] > $expectedTotalCount) {
+                        throw new \Exception("Pagination error: offset + count exceeds TotalCount.");
+                    }
+
+                    foreach ($page['companies'] as $c) {
+                        $id = $c['customer_id'];
+                        if (isset($customerCompanies[$id])) {
+                            throw new \Exception("Duplicate CustomerID detected: '{$id}'.");
+                        }
+                        $customerCompanies[$id] = $c['name'];
+                    }
+
+                    if ($page['has_more']) {
+                        if ($page['count'] === 0) {
+                            throw new \Exception("Pagination error: HasMore=1 but Count=0.");
+                        }
+                        if ($offset + $page['count'] >= $expectedTotalCount) {
+                            throw new \Exception("Pagination error: HasMore=1 but offset + count >= TotalCount.");
+                        }
+                        $offset += $page['count'];
+                    } else {
+                        if ($offset + $page['count'] !== $expectedTotalCount) {
+                            throw new \Exception("Pagination error: HasMore=0 but offset + count != TotalCount.");
+                        }
+                        break;
+                    }
+                }
+
                 return [
                     'payload' => [
                         'states' => $states,
                         'priorities' => $priorities,
                         'types' => $types,
+                        'customer_companies' => $customerCompanies,
                     ],
-                    'item_count' => count($states) + count($priorities) + count($types),
+                    'item_count' => count($states) + count($priorities) + count($types) + count($customerCompanies),
                 ];
             },
             'artisan',

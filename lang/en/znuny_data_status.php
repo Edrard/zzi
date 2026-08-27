@@ -55,7 +55,7 @@ return [
     'descriptions' => [
         'queues' => 'Number of normalized queues.',
         'agents' => 'Number of agents. The matrix of agent access to queues is stored in the dataset but not counted separately.',
-        'lookups' => 'Total number of states, priorities, and types.',
+        'lookups' => 'Total number of states, priorities, types, and customer companies.',
         'customer_users' => 'Sum of final CustomerUsers variants across all queues. This is not the number of globally unique users.',
         'inline_images' => 'Number of cached inline images.',
         'tail_offset' => 'Rotating cursor position for the tail ticket window.',

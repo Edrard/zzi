@@ -1752,4 +1752,114 @@ class ZnunyClient
             ];
         });
     }
+
+    /**
+     * Get a page of customer companies from Znuny.
+     */
+    public function getCustomerCompaniesPage(int $offset = 0, int $limit = 100): array
+    {
+        if ($offset < 0) {
+            throw new \InvalidArgumentException('Offset must be >= 0.');
+        }
+        if ($limit < 1 || $limit > 100) {
+            throw new \InvalidArgumentException('Limit must be between 1 and 100.');
+        }
+
+        return $this->withSessionRetry(function ($session) use ($offset, $limit) {
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/CustomerCompany', [
+                'SessionID' => $session,
+                'Offset' => $offset,
+                'Limit' => $limit,
+            ]);
+
+            $data = $this->processResponse($response);
+
+            if (!isset($data['Errors'])) {
+                throw new Exception('Missing Errors field in response.');
+            }
+            if (!is_array($data['Errors'])) {
+                throw new Exception('Malformed Errors field in response.');
+            }
+            if (!empty($data['Errors'])) {
+                throw new Exception('CustomerCompany API returned errors.');
+            }
+
+            if (!isset($data['CustomerCompanies']) || !is_array($data['CustomerCompanies'])) {
+                throw new Exception('Malformed CustomerCompanies array in response.');
+            }
+
+            $companies = [];
+            foreach ($data['CustomerCompanies'] as $company) {
+                if (!is_array($company)) {
+                    throw new Exception('Malformed CustomerCompany row.');
+                }
+
+                $id = $company['CustomerID'] ?? null;
+                if (!is_scalar($id) || trim((string)$id) === '') {
+                    throw new Exception('CustomerCompany row missing valid CustomerID.');
+                }
+
+                $name = $company['CustomerCompanyName'] ?? null;
+                if (!is_scalar($name) || trim((string)$name) === '') {
+                    throw new Exception('CustomerCompany row missing valid CustomerCompanyName.');
+                }
+
+                $companies[] = [
+                    'customer_id' => (string) $id,
+                    'name' => (string) $name,
+                ];
+            }
+
+            $parseMetadataInt = function ($key, $data, $min = 0, $max = null) {
+                if (!array_key_exists($key, $data)) {
+                    throw new Exception("Missing pagination metadata: {$key}.");
+                }
+                $val = $data[$key];
+                if (is_int($val)) {
+                    $intVal = $val;
+                } elseif (is_string($val) && preg_match('/^(0|[1-9][0-9]*)$/', $val)) {
+                    if ((string) (int) $val !== $val) {
+                        throw new Exception("Pagination metadata {$key} out of range.");
+                    }
+                    $intVal = (int) $val;
+                } else {
+                    throw new Exception("Malformed pagination metadata: {$key}.");
+                }
+
+                if ($intVal < $min) {
+                    throw new Exception("Pagination metadata {$key} out of range.");
+                }
+                if ($max !== null && $intVal > $max) {
+                    throw new Exception("Pagination metadata {$key} out of range.");
+                }
+                return $intVal;
+            };
+
+            $count = $parseMetadataInt('Count', $data);
+            $totalCount = $parseMetadataInt('TotalCount', $data);
+            $resLimit = $parseMetadataInt('Limit', $data, 1, 100);
+            $resOffset = $parseMetadataInt('Offset', $data);
+
+            if (!array_key_exists('HasMore', $data)) {
+                throw new Exception('Missing pagination metadata: HasMore.');
+            }
+            $hasMoreRaw = $data['HasMore'];
+            if ($hasMoreRaw === 0 || $hasMoreRaw === '0') {
+                $hasMore = false;
+            } elseif ($hasMoreRaw === 1 || $hasMoreRaw === '1') {
+                $hasMore = true;
+            } else {
+                throw new Exception('Malformed pagination metadata: HasMore.');
+            }
+
+            return [
+                'companies' => $companies,
+                'count' => $count,
+                'total_count' => $totalCount,
+                'limit' => $resLimit,
+                'offset' => $resOffset,
+                'has_more' => $hasMore,
+            ];
+        });
+    }
 }
