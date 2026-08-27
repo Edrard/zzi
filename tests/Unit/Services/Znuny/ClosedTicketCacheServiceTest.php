@@ -13,7 +13,9 @@ class ClosedTicketCacheServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new ClosedTicketCacheService;
+        $mockLookup = \Mockery::mock(\App\Services\Znuny\Cache\ZnunyLookupCacheReadService::class);
+        $mockLookup->shouldReceive('hasCustomerCompany')->andReturn(false)->byDefault();
+        $this->service = new ClosedTicketCacheService($mockLookup);
         Redis::flushdb();
     }
 
@@ -31,7 +33,7 @@ class ClosedTicketCacheServiceTest extends TestCase
         $this->service->upsertTicket($ticket, $retentionDays);
 
         $this->assertEquals(
-            json_encode($ticket),
+            json_encode(array_merge($ticket, ['customer_user_registered' => false])),
             Redis::get('znuny:closed_ticket:ticket:123')
         );
 
@@ -132,4 +134,57 @@ class ClosedTicketCacheServiceTest extends TestCase
 
         Redis::del('znuny:closed_ticket:index:2023-10-01');
     }
+
+    public function test_registered_customer_is_enriched_before_cache(): void
+    {
+        $mockLookup = \Mockery::mock(\App\Services\Znuny\Cache\ZnunyLookupCacheReadService::class);
+        $mockLookup->shouldReceive('hasCustomerCompany')->once()->with('agrotekhnik')->andReturn(true);
+        $service = new ClosedTicketCacheService($mockLookup);
+
+        $ticket = [
+            'TicketID' => 125,
+            'CustomerID' => 'agrotekhnik',
+            'Created' => '2023-10-01 12:00:00',
+        ];
+        $retentionDays = 180;
+        $retentionSeconds = $retentionDays * 86400;
+        $timestamp = strtotime($ticket['Created']);
+
+        Redis::shouldReceive('setex')->once()->with(
+            'znuny:closed_ticket:ticket:125',
+            $retentionSeconds,
+            json_encode(array_merge($ticket, ['customer_user_registered' => true]))
+        );
+        Redis::shouldReceive('zadd')->once()->with('znuny:closed_ticket:index:2023-10-01', $timestamp, 125);
+        Redis::shouldReceive('expire')->once()->with('znuny:closed_ticket:index:2023-10-01', $retentionSeconds);
+
+        $service->upsertTicket($ticket, $retentionDays);
+    }
+
+    public function test_mail_only_customer_is_enriched_before_cache(): void
+    {
+        $mockLookup = \Mockery::mock(\App\Services\Znuny\Cache\ZnunyLookupCacheReadService::class);
+        $mockLookup->shouldReceive('hasCustomerCompany')->once()->with('oleksandr.ustinov@tmm.ua')->andReturn(false);
+        $service = new ClosedTicketCacheService($mockLookup);
+
+        $ticket = [
+            'TicketID' => 126,
+            'CustomerID' => 'oleksandr.ustinov@tmm.ua',
+            'Created' => '2023-10-01 12:00:00',
+        ];
+        $retentionDays = 180;
+        $retentionSeconds = $retentionDays * 86400;
+        $timestamp = strtotime($ticket['Created']);
+
+        Redis::shouldReceive('setex')->once()->with(
+            'znuny:closed_ticket:ticket:126',
+            $retentionSeconds,
+            json_encode(array_merge($ticket, ['customer_user_registered' => false]))
+        );
+        Redis::shouldReceive('zadd')->once()->with('znuny:closed_ticket:index:2023-10-01', $timestamp, 126);
+        Redis::shouldReceive('expire')->once()->with('znuny:closed_ticket:index:2023-10-01', $retentionSeconds);
+
+        $service->upsertTicket($ticket, $retentionDays);
+    }
+
 }

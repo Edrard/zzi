@@ -2,10 +2,15 @@
 
 namespace App\Services\Znuny;
 
+use App\Services\Znuny\Cache\ZnunyLookupCacheReadService;
 use Illuminate\Support\Facades\Redis;
 
 class ClosedTicketCacheService
 {
+    public function __construct(
+        private readonly ZnunyLookupCacheReadService $lookupCache
+    ) {}
+
     private const METADATA_KEY = 'znuny:closed_ticket:sync:metadata';
 
     public function getMetadata(): ?array
@@ -72,6 +77,10 @@ class ClosedTicketCacheService
         $retentionSeconds = $retentionDays * 86400;
 
         $ticketKey = "znuny:closed_ticket:ticket:{$ticketId}";
+
+        $customerId = (string) ($ticket['CustomerID'] ?? '');
+        $ticket['customer_user_registered'] = $this->lookupCache->hasCustomerCompany($customerId);
+
         Redis::setex($ticketKey, $retentionSeconds, json_encode($ticket));
 
         $indexKey = "znuny:closed_ticket:index:{$date}";
