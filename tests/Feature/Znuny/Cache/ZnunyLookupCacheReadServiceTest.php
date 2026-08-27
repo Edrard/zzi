@@ -396,4 +396,28 @@ class ZnunyLookupCacheReadServiceTest extends TestCase
         $this->assertEquals(['incident' => 'incident'], $service->getTypes());
         $this->assertEquals([], $service->getCustomerCompanies());
     }
+
+    public function test_has_customer_company()
+    {
+        Cache::put('znuny_prewarm_lookups_meta', [
+            'active_generation' => 'gen_1',
+            'status' => 'ready',
+        ], now()->addMinutes(10));
+        Cache::put('gen_1', [
+            'states' => ['open' => 'open'],
+            'priorities' => ['high' => 'high'],
+            'types' => ['incident' => 'incident'],
+            'customer_companies' => [
+                'agrotekhnik' => 'agrotekhnik Agrotekhnik',
+                'finbert' => 'finbert Finbert',
+            ],
+        ], now()->addMinutes(10));
+
+        $service = new ZnunyLookupCacheReadService();
+
+        $this->assertTrue($service->hasCustomerCompany('agrotekhnik'));
+        $this->assertTrue($service->hasCustomerCompany('finbert'));
+        $this->assertFalse($service->hasCustomerCompany('oleksandr.ustinov@tmm.ua'));
+        $this->assertFalse($service->hasCustomerCompany(''));
+    }
 }

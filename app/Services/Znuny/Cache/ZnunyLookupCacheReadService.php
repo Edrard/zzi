@@ -88,6 +88,12 @@ class ZnunyLookupCacheReadService
         return $snapshot !== null ? $snapshot['customer_companies'] : [];
     }
 
+    public function hasCustomerCompany(string $customerId): bool
+    {
+        return $customerId !== ''
+            && array_key_exists($customerId, $this->getCustomerCompanies());
+    }
+
     public function getMetadata(): array
     {
         return $this->snapshotManager->readMetadata();

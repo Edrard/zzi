@@ -3,11 +3,16 @@
 namespace App\Services\Znuny;
 
 use App\Services\SettingsService;
+use App\Services\Znuny\Cache\ZnunyLookupCacheReadService;
 use App\Support\Polling\UiPollInterval;
 use Illuminate\Support\Facades\Redis;
 
 class ZnunyTicketCacheService
 {
+    public function __construct(
+        private readonly ZnunyLookupCacheReadService $lookupCache
+    ) {}
+
     protected function isEnabled(): bool
     {
         return SettingsService::bool('znuny_ticket_workspace_enabled', true) ?? true;
@@ -40,6 +45,8 @@ class ZnunyTicketCacheService
         $ttl = $this->getTtl();
 
         $key = "znuny:ticket:{$ticketId}";
+
+        $ticket = $this->enrichTicketWithCustomerRegistration($ticket);
 
         Redis::setex($key, max(1, $ttl), json_encode($ticket));
 
@@ -87,6 +94,8 @@ class ZnunyTicketCacheService
         $ttl = $this->getTtl();
         $key = "znuny:ticket:{$ticketId}";
 
+        $ticket = $this->enrichTicketWithCustomerRegistration($ticket);
+
         Redis::setex($key, max(1, $ttl), json_encode($ticket));
         $this->updateIndexes($ticket, $ttl);
     }
@@ -126,6 +135,8 @@ class ZnunyTicketCacheService
             return 'skipped_missing_ticket_id';
         }
 
+        $ticket = $this->enrichTicketWithCustomerRegistration($ticket);
+
         $isClosed = $this->isClosedState($ticket['StateType'] ?? '');
         $ttl = $this->getTtl();
         $key = "znuny:ticket:{$ticketId}";
@@ -149,7 +160,11 @@ class ZnunyTicketCacheService
         $inlineCountUnchanged = $hasOldInlineCount && $newInlineCount === $oldInlineCount;
         $htmlCountUnchanged = $hasOldHtmlCount && $newHtmlCount === $oldHtmlCount;
 
-        if ($fingerprintUnchanged && $inlineCountUnchanged && $htmlCountUnchanged) {
+        $hasOldRegistration = is_array($existingData) && array_key_exists('customer_user_registered', $existingData);
+        $oldRegistration = $hasOldRegistration ? $existingData['customer_user_registered'] : null;
+        $registrationUnchanged = $hasOldRegistration && $ticket['customer_user_registered'] === $oldRegistration;
+
+        if ($fingerprintUnchanged && $inlineCountUnchanged && $htmlCountUnchanged && $registrationUnchanged) {
             // refresh TTLs
             Redis::expire($key, max(1, $ttl));
 
@@ -168,6 +183,7 @@ class ZnunyTicketCacheService
         }
 
         // new or fingerprint changed
+
         Redis::setex($key, max(1, $ttl), json_encode($ticket));
         $this->updateIndexes($ticket, $ttl);
 
@@ -257,5 +273,15 @@ class ZnunyTicketCacheService
     protected function isClosedState(string $stateType): bool
     {
         return in_array(strtolower($stateType), ['closed', 'merged'], true);
+    }
+
+    private function enrichTicketWithCustomerRegistration(array $ticket): array
+    {
+        $customerId = (string) ($ticket['CustomerID'] ?? '');
+
+        $ticket['customer_user_registered'] =
+            $this->lookupCache->hasCustomerCompany($customerId);
+
+        return $ticket;
     }
 }
