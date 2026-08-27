@@ -752,4 +752,140 @@ class ZnunyWarmLookupsCommandTest extends TestCase
         $this->assertEquals([], $payload['customer_companies']);
         $this->assertEquals(3, $meta['item_count']);
     }
+
+    public function test_customer_company_page_size_clamps_49_to_50()
+    {
+        putenv('ZNUNY_CUSTOMER_COMPANY_PAGE_SIZE=49');
+        $config = require config_path('znuny.php');
+        config(['znuny' => $config]);
+        putenv('ZNUNY_CUSTOMER_COMPANY_PAGE_SIZE'); // clear
+
+        Http::fake([
+            '*/Session*' => Http::response(['SessionID' => 'test']),
+            '*/TicketState*' => Http::response(['TicketStates' => ['open']]),
+            '*/TicketPriority*' => Http::response(['TicketPriorities' => ['high']]),
+            '*/TicketType*' => Http::response(['TicketTypes' => ['Incident']]),
+            '*/CustomerCompany*' => Http::response([
+                'Errors' => [],
+                'CustomerCompanies' => [],
+                'Count' => 0,
+                'TotalCount' => 0,
+                'Limit' => 50,
+                'Offset' => 0,
+                'HasMore' => 0,
+            ]),
+        ]);
+
+        $this->artisan('znuny:cache:warm-lookups')->assertSuccessful();
+
+        $companyRequests = collect(Http::recorded())
+            ->map(fn ($record) => $record[0])
+            ->filter(fn (\Illuminate\Http\Client\Request $req) => str_contains(parse_url($req->url(), PHP_URL_PATH), '/CustomerCompany'))
+            ->values();
+
+        $this->assertCount(1, $companyRequests);
+        $this->assertEquals(50, $companyRequests[0]['Limit']);
+    }
+
+    public function test_customer_company_page_size_clamps_101_to_100()
+    {
+        putenv('ZNUNY_CUSTOMER_COMPANY_PAGE_SIZE=101');
+        $config = require config_path('znuny.php');
+        config(['znuny' => $config]);
+        putenv('ZNUNY_CUSTOMER_COMPANY_PAGE_SIZE'); // clear
+
+        Http::fake([
+            '*/Session*' => Http::response(['SessionID' => 'test']),
+            '*/TicketState*' => Http::response(['TicketStates' => ['open']]),
+            '*/TicketPriority*' => Http::response(['TicketPriorities' => ['high']]),
+            '*/TicketType*' => Http::response(['TicketTypes' => ['Incident']]),
+            '*/CustomerCompany*' => Http::response([
+                'Errors' => [],
+                'CustomerCompanies' => [],
+                'Count' => 0,
+                'TotalCount' => 0,
+                'Limit' => 100,
+                'Offset' => 0,
+                'HasMore' => 0,
+            ]),
+        ]);
+
+        $this->artisan('znuny:cache:warm-lookups')->assertSuccessful();
+
+        $companyRequests = collect(Http::recorded())
+            ->map(fn ($record) => $record[0])
+            ->filter(fn (\Illuminate\Http\Client\Request $req) => str_contains(parse_url($req->url(), PHP_URL_PATH), '/CustomerCompany'))
+            ->values();
+
+        $this->assertCount(1, $companyRequests);
+        $this->assertEquals(100, $companyRequests[0]['Limit']);
+    }
+
+    public function test_customer_company_configurable_page_size_50_with_87_companies()
+    {
+        config(['znuny.customer_company_page_size' => 50]);
+
+        $page1Companies = [];
+        for ($i = 1; $i <= 50; $i++) {
+            $page1Companies[] = ['CustomerID' => "c{$i}", 'CustomerCompanyName' => "C{$i}"];
+        }
+
+        $page2Companies = [];
+        for ($i = 51; $i <= 87; $i++) {
+            $page2Companies[] = ['CustomerID' => "c{$i}", 'CustomerCompanyName' => "C{$i}"];
+        }
+
+        Http::fake([
+            '*/Session*' => Http::response(['SessionID' => 'test']),
+            '*/TicketState*' => Http::response(['TicketStates' => ['open']]),
+            '*/TicketPriority*' => Http::response(['TicketPriorities' => ['high']]),
+            '*/TicketType*' => Http::response(['TicketTypes' => ['Incident']]),
+            '*/CustomerCompany*Offset=0*' => Http::response([
+                'Errors' => [],
+                'CustomerCompanies' => $page1Companies,
+                'Count' => 50,
+                'TotalCount' => 87,
+                'Limit' => 50,
+                'Offset' => 0,
+                'HasMore' => 1,
+            ]),
+            '*/CustomerCompany*Offset=50*' => Http::response([
+                'Errors' => [],
+                'CustomerCompanies' => $page2Companies,
+                'Count' => 37,
+                'TotalCount' => 87,
+                'Limit' => 50,
+                'Offset' => 50,
+                'HasMore' => 0,
+            ]),
+        ]);
+
+        $this->artisan('znuny:cache:warm-lookups')->assertSuccessful();
+
+        $meta = Cache::get('znuny_prewarm_lookups_meta');
+        $payload = Cache::get($meta['active_generation']);
+
+        $this->assertArrayHasKey('customer_companies', $payload);
+        $this->assertCount(87, $payload['customer_companies']);
+        $this->assertEquals('C1', $payload['customer_companies']['c1']);
+        $this->assertEquals('C50', $payload['customer_companies']['c50']);
+        $this->assertEquals('C87', $payload['customer_companies']['c87']);
+        $this->assertEquals(90, $meta['item_count']);
+
+        $companyRequests = collect(Http::recorded())
+            ->map(fn ($record) => $record[0])
+            ->filter(fn (\Illuminate\Http\Client\Request $req) => str_contains(parse_url($req->url(), PHP_URL_PATH), '/CustomerCompany'))
+            ->values();
+
+        $this->assertCount(2, $companyRequests);
+
+        $this->assertEquals(0, $companyRequests[0]['Offset']);
+        $this->assertEquals(50, $companyRequests[0]['Limit']);
+        $this->assertFalse(isset($companyRequests[0]['Search']));
+
+
+        $this->assertEquals(50, $companyRequests[1]['Offset']);
+        $this->assertEquals(50, $companyRequests[1]['Limit']);
+        $this->assertFalse(isset($companyRequests[1]['Search']));
+    }
 }
