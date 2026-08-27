@@ -1037,4 +1037,44 @@ class ZnunyCachedLookupServiceTest extends TestCase
         $this->assertEquals(['available' => true, 'status' => 'refreshing'], $service->getPrewarmDatasetState('lookups'));
         $this->assertEquals(['available' => true, 'status' => 'missing'], $service->getPrewarmDatasetState('customer_users'));
     }
+    public function test_get_customer_companies_returns_exact_reader_map()
+    {
+        $this->mock(ZnunyLookupCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getCustomerCompanies')->once()->andReturn([
+                'c1' => 'Company 1',
+                'c2' => 'Company 2',
+            ]);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $companies = $service->getCustomerCompanies();
+
+        $this->assertEquals([
+            'c1' => 'Company 1',
+            'c2' => 'Company 2',
+        ], $companies);
+    }
+
+    public function test_get_customer_companies_returns_empty_on_exception()
+    {
+        $this->mock(ZnunyLookupCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getCustomerCompanies')->once()->andThrow(new \Exception('Reader error'));
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $companies = $service->getCustomerCompanies();
+
+        $this->assertEquals([], $companies);
+    }
+
+    public function test_get_customer_companies_repeated_calls_read_through_reader()
+    {
+        $this->mock(ZnunyLookupCacheReadService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getCustomerCompanies')->twice()->andReturn(['c1' => 'Company 1']);
+        });
+
+        $service = app(ZnunyCachedLookupService::class);
+        $service->getCustomerCompanies();
+        $service->getCustomerCompanies();
+    }
 }

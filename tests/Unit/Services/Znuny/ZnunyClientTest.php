@@ -1032,4 +1032,180 @@ class ZnunyClientTest extends TestCase
 
         $this->assertSame([], $client->getTicketInlineAttachmentReferences(123));
     }
+    public function test_get_customer_companies_page_success()
+    {
+        Http::fake([
+            '*/Session*' => Http::response(['SessionID' => 'test-session-id'], 200),
+            '*/CustomerCompany*' => Http::response([
+                'Errors' => [], 'CustomerCompanies' => [
+                    ['CustomerID' => 'c1', 'CustomerCompanyName' => 'Company One'],
+                    ['CustomerID' => 'c2', 'CustomerCompanyName' => 'Company Two'],
+                ],
+                'Count' => 2,
+                'TotalCount' => 2,
+                'Limit' => 100,
+                'Offset' => 0,
+                'HasMore' => 0,
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $result = $client->getCustomerCompaniesPage(0, 100);
+
+        $this->assertEquals(2, $result['count']);
+        $this->assertEquals('Company One', $result['companies'][0]['name']);
+        $this->assertEquals('c1', $result['companies'][0]['customer_id']);
+
+        Http::assertSent(function (Request $request) {
+            $path = parse_url($request->url(), PHP_URL_PATH);
+            if (str_contains($path, '/CustomerCompany')) {
+                return $request['SessionID'] === 'test-session-id' &&
+                       $request['Offset'] == 0 &&
+                       $request['Limit'] == 100 &&
+                       !isset($request['Search']);
+            }
+            return true;
+        });
+    }
+
+    public static function provideInvalidCustomerCompanyPages(): array
+    {
+        return [
+            'errors missing' => [
+                ['CustomerCompanies' => [], 'Count' => 0, 'TotalCount' => 0, 'Limit' => 100, 'Offset' => 0, 'HasMore' => 0],
+                'Missing Errors field in response.',
+            ],
+            'errors non empty' => [
+                ['Errors' => ['Some error']],
+                'CustomerCompany API returned errors.',
+            ],
+            'errors malformed' => [
+                ['Errors' => 'Not an array'],
+                'Malformed Errors field in response.',
+            ],
+            'companies missing' => [
+                ['Errors' => []],
+                'Malformed CustomerCompanies array in response.',
+            ],
+            'companies malformed' => [
+                ['Errors' => [], 'CustomerCompanies' => 'Not an array'],
+                'Malformed CustomerCompanies array in response.',
+            ],
+            'missing count' => [
+                ['Errors' => [], 'CustomerCompanies' => []],
+                'Missing pagination metadata: Count.',
+            ],
+            'missing total_count' => [
+                ['Errors' => [], 'CustomerCompanies' => [], 'Count' => 0],
+                'Missing pagination metadata: TotalCount.',
+            ],
+            'missing limit' => [
+                ['Errors' => [], 'CustomerCompanies' => [], 'Count' => 0, 'TotalCount' => 0],
+                'Missing pagination metadata: Limit.',
+            ],
+            'missing offset' => [
+                ['Errors' => [], 'CustomerCompanies' => [], 'Count' => 0, 'TotalCount' => 0, 'Limit' => 100],
+                'Missing pagination metadata: Offset.',
+            ],
+            'missing has_more' => [
+                ['Errors' => [], 'CustomerCompanies' => [], 'Count' => 0, 'TotalCount' => 0, 'Limit' => 100, 'Offset' => 0],
+                'Missing pagination metadata: HasMore.',
+            ],
+            'malformed count' => [
+                ['Errors' => [], 'CustomerCompanies' => [], 'Count' => 'abc', 'TotalCount' => 0, 'Limit' => 100, 'Offset' => 0, 'HasMore' => 0],
+                'Malformed pagination metadata: Count.',
+            ],
+            'malformed total_count' => [
+                ['Errors' => [], 'CustomerCompanies' => [], 'Count' => 0, 'TotalCount' => 'abc', 'Limit' => 100, 'Offset' => 0, 'HasMore' => 0],
+                'Malformed pagination metadata: TotalCount.',
+            ],
+            'malformed limit' => [
+                ['Errors' => [], 'CustomerCompanies' => [], 'Count' => 0, 'TotalCount' => 0, 'Limit' => 'abc', 'Offset' => 0, 'HasMore' => 0],
+                'Malformed pagination metadata: Limit.',
+            ],
+            'limit out of bounds' => [
+                ['Errors' => [], 'CustomerCompanies' => [], 'Count' => 0, 'TotalCount' => 0, 'Limit' => 101, 'Offset' => 0, 'HasMore' => 0],
+                'Pagination metadata Limit out of range.',
+            ],
+            'limit overflow' => [
+                ['Errors' => [], 'CustomerCompanies' => [], 'Count' => 0, 'TotalCount' => 0, 'Limit' => '99999999999999999999999999999', 'Offset' => 0, 'HasMore' => 0],
+                'Pagination metadata Limit out of range.',
+            ],
+            'limit negative' => [
+                ['Errors' => [], 'CustomerCompanies' => [], 'Count' => 0, 'TotalCount' => 0, 'Limit' => -1, 'Offset' => 0, 'HasMore' => 0],
+                'Pagination metadata Limit out of range.',
+            ],
+            'limit negative string' => [
+                ['Errors' => [], 'CustomerCompanies' => [], 'Count' => 0, 'TotalCount' => 0, 'Limit' => '-1', 'Offset' => 0, 'HasMore' => 0],
+                'Malformed pagination metadata: Limit.',
+            ],
+            'malformed offset' => [
+                ['Errors' => [], 'CustomerCompanies' => [], 'Count' => 0, 'TotalCount' => 0, 'Limit' => 100, 'Offset' => 'abc', 'HasMore' => 0],
+                'Malformed pagination metadata: Offset.',
+            ],
+            'malformed has_more' => [
+                ['Errors' => [], 'CustomerCompanies' => [], 'Count' => 0, 'TotalCount' => 0, 'Limit' => 100, 'Offset' => 0, 'HasMore' => 'false'],
+                'Malformed pagination metadata: HasMore.',
+            ],
+            'row without id' => [
+                ['Errors' => [], 'CustomerCompanies' => [['CustomerCompanyName' => 'Test']], 'Count' => 1, 'TotalCount' => 1, 'Limit' => 100, 'Offset' => 0, 'HasMore' => 0],
+                'CustomerCompany row missing valid CustomerID.',
+            ],
+            'non-scalar id' => [
+                ['Errors' => [], 'CustomerCompanies' => [['CustomerID' => ['id'], 'CustomerCompanyName' => 'Test']], 'Count' => 1, 'TotalCount' => 1, 'Limit' => 100, 'Offset' => 0, 'HasMore' => 0],
+                'CustomerCompany row missing valid CustomerID.',
+            ],
+            'missing name' => [
+                ['Errors' => [], 'CustomerCompanies' => [['CustomerID' => 'c1']], 'Count' => 1, 'TotalCount' => 1, 'Limit' => 100, 'Offset' => 0, 'HasMore' => 0],
+                'CustomerCompany row missing valid CustomerCompanyName.',
+            ],
+            'non-scalar name' => [
+                ['Errors' => [], 'CustomerCompanies' => [['CustomerID' => 'c1', 'CustomerCompanyName' => ['test']]], 'Count' => 1, 'TotalCount' => 1, 'Limit' => 100, 'Offset' => 0, 'HasMore' => 0],
+                'CustomerCompany row missing valid CustomerCompanyName.',
+            ],
+        ];
+    }
+
+    #[DataProvider('provideInvalidCustomerCompanyPages')]
+    public function test_get_customer_companies_page_strict_validation(array $payload, string $expectedExceptionMessage)
+    {
+        Http::fake([
+            '*/Session*' => Http::response(['SessionID' => 'test-session-id'], 200),
+            '*/CustomerCompany*' => Http::response($payload, 200),
+        ]);
+
+        $client = new ZnunyClient;
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage($expectedExceptionMessage);
+
+        $client->getCustomerCompaniesPage(0, 100);
+    }
+
+    public function test_get_customer_companies_page_rejects_negative_offset()
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Offset must be >= 0.');
+
+        $client = new ZnunyClient;
+        $client->getCustomerCompaniesPage(-1, 100);
+    }
+
+    public function test_get_customer_companies_page_rejects_zero_limit()
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Limit must be between 1 and 100.');
+
+        $client = new ZnunyClient;
+        $client->getCustomerCompaniesPage(0, 0);
+    }
+
+    public function test_get_customer_companies_page_rejects_large_limit()
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Limit must be between 1 and 100.');
+
+        $client = new ZnunyClient;
+        $client->getCustomerCompaniesPage(0, 101);
+    }
 }

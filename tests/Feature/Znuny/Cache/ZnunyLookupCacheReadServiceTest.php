@@ -315,4 +315,85 @@ class ZnunyLookupCacheReadServiceTest extends TestCase
         $this->assertEquals('lookups', $meta['dataset_name']);
         $this->assertEquals('missing', $meta['status']);
     }
+
+    public function test_old_snapshot_without_customer_companies_is_valid_and_returns_empty_companies()
+    {
+        Cache::put('znuny_prewarm_lookups_meta', [
+            'active_generation' => 'gen_1',
+            'status' => 'ready',
+        ], now()->addMinutes(10));
+        Cache::put('gen_1', [
+            'states' => ['open' => 'open'],
+            'priorities' => ['high' => 'high'],
+            'types' => ['incident' => 'incident'],
+            // no customer_companies
+        ], now()->addMinutes(10));
+
+        $service = new ZnunyLookupCacheReadService();
+        $snapshot = $service->getSnapshot();
+
+        $this->assertNotNull($snapshot);
+        $this->assertEquals(['open' => 'open'], $service->getStates());
+        $this->assertEquals(['high' => 'high'], $service->getPriorities());
+        $this->assertEquals(['incident' => 'incident'], $service->getTypes());
+        $this->assertEquals([], $service->getCustomerCompanies());
+    }
+
+    public function test_new_snapshot_with_customer_companies_returns_exact_map()
+    {
+        Cache::put('znuny_prewarm_lookups_meta', [
+            'active_generation' => 'gen_1',
+            'status' => 'ready',
+        ], now()->addMinutes(10));
+        Cache::put('gen_1', [
+            'states' => ['open' => 'open'],
+            'priorities' => ['high' => 'high'],
+            'types' => ['incident' => 'incident'],
+            'customer_companies' => ['c1' => 'Company 1', 'c2' => 'Company 2'],
+        ], now()->addMinutes(10));
+
+        $service = new ZnunyLookupCacheReadService();
+        $snapshot = $service->getSnapshot();
+
+        $this->assertNotNull($snapshot);
+        $this->assertEquals(['c1' => 'Company 1', 'c2' => 'Company 2'], $service->getCustomerCompanies());
+    }
+
+    public static function malformedCompaniesProvider(): array
+    {
+        return [
+            'not an array' => ['string'],
+            'empty key' => [['' => 'name']],
+            'invalid value array' => [['c1' => ['name']]],
+            'invalid value object' => [['c1' => (object)['name']]],
+            'boolean value' => [['c1' => true]],
+            'numeric value' => [['c1' => 123]],
+            'empty string value' => [['c1' => '']],
+        ];
+    }
+
+    #[DataProvider('malformedCompaniesProvider')]
+    public function test_malformed_customer_companies_returns_empty_array_and_preserves_others($malformedCompanies)
+    {
+
+        Cache::put('znuny_prewarm_lookups_meta', [
+            'active_generation' => 'gen_1',
+            'status' => 'ready',
+        ], now()->addMinutes(10));
+        Cache::put('gen_1', [
+            'states' => ['open' => 'open'],
+            'priorities' => ['high' => 'high'],
+            'types' => ['incident' => 'incident'],
+            'customer_companies' => $malformedCompanies,
+        ], now()->addMinutes(10));
+
+        $service = new ZnunyLookupCacheReadService();
+        $snapshot = $service->getSnapshot();
+
+        $this->assertNotNull($snapshot);
+        $this->assertEquals(['open' => 'open'], $service->getStates());
+        $this->assertEquals(['high' => 'high'], $service->getPriorities());
+        $this->assertEquals(['incident' => 'incident'], $service->getTypes());
+        $this->assertEquals([], $service->getCustomerCompanies());
+    }
 }
