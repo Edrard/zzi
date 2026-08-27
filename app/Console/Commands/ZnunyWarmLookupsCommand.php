@@ -31,7 +31,8 @@ class ZnunyWarmLookupsCommand extends Command
 
                 $customerCompanies = [];
                 $offset = 0;
-                $limit = 100;
+                $limit = (int) config('znuny.customer_company_page_size', 100);
+
                 $expectedTotalCount = null;
 
                 while (true) {

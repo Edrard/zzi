@@ -19,4 +19,9 @@ return [
 
     'inline_image_warmer_hot_percentage' => max(1, min(100, (int) env('ZNUNY_INLINE_IMAGE_WARMER_HOT_PERCENTAGE', 10))),
 
+    'customer_company_page_size' => max(
+        50,
+        min(100, (int) env('ZNUNY_CUSTOMER_COMPANY_PAGE_SIZE', 100))
+    ),
+
 ];
