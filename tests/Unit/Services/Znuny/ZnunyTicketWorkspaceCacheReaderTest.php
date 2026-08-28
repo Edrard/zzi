@@ -294,4 +294,47 @@ class ZnunyTicketWorkspaceCacheReaderTest extends TestCase
         $this->assertEquals(0, $tickets[208]['InlineAttachmentCount']);
         $this->assertEquals(0, $tickets[209]['InlineAttachmentCount']);
     }
+
+    public function test_it_normalizes_customer_user_and_id_and_registration()
+    {
+        $reader = app(ZnunyTicketWorkspaceCacheReader::class);
+
+        // 1. Registered non-email-login user
+        $t1 = $reader->normalizeSingleTicket([
+            'TicketID' => 301,
+            'StateType' => 'open',
+            'CustomerUserID' => 'PanlogisticClients',
+            'CustomerID' => 'panlogistic',
+            'customer_user_registered' => true,
+        ]);
+
+        $this->assertEquals('PanlogisticClients', $t1['CustomerUserID']);
+        $this->assertEquals('panlogistic', $t1['CustomerID']);
+        $this->assertTrue($t1['customer_user_registered']);
+
+        // 2. Mail-only/unregistered
+        $t2 = $reader->normalizeSingleTicket([
+            'TicketID' => 302,
+            'StateType' => 'open',
+            'CustomerUserID' => 'oleksandr.ustinov@tmm.ua',
+            'CustomerID' => 'oleksandr.ustinov@tmm.ua',
+            'customer_user_registered' => false,
+        ]);
+
+        $this->assertEquals('oleksandr.ustinov@tmm.ua', $t2['CustomerUserID']);
+        $this->assertEquals('oleksandr.ustinov@tmm.ua', $t2['CustomerID']);
+        $this->assertFalse($t2['customer_user_registered']);
+
+        // 3. Legacy (absent boolean)
+        $t3 = $reader->normalizeSingleTicket([
+            'TicketID' => 303,
+            'StateType' => 'open',
+            'CustomerUserID' => 'legacy',
+            'CustomerID' => 'legacy',
+        ]);
+
+        $this->assertEquals('legacy', $t3['CustomerUserID']);
+        $this->assertEquals('legacy', $t3['CustomerID']);
+        $this->assertNull($t3['customer_user_registered']);
+    }
 }

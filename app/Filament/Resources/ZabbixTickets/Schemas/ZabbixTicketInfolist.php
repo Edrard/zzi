@@ -102,7 +102,80 @@ class ZabbixTicketInfolist
 
                                         return $displayOwner;
                                     })->inlineLabel()->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
-                                    TextEntry::make('customer_user')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.customer')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->customer_user)->inlineLabel()->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->customer_user !== null)->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
+                                    TextEntry::make('customer_user')
+                                        ->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.customer')))
+                                        ->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->customer_user)
+                                        ->inlineLabel()
+                                        ->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->customer_user !== null)
+                                        ->placeholder(__('zabbix_tickets.details_modal.placeholders.empty'))
+                                        ->icon(function ($record) {
+                                            $registered = TicketDetailsPayload::fromRecord($record)->customer_user_registered;
+                                            if ($registered === true) return 'heroicon-m-user';
+                                            if ($registered === false) return 'heroicon-m-user-plus';
+                                            return null;
+                                        })
+                                        ->iconColor(function ($record) {
+                                            $registered = TicketDetailsPayload::fromRecord($record)->customer_user_registered;
+                                            if ($registered === false) return 'warning';
+                                            return 'gray';
+                                        })
+                                        ->tooltip(function ($record) {
+                                            $registered = TicketDetailsPayload::fromRecord($record)->customer_user_registered;
+                                            if ($registered === true) return 'Відкрити користувача Znuny';
+                                            if ($registered === false) return 'Користувач не створений у Znuny. Натисніть, щоб створити.';
+                                            return null;
+                                        })
+                                        ->action(
+                                            \Filament\Actions\Action::make('manage_customer_user')
+                                                ->modalHeading(fn ($record) => TicketDetailsPayload::fromRecord($record)->customer_user_registered ? 'Редагувати користувача Znuny' : 'Створити користувача Znuny')
+                                                ->form(function ($record) {
+                                                    $payload = TicketDetailsPayload::fromRecord($record);
+                                                    if ($payload->customer_user_registered) {
+                                                        return [
+                                                            \Filament\Forms\Components\TextInput::make('CustomerUserID')
+                                                                ->label('CustomerUserID / Login')
+                                                                ->default($payload->customer_user)
+                                                                ->disabled(),
+                                                            \Filament\Forms\Components\TextInput::make('CustomerID')
+                                                                ->label('CustomerID')
+                                                                ->default($payload->customer_id)
+                                                                ->disabled(),
+                                                        ];
+                                                    } else {
+                                                        return [
+                                                            \Filament\Forms\Components\TextInput::make('email')
+                                                                ->label('Email')
+                                                                ->default($payload->customer_user)
+                                                                ->readOnly(),
+                                                            \Filament\Forms\Components\TextInput::make('login')
+                                                                ->label('Login')
+                                                                ->default($payload->customer_user)
+                                                                ->readOnly(),
+                                                            \Filament\Forms\Components\TextInput::make('first_name')
+                                                                ->label('Ім\'я')
+                                                                ->required(),
+                                                            \Filament\Forms\Components\TextInput::make('last_name')
+                                                                ->label('Прізвище')
+                                                                ->required(),
+                                                            \Filament\Forms\Components\Select::make('customer_id')
+                                                                ->label('CustomerID / Компанія')
+                                                                ->searchable()
+                                                                ->options(function () {
+                                                                    $companies = app(\App\Services\Znuny\Cache\ZnunyLookupCacheReadService::class)->getCustomerCompanies();
+                                                                    $options = [];
+                                                                    foreach ($companies as $id => $name) {
+                                                                        $options[$id] = $name . ' (' . $id . ')';
+                                                                    }
+                                                                    return $options;
+                                                                })
+                                                                ->required(),
+                                                        ];
+                                                    }
+                                                })
+                                                ->modalSubmitAction(false)
+                                                ->modalCancelAction(fn ($action) => $action->label('Закрити'))
+                                                ->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->customer_user_registered !== null)
+                                        ),
                                     TextEntry::make('znuny_priority')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.priority')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_priority)->inlineLabel()->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
                                     TextEntry::make('znuny_state_name')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.state')))->state(function ($record) {
                                         $state = TicketDetailsPayload::fromRecord($record)->znuny_state_name;

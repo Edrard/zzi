@@ -62,6 +62,10 @@ class TicketDetailsPayload
 
     public ?string $customer_user = null;
 
+    public ?string $customer_id = null;
+
+    public ?bool $customer_user_registered = null;
+
     public ?string $znuny_priority = null;
 
     public ?string $znuny_state_name = null;
@@ -195,6 +199,7 @@ class TicketDetailsPayload
         $payload->znuny_owner_name = $arr['Owner'] ?? null;
         $payload->znuny_owner_id = isset($arr['OwnerID']) ? (int) $arr['OwnerID'] : null;
         $payload->customer_user = $arr['CustomerUserID'] ?? null;
+        $payload->customer_id = $arr['CustomerID'] ?? null;
         $payload->znuny_priority = $arr['Priority'] ?? null;
         $payload->znuny_state_name = $arr['State'] ?? null;
         $payload->state_type_str = $arr['StateType'] ?? null;
@@ -204,6 +209,7 @@ class TicketDetailsPayload
         $payload->article_count = isset($arr['ArticleCount']) ? (int) $arr['ArticleCount'] : null;
         $payload->last_article = self::parseZnunyTimestamp($arr['LastArticleCreated'] ?? null);
         $payload->has_zabbix_link = $hasLink;
+        $payload->customer_user_registered = array_key_exists('customer_user_registered', $arr) ? (bool) $arr['customer_user_registered'] : null;
 
         // Also capture the actual ticket ID if we have it in the array or arguments
         $payload->znuny_ticket_id = $arr['TicketID'] ?? $arguments['znuny_ticket_id'] ?? null;
@@ -251,6 +257,12 @@ class TicketDetailsPayload
             }
             if (isset($rawTicket['State'])) {
                 $payload->znuny_state_name = $rawTicket['State'];
+            }
+            if (isset($rawTicket['CustomerID'])) {
+                $payload->customer_id = $rawTicket['CustomerID'];
+            }
+            if (array_key_exists('customer_user_registered', $rawTicket)) {
+                $payload->customer_user_registered = (bool) $rawTicket['customer_user_registered'];
             }
         }
     }

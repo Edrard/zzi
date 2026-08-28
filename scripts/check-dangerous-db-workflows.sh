@@ -13,7 +13,7 @@ echo "Running safety check for dangerous DB workflows..."
 DEST_COMMANDS="migrate:fresh\|migrate:refresh\|db:wipe\|schema:dump --prune"
 
 # Tinker commands that combine with test traits
-TINKER_TEST_TRAITS="Tests\\\\TestCase\|RefreshDatabase\|DatabaseMigrations\|DatabaseTransactions"
+TINKER_TEST_TRAITS='Tests\\TestCase|RefreshDatabase|DatabaseMigrations|DatabaseTransactions'
 
 # 1. Check for destructive commands in docs, scripts, tests, app, database, resources.
 # AGENTS.md is intentionally excluded because it documents forbidden commands as policy text.
@@ -27,16 +27,32 @@ if grep -RIn "$DEST_COMMANDS" docs scripts tests app database resources \
   exit 1
 fi
 
-# 2. Check for Tinker running Test traits (this should catch `tinker --execute="... RefreshDatabase ..."`)
-if grep -RIn "tinker.*$TINKER_TEST_TRAITS\|$TINKER_TEST_TRAITS.*tinker" AGENTS.md docs scripts gpt \
-  --exclude-dir=vendor \
-  --exclude-dir=node_modules \
-  --exclude-dir=.git \
-  --exclude-dir=storage \
-  --exclude="check-dangerous-db-workflows.sh" 2>/dev/null; then
+# 2. Check for Tinker running Test traits.
+# SAFE_TINKER_POLICY_FILTER_V1
+# Explicit prohibition documentation is safe; real workflows still fail.
+TINKER_TEST_TRAITS='Tests\\TestCase|RefreshDatabase|DatabaseMigrations|DatabaseTransactions'
+
+TINKER_MATCHES="$(
+  grep -RInE "tinker.*(${TINKER_TEST_TRAITS})|(${TINKER_TEST_TRAITS}).*tinker" AGENTS.md docs scripts gpt \
+    --exclude-dir=vendor \
+    --exclude-dir=node_modules \
+    --exclude-dir=.git \
+    --exclude-dir=storage \
+    --exclude="check-dangerous-db-workflows.sh" 2>/dev/null || true
+)"
+
+if [ -n "$TINKER_MATCHES" ]; then
+  TINKER_MATCHES="$(
+    printf '%s\n' "$TINKER_MATCHES" \
+      | grep -Eiv '(never[[:space:]]+run|do[[:space:]]+not[[:space:]]+run)[[:space:]]+.*tinker' \
+      || true
+  )"
+fi
+
+if [ -n "$TINKER_MATCHES" ]; then
+  printf '%s\n' "$TINKER_MATCHES"
   echo "ERROR: Found dangerous tinker test trait workflows in project files."
   exit 1
 fi
-
 echo "Safety check passed."
 exit 0

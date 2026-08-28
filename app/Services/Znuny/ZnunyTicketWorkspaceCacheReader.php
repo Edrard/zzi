@@ -430,6 +430,10 @@ class ZnunyTicketWorkspaceCacheReader
             'OwnerID' => $ticket['OwnerID'] ?? null,
             'Owner' => $ticket['Owner'] ?? null,
             'CustomerUserID' => $ticket['CustomerUserID'] ?? null,
+            'CustomerID' => $ticket['CustomerID'] ?? null,
+            'customer_user_registered' => array_key_exists('customer_user_registered', $ticket)
+                ? (bool) $ticket['customer_user_registered']
+                : null,
             'StateID' => $ticket['StateID'] ?? null,
             'State' => $ticket['State'] ?? null,
             'StateType' => $ticket['StateType'] ?? null,
