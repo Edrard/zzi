@@ -653,6 +653,14 @@ return [
             'label' => 'Шаблон URL заявки Znuny',
             'description' => 'Використовується для створення прямих посилань на заявки Znuny в інтерфейсі. Точний підтримуваний токен заповнювача - {ticket_id}. Приклад: https://znuny.example.com/index.pl?Action=AgentTicketZoom;TicketID={ticket_id} Заповнювач замінюється під час виконання.',
         ],
+        'znuny_customer_user_url_template' => [
+            'label' => 'Шаблон URL користувача Znuny',
+            'description' => 'Шаблон посилання на сторінку редагування користувача в Znuny. Використовуйте {customer_user_login} для підстановки логіна користувача Znuny. Це саме CustomerUser Login, а не CustomerID компанії. Логін може бути як email-адресою, так і довільним значенням, наприклад AksenovaClients. Приклад: https://znuny.example.com/index.pl?Action=AdminCustomerUser;Subaction=Change;ID={customer_user_login}',
+            'validation' => [
+                'scheme' => 'Шаблон URL має починатися з http:// або https://',
+                'placeholder' => 'Шаблон URL має містити літерал {customer_user_login}.',
+            ],
+        ],
         'znuny_username' => [
             'label' => 'Ім’я користувача Znuny',
             'description' => 'Логін агента інтеграції Znuny',

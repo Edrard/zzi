@@ -127,20 +127,22 @@ class ZabbixTicketInfolist
                                         })
                                         ->action(
                                             \Filament\Actions\Action::make('manage_customer_user')
+                                                ->url(function ($record) {
+                                                    $payload = TicketDetailsPayload::fromRecord($record);
+                                                    if ($payload->customer_user_registered) {
+                                                        $login = $payload->customer_user;
+                                                        return app(\App\Services\Znuny\ZnunyCustomerUserUrlService::class)->getEditUrl($login);
+                                                    }
+                                                    return null;
+                                                })
+                                                ->openUrlInNewTab()
                                                 ->modalHeading(fn ($record) => TicketDetailsPayload::fromRecord($record)->customer_user_registered ? 'Редагувати користувача Znuny' : 'Створити користувача Znuny')
                                                 ->form(function ($record) {
                                                     $payload = TicketDetailsPayload::fromRecord($record);
                                                     if ($payload->customer_user_registered) {
-                                                        return [
-                                                            \Filament\Forms\Components\TextInput::make('CustomerUserID')
-                                                                ->label('CustomerUserID / Login')
-                                                                ->default($payload->customer_user)
-                                                                ->disabled(),
-                                                            \Filament\Forms\Components\TextInput::make('CustomerID')
-                                                                ->label('CustomerID')
-                                                                ->default($payload->customer_id)
-                                                                ->disabled(),
-                                                        ];
+                                                        // Registered branch should not render a modal. Handled by url() unless disabled/missing.
+                                                        // Returning an empty array gracefully prevents rendering the old full edit stub.
+                                                        return [];
                                                     } else {
                                                         return [
                                                             \Filament\Forms\Components\TextInput::make('email')
@@ -174,7 +176,18 @@ class ZabbixTicketInfolist
                                                 })
                                                 ->modalSubmitAction(false)
                                                 ->modalCancelAction(fn ($action) => $action->label('Закрити'))
-                                                ->visible(fn ($record) => TicketDetailsPayload::fromRecord($record)->customer_user_registered !== null)
+                                                ->visible(function ($record) {
+                                                    $payload = TicketDetailsPayload::fromRecord($record);
+                                                    if ($payload->customer_user_registered === null) {
+                                                        return false;
+                                                    }
+                                                    if ($payload->customer_user_registered === false) {
+                                                        return true;
+                                                    }
+
+                                                    $login = $payload->customer_user;
+                                                    return app(\App\Services\Znuny\ZnunyCustomerUserUrlService::class)->getEditUrl($login) !== null;
+                                                })
                                         ),
                                     TextEntry::make('znuny_priority')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.priority')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_priority)->inlineLabel()->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
                                     TextEntry::make('znuny_state_name')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.state')))->state(function ($record) {

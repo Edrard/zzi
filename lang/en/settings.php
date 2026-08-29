@@ -654,6 +654,14 @@ return [
             'label' => 'Znuny Ticket Url Template',
             'description' => 'Used to generate direct links to Znuny tickets in the UI. The exact supported placeholder token is {ticket_id}. Example: https://znuny.example.com/index.pl?Action=AgentTicketZoom;TicketID={ticket_id} The placeholder is replaced at runtime.',
         ],
+        'znuny_customer_user_url_template' => [
+            'label' => 'Znuny Customer User URL Template',
+            'description' => 'URL template for editing a customer user in Znuny. Use {customer_user_login} for substitution. This is the CustomerUser Login, not the CustomerID. The login can be an email or an arbitrary value like AksenovaClients. Example: https://znuny.example.com/index.pl?Action=AdminCustomerUser;Subaction=Change;ID={customer_user_login}',
+            'validation' => [
+                'scheme' => 'The URL template must start with http:// or https://',
+                'placeholder' => 'The URL template must contain the literal {customer_user_login} placeholder.',
+            ],
+        ],
         'znuny_username' => [
             'label' => 'Znuny Username',
             'description' => 'Znuny integration agent login',

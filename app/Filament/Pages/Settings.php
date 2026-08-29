@@ -595,6 +595,10 @@ class Settings extends Page implements HasForms
                     'label' => 'Znuny Ticket URL Template',
                     'description' => 'Template used to open a Znuny ticket in the Znuny web UI. Supported placeholders: {ticket_id} for the internal Znuny TicketID. Example: https://znuny.example.com/otrs/index.pl?Action=AgentTicketZoom;TicketID={ticket_id}',
                 ],
+                'znuny_customer_user_url_template' => [
+                    'label' => 'Znuny Customer User URL Template',
+                    'description' => 'Template used to open a Znuny customer user edit page. The exact supported placeholder token is {customer_user_login}. Example: https://znuny.example.com/index.pl?Action=AdminCustomerUser;Subaction=Change;ID={customer_user_login}',
+                ],
                 'zabbix_problem_url_template' => [
                     'label' => 'Zabbix Problem URL Template',
                     'description' => 'Template used to open a Zabbix problem in the Zabbix web UI. Supported placeholders: {trigger_id}, {event_id}. Example for Zabbix 7.0: https://zabbix.example.com/zabbix.php?show=1&action=problem.view&triggerids%5B%5D={trigger_id} Example with event id: https://zabbix.example.com/tr_events.php?triggerid={trigger_id}&eventid={event_id}',
@@ -729,6 +733,28 @@ class Settings extends Page implements HasForms
                             return function (string $attribute, $value, \Closure $fail) {
                                 if (! str_contains($value, '<queue>')) {
                                     $fail('The template must contain the <queue> placeholder.');
+                                }
+                            };
+                        },
+                    ]);
+            } elseif ($setting->key === 'znuny_customer_user_url_template') {
+                $component = TextInput::make($setting->key)
+                    ->label($label)
+                    ->helperText($description)
+                    ->nullable()
+                    ->dehydrateStateUsing(fn (?string $state) => is_string($state) ? trim($state) : $state)
+                    ->rules([
+                        function () {
+                            return function (string $attribute, $value, \Closure $fail) {
+                                if (empty($value)) return;
+
+                                $trimmed = trim($value);
+                                if (!str_starts_with($trimmed, 'http://') && !str_starts_with($trimmed, 'https://')) {
+                                    $fail(__('settings.settings_page.fields.znuny_customer_user_url_template.validation.scheme'));
+                                }
+
+                                if (!str_contains($trimmed, '{customer_user_login}')) {
+                                    $fail(__('settings.settings_page.fields.znuny_customer_user_url_template.validation.placeholder'));
                                 }
                             };
                         },
@@ -964,7 +990,7 @@ class Settings extends Page implements HasForms
                 $input = TextInput::make($setting->key)
                     ->label($label)
                     ->helperText($description)
-                    ->required(! in_array($setting->key, ['zabbix_problem_url_template', 'znuny_ticket_url_template', 'mail_from_name', 'mail_admin_recipients', 'mail_smtp_host', 'mail_smtp_username', 'mail_from_address', 'mail_transport']));
+                    ->required(! in_array($setting->key, ['zabbix_problem_url_template', 'znuny_ticket_url_template', 'znuny_customer_user_url_template', 'mail_from_name', 'mail_admin_recipients', 'mail_smtp_host', 'mail_smtp_username', 'mail_from_address', 'mail_transport']));
 
                 if (in_array($setting->key, ['zabbix_api_token', 'znuny_password'])) {
                     $input->password()
@@ -1367,6 +1393,7 @@ class Settings extends Page implements HasForms
                     $z['znuny_api_url'] ?? null,
                     $z['znuny_web_url'] ?? null,
                     $z['znuny_ticket_url_template'] ?? null,
+                    $z['znuny_customer_user_url_template'] ?? null,
                     $z['znuny_api_verify_ssl'] ?? null,
                     $z['znuny_api_timeout'] ?? null,
                     $this->getZnunyConnectionTestAction('testZnunyConnection_Endpoints'),

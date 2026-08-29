@@ -70,6 +70,7 @@ class DefaultSettings
             ['key' => 'znuny_api_url', 'value' => '', 'type' => 'string', 'description' => 'Znuny GenericTicketConnectorREST base URL'],
             ['key' => 'znuny_web_url', 'value' => '', 'type' => 'string', 'description' => 'Znuny agent web interface URL'],
             ['key' => 'znuny_ticket_url_template', 'value' => '', 'type' => 'string', 'description' => 'Znuny agent ticket URL template'],
+            ['key' => 'znuny_customer_user_url_template', 'value' => 'https://znuny.example.com/index.pl?Action=AdminCustomerUser;Subaction=Change;ID={customer_user_login}', 'type' => 'string', 'description' => 'Znuny agent customer user URL template'],
             ['key' => 'znuny_username', 'value' => '', 'type' => 'string', 'description' => 'Znuny integration agent login'],
             ['key' => 'znuny_password', 'value' => '', 'type' => 'string', 'description' => 'Znuny integration agent password'],
             ['key' => 'znuny_api_timeout', 'value' => '15', 'type' => 'integer', 'description' => 'Znuny API request timeout in seconds'],
