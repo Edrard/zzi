@@ -1355,4 +1355,86 @@ class ZnunyClientTest extends TestCase
         $client = new ZnunyClient;
         $client->getCustomerCompaniesPage(0, 101);
     }
+
+    public function test_update_customer_user_uses_patch_encoded_login_and_whitelists_payload()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/CustomerUser/*' => Http::response([
+                'Success' => 1,
+                'Data' => [
+                    'Updated' => 1,
+                    'CustomerUser' => [
+                        'UserLogin' => 'user+tag@example.com',
+                        'UserCustomerID' => 'comp2',
+                    ],
+                    'Errors' => [],
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+
+        $response = $client->updateCustomerUser('user+tag@example.com', [
+            'Email' => 'new@example.com',
+            'FirstName' => 'New',
+            'LastName' => 'Name',
+            'CustomerID' => 'comp2',
+            'Login' => 'renamed-user@example.com',
+            'Password' => 'secret',
+            'Valid' => 0,
+            'ArbitraryExtra' => 'strip-me',
+        ]);
+
+        $this->assertTrue($response['updated']);
+        $this->assertSame('user+tag@example.com', $response['login']);
+        $this->assertSame('comp2', $response['customer_id']);
+
+        Http::assertSent(function (Request $request) {
+            if (! str_contains($request->url(), '/CustomerUser/user%2Btag%40example.com')) {
+                return false;
+            }
+
+            if ($request->method() !== 'PATCH') {
+                return false;
+            }
+
+            $data = $request->data();
+
+            return ($data['Email'] ?? null) === 'new@example.com'
+                && ($data['FirstName'] ?? null) === 'New'
+                && ($data['LastName'] ?? null) === 'Name'
+                && ($data['CustomerID'] ?? null) === 'comp2'
+                && ($data['Login'] ?? null) === 'renamed-user@example.com'
+                && ($data['SessionID'] ?? null) === 'fake_session'
+                && ! array_key_exists('Password', $data)
+                && ! array_key_exists('Valid', $data)
+                && ! array_key_exists('ArbitraryExtra', $data)
+                && count($data) === 6;
+        });
+    }
+
+    public function test_update_customer_user_logical_failure()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/CustomerUser/*' => Http::response([
+                'Success' => 1,
+                'Data' => [
+                    'Updated' => 0,
+                    'CustomerUser' => null,
+                    'Errors' => ['Update rejected'],
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+
+        $response = $client->updateCustomerUser('user1', [
+            'FirstName' => 'New',
+        ]);
+
+        $this->assertFalse($response['updated']);
+        $this->assertContains('Update rejected', $response['errors']);
+    }
 }

@@ -174,6 +174,37 @@ return [
                 'already_exists' => 'Користувач уже існує в Znuny. Локальні дані оновлено.',
             ],
         ],
+        'customer_user_edit' => [
+            'tooltip' => 'Редагувати користувача Znuny',
+            'modal_heading' => 'Редагувати користувача Znuny',
+            'action_label' => 'Зберегти',
+            'action_cancel' => 'Скасувати',
+            'native_link' => 'Відкрити в Znuny',
+            'validation' => [
+                'required_fields_missing' => 'Не всі обов\'язкові поля заповнені.',
+                'email_required' => 'Email є обов\'язковим.',
+                'invalid_email' => 'Некоректний формат Email.',
+                'company_unavailable' => 'Обрана компанія не знайдена в базі або неактивна.',
+                'no_changes' => 'Змін не внесено.',
+            ],
+            'errors' => [
+                'lookup_transport_failure' => 'Помилка зв\'язку з API Znuny при отриманні даних користувача.',
+                'update_transport_failure' => 'Помилка зв\'язку з API Znuny при оновленні користувача.',
+                'api_error' => 'Помилка API Znuny: :error',
+                'updated_identity_incomplete' => 'Користувач оновлений, але API не повернув CustomerID або Login.',
+                'updated_company_inactive' => 'Користувач оновлений, але його компанія неактивна.',
+                'not_found' => 'Користувача не знайдено в Znuny.',
+                'lookup_identity_invalid' => 'Znuny повернув неочікуваний ідентифікатор користувача.',
+                'update_failed' => 'Не вдалося оновити користувача в Znuny.',
+                'reconciliation_failed' => 'Користувача оновлено в Znuny, але локальний кеш заявок не вдалося узгодити.',
+            ],
+            'notifications' => [
+                'success_title' => 'Успіх',
+                'error_title' => 'Помилка',
+                'updated_success' => 'Користувача Znuny успішно оновлено.',
+                'no_changes' => 'Змін не потрібно.',
+            ],
+        ],
     ],
     'status_presenter' => [
         'titles' => [

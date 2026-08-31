@@ -1407,6 +1407,63 @@ class ZnunyClient
     }
 
     /**
+     * Call PATCH /CustomerUser/{UserLogin}
+     */
+    public function updateCustomerUser(string $login, array $payload): array
+    {
+        $filteredPayload = [];
+        if (array_key_exists('Email', $payload)) {
+            $filteredPayload['Email'] = $payload['Email'];
+        }
+        if (array_key_exists('FirstName', $payload)) {
+            $filteredPayload['FirstName'] = $payload['FirstName'];
+        }
+        if (array_key_exists('LastName', $payload)) {
+            $filteredPayload['LastName'] = $payload['LastName'];
+        }
+        if (array_key_exists('CustomerID', $payload)) {
+            $filteredPayload['CustomerID'] = $payload['CustomerID'];
+        }
+        if (array_key_exists('Login', $payload)) {
+            $filteredPayload['Login'] = $payload['Login'];
+        }
+
+        return $this->withSessionRetry(function ($session) use ($login, $filteredPayload) {
+            $filteredPayload['SessionID'] = $session;
+
+            $response = $this->buildPendingRequest()->patch($this->apiUrl().'/CustomerUser/'.rawurlencode($login), $filteredPayload);
+
+            $data = $this->processResponse($response);
+
+            $updated = ! empty($data['Updated']);
+            $customerUser = $data['CustomerUser'] ?? null;
+            $errors = $data['Errors'] ?? [];
+
+            if (! $updated) {
+                return [
+                    'updated' => false,
+                    'errors' => $errors,
+                ];
+            }
+
+            if (empty($customerUser['UserLogin'])) {
+                return [
+                    'updated' => false,
+                    'errors' => array_merge($errors, ['CustomerUser login missing in response.']),
+                ];
+            }
+
+            return [
+                'updated' => true,
+                'login' => trim((string) $customerUser['UserLogin']),
+                'customer_id' => trim((string) ($customerUser['UserCustomerID'] ?? '')),
+                'errors' => $errors,
+                'customer_user' => $customerUser,
+            ];
+        });
+    }
+
+    /**
      * Call /ResolveTicketDefaults?HostName=...
      */
     public function resolveTicketDefaults(string $hostName): array

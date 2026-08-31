@@ -174,6 +174,37 @@ return [
                 'already_exists' => 'User already exists in Znuny. Local data has been updated.',
             ],
         ],
+        'customer_user_edit' => [
+            'tooltip' => 'Edit Znuny customer',
+            'modal_heading' => 'Edit Znuny customer',
+            'action_label' => 'Save',
+            'action_cancel' => 'Cancel',
+            'native_link' => 'Open in Znuny',
+            'validation' => [
+                'required_fields_missing' => 'Not all required fields are filled in.',
+                'email_required' => 'Email is required.',
+                'invalid_email' => 'Invalid email format.',
+                'company_unavailable' => 'The selected company was not found or is inactive.',
+                'no_changes' => 'No changes were made.',
+            ],
+            'errors' => [
+                'lookup_transport_failure' => 'Could not connect to the Znuny API while fetching the customer user data.',
+                'update_transport_failure' => 'Could not connect to the Znuny API while updating the customer user.',
+                'api_error' => 'Znuny API error: :error',
+                'updated_identity_incomplete' => 'The customer user was updated, but the API did not return CustomerID or Login.',
+                'updated_company_inactive' => 'The customer user was updated, but its company is inactive.',
+                'not_found' => 'Customer user not found in Znuny.',
+                'lookup_identity_invalid' => 'Znuny returned an unexpected customer user identity.',
+                'update_failed' => 'Znuny could not update the customer user.',
+                'reconciliation_failed' => 'The customer user was updated in Znuny, but the local ticket cache could not be reconciled.',
+            ],
+            'notifications' => [
+                'success_title' => 'Success',
+                'error_title' => 'Error',
+                'updated_success' => 'Znuny customer user updated successfully.',
+                'no_changes' => 'No changes were necessary.',
+            ],
+        ],
     ],
     'status_presenter' => [
         'titles' => [

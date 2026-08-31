@@ -137,6 +137,8 @@ return [
             'customer_user' => [
                 'created' => 'Znuny customer user created',
                 'create_failed' => 'Znuny customer user creation failed',
+                'updated' => 'Znuny customer user updated',
+                'update_failed' => 'Znuny customer user update failed',
             ],
             'standalone_ticket' => [
                 'created' => 'Standalone ticket created',

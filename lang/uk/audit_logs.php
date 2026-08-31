@@ -137,6 +137,8 @@ return [
             'customer_user' => [
                 'created' => 'Користувача клієнта Znuny створено',
                 'create_failed' => 'Не вдалося створити користувача клієнта Znuny',
+                'updated' => 'Користувача клієнта Znuny оновлено',
+                'update_failed' => 'Не вдалося оновити користувача клієнта Znuny',
             ],
             'standalone_ticket' => [
                 'created' => 'Окрему заявку Znuny створено',

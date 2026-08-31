@@ -7,6 +7,7 @@ use App\Filament\Support\TicketDetailsPayload;
 use App\Services\Support\DateTimeDisplayService;
 use App\Services\Znuny\Cache\ZnunyLookupCacheReadService;
 use App\Services\Znuny\ZnunyAssignmentDependencyService;
+use App\Services\Znuny\ZnunyCustomerUserEditService;
 use App\Services\Znuny\ZnunyCustomerUserQuickCreateService;
 use App\Services\Znuny\ZnunyCustomerUserUrlService;
 use App\Services\Znuny\ZnunyTicketArticleCacheService;
@@ -139,7 +140,7 @@ class ZabbixTicketInfolist
                                         ->tooltip(function ($record) {
                                             $registered = TicketDetailsPayload::fromRecord($record)->customer_user_registered;
                                             if ($registered === true) {
-                                                return __('zabbix_tickets.details_modal.customer_user_quick_create.tooltip_open');
+                                                return __('zabbix_tickets.details_modal.customer_user_edit.tooltip');
                                             }
                                             if ($registered === false) {
                                                 return __('zabbix_tickets.details_modal.customer_user_quick_create.tooltip_create');
@@ -149,88 +150,158 @@ class ZabbixTicketInfolist
                                         })
                                         ->action(
                                             Action::make('manage_customer_user')
-                                                ->url(function ($record) {
+                                                ->modalHeading(fn ($record) => TicketDetailsPayload::fromRecord($record)->customer_user_registered ? __('zabbix_tickets.details_modal.customer_user_edit.modal_heading') : __('zabbix_tickets.details_modal.customer_user_quick_create.modal_heading_create'))
+                                                ->mountUsing(function (Schema $schema, $record, Action $action) {
                                                     $payload = TicketDetailsPayload::fromRecord($record);
-                                                    if ($payload->customer_user_registered) {
-                                                        $login = $payload->customer_user;
+                                                    if (! $payload->customer_user_registered) {
+                                                        $schema->fill([
+                                                            'login' => $payload->customer_user,
+                                                            'email' => $payload->customer_user,
+                                                        ]);
 
-                                                        return app(ZnunyCustomerUserUrlService::class)->getEditUrl($login);
-                                                    }
-
-                                                    return null;
-                                                })
-                                                ->openUrlInNewTab()
-                                                ->modalHeading(fn ($record) => TicketDetailsPayload::fromRecord($record)->customer_user_registered ? __('zabbix_tickets.details_modal.customer_user_quick_create.modal_heading_edit') : __('zabbix_tickets.details_modal.customer_user_quick_create.modal_heading_create'))
-                                                ->form(function ($record) {
-                                                    $payload = TicketDetailsPayload::fromRecord($record);
-                                                    if ($payload->customer_user_registered) {
-                                                        // Registered branch should not render a modal. Handled by url() unless disabled/missing.
-                                                        // Returning an empty array gracefully prevents rendering the old full edit stub.
-                                                        return [];
-                                                    } else {
-                                                        return [
-                                                            TextInput::make('email')
-                                                                ->label(__('zabbix_tickets.details_modal.customer_user_quick_create.fields.email'))
-                                                                ->email()
-                                                                ->default($payload->customer_user)
-                                                                ->readOnly(),
-                                                            TextInput::make('login')
-                                                                ->label(__('zabbix_tickets.details_modal.customer_user_quick_create.fields.login'))
-                                                                ->default($payload->customer_user)
-                                                                ->readOnly(),
-                                                            TextInput::make('first_name')
-                                                                ->label(__('zabbix_tickets.details_modal.customer_user_quick_create.fields.first_name'))
-                                                                ->required(),
-                                                            TextInput::make('last_name')
-                                                                ->label(__('zabbix_tickets.details_modal.customer_user_quick_create.fields.last_name'))
-                                                                ->required(),
-                                                            Select::make('customer_id')
-                                                                ->label(__('zabbix_tickets.details_modal.customer_user_quick_create.fields.customer_id'))
-                                                                ->searchable()
-                                                                ->optionsLimit(100)
-                                                                ->options(function () {
-                                                                    $companies = app(ZnunyLookupCacheReadService::class)->getCustomerCompanies();
-                                                                    $options = [];
-                                                                    foreach ($companies as $id => $name) {
-                                                                        $options[$id] = $name.' ('.$id.')';
-                                                                    }
-
-                                                                    return $options;
-                                                                })
-                                                                ->required(),
-                                                        ];
-                                                    }
-                                                })
-                                                ->modalSubmitAction(function (Action $action, $record) {
-                                                    $payload = TicketDetailsPayload::fromRecord($record);
-                                                    if ($payload->customer_user_registered) {
-                                                        return false;
-                                                    }
-
-                                                    return $action->label(__('zabbix_tickets.details_modal.customer_user_quick_create.action_label'));
-                                                })
-                                                ->action(function (array $data, $record, Action $action, Component $livewire) {
-                                                    $payload = TicketDetailsPayload::fromRecord($record);
-                                                    if ($payload->customer_user_registered) {
                                                         return;
                                                     }
 
-                                                    $service = app(ZnunyCustomerUserQuickCreateService::class);
+                                                    $login = $payload->customer_user;
+                                                    $service = app(ZnunyCustomerUserEditService::class);
+                                                    $result = $service->getCustomerUser($login, $payload->znuny_ticket_id ? (int) $payload->znuny_ticket_id : null);
 
-                                                    $result = $service->createCustomerUser(
-                                                        $data['login'] ?? '',
-                                                        $data['email'] ?? '',
-                                                        $data['first_name'] ?? '',
-                                                        $data['last_name'] ?? '',
-                                                        $data['customer_id'] ?? '',
-                                                        $payload->znuny_ticket_id ? (int) $payload->znuny_ticket_id : null
-                                                    );
+                                                    if (! $result['success']) {
+                                                        Notification::make()
+                                                            ->title(__('zabbix_tickets.details_modal.customer_user_edit.notifications.error_title'))
+                                                            ->body($result['message'])
+                                                            ->danger()
+                                                            ->send();
+
+                                                        $action->cancel();
+
+                                                        return;
+                                                    }
+
+                                                    $schema->fill($result['data']);
+                                                })
+                                                ->form(function ($record) {
+                                                    $payload = TicketDetailsPayload::fromRecord($record);
+                                                    $isRegistered = $payload->customer_user_registered;
+
+                                                    return [
+                                                        TextInput::make('email')
+                                                            ->label(__('zabbix_tickets.details_modal.customer_user_quick_create.fields.email'))
+                                                            ->email()
+                                                            ->required()
+                                                            ->readOnly(fn () => ! $isRegistered),
+                                                        TextInput::make('login')
+                                                            ->label(__('zabbix_tickets.details_modal.customer_user_quick_create.fields.login'))
+                                                            ->required()
+                                                            ->readOnly(fn () => ! $isRegistered),
+                                                        TextInput::make('first_name')
+                                                            ->label(__('zabbix_tickets.details_modal.customer_user_quick_create.fields.first_name'))
+                                                            ->required(),
+                                                        TextInput::make('last_name')
+                                                            ->label(__('zabbix_tickets.details_modal.customer_user_quick_create.fields.last_name'))
+                                                            ->required(),
+                                                        Select::make('customer_id')
+                                                            ->label(__('zabbix_tickets.details_modal.customer_user_quick_create.fields.customer_id'))
+                                                            ->searchable()
+                                                            ->optionsLimit(100)
+                                                            ->options(function () {
+                                                                $companies = app(ZnunyLookupCacheReadService::class)->getCustomerCompanies();
+                                                                $options = [];
+                                                                foreach ($companies as $id => $name) {
+                                                                    $customerId = trim((string) $id);
+                                                                    $companyName = trim((string) $name);
+                                                                    $prefix = $customerId.' ';
+
+                                                                    if (
+                                                                        $customerId !== ''
+                                                                        && str_starts_with(strtolower($companyName), strtolower($prefix))
+                                                                    ) {
+                                                                        $companyName = trim(substr($companyName, strlen($prefix)));
+                                                                    }
+
+                                                                    $options[$customerId] = $companyName !== ''
+                                                                        ? $companyName.' ('.$customerId.')'
+                                                                        : $customerId;
+                                                                }
+
+                                                                return $options;
+                                                            })
+                                                            ->required(),
+                                                    ];
+                                                })
+                                                ->modalSubmitAction(function (Action $action, $record) {
+                                                    $payload = TicketDetailsPayload::fromRecord($record);
+
+                                                    return $action->label($payload->customer_user_registered ? __('zabbix_tickets.details_modal.customer_user_edit.action_label') : __('zabbix_tickets.details_modal.customer_user_quick_create.action_label'));
+                                                })
+                                                ->modalCancelAction(function (Action $action, $record) {
+                                                    $payload = TicketDetailsPayload::fromRecord($record);
+
+                                                    return $action->label($payload->customer_user_registered ? __('zabbix_tickets.details_modal.customer_user_edit.action_cancel') : __('zabbix_tickets.details_modal.customer_user_quick_create.action_cancel'));
+                                                })
+                                                ->extraModalFooterActions(function ($record) {
+                                                    $payload = TicketDetailsPayload::fromRecord($record);
+                                                    if (! $payload->customer_user_registered) {
+                                                        return [];
+                                                    }
+
+                                                    $login = $payload->customer_user;
+                                                    $url = app(ZnunyCustomerUserUrlService::class)->getEditUrl($login);
+
+                                                    if (! $url) {
+                                                        return [];
+                                                    }
+
+                                                    return [
+                                                        Action::make('open_in_znuny')
+                                                            ->label(__('zabbix_tickets.details_modal.customer_user_edit.native_link'))
+                                                            ->url($url)
+                                                            ->openUrlInNewTab()
+                                                            ->color('gray'),
+                                                    ];
+                                                })
+                                                ->modalFooterActionsAlignment(Alignment::Right)
+                                                ->modalFooterActions(fn (Action $action) => array_merge(
+                                                    [
+                                                        $action->getModalSubmitAction(),
+                                                        $action->getModalCancelAction(),
+                                                    ],
+                                                    $action->getExtraModalFooterActions()
+                                                ))
+                                                ->action(function (array $data, $record, Action $action, Component $livewire) {
+                                                    $payload = TicketDetailsPayload::fromRecord($record);
+                                                    $isRegistered = $payload->customer_user_registered;
+
+                                                    if ($isRegistered) {
+                                                        $service = app(ZnunyCustomerUserEditService::class);
+                                                        $result = $service->updateCustomerUser(
+                                                            $payload->customer_user ?? '',
+                                                            [
+                                                                'Login' => $data['login'] ?? '',
+                                                                'Email' => $data['email'] ?? '',
+                                                                'FirstName' => $data['first_name'] ?? '',
+                                                                'LastName' => $data['last_name'] ?? '',
+                                                                'CustomerID' => $data['customer_id'] ?? '',
+                                                            ],
+                                                            $payload->znuny_ticket_id ? (int) $payload->znuny_ticket_id : null
+                                                        );
+                                                    } else {
+                                                        $service = app(ZnunyCustomerUserQuickCreateService::class);
+                                                        $result = $service->createCustomerUser(
+                                                            $data['login'] ?? '',
+                                                            $data['email'] ?? '',
+                                                            $data['first_name'] ?? '',
+                                                            $data['last_name'] ?? '',
+                                                            $data['customer_id'] ?? '',
+                                                            $payload->znuny_ticket_id ? (int) $payload->znuny_ticket_id : null
+                                                        );
+                                                    }
 
                                                     if ($result['success']) {
                                                         $notification = Notification::make()
                                                             ->title(! empty($result['warning'])
                                                                 ? __('zabbix_tickets.details_modal.customer_user_quick_create.notifications.warning_title')
-                                                                : __('zabbix_tickets.details_modal.customer_user_quick_create.notifications.success_title'))
+                                                                : ($isRegistered ? __('zabbix_tickets.details_modal.customer_user_edit.notifications.success_title') : __('zabbix_tickets.details_modal.customer_user_quick_create.notifications.success_title')))
                                                             ->body($result['message']);
 
                                                         if (! empty($result['warning'])) {
@@ -241,9 +312,6 @@ class ZabbixTicketInfolist
 
                                                         $notification->send();
 
-                                                        // Redis is already reconciled by the service, but the mounted parent
-                                                        // action still owns the old record/schema snapshot. Re-mount that same
-                                                        // parent action so Filament resolves a fresh record from the updated cache.
                                                         $parentIndex = count($livewire->mountedActions) - 2;
                                                         $parentMountedAction = $parentIndex >= 0
                                                             ? ($livewire->mountedActions[$parentIndex] ?? null)
@@ -262,12 +330,11 @@ class ZabbixTicketInfolist
                                                                 $parentMountedAction['context'] ?? [],
                                                             );
                                                         } else {
-                                                            // Defensive fallback: only close the Quick Create child.
                                                             $livewire->unmountAction(cancelParentActions: false);
                                                         }
                                                     } else {
                                                         Notification::make()
-                                                            ->title(__('zabbix_tickets.details_modal.customer_user_quick_create.notifications.error_title'))
+                                                            ->title($isRegistered ? __('zabbix_tickets.details_modal.customer_user_edit.notifications.error_title') : __('zabbix_tickets.details_modal.customer_user_quick_create.notifications.error_title'))
                                                             ->body($result['message'])
                                                             ->danger()
                                                             ->send();
@@ -275,24 +342,10 @@ class ZabbixTicketInfolist
                                                         $action->halt();
                                                     }
                                                 })
-                                                ->modalCancelAction(fn ($action) => $action->label(__('zabbix_tickets.details_modal.customer_user_quick_create.action_cancel')))
-                                                ->modalFooterActionsAlignment(Alignment::Right)
-                                                ->modalFooterActions(fn (Action $action) => [
-                                                    $action->getModalSubmitAction(),
-                                                    $action->getModalCancelAction(),
-                                                ])
                                                 ->visible(function ($record) {
                                                     $payload = TicketDetailsPayload::fromRecord($record);
-                                                    if ($payload->customer_user_registered === null) {
-                                                        return false;
-                                                    }
-                                                    if ($payload->customer_user_registered === false) {
-                                                        return true;
-                                                    }
 
-                                                    $login = $payload->customer_user;
-
-                                                    return app(ZnunyCustomerUserUrlService::class)->getEditUrl($login) !== null;
+                                                    return $payload->customer_user_registered !== null;
                                                 })
                                         ),
                                     TextEntry::make('znuny_priority')->label(self::formatLabel(__('zabbix_tickets.details_modal.fields.priority')))->state(fn ($record) => TicketDetailsPayload::fromRecord($record)->znuny_priority)->inlineLabel()->placeholder(__('zabbix_tickets.details_modal.placeholders.empty')),
