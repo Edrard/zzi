@@ -84,6 +84,7 @@ return [
         'scheduled_znuny_task_run' => 'Scheduled Znuny task run',
         'znuny_ticket_creation_attempt' => 'Znuny ticket creation attempt',
         'znuny_prewarm_dataset' => 'Znuny reference dataset',
+        'znuny_customer_user' => 'Znuny customer user',
     ],
     'actions' => [
         'settings' => [
@@ -133,6 +134,10 @@ return [
         'scheduled_znuny_run_retry_created' => 'Retry run created',
         'scheduled_znuny_run_uncertain' => 'Run uncertain',
         'znuny' => [
+            'customer_user' => [
+                'created' => 'Znuny customer user created',
+                'create_failed' => 'Znuny customer user creation failed',
+            ],
             'standalone_ticket' => [
                 'created' => 'Standalone ticket created',
                 'failed' => 'Standalone ticket creation failed',

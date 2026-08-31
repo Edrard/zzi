@@ -30,7 +30,7 @@ class ZabbixTicketStatusPresenter
                 'icon' => 'heroicon-o-exclamation-triangle',
                 'class' => 'zbx-status-icon-flapping',
                 'style' => '',
-                'title' => 'Flapping ticket. Ticket: '.$ticket->znuny_ticket_number,
+                'title' => __('zabbix_tickets.status_presenter.titles.flapping_ticket', ['ticket' => $ticket->znuny_ticket_number]),
             ];
         }
 
@@ -40,7 +40,7 @@ class ZabbixTicketStatusPresenter
                 'icon' => 'heroicon-o-arrow-path',
                 'class' => 'zbx-status-icon-reopen-candidate',
                 'style' => '',
-                'title' => 'Manual reopen candidate. Ticket: '.$ticket->znuny_ticket_number,
+                'title' => __('zabbix_tickets.status_presenter.titles.manual_reopen_candidate', ['ticket' => $ticket->znuny_ticket_number]),
             ];
         }
 
@@ -50,7 +50,7 @@ class ZabbixTicketStatusPresenter
                 'icon' => 'heroicon-o-arrow-uturn-left',
                 'class' => 'zbx-status-icon-reopened',
                 'style' => '',
-                'title' => 'Manually reopened ticket. Ticket: '.$ticket->znuny_ticket_number,
+                'title' => __('zabbix_tickets.status_presenter.titles.manually_reopened_ticket', ['ticket' => $ticket->znuny_ticket_number]),
             ];
         }
 
@@ -59,7 +59,7 @@ class ZabbixTicketStatusPresenter
             'icon' => 'heroicon-o-ticket',
             'class' => 'zbx-status-icon-linked',
             'style' => '',
-            'title' => 'Ticket already linked: '.$ticket->znuny_ticket_number,
+            'title' => __('zabbix_tickets.status_presenter.titles.ticket_already_linked', ['ticket' => $ticket->znuny_ticket_number]),
         ];
     }
 
@@ -72,26 +72,26 @@ class ZabbixTicketStatusPresenter
             [
                 'icon' => 'heroicon-o-ticket',
                 'class' => 'zbx-status-icon-linked',
-                'label' => 'Linked ticket',
-                'description' => 'A Znuny ticket is currently linked to this active Zabbix problem.',
+                'label' => __('zabbix_tickets.status_presenter.labels.linked_ticket'),
+                'description' => __('zabbix_tickets.status_presenter.descriptions.linked_ticket'),
             ],
             [
                 'icon' => 'heroicon-o-arrow-path',
                 'class' => 'zbx-status-icon-reopen-candidate',
-                'label' => 'Manual reopen candidate',
-                'description' => 'The linked ticket is closed, but the Zabbix problem is active again. Review manually.',
+                'label' => __('zabbix_tickets.status_presenter.labels.manual_reopen_candidate'),
+                'description' => __('zabbix_tickets.status_presenter.descriptions.manual_reopen_candidate'),
             ],
             [
                 'icon' => 'heroicon-o-arrow-uturn-left',
                 'class' => 'zbx-status-icon-reopened',
-                'label' => 'Manually reopened',
-                'description' => 'The ticket was manually reopened by an operator.',
+                'label' => __('zabbix_tickets.status_presenter.labels.manually_reopened'),
+                'description' => __('zabbix_tickets.status_presenter.descriptions.manually_reopened'),
             ],
             [
                 'icon' => 'heroicon-o-exclamation-triangle',
                 'class' => 'zbx-status-icon-flapping',
-                'label' => 'Flapping detected',
-                'description' => 'This problem has resolved and become active again multiple times recently.',
+                'label' => __('zabbix_tickets.status_presenter.labels.flapping_detected'),
+                'description' => __('zabbix_tickets.status_presenter.descriptions.flapping_detected'),
             ],
         ];
     }
@@ -104,34 +104,34 @@ class ZabbixTicketStatusPresenter
     {
         if ($record->manual_lifecycle_status === 'flapping') {
             return [
-                'label' => 'Flapping',
+                'label' => __('zabbix_tickets.status_presenter.labels.flapping'),
                 'color' => 'danger',
                 'icon' => 'heroicon-o-exclamation-triangle',
-                'tooltip' => 'Flapping problem detected.',
+                'tooltip' => __('zabbix_tickets.status_presenter.tooltips.flapping_detected'),
             ];
         }
 
         if ($record->manual_lifecycle_status === 'reopen_candidate') {
             return [
-                'label' => 'Manual reopen candidate',
+                'label' => __('zabbix_tickets.status_presenter.labels.manual_reopen_candidate'),
                 'color' => 'warning',
                 'icon' => 'heroicon-o-arrow-path',
-                'tooltip' => 'The Znuny ticket is closed, but the linked Zabbix problem is active again within the reopen window. Review manually.',
+                'tooltip' => __('zabbix_tickets.status_presenter.tooltips.manual_reopen_candidate'),
             ];
         }
 
         if ($record->manual_lifecycle_status === 'reopened' || $record->manual_reopened_at !== null) {
             return [
-                'label' => 'Reopened',
+                'label' => __('zabbix_tickets.status_presenter.labels.reopened'),
                 'color' => 'info',
                 'icon' => 'heroicon-o-arrow-uturn-left',
-                'tooltip' => 'Manually reopened ticket.',
+                'tooltip' => __('zabbix_tickets.status_presenter.tooltips.manually_reopened'),
             ];
         }
 
         if (self::isClosed($record)) {
             return [
-                'label' => 'Closed',
+                'label' => __('zabbix_tickets.status_presenter.labels.closed'),
                 'color' => 'gray',
                 'icon' => 'heroicon-o-check-circle',
                 'tooltip' => null,
@@ -140,54 +140,54 @@ class ZabbixTicketStatusPresenter
 
         if ($record->manual_lifecycle_status === 'close_candidate') {
             return [
-                'label' => 'Ready',
+                'label' => __('zabbix_tickets.status_presenter.labels.ready'),
                 'color' => 'success',
                 'icon' => 'heroicon-o-check-circle',
-                'tooltip' => 'Linked Zabbix problem is resolved and close delay has passed.',
+                'tooltip' => __('zabbix_tickets.status_presenter.tooltips.ready_to_close'),
             ];
         }
 
         if ($record->manual_lifecycle_status === 'resolved_waiting') {
             return [
-                'label' => 'Waiting for close delay', // Table had 'Waiting', Infolist had 'Waiting for close delay'. I'll stick to 'Waiting' for brevity in both if they share. Let's use 'Waiting' for badge.
+                'label' => __('zabbix_tickets.status_presenter.labels.waiting_for_close_delay'), // Table had 'Waiting', Infolist had 'Waiting for close delay'. I'll stick to 'Waiting' for brevity in both if they share. Let's use 'Waiting' for badge.
                 'color' => 'info',
                 'icon' => 'heroicon-o-check',
-                'tooltip' => 'Linked Zabbix problem is resolved, waiting for close delay.',
+                'tooltip' => __('zabbix_tickets.status_presenter.tooltips.waiting_for_close_delay'),
             ];
         }
 
         if ($record->manual_lifecycle_status === 'cache_stale') {
             return [
-                'label' => 'Cache stale',
+                'label' => __('zabbix_tickets.status_presenter.labels.cache_stale'),
                 'color' => 'warning',
                 'icon' => 'heroicon-o-clock',
-                'tooltip' => 'Zabbix problem cache may be stale. Waiting for sync.',
+                'tooltip' => __('zabbix_tickets.status_presenter.tooltips.cache_stale'),
             ];
         }
 
         if ($record->manual_lifecycle_status === 'identity_missing') {
             return [
-                'label' => 'Missing Zabbix identity',
+                'label' => __('zabbix_tickets.status_presenter.labels.missing_zabbix_identity'),
                 'color' => 'warning',
                 'icon' => 'heroicon-o-question-mark-circle', // Table used question mark for fallback
-                'tooltip' => 'Missing Zabbix host/trigger identity; lifecycle cannot be evaluated safely.',
+                'tooltip' => __('zabbix_tickets.status_presenter.tooltips.missing_zabbix_identity'),
             ];
         }
 
         if ($record->manual_lifecycle_status === 'active' || $record->zabbix_problem_is_active === true) {
             return [
-                'label' => 'Active', // Table: Active, Infolist: Zabbix problem active
+                'label' => __('zabbix_tickets.status_presenter.labels.active'), // Table: Active, Infolist: Zabbix problem active
                 'color' => 'danger',
                 'icon' => 'heroicon-o-exclamation-circle',
-                'tooltip' => 'Linked Zabbix problem is still active.',
+                'tooltip' => __('zabbix_tickets.status_presenter.tooltips.active'),
             ];
         }
 
         return [
-            'label' => 'Unknown',
+            'label' => __('zabbix_tickets.status_presenter.labels.unknown'),
             'color' => 'gray',
             'icon' => 'heroicon-o-question-mark-circle',
-            'tooltip' => 'Lifecycle state has not been evaluated yet.',
+            'tooltip' => __('zabbix_tickets.status_presenter.tooltips.unknown'),
         ];
     }
 

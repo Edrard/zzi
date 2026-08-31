@@ -84,6 +84,7 @@ return [
         'scheduled_znuny_task_run' => 'Запуск запланованого завдання Znuny',
         'znuny_ticket_creation_attempt' => 'Спроба створення звернення Znuny',
         'znuny_prewarm_dataset' => 'Набір довідкових даних Znuny',
+        'znuny_customer_user' => 'Користувач клієнта Znuny',
     ],
     'actions' => [
         'settings' => [
@@ -133,6 +134,10 @@ return [
         'scheduled_znuny_run_retry_created' => 'Створено повторний запуск',
         'scheduled_znuny_run_uncertain' => 'Невизначений запуск',
         'znuny' => [
+            'customer_user' => [
+                'created' => 'Користувача клієнта Znuny створено',
+                'create_failed' => 'Не вдалося створити користувача клієнта Znuny',
+            ],
             'standalone_ticket' => [
                 'created' => 'Окрему заявку Znuny створено',
                 'failed' => 'Помилка створення окремої заявки Znuny',

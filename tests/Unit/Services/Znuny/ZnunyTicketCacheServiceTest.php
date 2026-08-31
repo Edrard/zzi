@@ -3,6 +3,7 @@
 namespace Tests\Unit\Services\Znuny;
 
 use App\Models\Setting;
+use App\Services\Znuny\Cache\ZnunyLookupCacheReadService;
 use App\Services\Znuny\ZnunyTicketCacheService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Redis;
@@ -30,7 +31,7 @@ class ZnunyTicketCacheServiceTest extends TestCase
         Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
         Setting::updateOrCreate(['key' => 'znuny_ticket_cache_ttl_minutes'], ['value' => '10']);
 
-        $mockLookup = \Mockery::mock(\App\Services\Znuny\Cache\ZnunyLookupCacheReadService::class);
+        $mockLookup = \Mockery::mock(ZnunyLookupCacheReadService::class);
         $mockLookup->shouldReceive('hasCustomerCompany')->andReturn(false)->byDefault();
         $this->service = new ZnunyTicketCacheService($mockLookup);
     }
@@ -495,123 +496,222 @@ class ZnunyTicketCacheServiceTest extends TestCase
 
     public function test_upsert_or_refresh_registered_creates_true()
     {
-        $mockLookup = \Mockery::mock(\App\Services\Znuny\Cache\ZnunyLookupCacheReadService::class);
-        $mockLookup->shouldReceive("hasCustomerCompany")->with("agrotekhnik")->andReturn(true);
+        $mockLookup = \Mockery::mock(ZnunyLookupCacheReadService::class);
+        $mockLookup->shouldReceive('hasCustomerCompany')->with('agrotekhnik')->andReturn(true);
         $service = new ZnunyTicketCacheService($mockLookup);
 
         $ticket = [
-            "TicketID" => 1000,
-            "CustomerID" => "agrotekhnik",
-            "SyncFingerprint" => "fp1",
+            'TicketID' => 1000,
+            'CustomerID' => 'agrotekhnik',
+            'SyncFingerprint' => 'fp1',
         ];
 
-        Redis::shouldReceive("get")->with("znuny:ticket:1000")->andReturn(null);
-        Redis::shouldReceive("setex")
+        Redis::shouldReceive('get')->with('znuny:ticket:1000')->andReturn(null);
+        Redis::shouldReceive('setex')
             ->once()
-            ->with("znuny:ticket:1000", 600, json_encode(["TicketID" => 1000, "CustomerID" => "agrotekhnik", "SyncFingerprint" => "fp1", "customer_user_registered" => true]));
-        Redis::shouldReceive("setex")->with("znuny:ticket_indexes:1000", \Mockery::any(), \Mockery::any());
+            ->with('znuny:ticket:1000', 600, json_encode(['TicketID' => 1000, 'CustomerID' => 'agrotekhnik', 'SyncFingerprint' => 'fp1', 'customer_user_registered' => true]));
+        Redis::shouldReceive('setex')->with('znuny:ticket_indexes:1000', \Mockery::any(), \Mockery::any());
 
         $result = $service->upsertOrRefreshFromSearchResult($ticket);
-        $this->assertEquals("cached_new", $result);
+        $this->assertEquals('cached_new', $result);
     }
 
     public function test_upsert_or_refresh_mail_only_creates_false()
     {
         $ticket = [
-            "TicketID" => 1001,
-            "CustomerID" => "oleksandr.ustinov@tmm.ua",
-            "SyncFingerprint" => "fp1",
+            'TicketID' => 1001,
+            'CustomerID' => 'oleksandr.ustinov@tmm.ua',
+            'SyncFingerprint' => 'fp1',
         ];
 
-        Redis::shouldReceive("get")->with("znuny:ticket:1001")->andReturn(null);
-        Redis::shouldReceive("setex")
+        Redis::shouldReceive('get')->with('znuny:ticket:1001')->andReturn(null);
+        Redis::shouldReceive('setex')
             ->once()
-            ->with("znuny:ticket:1001", 600, json_encode(["TicketID" => 1001, "CustomerID" => "oleksandr.ustinov@tmm.ua", "SyncFingerprint" => "fp1", "customer_user_registered" => false]));
-        Redis::shouldReceive("setex")->with("znuny:ticket_indexes:1001", \Mockery::any(), \Mockery::any());
+            ->with('znuny:ticket:1001', 600, json_encode(['TicketID' => 1001, 'CustomerID' => 'oleksandr.ustinov@tmm.ua', 'SyncFingerprint' => 'fp1', 'customer_user_registered' => false]));
+        Redis::shouldReceive('setex')->with('znuny:ticket_indexes:1001', \Mockery::any(), \Mockery::any());
 
         $result = $this->service->upsertOrRefreshFromSearchResult($ticket);
-        $this->assertEquals("cached_new", $result);
+        $this->assertEquals('cached_new', $result);
     }
 
     public function test_upsert_or_refresh_old_cache_migration_rewrites()
     {
         $ticket = [
-            "TicketID" => 1002,
-            "CustomerID" => "oleksandr.ustinov@tmm.ua",
-            "SyncFingerprint" => "fp_same",
-            "InlineAttachmentCount" => 0,
-            "HTMLBodyArticleCount" => 0,
+            'TicketID' => 1002,
+            'CustomerID' => 'oleksandr.ustinov@tmm.ua',
+            'SyncFingerprint' => 'fp_same',
+            'InlineAttachmentCount' => 0,
+            'HTMLBodyArticleCount' => 0,
         ];
         // Missing customer_user_registered in cache
-        $existing = json_encode(["TicketID" => 1002, "CustomerID" => "oleksandr.ustinov@tmm.ua", "SyncFingerprint" => "fp_same", "InlineAttachmentCount" => 0, "HTMLBodyArticleCount" => 0]);
+        $existing = json_encode(['TicketID' => 1002, 'CustomerID' => 'oleksandr.ustinov@tmm.ua', 'SyncFingerprint' => 'fp_same', 'InlineAttachmentCount' => 0, 'HTMLBodyArticleCount' => 0]);
 
-        Redis::shouldReceive("get")->with("znuny:ticket:1002")->andReturn($existing);
-        Redis::shouldReceive("get")->with("znuny:ticket_indexes:1002")->andReturn(json_encode(["znuny:index:queue:1"]));
-        Redis::shouldReceive("zrem")->with("znuny:index:queue:1", 1002)->once();
+        Redis::shouldReceive('get')->with('znuny:ticket:1002')->andReturn($existing);
+        Redis::shouldReceive('get')->with('znuny:ticket_indexes:1002')->andReturn(json_encode(['znuny:index:queue:1']));
+        Redis::shouldReceive('zrem')->with('znuny:index:queue:1', 1002)->once();
 
-        Redis::shouldReceive("setex")
+        Redis::shouldReceive('setex')
             ->once()
-            ->with("znuny:ticket:1002", 600, json_encode(["TicketID" => 1002, "CustomerID" => "oleksandr.ustinov@tmm.ua", "SyncFingerprint" => "fp_same", "InlineAttachmentCount" => 0, "HTMLBodyArticleCount" => 0, "customer_user_registered" => false]));
-        Redis::shouldReceive("setex")->with("znuny:ticket_indexes:1002", \Mockery::any(), \Mockery::any());
+            ->with('znuny:ticket:1002', 600, json_encode(['TicketID' => 1002, 'CustomerID' => 'oleksandr.ustinov@tmm.ua', 'SyncFingerprint' => 'fp_same', 'InlineAttachmentCount' => 0, 'HTMLBodyArticleCount' => 0, 'customer_user_registered' => false]));
+        Redis::shouldReceive('setex')->with('znuny:ticket_indexes:1002', \Mockery::any(), \Mockery::any());
 
         $result = $this->service->upsertOrRefreshFromSearchResult($ticket);
-        $this->assertEquals("updated_changed", $result);
+        $this->assertEquals('updated_changed', $result);
     }
 
     public function test_upsert_or_refresh_registration_changed_rewrites()
     {
-        $mockLookup = \Mockery::mock(\App\Services\Znuny\Cache\ZnunyLookupCacheReadService::class);
-        $mockLookup->shouldReceive("hasCustomerCompany")->with("agrotekhnik")->andReturn(true);
+        $mockLookup = \Mockery::mock(ZnunyLookupCacheReadService::class);
+        $mockLookup->shouldReceive('hasCustomerCompany')->with('agrotekhnik')->andReturn(true);
         $service = new ZnunyTicketCacheService($mockLookup);
 
         $ticket = [
-            "TicketID" => 1003,
-            "CustomerID" => "agrotekhnik",
-            "SyncFingerprint" => "fp_same",
-            "InlineAttachmentCount" => 0,
-            "HTMLBodyArticleCount" => 0,
+            'TicketID' => 1003,
+            'CustomerID' => 'agrotekhnik',
+            'SyncFingerprint' => 'fp_same',
+            'InlineAttachmentCount' => 0,
+            'HTMLBodyArticleCount' => 0,
         ];
         // Exists in cache but with false
-        $existing = json_encode(["TicketID" => 1003, "CustomerID" => "agrotekhnik", "SyncFingerprint" => "fp_same", "InlineAttachmentCount" => 0, "HTMLBodyArticleCount" => 0, "customer_user_registered" => false]);
+        $existing = json_encode(['TicketID' => 1003, 'CustomerID' => 'agrotekhnik', 'SyncFingerprint' => 'fp_same', 'InlineAttachmentCount' => 0, 'HTMLBodyArticleCount' => 0, 'customer_user_registered' => false]);
 
-        Redis::shouldReceive("get")->with("znuny:ticket:1003")->andReturn($existing);
-        Redis::shouldReceive("get")->with("znuny:ticket_indexes:1003")->andReturn(json_encode(["znuny:index:queue:1"]));
-        Redis::shouldReceive("zrem")->with("znuny:index:queue:1", 1003)->once();
+        Redis::shouldReceive('get')->with('znuny:ticket:1003')->andReturn($existing);
+        Redis::shouldReceive('get')->with('znuny:ticket_indexes:1003')->andReturn(json_encode(['znuny:index:queue:1']));
+        Redis::shouldReceive('zrem')->with('znuny:index:queue:1', 1003)->once();
 
-        Redis::shouldReceive("setex")
+        Redis::shouldReceive('setex')
             ->once()
-            ->with("znuny:ticket:1003", 600, json_encode(["TicketID" => 1003, "CustomerID" => "agrotekhnik", "SyncFingerprint" => "fp_same", "InlineAttachmentCount" => 0, "HTMLBodyArticleCount" => 0, "customer_user_registered" => true]));
-        Redis::shouldReceive("setex")->with("znuny:ticket_indexes:1003", \Mockery::any(), \Mockery::any());
+            ->with('znuny:ticket:1003', 600, json_encode(['TicketID' => 1003, 'CustomerID' => 'agrotekhnik', 'SyncFingerprint' => 'fp_same', 'InlineAttachmentCount' => 0, 'HTMLBodyArticleCount' => 0, 'customer_user_registered' => true]));
+        Redis::shouldReceive('setex')->with('znuny:ticket_indexes:1003', \Mockery::any(), \Mockery::any());
 
         $result = $service->upsertOrRefreshFromSearchResult($ticket);
-        $this->assertEquals("updated_changed", $result);
+        $this->assertEquals('updated_changed', $result);
     }
 
     public function test_upsert_or_refresh_true_unchanged()
     {
-        $mockLookup = \Mockery::mock(\App\Services\Znuny\Cache\ZnunyLookupCacheReadService::class);
-        $mockLookup->shouldReceive("hasCustomerCompany")->with("agrotekhnik")->andReturn(true);
+        $mockLookup = \Mockery::mock(ZnunyLookupCacheReadService::class);
+        $mockLookup->shouldReceive('hasCustomerCompany')->with('agrotekhnik')->andReturn(true);
         $service = new ZnunyTicketCacheService($mockLookup);
 
         $ticket = [
-            "TicketID" => 1004,
-            "CustomerID" => "agrotekhnik",
-            "SyncFingerprint" => "fp_same",
-            "InlineAttachmentCount" => 0,
-            "HTMLBodyArticleCount" => 0,
+            'TicketID' => 1004,
+            'CustomerID' => 'agrotekhnik',
+            'SyncFingerprint' => 'fp_same',
+            'InlineAttachmentCount' => 0,
+            'HTMLBodyArticleCount' => 0,
         ];
         // Exists in cache with true
-        $existing = json_encode(["TicketID" => 1004, "CustomerID" => "agrotekhnik", "SyncFingerprint" => "fp_same", "InlineAttachmentCount" => 0, "HTMLBodyArticleCount" => 0, "customer_user_registered" => true]);
+        $existing = json_encode(['TicketID' => 1004, 'CustomerID' => 'agrotekhnik', 'SyncFingerprint' => 'fp_same', 'InlineAttachmentCount' => 0, 'HTMLBodyArticleCount' => 0, 'customer_user_registered' => true]);
 
-        Redis::shouldReceive("get")->with("znuny:ticket:1004")->andReturn($existing);
-        Redis::shouldReceive("get")->with("znuny:ticket_indexes:1004")->andReturn(json_encode(["znuny:index:queue:1"]));
+        Redis::shouldReceive('get')->with('znuny:ticket:1004')->andReturn($existing);
+        Redis::shouldReceive('get')->with('znuny:ticket_indexes:1004')->andReturn(json_encode(['znuny:index:queue:1']));
 
-        Redis::shouldReceive("expire")->with("znuny:ticket:1004", 600)->once();
-        Redis::shouldReceive("expire")->with("znuny:ticket_indexes:1004", \Mockery::any())->once();
-        Redis::shouldReceive("expire")->with("znuny:index:queue:1", \Mockery::any())->once();
-        Redis::shouldReceive("setex")->never();
+        Redis::shouldReceive('expire')->with('znuny:ticket:1004', 600)->once();
+        Redis::shouldReceive('expire')->with('znuny:ticket_indexes:1004', \Mockery::any())->once();
+        Redis::shouldReceive('expire')->with('znuny:index:queue:1', \Mockery::any())->once();
+        Redis::shouldReceive('setex')->never();
 
         $result = $service->upsertOrRefreshFromSearchResult($ticket);
-        $this->assertEquals("refreshed_unchanged", $result);
+        $this->assertEquals('refreshed_unchanged', $result);
+    }
+
+    public function test_update_ticket_identity_maintains_reverse_index()
+    {
+        $mockLookup = \Mockery::mock(ZnunyLookupCacheReadService::class);
+        $mockLookup->shouldReceive('hasCustomerCompany')->with('new_comp')->andReturn(true);
+        $service = new ZnunyTicketCacheService($mockLookup);
+
+        $existing = json_encode([
+            'TicketID' => 2005,
+            'CustomerUserID' => 'old_user',
+            'CustomerID' => 'old_comp',
+            'customer_user_registered' => false,
+        ]);
+
+        Redis::shouldReceive('get')->with('znuny:ticket:2005')->andReturn($existing);
+        Redis::shouldReceive('ttl')->with('znuny:ticket:2005')->andReturn(300);
+
+        Redis::shouldReceive('get')->with('znuny:ticket_indexes:2005')->andReturn(json_encode([
+            'znuny:index:customer_user:old_user',
+        ]));
+
+        Redis::shouldReceive('setex')->with('znuny:ticket:2005', 300, \Mockery::any())->once();
+
+        Redis::shouldReceive('zrem')->with('znuny:index:customer_user:old_user', 2005)->once();
+
+        Redis::shouldReceive('zadd')->with('znuny:index:customer_user:new_user', \Mockery::any(), 2005)->once();
+        Redis::shouldReceive('expire')->with('znuny:index:customer_user:new_user', \Mockery::any())->once();
+
+        Redis::shouldReceive('setex')->with('znuny:ticket_indexes:2005', \Mockery::any(), json_encode([
+            'znuny:index:customer_user:new_user',
+        ]))->once();
+
+        $service->updateTicketIdentity(2005, 'new_user', 'new_comp');
+    }
+
+    public function test_refresh_preserves_reconciled_registration_for_same_mail_sender(): void
+    {
+        $login = 'oleksandr.ustinov@tmm.ua';
+        $ticketId = 59360;
+        $key = "znuny:ticket:{$ticketId}";
+        $reverseKey = "znuny:ticket_indexes:{$ticketId}";
+
+        $lookup = \Mockery::mock(ZnunyLookupCacheReadService::class);
+        $lookup->shouldReceive('hasCustomerCompany')
+            ->once()
+            ->with($login)
+            ->andReturn(false);
+        $lookup->shouldReceive('hasCustomerCompany')
+            ->once()
+            ->with('vamark project')
+            ->andReturn(true);
+
+        $service = new ZnunyTicketCacheService($lookup);
+
+        $existing = [
+            'TicketID' => $ticketId,
+            'CustomerUserID' => $login,
+            'CustomerID' => 'vamark project',
+            'customer_user_registered' => true,
+            'SyncFingerprint' => 'same',
+            'InlineAttachmentCount' => 0,
+            'HTMLBodyArticleCount' => 0,
+            'StateType' => 'open',
+        ];
+
+        $incoming = [
+            'TicketID' => $ticketId,
+            'CustomerUserID' => $login,
+            'CustomerID' => $login,
+            'SyncFingerprint' => 'same',
+            'InlineAttachmentCount' => 0,
+            'HTMLBodyArticleCount' => 0,
+            'StateType' => 'open',
+        ];
+
+        Redis::shouldReceive('get')
+            ->once()
+            ->with($key)
+            ->andReturn(json_encode($existing));
+
+        Redis::shouldReceive('expire')
+            ->once()
+            ->with($key, 600);
+
+        Redis::shouldReceive('expire')
+            ->once()
+            ->with($reverseKey, 604800);
+
+        Redis::shouldReceive('get')
+            ->once()
+            ->with($reverseKey)
+            ->andReturn(null);
+
+        Redis::shouldReceive('setex')->never();
+
+        $result = $service->upsertOrRefreshFromSearchResult($incoming);
+
+        $this->assertSame('refreshed_unchanged', $result);
     }
 }

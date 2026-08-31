@@ -97,6 +97,151 @@ class ZnunyClientTest extends TestCase
         $this->assertContains('Some API error', $response['errors']);
     }
 
+    public function test_create_customer_user_success()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/CustomerUser' => Http::response([
+                'Success' => 1,
+                'Data' => [
+                    'Created' => 1,
+                    'CustomerUser' => [
+                        'UserLogin' => 'testuser',
+                        'UserCustomerID' => 'testcompany',
+                    ],
+                    'Errors' => [],
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+
+        $response = $client->createCustomerUser([
+            'FirstName' => 'Test',
+            'LastName' => 'User',
+            'Login' => 'testuser',
+            'Email' => 'test@example.com',
+            'CustomerID' => 'testcompany',
+            'Password' => 'secret123',
+            'ValidID' => 1,
+            'ArbitraryExtra' => 'should_be_stripped',
+        ]);
+
+        $this->assertTrue($response['found']);
+        $this->assertTrue($response['created']);
+        $this->assertEquals('testuser', $response['login']);
+        $this->assertEquals('testcompany', $response['customer_id']);
+        $this->assertEmpty($response['errors']);
+
+        Http::assertSent(function (Request $request) {
+            if (str_contains($request->url(), '/CustomerUser')) {
+                if ($request->method() !== 'POST') {
+                    return false;
+                }
+                $data = $request->data();
+
+                return $data['Login'] === 'testuser'
+                    && $data['Email'] === 'test@example.com'
+                    && $data['FirstName'] === 'Test'
+                    && $data['LastName'] === 'User'
+                    && $data['CustomerID'] === 'testcompany'
+                    && $data['SessionID'] === 'fake_session'
+                    && ! isset($data['Password'])
+                    && ! isset($data['ValidID'])
+                    && ! isset($data['ArbitraryExtra'])
+                    && count($data) === 6;
+            }
+
+            return false;
+        });
+    }
+
+    public function test_create_customer_user_logical_failure()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/CustomerUser' => Http::response([
+                'Success' => 1,
+                'Data' => [
+                    'Created' => 0,
+                    'CustomerUser' => null,
+                    'Errors' => ['Duplicate Login'],
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+
+        $response = $client->createCustomerUser([
+            'FirstName' => 'Test',
+            'LastName' => 'User',
+            'Login' => 'testuser',
+            'Email' => 'test@example.com',
+            'CustomerID' => 'testcompany',
+        ]);
+
+        $this->assertFalse($response['found']);
+        $this->assertFalse($response['created']);
+        $this->assertContains('Duplicate Login', $response['errors']);
+    }
+
+    public function test_create_customer_user_missing_login_in_response()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/CustomerUser' => Http::response([
+                'Success' => 1,
+                'Data' => [
+                    'Created' => 1,
+                    'CustomerUser' => [
+                        'UserCustomerID' => 'testcompany',
+                    ],
+                    'Errors' => [],
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+
+        $response = $client->createCustomerUser([
+            'FirstName' => 'Test',
+            'LastName' => 'User',
+            'Login' => 'testuser',
+            'Email' => 'test@example.com',
+            'CustomerID' => 'testcompany',
+        ]);
+
+        $this->assertFalse($response['found']);
+        $this->assertFalse($response['created']);
+        $this->assertContains('CustomerUser login missing in response.', $response['errors']);
+    }
+
+    public function test_create_customer_user_api_error()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/CustomerUser' => Http::response([
+                'Error' => [
+                    'ErrorCode' => 'ZnunyAgentList.SomeError',
+                    'ErrorMessage' => 'Something went wrong',
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Znuny API Error: [ZnunyAgentList.SomeError] Something went wrong');
+
+        $client->createCustomerUser([
+            'FirstName' => 'Test',
+            'LastName' => 'User',
+            'Login' => 'testuser',
+            'Email' => 'test@example.com',
+            'CustomerID' => 'testcompany',
+        ]);
+    }
+
     public function test_process_response_unwraps_data_array()
     {
         Http::fake([
@@ -1032,6 +1177,7 @@ class ZnunyClientTest extends TestCase
 
         $this->assertSame([], $client->getTicketInlineAttachmentReferences(123));
     }
+
     public function test_get_customer_companies_page_success()
     {
         Http::fake([
@@ -1062,8 +1208,9 @@ class ZnunyClientTest extends TestCase
                 return $request['SessionID'] === 'test-session-id' &&
                        $request['Offset'] == 0 &&
                        $request['Limit'] == 100 &&
-                       !isset($request['Search']);
+                       ! isset($request['Search']);
             }
+
             return true;
         });
     }

@@ -69,29 +69,33 @@ class Settings extends Page implements HasForms
         'scheduled_tasks_failure_threshold',
     ];
 
-    private function localizedSettingLabel(string $key, string $fallback): string
+    private function localizedSettingLabel(string $key, ?string $fallback = null): string
     {
         $translationKey = "settings.metadata.{$key}.label";
 
-        return Lang::has($translationKey) ? __($translationKey) : $fallback;
-    }
-
-    private function localizedSettingDescription(string $key, ?string $fallback): ?string
-    {
-        if ($fallback === null) {
-            return null;
+        if (Lang::has($translationKey)) {
+            return __($translationKey);
         }
 
-        $translationKey = "settings.metadata.{$key}.description";
-
-        return Lang::has($translationKey) ? __($translationKey) : $fallback;
+        return $fallback ?? __($translationKey);
     }
 
-    private function localizedSettingOption(string $key, string $rawValue, string $fallback): string
+    private function localizedSettingDescription(string $key, ?string $fallback = null): ?string
+    {
+        $translationKey = "settings.metadata.{$key}.description";
+
+        if (Lang::has($translationKey)) {
+            return __($translationKey);
+        }
+
+        return $fallback;
+    }
+
+    private function localizedSettingOption(string $key, string $rawValue, ?string $fallback = null): string
     {
         $translationKey = "settings.metadata.{$key}.options.{$rawValue}";
 
-        return Lang::has($translationKey) ? __($translationKey) : $fallback;
+        return Lang::has($translationKey) ? __($translationKey) : ($fallback ?? $rawValue);
     }
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-cog-6-tooth';
@@ -567,116 +571,8 @@ class Settings extends Page implements HasForms
                 continue;
             }
 
-            $label = Str::title(str_replace('_', ' ', $setting->key));
-            $description = $setting->description;
-
-            $overrides = [
-                'zabbix_problem_cache_ttl_minutes' => [
-                    'label' => 'Problem Presence Window (minutes)',
-                    'description' => 'How long a last-seen Zabbix problem is still considered present after it stops appearing in Zabbix poll results. This helps avoid premature resolved-state transitions between poll cycles.',
-                ],
-                'znuny_ticket_snapshot_cache_ttl_minutes' => [
-                    'label' => 'Znuny Ticket Snapshot Cache TTL Minutes',
-                    'description' => 'How long linked ticket snapshot data may be cached before refresh. 0 disables this cache.',
-                ],
-                'znuny_detailed_sync_audit_enabled' => [
-                    'label' => 'Linked Tickets Detailed Sync Audit',
-                    'description' => 'Write detailed per-ticket Linked Tickets sync audit events such as updated, missing, and failed. Keep disabled unless troubleshooting.',
-                ],
-                'zabbix_problem_sync_audit_enabled' => [
-                    'label' => 'Current Problems Sync Audit',
-                    'description' => 'Write summary audit records for scheduled Zabbix problem polling.',
-                ],
-                'znuny_ticket_workspace_sync_audit_enabled' => [
-                    'label' => 'Ticket Workspace Sync Audit',
-                    'description' => 'Write summary audit records for scheduled Ticket Workspace cache warming.',
-                ],
-                'znuny_ticket_url_template' => [
-                    'label' => 'Znuny Ticket URL Template',
-                    'description' => 'Template used to open a Znuny ticket in the Znuny web UI. Supported placeholders: {ticket_id} for the internal Znuny TicketID. Example: https://znuny.example.com/otrs/index.pl?Action=AgentTicketZoom;TicketID={ticket_id}',
-                ],
-                'znuny_customer_user_url_template' => [
-                    'label' => 'Znuny Customer User URL Template',
-                    'description' => 'Template used to open a Znuny customer user edit page. The exact supported placeholder token is {customer_user_login}. Example: https://znuny.example.com/index.pl?Action=AdminCustomerUser;Subaction=Change;ID={customer_user_login}',
-                ],
-                'zabbix_problem_url_template' => [
-                    'label' => 'Zabbix Problem URL Template',
-                    'description' => 'Template used to open a Zabbix problem in the Zabbix web UI. Supported placeholders: {trigger_id}, {event_id}. Example for Zabbix 7.0: https://zabbix.example.com/zabbix.php?show=1&action=problem.view&triggerids%5B%5D={trigger_id} Example with event id: https://zabbix.example.com/tr_events.php?triggerid={trigger_id}&eventid={event_id}',
-                ],
-                'znuny_linked_ticket_sync_batch_size' => [
-                    'label' => 'Linked Ticket Sync Batch Size',
-                    'description' => 'Maximum number of eligible linked tickets processed per sync run. 0 means all eligible tickets.',
-                ],
-                'znuny_linked_ticket_sync_interval_minutes' => [
-                    'label' => 'Linked Ticket Sync Interval Minutes',
-                    'description' => 'How often scheduled linked-ticket synchronization should run.',
-                ],
-                'manual_ticket_auto_close_schedule_mode' => [
-                    'label' => 'Manual Ticket Auto-close Scheduler Mode',
-                    'description' => 'Controls how the scheduler handles auto-closing of manual tickets.',
-                ],
-                'default_close_delay_hours' => [
-                    'label' => 'Default Close Delay Hours',
-                    'description' => 'Hours a linked Zabbix problem must remain resolved before automatic ticket close can run.',
-                ],
-                'default_reopen_window_hours' => [
-                    'label' => 'Default Reopen Window Hours',
-                    'description' => 'Hours after ticket close during which the same logical Zabbix problem is shown as a recent candidate for reopening. Reopen is still a manual operator action.',
-                ],
-                'manual_ticket_flap_threshold' => [
-                    'label' => 'Flap Threshold',
-                    'description' => 'Number of times the same linked problem may return after resolving before it is marked as flapping. 0 disables flapping detection.',
-                ],
-                'manual_ticket_extra_flapping_delay_hours' => [
-                    'label' => 'Extra Flapping Delay Hours',
-                    'description' => 'Additional close delay added after flapping is detected for a linked manual ticket.',
-                ],
-                'znuny_ticket_workspace_enabled' => [
-                    'label' => 'Enable Ticket Workspace',
-                    'description' => 'Master switch for the entire Ticket Workspace subsystem. When disabled, scheduled and manual synchronization, individual ticket refreshes, and cached ticket reads are blocked. Existing cached data is retained and becomes available again after the feature is re-enabled.',
-                ],
-                'znuny_ticket_cache_refresh_interval_minutes' => [
-                    'label' => 'Active Cache Refresh Interval (Minutes)',
-                    'description' => 'How often the scheduled active-ticket cache warmer is allowed to run. The scheduler checks regularly but skips warming until this interval has elapsed; manual refreshes are not limited by this value. Lower values increase Znuny API load.',
-                ],
-                'znuny_ticket_cache_default_limit' => [
-                    'label' => 'Znuny API Fetch Batch Size',
-                    'description' => 'Number of active tickets requested from Znuny in each API page during cache warming. This does not control the number of rows displayed in Ticket Workspace. Larger values reduce request count but increase response size and processing load.',
-                ],
-                'znuny_ticket_cache_max_pages_per_run' => [
-                    'label' => 'Max Pages Per Run',
-                    'description' => 'Maximum number of Znuny API pages processed during one active-ticket cache warming run. The approximate upper limit per run is Znuny API Fetch Batch Size × Max Pages Per Run; fewer pages are requested when Znuny has no more results.',
-                ],
-                'znuny_ticket_cache_ttl_minutes' => [
-                    'label' => 'Active Ticket Cache TTL (Minutes)',
-                    'description' => 'Base Redis lifetime for cached active tickets. The application may automatically increase the effective TTL so cached data does not expire before the next scheduled refresh and UI polling cycle. Increasing this value retains stale active-ticket data longer if synchronization stops.',
-                ],
-
-                'znuny_ticket_workspace_active_state_type_ids' => [
-                    'label' => 'Active State Types',
-                    'description' => 'Select the Znuny state types included in the active ticket working set. These values are state type names, not numeric IDs. Changes apply to the next active-ticket cache refresh.',
-                ],
-                'znuny_closed_ticket_window_days' => [
-                    'label' => 'Closed Ticket Creation Window (Days)',
-                    'description' => 'Closed tickets are cached only when their Created timestamp falls within this number of days. The window is not based on the actual close time because Znuny does not provide a sufficiently reliable close timestamp for this workflow. Reducing the value does not immediately remove entries already retained in Redis; cached entries expire naturally and may remain physically stored for up to six times this window.',
-                ],
-                'znuny_closed_ticket_small_sync_interval_minutes' => [
-                    'label' => 'Recent Closed Tickets Sync Interval (Minutes)',
-                    'description' => 'How often the scheduled small synchronization checks Znuny for recently changed closed tickets and refreshes the closed-ticket cache. Only tickets whose Created timestamp falls inside the configured creation window are stored. Lower values increase Znuny API load, and synchronization does not run while Ticket Workspace is disabled.',
-                ],
-                'znuny_closed_ticket_sync_audit_auto_enabled' => [
-                    'label' => 'Log Automatic Closed-Ticket Syncs',
-                    'description' => 'Write Audit Log entries for automatic closed-ticket syncs. Manual syncs are always audited.',
-                ],
-            ];
-
-            if (isset($overrides[$setting->key])) {
-                $label = $overrides[$setting->key]['label'];
-                $description = $overrides[$setting->key]['description'];
-            }
-
-            $label = $this->localizedSettingLabel($setting->key, $label);
-            $description = $this->localizedSettingDescription($setting->key, $description);
+            $label = $this->localizedSettingLabel($setting->key);
+            $description = $this->localizedSettingDescription($setting->key);
 
             $component = null;
 
@@ -746,14 +642,16 @@ class Settings extends Page implements HasForms
                     ->rules([
                         function () {
                             return function (string $attribute, $value, \Closure $fail) {
-                                if (empty($value)) return;
+                                if (empty($value)) {
+                                    return;
+                                }
 
                                 $trimmed = trim($value);
-                                if (!str_starts_with($trimmed, 'http://') && !str_starts_with($trimmed, 'https://')) {
+                                if (! str_starts_with($trimmed, 'http://') && ! str_starts_with($trimmed, 'https://')) {
                                     $fail(__('settings.settings_page.fields.znuny_customer_user_url_template.validation.scheme'));
                                 }
 
-                                if (!str_contains($trimmed, '{customer_user_login}')) {
+                                if (! str_contains($trimmed, '{customer_user_login}')) {
                                     $fail(__('settings.settings_page.fields.znuny_customer_user_url_template.validation.placeholder'));
                                 }
                             };
@@ -828,12 +726,12 @@ class Settings extends Page implements HasForms
                     ->helperText($description)
                     ->multiple()
                     ->options([
-                        'new' => $this->localizedSettingOption($setting->key, 'new', 'New'),
-                        'open' => $this->localizedSettingOption($setting->key, 'open', 'Open'),
-                        'pending_reminder' => $this->localizedSettingOption($setting->key, 'pending_reminder', 'Pending reminder'),
-                        'pending_auto' => $this->localizedSettingOption($setting->key, 'pending_auto', 'Pending auto'),
-                        'closed' => $this->localizedSettingOption($setting->key, 'closed', 'Closed'),
-                        'merged' => $this->localizedSettingOption($setting->key, 'merged', 'Merged'),
+                        'new' => $this->localizedSettingOption($setting->key, 'new'),
+                        'open' => $this->localizedSettingOption($setting->key, 'open'),
+                        'pending_reminder' => $this->localizedSettingOption($setting->key, 'pending_reminder'),
+                        'pending_auto' => $this->localizedSettingOption($setting->key, 'pending_auto'),
+                        'closed' => $this->localizedSettingOption($setting->key, 'closed'),
+                        'merged' => $this->localizedSettingOption($setting->key, 'merged'),
                     ])
                     ->required();
             } elseif (in_array($setting->key, ['zabbix_attention_highlight_text_color', 'zabbix_attention_highlight_underline_color'])) {
@@ -841,22 +739,22 @@ class Settings extends Page implements HasForms
                     ->label($label)
                     ->helperText($description)
                     ->options([
-                        'custom_hex' => $this->localizedSettingOption($setting->key, 'custom_hex', 'Custom HEX'),
-                        'aquamarine' => $this->localizedSettingOption($setting->key, 'aquamarine', 'Aquamarine'),
-                        'white' => $this->localizedSettingOption($setting->key, 'white', 'White'),
-                        'gray' => $this->localizedSettingOption($setting->key, 'gray', 'Gray'),
-                        'red' => $this->localizedSettingOption($setting->key, 'red', 'Red'),
-                        'orange' => $this->localizedSettingOption($setting->key, 'orange', 'Orange'),
-                        'amber' => $this->localizedSettingOption($setting->key, 'amber', 'Amber'),
-                        'yellow' => $this->localizedSettingOption($setting->key, 'yellow', 'Yellow'),
-                        'lime' => $this->localizedSettingOption($setting->key, 'lime', 'Lime'),
-                        'green' => $this->localizedSettingOption($setting->key, 'green', 'Green'),
-                        'emerald' => $this->localizedSettingOption($setting->key, 'emerald', 'Emerald'),
-                        'cyan' => $this->localizedSettingOption($setting->key, 'cyan', 'Cyan'),
-                        'sky' => $this->localizedSettingOption($setting->key, 'sky', 'Sky'),
-                        'blue' => $this->localizedSettingOption($setting->key, 'blue', 'Blue'),
-                        'violet' => $this->localizedSettingOption($setting->key, 'violet', 'Violet'),
-                        'pink' => $this->localizedSettingOption($setting->key, 'pink', 'Pink'),
+                        'custom_hex' => $this->localizedSettingOption($setting->key, 'custom_hex'),
+                        'aquamarine' => $this->localizedSettingOption($setting->key, 'aquamarine'),
+                        'white' => $this->localizedSettingOption($setting->key, 'white'),
+                        'gray' => $this->localizedSettingOption($setting->key, 'gray'),
+                        'red' => $this->localizedSettingOption($setting->key, 'red'),
+                        'orange' => $this->localizedSettingOption($setting->key, 'orange'),
+                        'amber' => $this->localizedSettingOption($setting->key, 'amber'),
+                        'yellow' => $this->localizedSettingOption($setting->key, 'yellow'),
+                        'lime' => $this->localizedSettingOption($setting->key, 'lime'),
+                        'green' => $this->localizedSettingOption($setting->key, 'green'),
+                        'emerald' => $this->localizedSettingOption($setting->key, 'emerald'),
+                        'cyan' => $this->localizedSettingOption($setting->key, 'cyan'),
+                        'sky' => $this->localizedSettingOption($setting->key, 'sky'),
+                        'blue' => $this->localizedSettingOption($setting->key, 'blue'),
+                        'violet' => $this->localizedSettingOption($setting->key, 'violet'),
+                        'pink' => $this->localizedSettingOption($setting->key, 'pink'),
                     ])
                     ->disabled(fn (callable $get) => $setting->key === 'zabbix_attention_highlight_underline_color' && $get('zabbix_attention_highlight_underline_style') === 'disabled')
                     ->required()
@@ -888,12 +786,12 @@ class Settings extends Page implements HasForms
                     ->label($label)
                     ->helperText($description)
                     ->options([
-                        'disabled' => $this->localizedSettingOption($setting->key, 'disabled', 'Disabled'),
-                        'solid' => $this->localizedSettingOption($setting->key, 'solid', 'Solid'),
-                        'dashed' => $this->localizedSettingOption($setting->key, 'dashed', 'Dashed'),
-                        'dotted' => $this->localizedSettingOption($setting->key, 'dotted', 'Dotted'),
-                        'double' => $this->localizedSettingOption($setting->key, 'double', 'Double'),
-                        'wavy' => $this->localizedSettingOption($setting->key, 'wavy', 'Wavy'),
+                        'disabled' => $this->localizedSettingOption($setting->key, 'disabled'),
+                        'solid' => $this->localizedSettingOption($setting->key, 'solid'),
+                        'dashed' => $this->localizedSettingOption($setting->key, 'dashed'),
+                        'dotted' => $this->localizedSettingOption($setting->key, 'dotted'),
+                        'double' => $this->localizedSettingOption($setting->key, 'double'),
+                        'wavy' => $this->localizedSettingOption($setting->key, 'wavy'),
                     ])
                     ->required()
                     ->live();
@@ -902,9 +800,9 @@ class Settings extends Page implements HasForms
                     ->label($label)
                     ->helperText($description)
                     ->options([
-                        '1px' => $this->localizedSettingOption($setting->key, '1px', '1px'),
-                        '2px' => $this->localizedSettingOption($setting->key, '2px', '2px'),
-                        '3px' => $this->localizedSettingOption($setting->key, '3px', '3px'),
+                        '1px' => $this->localizedSettingOption($setting->key, '1px'),
+                        '2px' => $this->localizedSettingOption($setting->key, '2px'),
+                        '3px' => $this->localizedSettingOption($setting->key, '3px'),
                     ])
                     ->disabled(fn (callable $get) => $get('zabbix_attention_highlight_underline_style') === 'disabled')
                     ->required()
@@ -923,9 +821,9 @@ class Settings extends Page implements HasForms
                         'disabled: scheduler will not auto-close manual tickets; dry_run: scheduler logs what would be closed without changing Znuny; execute: scheduler closes eligible manual tickets using the verified /TicketClose workflow.',
                     ))
                     ->options([
-                        'disabled' => $this->localizedSettingOption($setting->key, 'disabled', 'Disabled'),
-                        'dry_run' => $this->localizedSettingOption($setting->key, 'dry_run', 'Dry Run'),
-                        'execute' => $this->localizedSettingOption($setting->key, 'execute', 'Execute'),
+                        'disabled' => $this->localizedSettingOption($setting->key, 'disabled'),
+                        'dry_run' => $this->localizedSettingOption($setting->key, 'dry_run'),
+                        'execute' => $this->localizedSettingOption($setting->key, 'execute'),
                     ])
                     ->required();
             } elseif ($setting->key === 'app_display_timezone') {
@@ -982,8 +880,8 @@ class Settings extends Page implements HasForms
                     ->label($label)
                     ->helperText($description)
                     ->options([
-                        'lock' => $this->localizedSettingOption($setting->key, 'lock', 'Lock'),
-                        'unlock' => $this->localizedSettingOption($setting->key, 'unlock', 'Unlock'),
+                        'lock' => $this->localizedSettingOption($setting->key, 'lock'),
+                        'unlock' => $this->localizedSettingOption($setting->key, 'unlock'),
                     ])
                     ->required();
             } else {
@@ -1606,38 +1504,38 @@ class Settings extends Page implements HasForms
 
         $mailSchema = [
             Toggle::make('mail_notifications_enabled')
-                ->label($this->localizedSettingLabel('mail_notifications_enabled', 'Mail Notifications Enabled'))
-                ->helperText($this->localizedSettingDescription('mail_notifications_enabled', 'Enable or disable outgoing mail notifications'))
+                ->label($this->localizedSettingLabel('mail_notifications_enabled'))
+                ->helperText($this->localizedSettingDescription('mail_notifications_enabled'))
                 ->required(),
             ToggleButtons::make('mail_transport')
-                ->label($this->localizedSettingLabel('mail_transport', 'Mail Transport'))
-                ->helperText($this->localizedSettingDescription('mail_transport', 'Select the mail transport method.'))
+                ->label($this->localizedSettingLabel('mail_transport'))
+                ->helperText($this->localizedSettingDescription('mail_transport'))
                 ->options([
-                    'sendmail' => $this->localizedSettingOption('mail_transport', 'sendmail', 'Server Sendmail'),
-                    'smtp' => $this->localizedSettingOption('mail_transport', 'smtp', 'External SMTP Server'),
+                    'sendmail' => $this->localizedSettingOption('mail_transport', 'sendmail'),
+                    'smtp' => $this->localizedSettingOption('mail_transport', 'smtp'),
                 ])
                 ->inline()
                 ->required()
                 ->live(),
             TextInput::make('mail_admin_recipients')
-                ->label($this->localizedSettingLabel('mail_admin_recipients', 'Mail Admin Recipients'))
-                ->helperText($this->localizedSettingDescription('mail_admin_recipients', 'Comma-separated list of admin email addresses to receive system alerts'))
+                ->label($this->localizedSettingLabel('mail_admin_recipients'))
+                ->helperText($this->localizedSettingDescription('mail_admin_recipients'))
                 ->required(false),
             TextInput::make('mail_from_address')
-                ->label($this->localizedSettingLabel('mail_from_address', 'Mail From Address'))
-                ->helperText($this->localizedSettingDescription('mail_from_address', 'Global FROM address for outgoing mails'))
+                ->label($this->localizedSettingLabel('mail_from_address'))
+                ->helperText($this->localizedSettingDescription('mail_from_address'))
                 ->required(false),
             TextInput::make('mail_from_name')
-                ->label($this->localizedSettingLabel('mail_from_name', 'Mail From Name'))
-                ->helperText($this->localizedSettingDescription('mail_from_name', 'Global FROM name for outgoing mails'))
+                ->label($this->localizedSettingLabel('mail_from_name'))
+                ->helperText($this->localizedSettingDescription('mail_from_name'))
                 ->required(false),
 
             Section::make('sendmail_configuration')
                 ->heading(__('settings.settings_page.sections.sendmail_configuration.heading'))
                 ->schema([
                     TextInput::make('mail_sendmail_path')
-                        ->label($this->localizedSettingLabel('mail_sendmail_path', 'Mail Sendmail Path'))
-                        ->helperText($this->localizedSettingDescription('mail_sendmail_path', 'Path to the sendmail binary'))
+                        ->label($this->localizedSettingLabel('mail_sendmail_path'))
+                        ->helperText($this->localizedSettingDescription('mail_sendmail_path'))
                         ->required(
                             fn (callable $get): bool => (bool) $get('mail_notifications_enabled')
                                 && $get('mail_transport') === 'sendmail'
@@ -1650,15 +1548,15 @@ class Settings extends Page implements HasForms
                 ->heading(__('settings.settings_page.sections.smtp_configuration.heading'))
                 ->schema([
                     TextInput::make('mail_smtp_host')
-                        ->label($this->localizedSettingLabel('mail_smtp_host', 'Mail Smtp Host'))
-                        ->helperText($this->localizedSettingDescription('mail_smtp_host', 'SMTP host address'))
+                        ->label($this->localizedSettingLabel('mail_smtp_host'))
+                        ->helperText($this->localizedSettingDescription('mail_smtp_host'))
                         ->required(
                             fn (callable $get): bool => (bool) $get('mail_notifications_enabled')
                                 && $get('mail_transport') === 'smtp'
                         ),
                     TextInput::make('mail_smtp_port')
-                        ->label($this->localizedSettingLabel('mail_smtp_port', 'Mail Smtp Port'))
-                        ->helperText($this->localizedSettingDescription('mail_smtp_port', 'SMTP port'))
+                        ->label($this->localizedSettingLabel('mail_smtp_port'))
+                        ->helperText($this->localizedSettingDescription('mail_smtp_port'))
                         ->numeric()
                         ->integer()
                         ->required(
@@ -1666,29 +1564,29 @@ class Settings extends Page implements HasForms
                                 && $get('mail_transport') === 'smtp'
                         ),
                     TextInput::make('mail_smtp_encryption')
-                        ->label($this->localizedSettingLabel('mail_smtp_encryption', 'Mail Smtp Encryption'))
-                        ->helperText($this->localizedSettingDescription('mail_smtp_encryption', 'SMTP encryption (none, tls, ssl)'))
+                        ->label($this->localizedSettingLabel('mail_smtp_encryption'))
+                        ->helperText($this->localizedSettingDescription('mail_smtp_encryption'))
                         ->required(
                             fn (callable $get): bool => (bool) $get('mail_notifications_enabled')
                                 && $get('mail_transport') === 'smtp'
                         ),
                     TextInput::make('mail_smtp_username')
-                        ->label($this->localizedSettingLabel('mail_smtp_username', 'Mail Smtp Username'))
-                        ->helperText($this->localizedSettingDescription('mail_smtp_username', 'SMTP username'))
+                        ->label($this->localizedSettingLabel('mail_smtp_username'))
+                        ->helperText($this->localizedSettingDescription('mail_smtp_username'))
                         ->required(false),
                     TextInput::make('mail_smtp_password')
-                        ->label($this->localizedSettingLabel('mail_smtp_password', 'Mail Smtp Password'))
-                        ->helperText($this->localizedSettingDescription('mail_smtp_password', 'SMTP password'))
+                        ->label($this->localizedSettingLabel('mail_smtp_password'))
+                        ->helperText($this->localizedSettingDescription('mail_smtp_password'))
                         ->password()
                         ->revealable()
                         ->placeholder(__('settings.settings_page.fields.mail_smtp_password.placeholder'))
                         ->required(false),
                     Toggle::make('mail_smtp_password_clear')
-                        ->label(Lang::has('settings.settings_page.fields.mail_smtp_password_clear.label') ? __('settings.settings_page.fields.mail_smtp_password_clear.label') : 'Clear Stored SMTP Password')
+                        ->label(__('settings.settings_page.fields.mail_smtp_password_clear.label'))
                         ->default(false),
                     TextInput::make('mail_smtp_timeout_seconds')
-                        ->label($this->localizedSettingLabel('mail_smtp_timeout_seconds', 'Mail Smtp Timeout Seconds'))
-                        ->helperText($this->localizedSettingDescription('mail_smtp_timeout_seconds', 'SMTP timeout in seconds'))
+                        ->label($this->localizedSettingLabel('mail_smtp_timeout_seconds'))
+                        ->helperText($this->localizedSettingDescription('mail_smtp_timeout_seconds'))
                         ->numeric()
                         ->integer()
                         ->required(fn (callable $get) => $get('mail_transport') === 'smtp'),
@@ -1735,8 +1633,8 @@ class Settings extends Page implements HasForms
                 ->description(__('settings.settings_page.sections.scheduler_control.description'))
                 ->schema([
                     Toggle::make('scheduled_tasks_enabled')
-                        ->label($this->localizedSettingLabel('scheduled_tasks_enabled', 'Scheduler Enabled'))
-                        ->helperText($this->localizedSettingDescription('scheduled_tasks_enabled', 'Global switch for scheduled Znuny task processing.'))
+                        ->label($this->localizedSettingLabel('scheduled_tasks_enabled'))
+                        ->helperText($this->localizedSettingDescription('scheduled_tasks_enabled'))
                         ->required(),
                 ])
                 ->columns(1),
@@ -1746,14 +1644,14 @@ class Settings extends Page implements HasForms
                 ->description(__('settings.settings_page.sections.execution_limits.description'))
                 ->schema([
                     TextInput::make('scheduled_tasks_max_processed_per_run')
-                        ->label($this->localizedSettingLabel('scheduled_tasks_max_processed_per_run', 'Maximum Tasks per Run'))
-                        ->helperText($this->localizedSettingDescription('scheduled_tasks_max_processed_per_run', 'Maximum number of scheduled tasks processed sequentially during one command run.'))
+                        ->label($this->localizedSettingLabel('scheduled_tasks_max_processed_per_run'))
+                        ->helperText($this->localizedSettingDescription('scheduled_tasks_max_processed_per_run'))
                         ->numeric()
                         ->integer()
                         ->required(),
                     TextInput::make('scheduled_tasks_command_runtime_seconds')
-                        ->label($this->localizedSettingLabel('scheduled_tasks_command_runtime_seconds', 'Command Runtime Limit (seconds)'))
-                        ->helperText($this->localizedSettingDescription('scheduled_tasks_command_runtime_seconds', 'Maximum time the scheduler processing command may run before it stops accepting more work.'))
+                        ->label($this->localizedSettingLabel('scheduled_tasks_command_runtime_seconds'))
+                        ->helperText($this->localizedSettingDescription('scheduled_tasks_command_runtime_seconds'))
                         ->numeric()
                         ->integer()
                         ->required(),
@@ -1765,14 +1663,14 @@ class Settings extends Page implements HasForms
                 ->description(__('settings.settings_page.sections.recovery_and_catch_up.description'))
                 ->schema([
                     TextInput::make('scheduled_tasks_pause_minutes')
-                        ->label($this->localizedSettingLabel('scheduled_tasks_pause_minutes', 'Pause After Transient Error (minutes)'))
-                        ->helperText($this->localizedSettingDescription('scheduled_tasks_pause_minutes', 'How long scheduler processing pauses after a transient connection or service error.'))
+                        ->label($this->localizedSettingLabel('scheduled_tasks_pause_minutes'))
+                        ->helperText($this->localizedSettingDescription('scheduled_tasks_pause_minutes'))
                         ->numeric()
                         ->integer()
                         ->required(),
                     TextInput::make('scheduled_tasks_missed_run_max_age_days')
-                        ->label($this->localizedSettingLabel('scheduled_tasks_missed_run_max_age_days', 'Missed Run Catch-up Window (days)'))
-                        ->helperText($this->localizedSettingDescription('scheduled_tasks_missed_run_max_age_days', 'Maximum age of a missed scheduled run that may still be executed by the catch-up process.'))
+                        ->label($this->localizedSettingLabel('scheduled_tasks_missed_run_max_age_days'))
+                        ->helperText($this->localizedSettingDescription('scheduled_tasks_missed_run_max_age_days'))
                         ->numeric()
                         ->integer()
                         ->required(),
@@ -1784,12 +1682,12 @@ class Settings extends Page implements HasForms
                 ->description(__('settings.settings_page.sections.failure_protection.description'))
                 ->schema([
                     Toggle::make('scheduled_tasks_auto_disable_on_failures')
-                        ->label($this->localizedSettingLabel('scheduled_tasks_auto_disable_on_failures', 'Auto-disable After Repeated Failures'))
-                        ->helperText($this->localizedSettingDescription('scheduled_tasks_auto_disable_on_failures', 'Disable scheduler processing automatically after the configured number of consecutive failures.'))
+                        ->label($this->localizedSettingLabel('scheduled_tasks_auto_disable_on_failures'))
+                        ->helperText($this->localizedSettingDescription('scheduled_tasks_auto_disable_on_failures'))
                         ->required(),
                     TextInput::make('scheduled_tasks_failure_threshold')
-                        ->label($this->localizedSettingLabel('scheduled_tasks_failure_threshold', 'Consecutive Failure Threshold'))
-                        ->helperText($this->localizedSettingDescription('scheduled_tasks_failure_threshold', 'Number of consecutive failures that triggers automatic scheduler disablement.'))
+                        ->label($this->localizedSettingLabel('scheduled_tasks_failure_threshold'))
+                        ->helperText($this->localizedSettingDescription('scheduled_tasks_failure_threshold'))
                         ->numeric()
                         ->integer()
                         ->required(),
@@ -1816,12 +1714,12 @@ class Settings extends Page implements HasForms
             $name = method_exists($component, 'getName') ? $component->getName() : null;
             if ($name === 'app_display_timezone') {
                 $explicit['app_display_timezone'] = $component
-                    ->label($this->localizedSettingLabel('app_display_timezone', 'Display Time Zone'))
-                    ->helperText($this->localizedSettingDescription('app_display_timezone', 'Time zone used only for dates and times shown in the administration interface. Stored timestamps, background processing, and scheduler timing are not changed.'));
+                    ->label($this->localizedSettingLabel('app_display_timezone'))
+                    ->helperText($this->localizedSettingDescription('app_display_timezone'));
             } elseif ($name === 'pagination_per_page_base') {
                 $explicit['pagination_per_page_base'] = $component
-                    ->label($this->localizedSettingLabel('pagination_per_page_base', 'Base Rows per Page'))
-                    ->helperText($this->localizedSettingDescription('pagination_per_page_base', 'Base number of rows used by paginated tables. Available page-size choices are generated as half of this value rounded up to the nearest multiple of 5, the base value, double the value, and triple the value. For example, 100 produces 50, 100, 200, and 300.'));
+                    ->label($this->localizedSettingLabel('pagination_per_page_base'))
+                    ->helperText($this->localizedSettingDescription('pagination_per_page_base'));
             } elseif ($name === 'ui_locale') {
                 $explicit['ui_locale'] = $component;
             } else {
@@ -1887,44 +1785,44 @@ class Settings extends Page implements HasForms
 
         if (isset($explicit['cleanup_enabled'])) {
             $explicit['cleanup_enabled']
-                ->label($this->localizedSettingLabel('cleanup_enabled', 'Automatic Local Data Cleanup'))
-                ->helperText($this->localizedSettingDescription('cleanup_enabled', 'Enable scheduled cleanup of old local integration records. Disabling this option preserves all retention settings but prevents automatic deletion. This does not delete active Zabbix problems or Znuny tickets.'));
+                ->label($this->localizedSettingLabel('cleanup_enabled'))
+                ->helperText($this->localizedSettingDescription('cleanup_enabled'));
         }
 
         if (isset($explicit['cleanup_batch_size'])) {
             $explicit['cleanup_batch_size']
-                ->label($this->localizedSettingLabel('cleanup_batch_size', 'Records per Cleanup Batch'))
-                ->helperText($this->localizedSettingDescription('cleanup_batch_size', 'Maximum number of records removed from each cleanup category during one cleanup pass. Lower values reduce database load; higher values clear accumulated old data faster.'));
+                ->label($this->localizedSettingLabel('cleanup_batch_size'))
+                ->helperText($this->localizedSettingDescription('cleanup_batch_size'));
         }
 
         if (isset($explicit['retention_resolved_days'])) {
             $explicit['retention_resolved_days']
-                ->label($this->localizedSettingLabel('retention_resolved_days', 'Resolved Problem History (days)'))
-                ->helperText($this->localizedSettingDescription('retention_resolved_days', 'Number of days to keep local history for Zabbix problems after they become resolved. This does not delete problems, events, or history from Zabbix.'));
+                ->label($this->localizedSettingLabel('retention_resolved_days'))
+                ->helperText($this->localizedSettingDescription('retention_resolved_days'));
         }
 
         if (isset($explicit['retention_closed_tickets_days'])) {
             $explicit['retention_closed_tickets_days']
-                ->label($this->localizedSettingLabel('retention_closed_tickets_days', 'Closed Ticket Link History (days)'))
-                ->helperText($this->localizedSettingDescription('retention_closed_tickets_days', 'Number of days to keep local integration records and links for closed tickets. This does not delete tickets, articles, or history from Znuny.'));
+                ->label($this->localizedSettingLabel('retention_closed_tickets_days'))
+                ->helperText($this->localizedSettingDescription('retention_closed_tickets_days'));
         }
 
         if (isset($explicit['retention_action_logs_days'])) {
             $explicit['retention_action_logs_days']
-                ->label($this->localizedSettingLabel('retention_action_logs_days', 'Action Log Retention (days)'))
-                ->helperText($this->localizedSettingDescription('retention_action_logs_days', 'Number of days to keep local application action-log records used for operational history, auditing, and troubleshooting.'));
+                ->label($this->localizedSettingLabel('retention_action_logs_days'))
+                ->helperText($this->localizedSettingDescription('retention_action_logs_days'));
         }
 
         if (isset($explicit['scheduled_task_logs_retention_days'])) {
             $explicit['scheduled_task_logs_retention_days']
-                ->label($this->localizedSettingLabel('scheduled_task_logs_retention_days', 'Scheduled Task Run Log Retention (days)'))
-                ->helperText($this->localizedSettingDescription('scheduled_task_logs_retention_days', 'Number of days to keep execution logs for scheduled Znuny task runs. Scheduled task definitions and pending scheduled work are not deleted by this retention setting.'));
+                ->label($this->localizedSettingLabel('scheduled_task_logs_retention_days'))
+                ->helperText($this->localizedSettingDescription('scheduled_task_logs_retention_days'));
         }
 
         if (isset($explicit['retention_failed_jobs_days'])) {
             $explicit['retention_failed_jobs_days']
-                ->label($this->localizedSettingLabel('retention_failed_jobs_days', 'Failed Job Retention (days)'))
-                ->helperText($this->localizedSettingDescription('retention_failed_jobs_days', 'Number of days to keep failed background-job records for diagnostics and troubleshooting.'));
+                ->label($this->localizedSettingLabel('retention_failed_jobs_days'))
+                ->helperText($this->localizedSettingDescription('retention_failed_jobs_days'));
         }
 
         $schema = [];
@@ -2020,46 +1918,46 @@ class Settings extends Page implements HasForms
 
         if (isset($explicit['znuny_prewarm_queues_interval_minutes'])) {
             $explicit['znuny_prewarm_queues_interval_minutes']
-                ->label($this->localizedSettingLabel('znuny_prewarm_queues_interval_minutes', 'Значення інтервалу оновлення черг Znuny (у хвилинах)'))
-                ->helperText($this->localizedSettingDescription('znuny_prewarm_queues_interval_minutes', 'Інтервал фонового оновлення кешу черг.'))
+                ->label($this->localizedSettingLabel('znuny_prewarm_queues_interval_minutes'))
+                ->helperText($this->localizedSettingDescription('znuny_prewarm_queues_interval_minutes'))
                 ->numeric()
                 ->minValue(3);
         }
 
         if (isset($explicit['znuny_prewarm_agents_interval_minutes'])) {
             $explicit['znuny_prewarm_agents_interval_minutes']
-                ->label($this->localizedSettingLabel('znuny_prewarm_agents_interval_minutes', 'Значення інтервалу оновлення агентів Znuny (у хвилинах)'))
-                ->helperText($this->localizedSettingDescription('znuny_prewarm_agents_interval_minutes', 'Інтервал фонового оновлення кешу агентів.'))
+                ->label($this->localizedSettingLabel('znuny_prewarm_agents_interval_minutes'))
+                ->helperText($this->localizedSettingDescription('znuny_prewarm_agents_interval_minutes'))
                 ->numeric()
                 ->minValue(3);
         }
 
         if (isset($explicit['znuny_prewarm_lookups_interval_minutes'])) {
             $explicit['znuny_prewarm_lookups_interval_minutes']
-                ->label($this->localizedSettingLabel('znuny_prewarm_lookups_interval_minutes', 'Значення інтервалу оновлення довідників Znuny (у хвилинах)'))
-                ->helperText($this->localizedSettingDescription('znuny_prewarm_lookups_interval_minutes', 'Інтервал фонового оновлення станів, пріоритетів та типів.'))
+                ->label($this->localizedSettingLabel('znuny_prewarm_lookups_interval_minutes'))
+                ->helperText($this->localizedSettingDescription('znuny_prewarm_lookups_interval_minutes'))
                 ->numeric()
                 ->minValue(3);
         }
 
         if (isset($explicit['znuny_prewarm_customer_users_interval_minutes'])) {
             $explicit['znuny_prewarm_customer_users_interval_minutes']
-                ->label($this->localizedSettingLabel('znuny_prewarm_customer_users_interval_minutes', 'Значення інтервалу оновлення клієнтів Znuny (у хвилинах)'))
-                ->helperText($this->localizedSettingDescription('znuny_prewarm_customer_users_interval_minutes', 'Інтервал фонового оновлення клієнтів (CustomerUsers).'))
+                ->label($this->localizedSettingLabel('znuny_prewarm_customer_users_interval_minutes'))
+                ->helperText($this->localizedSettingDescription('znuny_prewarm_customer_users_interval_minutes'))
                 ->numeric()
                 ->minValue(3);
         }
 
         if (isset($explicit['znuny_ticket_article_cache_ttl_minutes'])) {
             $explicit['znuny_ticket_article_cache_ttl_minutes']
-                ->label($this->localizedSettingLabel('znuny_ticket_article_cache_ttl_minutes', 'Ticket Article Cache Lifetime (minutes)'))
-                ->helperText($this->localizedSettingDescription('znuny_ticket_article_cache_ttl_minutes', 'How long Znuny ticket articles fetched for linked tickets may be cached. Set to 0 to bypass persistent ticket article caching.'));
+                ->label($this->localizedSettingLabel('znuny_ticket_article_cache_ttl_minutes'))
+                ->helperText($this->localizedSettingDescription('znuny_ticket_article_cache_ttl_minutes'));
         }
 
         if (isset($explicit['znuny_ticket_snapshot_cache_ttl_minutes'])) {
             $explicit['znuny_ticket_snapshot_cache_ttl_minutes']
-                ->label($this->localizedSettingLabel('znuny_ticket_snapshot_cache_ttl_minutes', 'Linked Ticket Snapshot Cache Lifetime (minutes)'))
-                ->helperText($this->localizedSettingDescription('znuny_ticket_snapshot_cache_ttl_minutes', 'Configured lifetime for cached linked-ticket snapshot data. A snapshot may include locally stored Znuny ticket details such as state, owner, queue, priority, and synchronization metadata. This setting does not control Ticket Workspace caching and does not delete local ticket links or data in Znuny.'));
+                ->label($this->localizedSettingLabel('znuny_ticket_snapshot_cache_ttl_minutes'))
+                ->helperText($this->localizedSettingDescription('znuny_ticket_snapshot_cache_ttl_minutes'));
         }
 
         $schema = [];

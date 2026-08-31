@@ -207,12 +207,15 @@ class AuditLogResourceLocalizationTest extends TestCase
                 'znuny.standalone_ticket.created' => ['en' => 'Standalone ticket created', 'uk' => 'Окрему заявку Znuny створено'],
                 'znuny.standalone_ticket.failed' => ['en' => 'Standalone ticket creation failed', 'uk' => 'Помилка створення окремої заявки Znuny'],
                 'znuny.standalone_ticket.failed_validation' => ['en' => 'Standalone ticket validation failed', 'uk' => 'Помилка перевірки окремої заявки Znuny'],
+                'znuny.customer_user.created' => ['en' => 'Znuny customer user created', 'uk' => 'Користувача клієнта Znuny створено'],
+                'znuny.customer_user.create_failed' => ['en' => 'Znuny customer user creation failed', 'uk' => 'Не вдалося створити користувача клієнта Znuny'],
             ];
 
             $expectedAddedEntities = [
                 'znuny_standalone_ticket' => ['en' => 'Znuny Standalone Ticket', 'uk' => 'Окрема заявка Znuny'],
                 'ScheduledZnunyTaskRun' => ['en' => 'Scheduled Znuny task run', 'uk' => 'Запуск запланованого завдання Znuny'],
                 'ZnunyTicketCreationAttempt' => ['en' => 'Znuny ticket creation attempt', 'uk' => 'Спроба створення звернення Znuny'],
+                'znuny_customer_user' => ['en' => 'Znuny customer user', 'uk' => 'Користувач клієнта Znuny'],
             ];
 
             foreach (['en', 'uk'] as $locale) {

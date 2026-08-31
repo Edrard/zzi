@@ -78,14 +78,63 @@ class ClosedTicketCacheService
 
         $ticketKey = "znuny:closed_ticket:ticket:{$ticketId}";
 
-        $customerId = (string) ($ticket['CustomerID'] ?? '');
-        $ticket['customer_user_registered'] = $this->lookupCache->hasCustomerCompany($customerId);
+        $oldLogin = '';
+        $existingData = Redis::get($ticketKey);
+        if ($existingData) {
+            $existingTicket = json_decode($existingData, true);
+            if (is_array($existingTicket) && ! empty($existingTicket['CustomerUserID'])) {
+                $oldLogin = strtolower(trim((string) $existingTicket['CustomerUserID']));
+            }
+        }
+
+        $customerId = trim((string) ($ticket['CustomerID'] ?? ''));
+
+        if ($this->lookupCache->hasCustomerCompany($customerId)) {
+            $ticket['customer_user_registered'] = true;
+        } else {
+            $existingRaw = Redis::get($ticketKey);
+            $existing = $existingRaw ? json_decode($existingRaw, true) : null;
+
+            $sameLogin = is_array($existing)
+                && strtolower(trim((string) ($existing['CustomerUserID'] ?? '')))
+                    === strtolower(trim((string) ($ticket['CustomerUserID'] ?? '')));
+
+            $existingCustomerId = $sameLogin
+                ? trim((string) ($existing['CustomerID'] ?? ''))
+                : '';
+
+            if (
+                $sameLogin
+                && (($existing['customer_user_registered'] ?? false) === true)
+                && $this->lookupCache->hasCustomerCompany($existingCustomerId)
+            ) {
+                $ticket['CustomerID'] = $existingCustomerId;
+                $ticket['customer_user_registered'] = true;
+            } else {
+                $ticket['customer_user_registered'] = false;
+            }
+        }
 
         Redis::setex($ticketKey, $retentionSeconds, json_encode($ticket));
 
         $indexKey = "znuny:closed_ticket:index:{$date}";
         Redis::zadd($indexKey, $timestamp, $ticketId);
         Redis::expire($indexKey, $retentionSeconds);
+
+        $newLogin = '';
+        if (! empty($ticket['CustomerUserID'])) {
+            $newLogin = strtolower(trim((string) $ticket['CustomerUserID']));
+            if ($newLogin !== '') {
+                $userIndexKey = "znuny:closed_ticket:customer_user_index:{$newLogin}";
+                Redis::zadd($userIndexKey, $timestamp, $ticketId);
+                $this->extendIndexTtl($userIndexKey, $retentionSeconds);
+            }
+        }
+
+        if ($oldLogin !== '' && $oldLogin !== $newLogin) {
+            $oldUserIndexKey = "znuny:closed_ticket:customer_user_index:{$oldLogin}";
+            Redis::zrem($oldUserIndexKey, $ticketId);
+        }
     }
 
     public function getTicket(int|string $ticketId): ?array
@@ -98,6 +147,52 @@ class ClosedTicketCacheService
         }
 
         return json_decode($data, true);
+    }
+
+    public function updateTicketIdentity(int|string $ticketId, string $customerUserId, string $customerId): void
+    {
+        $ticketKey = "znuny:closed_ticket:ticket:{$ticketId}";
+        $data = Redis::get($ticketKey);
+
+        if (! $data) {
+            return;
+        }
+
+        $ticket = json_decode($data, true);
+        if (! is_array($ticket)) {
+            return;
+        }
+
+        $ttl = Redis::ttl($ticketKey);
+        if ($ttl <= 0) {
+            return;
+        }
+
+        $oldCustomerUserId = trim((string) ($ticket['CustomerUserID'] ?? ''));
+
+        $ticket['CustomerUserID'] = $customerUserId;
+        $ticket['CustomerID'] = $customerId;
+        $ticket['customer_user_registered'] = $this->lookupCache->hasCustomerCompany(trim($customerId));
+
+        Redis::setex($ticketKey, $ttl, json_encode($ticket));
+
+        if (! empty($ticket['Created'])) {
+            $timestamp = strtotime($ticket['Created']);
+            if ($timestamp !== false && $timestamp > 0) {
+                $newLogin = strtolower(trim($customerUserId));
+                if ($newLogin !== '') {
+                    $newIndexKey = "znuny:closed_ticket:customer_user_index:{$newLogin}";
+                    Redis::zadd($newIndexKey, $timestamp, $ticketId);
+                    $this->extendIndexTtl($newIndexKey, $ttl);
+                }
+
+                $oldLogin = strtolower($oldCustomerUserId);
+                if ($oldLogin !== '' && $oldLogin !== $newLogin) {
+                    $oldIndexKey = "znuny:closed_ticket:customer_user_index:{$oldLogin}";
+                    Redis::zrem($oldIndexKey, $ticketId);
+                }
+            }
+        }
     }
 
     public function forgetTicket(int|string $ticketId): void
@@ -117,6 +212,26 @@ class ClosedTicketCacheService
                     Redis::zrem($indexKey, $ticketId);
                 }
             }
+            if (! empty($ticket['CustomerUserID'])) {
+                $login = strtolower(trim((string) $ticket['CustomerUserID']));
+                if ($login !== '') {
+                    $userIndexKey = "znuny:closed_ticket:customer_user_index:{$login}";
+                    Redis::zrem($userIndexKey, $ticketId);
+                }
+            }
+        }
+    }
+
+    private function extendIndexTtl(string $key, int $requiredTtl): void
+    {
+        if ($requiredTtl <= 0) {
+            return;
+        }
+
+        $currentTtl = Redis::ttl($key);
+
+        if ($currentTtl === -1 || $currentTtl === -2 || $currentTtl < $requiredTtl) {
+            Redis::expire($key, $requiredTtl);
         }
     }
 

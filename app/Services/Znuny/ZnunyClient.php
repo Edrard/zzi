@@ -1352,6 +1352,61 @@ class ZnunyClient
     }
 
     /**
+     * Call POST /CustomerUser
+     */
+    public function createCustomerUser(array $payload): array
+    {
+        $filteredPayload = [
+            'Login' => $payload['Login'] ?? '',
+            'Email' => $payload['Email'] ?? '',
+            'FirstName' => $payload['FirstName'] ?? '',
+            'LastName' => $payload['LastName'] ?? '',
+            'CustomerID' => $payload['CustomerID'] ?? '',
+        ];
+
+        return $this->withSessionRetry(function ($session) use ($filteredPayload) {
+            $filteredPayload['SessionID'] = $session;
+
+            $response = $this->buildPendingRequest()->post($this->apiUrl().'/CustomerUser', $filteredPayload);
+
+            $data = $this->processResponse($response);
+
+            // Plugin contract:
+            // Success => 1
+            // Data => { Created => 1, CustomerUser => {...}, Errors => [] }
+
+            $created = ! empty($data['Created']);
+            $customerUser = $data['CustomerUser'] ?? null;
+            $errors = $data['Errors'] ?? [];
+
+            if (! $created) {
+                return [
+                    'found' => false,
+                    'created' => false,
+                    'errors' => $errors,
+                ];
+            }
+
+            if (empty($customerUser['UserLogin'])) {
+                return [
+                    'found' => false,
+                    'created' => false,
+                    'errors' => array_merge($errors, ['CustomerUser login missing in response.']),
+                ];
+            }
+
+            return [
+                'found' => true,
+                'created' => true,
+                'login' => trim((string) $customerUser['UserLogin']),
+                'customer_id' => trim((string) ($customerUser['UserCustomerID'] ?? '')),
+                'errors' => $errors,
+                'customer_user' => $customerUser,
+            ];
+        });
+    }
+
+    /**
      * Call /ResolveTicketDefaults?HostName=...
      */
     public function resolveTicketDefaults(string $hostName): array
@@ -1774,33 +1829,33 @@ class ZnunyClient
 
             $data = $this->processResponse($response);
 
-            if (!isset($data['Errors'])) {
+            if (! isset($data['Errors'])) {
                 throw new Exception('Missing Errors field in response.');
             }
-            if (!is_array($data['Errors'])) {
+            if (! is_array($data['Errors'])) {
                 throw new Exception('Malformed Errors field in response.');
             }
-            if (!empty($data['Errors'])) {
+            if (! empty($data['Errors'])) {
                 throw new Exception('CustomerCompany API returned errors.');
             }
 
-            if (!isset($data['CustomerCompanies']) || !is_array($data['CustomerCompanies'])) {
+            if (! isset($data['CustomerCompanies']) || ! is_array($data['CustomerCompanies'])) {
                 throw new Exception('Malformed CustomerCompanies array in response.');
             }
 
             $companies = [];
             foreach ($data['CustomerCompanies'] as $company) {
-                if (!is_array($company)) {
+                if (! is_array($company)) {
                     throw new Exception('Malformed CustomerCompany row.');
                 }
 
                 $id = $company['CustomerID'] ?? null;
-                if (!is_scalar($id) || trim((string)$id) === '') {
+                if (! is_scalar($id) || trim((string) $id) === '') {
                     throw new Exception('CustomerCompany row missing valid CustomerID.');
                 }
 
                 $name = $company['CustomerCompanyName'] ?? null;
-                if (!is_scalar($name) || trim((string)$name) === '') {
+                if (! is_scalar($name) || trim((string) $name) === '') {
                     throw new Exception('CustomerCompany row missing valid CustomerCompanyName.');
                 }
 
@@ -1811,7 +1866,7 @@ class ZnunyClient
             }
 
             $parseMetadataInt = function ($key, $data, $min = 0, $max = null) {
-                if (!array_key_exists($key, $data)) {
+                if (! array_key_exists($key, $data)) {
                     throw new Exception("Missing pagination metadata: {$key}.");
                 }
                 $val = $data[$key];
@@ -1832,6 +1887,7 @@ class ZnunyClient
                 if ($max !== null && $intVal > $max) {
                     throw new Exception("Pagination metadata {$key} out of range.");
                 }
+
                 return $intVal;
             };
 
@@ -1840,7 +1896,7 @@ class ZnunyClient
             $resLimit = $parseMetadataInt('Limit', $data, 1, 100);
             $resOffset = $parseMetadataInt('Offset', $data);
 
-            if (!array_key_exists('HasMore', $data)) {
+            if (! array_key_exists('HasMore', $data)) {
                 throw new Exception('Missing pagination metadata: HasMore.');
             }
             $hasMoreRaw = $data['HasMore'];

@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Services\Znuny;
 
+use App\Services\Znuny\Cache\ZnunyLookupCacheReadService;
 use App\Services\Znuny\ClosedTicketCacheService;
 use Illuminate\Support\Facades\Redis;
 use Tests\TestCase;
@@ -13,10 +14,20 @@ class ClosedTicketCacheServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $mockLookup = \Mockery::mock(\App\Services\Znuny\Cache\ZnunyLookupCacheReadService::class);
+        $mockLookup = \Mockery::mock(ZnunyLookupCacheReadService::class);
         $mockLookup->shouldReceive('hasCustomerCompany')->andReturn(false)->byDefault();
         $this->service = new ClosedTicketCacheService($mockLookup);
-        Redis::flushdb();
+
+        $keys = Redis::keys('znuny:closed_ticket:*');
+        if (! empty($keys)) {
+            // Redis::keys returns prefixed keys if prefixing is on, but Redis::del takes unprefixed.
+            // Using a simple command loop with unprefixed if we have to, but since it's testing:
+            $prefix = config('database.redis.options.prefix', '');
+            $unprefixed = array_map(function ($k) use ($prefix) {
+                return ($prefix && str_starts_with($k, $prefix)) ? substr($k, strlen($prefix)) : $k;
+            }, $keys);
+            Redis::del($unprefixed);
+        }
     }
 
     public function test_upsert_ticket_calculates_retention_correctly()
@@ -137,9 +148,11 @@ class ClosedTicketCacheServiceTest extends TestCase
 
     public function test_registered_customer_is_enriched_before_cache(): void
     {
-        $mockLookup = \Mockery::mock(\App\Services\Znuny\Cache\ZnunyLookupCacheReadService::class);
+        $mockLookup = \Mockery::mock(ZnunyLookupCacheReadService::class);
         $mockLookup->shouldReceive('hasCustomerCompany')->once()->with('agrotekhnik')->andReturn(true);
         $service = new ClosedTicketCacheService($mockLookup);
+
+        Redis::shouldReceive('get')->with('znuny:closed_ticket:ticket:125')->andReturn(null);
 
         $ticket = [
             'TicketID' => 125,
@@ -163,9 +176,11 @@ class ClosedTicketCacheServiceTest extends TestCase
 
     public function test_mail_only_customer_is_enriched_before_cache(): void
     {
-        $mockLookup = \Mockery::mock(\App\Services\Znuny\Cache\ZnunyLookupCacheReadService::class);
+        $mockLookup = \Mockery::mock(ZnunyLookupCacheReadService::class);
         $mockLookup->shouldReceive('hasCustomerCompany')->once()->with('oleksandr.ustinov@tmm.ua')->andReturn(false);
         $service = new ClosedTicketCacheService($mockLookup);
+
+        Redis::shouldReceive('get')->with('znuny:closed_ticket:ticket:126')->andReturn(null);
 
         $ticket = [
             'TicketID' => 126,
@@ -187,4 +202,90 @@ class ClosedTicketCacheServiceTest extends TestCase
         $service->upsertTicket($ticket, $retentionDays);
     }
 
+    public function test_upsert_ticket_removes_old_user_membership()
+    {
+        $mockLookup = \Mockery::mock(ZnunyLookupCacheReadService::class);
+        $mockLookup->shouldReceive('hasCustomerCompany')->andReturn(false);
+        $service = new ClosedTicketCacheService($mockLookup);
+
+        $ticket = [
+            'TicketID' => 222,
+            'Created' => '2023-10-01 12:00:00',
+            'CustomerUserID' => 'new_user',
+        ];
+
+        // Seed old ticket
+        Redis::setex('znuny:closed_ticket:ticket:222', 3600, json_encode(['TicketID' => 222, 'CustomerUserID' => 'old_user']));
+        Redis::zadd('znuny:closed_ticket:customer_user_index:old_user', 1000, 222);
+
+        $service->upsertTicket($ticket, 30);
+
+        // old user should be removed
+        $this->assertEmpty(Redis::zrange('znuny:closed_ticket:customer_user_index:old_user', 0, -1));
+
+        // new user should be added
+        $this->assertEquals(['222'], Redis::zrange('znuny:closed_ticket:customer_user_index:new_user', 0, -1));
+
+        // TTL should be extended
+        $this->assertGreaterThan(100, Redis::ttl('znuny:closed_ticket:customer_user_index:new_user'));
+    }
+
+    public function test_forget_ticket_removes_user_membership()
+    {
+        $mockLookup = \Mockery::mock(ZnunyLookupCacheReadService::class);
+        $service = new ClosedTicketCacheService($mockLookup);
+
+        Redis::setex('znuny:closed_ticket:ticket:333', 3600, json_encode([
+            'TicketID' => 333,
+            'Created' => '2023-10-01 12:00:00',
+            'CustomerUserID' => 'some_user',
+        ]));
+        Redis::zadd('znuny:closed_ticket:customer_user_index:some_user', 1000, 333);
+
+        $service->forgetTicket(333);
+
+        $this->assertNull(Redis::get('znuny:closed_ticket:ticket:333'));
+        $this->assertEmpty(Redis::zrange('znuny:closed_ticket:customer_user_index:some_user', 0, -1));
+    }
+
+    public function test_closed_refresh_preserves_reconciled_registration_for_same_mail_sender(): void
+    {
+        $login = 'oleksandr.ustinov@tmm.ua';
+        $ticketId = 59361;
+        $key = "znuny:closed_ticket:ticket:{$ticketId}";
+
+        $lookup = \Mockery::mock(ZnunyLookupCacheReadService::class);
+        $lookup->shouldReceive('hasCustomerCompany')->with($login)->andReturn(false)->byDefault();
+        $lookup->shouldReceive('hasCustomerCompany')->with('vamark project')->andReturn(true)->byDefault();
+
+        $service = new ClosedTicketCacheService($lookup);
+
+        Redis::setex($key, 600, json_encode([
+            'TicketID' => $ticketId,
+            'Created' => '2026-08-31 12:00:00',
+            'CustomerUserID' => $login,
+            'CustomerID' => 'vamark project',
+            'customer_user_registered' => true,
+        ]));
+
+        try {
+            $service->upsertTicket([
+                'TicketID' => $ticketId,
+                'Created' => '2026-08-31 12:00:00',
+                'CustomerUserID' => $login,
+                'CustomerID' => $login,
+            ], 1);
+
+            $cached = $service->getTicket($ticketId);
+
+            $this->assertIsArray($cached);
+            $this->assertTrue($cached['customer_user_registered']);
+            $this->assertSame('vamark project', $cached['CustomerID']);
+            $this->assertSame($login, $cached['CustomerUserID']);
+        } finally {
+            Redis::del($key);
+            Redis::del('znuny:closed_ticket:index:2026-08-31');
+            Redis::del("znuny:closed_ticket:customer_user_index:{$login}");
+        }
+    }
 }
