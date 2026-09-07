@@ -156,6 +156,48 @@ class ZnunyClientTest extends TestCase
         });
     }
 
+    public function test_create_customer_user_passes_and_parses_reconcile_tickets()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/CustomerUser' => Http::response([
+                'Success' => 1,
+                'Data' => [
+                    'Created' => 1,
+                    'CustomerUser' => ['Login' => 'testuser', 'CustomerID' => 'testcompany', 'Status' => 'active'],
+                    'ReconcileTickets' => [
+                        'Requested' => 1,
+                        'Found' => 10,
+                        'Changed' => 3,
+                        'Skipped' => 6,
+                        'Failed' => 1,
+                        'Errors' => [['TicketID' => 42]],
+                    ],
+                    'Errors' => [],
+                ],
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $response = $client->createCustomerUser([
+            'FirstName' => 'Test',
+            'LastName' => 'User',
+            'Login' => 'testuser',
+            'Email' => 'test@example.com',
+            'CustomerID' => 'testcompany',
+            'ReconcileTickets' => 1,
+        ]);
+
+        $this->assertTrue($response['created']);
+        $this->assertSame(1, $response['reconcile_tickets']['requested']);
+        $this->assertSame(1, $response['reconcile_tickets']['failed']);
+
+        Http::assertSent(fn (Request $request) => $request->method() === 'POST'
+            && str_contains($request->url(), '/CustomerUser')
+            && ($request->data()['ReconcileTickets'] ?? null) === 1
+        );
+    }
+
     public function test_create_customer_user_logical_failure()
     {
         Http::fake([

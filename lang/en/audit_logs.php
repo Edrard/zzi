@@ -139,6 +139,8 @@ return [
                 'create_failed' => 'Znuny customer user creation failed',
                 'updated' => 'Znuny customer user updated',
                 'update_failed' => 'Znuny customer user update failed',
+                'self_healed' => 'Znuny customer user self-healed',
+                'not_found' => 'Znuny customer user not found during verification',
             ],
             'standalone_ticket' => [
                 'created' => 'Standalone ticket created',

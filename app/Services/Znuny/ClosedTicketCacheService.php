@@ -2,13 +2,15 @@
 
 namespace App\Services\Znuny;
 
+use App\Services\SettingsService;
 use App\Services\Znuny\Cache\ZnunyLookupCacheReadService;
 use Illuminate\Support\Facades\Redis;
 
 class ClosedTicketCacheService
 {
     public function __construct(
-        private readonly ZnunyLookupCacheReadService $lookupCache
+        private readonly ZnunyLookupCacheReadService $lookupCache,
+        private readonly ZnunyCustomerUserExistenceService $existenceService
     ) {}
 
     private const METADATA_KEY = 'znuny:closed_ticket:sync:metadata';
@@ -88,30 +90,26 @@ class ClosedTicketCacheService
         }
 
         $customerId = trim((string) ($ticket['CustomerID'] ?? ''));
+        $customerUserId = trim((string) ($ticket['CustomerUserID'] ?? ''));
 
-        if ($this->lookupCache->hasCustomerCompany($customerId)) {
-            $ticket['customer_user_registered'] = true;
-        } else {
-            $existingRaw = Redis::get($ticketKey);
-            $existing = $existingRaw ? json_decode($existingRaw, true) : null;
+        $protected = false;
+        if (isset($existingTicket) && is_array($existingTicket)) {
+            if (Redis::exists("znuny:identity_marker:{$ticketId}")) {
+                $ticket['CustomerUserID'] = trim((string) ($existingTicket['CustomerUserID'] ?? ''));
+                $ticket['CustomerID'] = trim((string) ($existingTicket['CustomerID'] ?? ''));
+                $ticket['customer_user_registered'] = $existingTicket['customer_user_registered'] ?? true;
+                $protected = true;
+            }
+        }
 
-            $sameLogin = is_array($existing)
-                && strtolower(trim((string) ($existing['CustomerUserID'] ?? '')))
-                    === strtolower(trim((string) ($ticket['CustomerUserID'] ?? '')));
-
-            $existingCustomerId = $sameLogin
-                ? trim((string) ($existing['CustomerID'] ?? ''))
-                : '';
-
-            if (
-                $sameLogin
-                && (($existing['customer_user_registered'] ?? false) === true)
-                && $this->lookupCache->hasCustomerCompany($existingCustomerId)
-            ) {
-                $ticket['CustomerID'] = $existingCustomerId;
-                $ticket['customer_user_registered'] = true;
+        if (! $protected) {
+            $status = $this->existenceService->checkCustomerUserExistence($customerUserId, $customerId);
+            if ($status['registered'] === null) {
+                $ticket['customer_user_registered'] = isset($existingTicket) && array_key_exists('customer_user_registered', $existingTicket)
+                    ? $existingTicket['customer_user_registered']
+                    : null;
             } else {
-                $ticket['customer_user_registered'] = false;
+                $ticket['customer_user_registered'] = $status['registered'];
             }
         }
 
@@ -149,7 +147,7 @@ class ClosedTicketCacheService
         return json_decode($data, true);
     }
 
-    public function updateTicketIdentity(int|string $ticketId, string $customerUserId, string $customerId): void
+    public function mirrorConfirmedTicketIdentity(int|string $ticketId, string $customerUserId, string $customerId): void
     {
         $ticketKey = "znuny:closed_ticket:ticket:{$ticketId}";
         $data = Redis::get($ticketKey);
@@ -170,9 +168,12 @@ class ClosedTicketCacheService
 
         $oldCustomerUserId = trim((string) ($ticket['CustomerUserID'] ?? ''));
 
+        $ttlMarker = SettingsService::int('znuny_ticket_cache_refresh_interval_minutes', 5) * 60;
+        Redis::setex("znuny:identity_marker:{$ticketId}", $ttlMarker, 1);
+
         $ticket['CustomerUserID'] = $customerUserId;
         $ticket['CustomerID'] = $customerId;
-        $ticket['customer_user_registered'] = $this->lookupCache->hasCustomerCompany(trim($customerId));
+        $ticket['customer_user_registered'] = true;
 
         Redis::setex($ticketKey, $ttl, json_encode($ticket));
 

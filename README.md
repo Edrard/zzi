@@ -26,6 +26,44 @@ It gives your operators a single pane of glass to view active Zabbix problems, i
 - **Run & Audit Logs**: Detailed audit logging for all ticket creation attempts, successes, and API failures.
 - **Administration UI**: A comprehensive Filament-based settings panel to configure API endpoints, storage options, cache TTLs, and automation rules.
 
+## CustomerUser Management
+
+ZZI provides a robust workflow for managing Znuny CustomerUsers directly from the ticket details view.
+
+### Ticket Details Status
+- **Gray user icon**: The user is known to exist in Znuny.
+- **Orange user-plus icon**: The user is considered missing locally.
+- Ordinary display uses caches and does not perform a live Znuny CustomerUser lookup for every ticket.
+
+### Quick Create
+- A direct lookup is performed when an operator clicks the orange icon.
+- If the user is truly missing, the Quick Create modal opens.
+- **Email** and **Login** are readonly in Quick Create; Login is derived from Email.
+- Operators may change the Login later via Edit.
+- A successful Create updates the local known-ticket identity immediately.
+- Plugin-side ticket reconciliation can be enabled with `ZNUNY_RECONCILE_TICKETS=1` in your `.env`.
+
+### Self-Heal Verification
+- **Orange + Direct FOUND**: ZZI uses the Login and CustomerID returned by Znuny, reconciles known local tickets, and immediately switches the icon to gray.
+- **Gray + Direct NOT FOUND**: This operation is non-destructive. Edit is not opened, and local identity is preserved.
+
+### Edit
+- Operators may edit Login, Email, FirstName, LastName, and CustomerID.
+- Changes to Login or CustomerID reconcile known local cached tickets.
+- A successful remote Edit remains successful even if local reconciliation can only report a warning.
+
+### Audit Logging
+Relevant actions are logged to ensure traceability:
+- `znuny.customer_user.created`
+- `znuny.customer_user.create_failed`
+- `znuny.customer_user.updated`
+- `znuny.customer_user.update_failed`
+- `znuny.customer_user.self_healed`
+- `znuny.customer_user.not_found`
+
+### Cache & Consistency
+An identity protection marker prevents a stale ticket refresh from immediately overwriting a just-confirmed CustomerUserID, CustomerID, or registered state.
+
 ## Architecture
 
 At a high level, the integration looks like this:

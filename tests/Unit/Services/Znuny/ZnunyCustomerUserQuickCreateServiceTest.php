@@ -5,6 +5,7 @@ namespace Tests\Unit\Services\Znuny;
 use App\Models\AuditLog;
 use App\Services\Znuny\Cache\ZnunyLookupCacheReadService;
 use App\Services\Znuny\ZnunyClient;
+use App\Services\Znuny\ZnunyCustomerUserExistenceService;
 use App\Services\Znuny\ZnunyCustomerUserQuickCreateService;
 use App\Services\Znuny\ZnunyTicketCacheReconciliationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -25,6 +26,8 @@ class ZnunyCustomerUserQuickCreateServiceTest extends TestCase
 
     private ZnunyTicketCacheReconciliationService $reconciliationService;
 
+    private ZnunyCustomerUserExistenceService $existenceService;
+
     private ZnunyCustomerUserQuickCreateService $service;
 
     protected function setUp(): void
@@ -35,9 +38,12 @@ class ZnunyCustomerUserQuickCreateServiceTest extends TestCase
         $this->lookupCache = $this->createMock(ZnunyLookupCacheReadService::class);
         $this->reconciliationService = $this->createMock(ZnunyTicketCacheReconciliationService::class);
 
+        $this->existenceService = $this->createMock(ZnunyCustomerUserExistenceService::class);
+
         $this->service = new ZnunyCustomerUserQuickCreateService(
             $this->client,
             $this->lookupCache,
+            $this->existenceService,
             $this->reconciliationService
         );
 
@@ -85,7 +91,7 @@ class ZnunyCustomerUserQuickCreateServiceTest extends TestCase
         $this->client->expects($this->never())->method('createCustomerUser');
 
         $this->reconciliationService->expects($this->once())
-            ->method('reconcileCustomerUser')
+            ->method('reconcileKnownCustomerUserIdentity')
             ->with('user1', 'User1', 'comp1', 1);
 
         $result = $this->service->createCustomerUser('user1', 'email@example.com', 'first', 'last', 'comp2', 1);
@@ -95,11 +101,12 @@ class ZnunyCustomerUserQuickCreateServiceTest extends TestCase
 
         $this->assertEquals(1, AuditLog::query()->where('id', '>', $this->auditBaselineId)->count());
         $log = AuditLog::query()->where('id', '>', $this->auditBaselineId)->orderBy('id')->first();
-        $this->assertEquals('znuny.customer_user.create_failed', $log->action);
+        $this->assertEquals('znuny.customer_user.created', $log->action);
         $this->assertEquals('znuny_customer_user', $log->entity_type);
         $this->assertEquals('User1', $log->entity_id);
-        $this->assertEquals('already_exists', $log->context['failure_stage']);
-        $this->assertEquals('customer_user_already_exists', $log->context['failure_reason']);
+        $this->assertTrue($log->context['already_existed']);
+        $this->assertArrayNotHasKey('failure_stage', $log->context);
+        $this->assertArrayNotHasKey('failure_reason', $log->context);
     }
 
     public function test_create_success()
@@ -119,11 +126,12 @@ class ZnunyCustomerUserQuickCreateServiceTest extends TestCase
                 'FirstName' => 'first',
                 'LastName' => 'last',
                 'CustomerID' => 'comp1',
+                'ReconcileTickets' => 1,
             ])
             ->willReturn(['created' => true, 'customer_id' => 'comp1', 'login' => 'User1']);
 
         $this->reconciliationService->expects($this->once())
-            ->method('reconcileCustomerUser')
+            ->method('reconcileKnownCustomerUserIdentity')
             ->with('user1', 'User1', 'comp1', 1);
 
         $result = $this->service->createCustomerUser('user1', 'email@example.com', 'first', 'last', 'comp1', 1);
@@ -154,7 +162,7 @@ class ZnunyCustomerUserQuickCreateServiceTest extends TestCase
             ->willReturn(['created' => false, 'errors' => ['Duplicate Login']]);
 
         $this->reconciliationService->expects($this->once())
-            ->method('reconcileCustomerUser')
+            ->method('reconcileKnownCustomerUserIdentity')
             ->with('user1', 'User1', 'comp1', 1);
 
         $result = $this->service->createCustomerUser('user1', 'email@example.com', 'first', 'last', 'comp1', 1);
@@ -163,11 +171,12 @@ class ZnunyCustomerUserQuickCreateServiceTest extends TestCase
 
         $this->assertEquals(1, AuditLog::query()->where('id', '>', $this->auditBaselineId)->count());
         $log = AuditLog::query()->where('id', '>', $this->auditBaselineId)->orderBy('id')->first();
-        $this->assertEquals('znuny.customer_user.create_failed', $log->action);
+        $this->assertEquals('znuny.customer_user.created', $log->action);
         $this->assertEquals('znuny_customer_user', $log->entity_type);
         $this->assertEquals('User1', $log->entity_id);
-        $this->assertEquals('already_exists', $log->context['failure_stage']);
-        $this->assertEquals('customer_user_already_exists', $log->context['failure_reason']);
+        $this->assertTrue($log->context['already_existed']);
+        $this->assertArrayNotHasKey('failure_stage', $log->context);
+        $this->assertArrayNotHasKey('failure_reason', $log->context);
     }
 
     public function test_create_failure_no_race()
@@ -182,7 +191,7 @@ class ZnunyCustomerUserQuickCreateServiceTest extends TestCase
             ->method('createCustomerUser')
             ->willReturn(['created' => false, 'errors' => ['Some API Error']]);
 
-        $this->reconciliationService->expects($this->never())->method('reconcileCustomerUser');
+        $this->reconciliationService->expects($this->never())->method('reconcileKnownCustomerUserIdentity');
 
         $result = $this->service->createCustomerUser('user1', 'email@example.com', 'first', 'last', 'comp1', 1);
 

@@ -10,7 +10,8 @@ use Illuminate\Support\Facades\Redis;
 class ZnunyTicketCacheService
 {
     public function __construct(
-        private readonly ZnunyLookupCacheReadService $lookupCache
+        private readonly ZnunyLookupCacheReadService $lookupCache,
+        private readonly ZnunyCustomerUserExistenceService $existenceService
     ) {}
 
     protected function isEnabled(): bool
@@ -45,8 +46,10 @@ class ZnunyTicketCacheService
         $ttl = $this->getTtl();
 
         $key = "znuny:ticket:{$ticketId}";
+        $existingDataRaw = Redis::get($key);
+        $existingData = $existingDataRaw ? json_decode($existingDataRaw, true) : null;
 
-        $ticket = $this->enrichTicketWithCustomerRegistration($ticket);
+        $ticket = $this->resolveCustomerRegistration($ticket, $existingData);
 
         Redis::setex($key, max(1, $ttl), json_encode($ticket));
 
@@ -93,8 +96,10 @@ class ZnunyTicketCacheService
 
         $ttl = $this->getTtl();
         $key = "znuny:ticket:{$ticketId}";
+        $existingDataRaw = Redis::get($key);
+        $existingData = $existingDataRaw ? json_decode($existingDataRaw, true) : null;
 
-        $ticket = $this->enrichTicketWithCustomerRegistration($ticket);
+        $ticket = $this->resolveCustomerRegistration($ticket, $existingData);
 
         Redis::setex($key, max(1, $ttl), json_encode($ticket));
         $this->updateIndexes($ticket, $ttl);
@@ -135,8 +140,6 @@ class ZnunyTicketCacheService
             return 'skipped_missing_ticket_id';
         }
 
-        $ticket = $this->enrichTicketWithCustomerRegistration($ticket);
-
         $isClosed = $this->isClosedState($ticket['StateType'] ?? '');
         $ttl = $this->getTtl();
         $key = "znuny:ticket:{$ticketId}";
@@ -144,7 +147,7 @@ class ZnunyTicketCacheService
         $existingDataRaw = Redis::get($key);
         $existingData = $existingDataRaw ? json_decode($existingDataRaw, true) : null;
 
-        $ticket = $this->preserveReconciledCustomerRegistration($ticket, $existingData);
+        $ticket = $this->resolveCustomerRegistration($ticket, $existingData);
 
         $newFingerprint = $ticket['SyncFingerprint'] ?? null;
         $oldFingerprint = $existingData['SyncFingerprint'] ?? null;
@@ -192,7 +195,7 @@ class ZnunyTicketCacheService
         return $existingData ? 'updated_changed' : 'cached_new';
     }
 
-    public function updateTicketIdentity(int|string $ticketId, string $customerUserId, string $customerId): void
+    public function mirrorConfirmedTicketIdentity(int|string $ticketId, string $customerUserId, string $customerId): void
     {
         $key = "znuny:ticket:{$ticketId}";
         $data = Redis::get($key);
@@ -213,9 +216,12 @@ class ZnunyTicketCacheService
 
         $oldCustomerUserId = trim((string) ($ticket['CustomerUserID'] ?? ''));
 
+        $ttlMarker = SettingsService::int('znuny_ticket_cache_refresh_interval_minutes', 5) * 60;
+        Redis::setex("znuny:identity_marker:{$ticketId}", $ttlMarker, 1);
+
         $ticket['CustomerUserID'] = $customerUserId;
         $ticket['CustomerID'] = $customerId;
-        $ticket['customer_user_registered'] = $this->lookupCache->hasCustomerCompany(trim($customerId));
+        $ticket['customer_user_registered'] = true;
 
         Redis::setex($key, $ttl, json_encode($ticket));
 
@@ -313,43 +319,40 @@ class ZnunyTicketCacheService
         return in_array(strtolower($stateType), ['closed', 'merged'], true);
     }
 
-    private function enrichTicketWithCustomerRegistration(array $ticket): array
+    private function resolveCustomerRegistration(array $ticket, mixed $existingData = null): array
     {
-        $customerId = trim((string) ($ticket['CustomerID'] ?? ''));
+        $existingData = is_array($existingData) ? $existingData : null;
+        $ticketId = $ticket['TicketID'] ?? null;
 
-        $ticket['customer_user_registered'] =
-            $this->lookupCache->hasCustomerCompany($customerId);
+        if ($ticketId && is_array($existingData)) {
+            if (Redis::exists("znuny:identity_marker:{$ticketId}")) {
+                $ticket['CustomerUserID'] = trim((string) ($existingData['CustomerUserID'] ?? ''));
+                $ticket['CustomerID'] = trim((string) ($existingData['CustomerID'] ?? ''));
+                $ticket['customer_user_registered'] = $existingData['customer_user_registered'] ?? true;
 
-        return $ticket;
+                return $ticket;
+            }
+        }
+
+        return $this->enrichTicketWithCustomerRegistration($ticket, $existingData);
     }
 
-    private function preserveReconciledCustomerRegistration(array $ticket, mixed $existing): array
+    private function enrichTicketWithCustomerRegistration(array $ticket, ?array $existingData = null): array
     {
-        if (($ticket['customer_user_registered'] ?? false) === true || ! is_array($existing)) {
-            return $ticket;
+        $customerId = trim((string) ($ticket['CustomerID'] ?? ''));
+        $customerUserId = trim((string) ($ticket['CustomerUserID'] ?? ''));
+
+        $status = $this->existenceService->checkCustomerUserExistence($customerUserId, $customerId);
+
+        if ($status['registered'] === null) {
+            if (is_array($existingData) && array_key_exists('customer_user_registered', $existingData)) {
+                $ticket['customer_user_registered'] = $existingData['customer_user_registered'];
+            } else {
+                $ticket['customer_user_registered'] = null;
+            }
+        } else {
+            $ticket['customer_user_registered'] = $status['registered'];
         }
-
-        if (($existing['customer_user_registered'] ?? false) !== true) {
-            return $ticket;
-        }
-
-        $incomingLogin = strtolower(trim((string) ($ticket['CustomerUserID'] ?? '')));
-        $existingLogin = strtolower(trim((string) ($existing['CustomerUserID'] ?? '')));
-
-        if ($incomingLogin === '' || $incomingLogin !== $existingLogin) {
-            return $ticket;
-        }
-
-        $existingCustomerId = trim((string) ($existing['CustomerID'] ?? ''));
-
-        if (! $this->lookupCache->hasCustomerCompany($existingCustomerId)) {
-            return $ticket;
-        }
-
-        // Old mail-originated tickets can continue to report CustomerID=email.
-        // Keep the authoritative CustomerID written by reconciliation.
-        $ticket['CustomerID'] = $existingCustomerId;
-        $ticket['customer_user_registered'] = true;
 
         return $ticket;
     }

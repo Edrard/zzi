@@ -261,6 +261,9 @@ class TicketDetailsPayload
             if (isset($rawTicket['CustomerID'])) {
                 $payload->customer_id = $rawTicket['CustomerID'];
             }
+            if (isset($rawTicket['CustomerUserID'])) {
+                $payload->customer_user = $rawTicket['CustomerUserID'];
+            }
             if (array_key_exists('customer_user_registered', $rawTicket)) {
                 $payload->customer_user_registered = (bool) $rawTicket['customer_user_registered'];
             }

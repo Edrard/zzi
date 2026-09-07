@@ -1308,45 +1308,36 @@ class ZnunyClient
     public function getCustomerUser(string $userLogin): array
     {
         return $this->withSessionRetry(function ($session) use ($userLogin) {
-            $response = $this->buildPendingRequest()->get($this->apiUrl().'/CustomerUser/'.rawurlencode($userLogin), [
+            $response = $this->buildPendingRequest()->get($this->apiUrl().'/CustomerUserLookup', [
                 'SessionID' => $session,
+                'Login' => $userLogin,
             ]);
-
             $data = $this->processResponse($response);
 
-            if (empty($data['CustomerUser']) || empty($data['CustomerUser']['UserLogin'])) {
-                return [
-                    'found' => false,
-                    'warnings' => $data['Warnings'] ?? ['CustomerUser not found.'],
-                ];
+            if (empty($data['Found']) || empty($data['CustomerUser']) || ! is_array($data['CustomerUser'])) {
+                return ['found' => false, 'errors' => is_array($data['Errors'] ?? null) ? $data['Errors'] : []];
             }
 
             $u = $data['CustomerUser'];
-            $login = trim((string) $u['UserLogin']);
-
+            $login = trim((string) ($u['Login'] ?? $u['UserLogin'] ?? ''));
             if ($login === '') {
-                return [
-                    'found' => false,
-                    'warnings' => $data['Warnings'] ?? ['CustomerUser login invalid.'],
-                ];
+                return ['found' => false, 'errors' => ['CustomerUser login invalid.']];
             }
 
-            $firstName = isset($u['UserFirstname']) ? trim((string) $u['UserFirstname']) : '';
-            $lastName = isset($u['UserLastname']) ? trim((string) $u['UserLastname']) : '';
-
-            $fullNameParts = array_filter([$firstName, $lastName]);
-            $fullName = implode(' ', $fullNameParts);
-            $label = $fullName ? "{$fullName} <{$login}>" : $login;
+            $firstName = trim((string) ($u['FirstName'] ?? $u['UserFirstname'] ?? ''));
+            $lastName = trim((string) ($u['LastName'] ?? $u['UserLastname'] ?? ''));
+            $fullName = trim($firstName.' '.$lastName);
 
             return [
                 'found' => true,
                 'login' => $login,
-                'customer_id' => trim((string) ($u['UserCustomerID'] ?? '')),
+                'customer_id' => trim((string) ($u['CustomerID'] ?? $u['UserCustomerID'] ?? '')),
                 'first_name' => $firstName,
                 'last_name' => $lastName,
-                'email' => trim((string) ($u['UserEmail'] ?? '')),
-                'label' => $label,
-                'warnings' => $data['Warnings'] ?? [],
+                'email' => trim((string) ($u['Email'] ?? $u['UserEmail'] ?? '')),
+                'status' => trim((string) ($u['Status'] ?? '')),
+                'label' => $fullName !== '' ? "{$fullName} <{$login}>" : $login,
+                'errors' => is_array($data['Errors'] ?? null) ? $data['Errors'] : [],
             ];
         });
     }
@@ -1363,45 +1354,53 @@ class ZnunyClient
             'LastName' => $payload['LastName'] ?? '',
             'CustomerID' => $payload['CustomerID'] ?? '',
         ];
+        if (array_key_exists('ReconcileTickets', $payload)) {
+            $filteredPayload['ReconcileTickets'] = $payload['ReconcileTickets'];
+        }
 
         return $this->withSessionRetry(function ($session) use ($filteredPayload) {
             $filteredPayload['SessionID'] = $session;
-
             $response = $this->buildPendingRequest()->post($this->apiUrl().'/CustomerUser', $filteredPayload);
-
             $data = $this->processResponse($response);
 
-            // Plugin contract:
-            // Success => 1
-            // Data => { Created => 1, CustomerUser => {...}, Errors => [] }
-
             $created = ! empty($data['Created']);
-            $customerUser = $data['CustomerUser'] ?? null;
-            $errors = $data['Errors'] ?? [];
-
+            $customerUser = is_array($data['CustomerUser'] ?? null) ? $data['CustomerUser'] : null;
+            $errors = is_array($data['Errors'] ?? null) ? $data['Errors'] : [];
             if (! $created) {
-                return [
-                    'found' => false,
-                    'created' => false,
-                    'errors' => $errors,
-                ];
+                return ['found' => false, 'created' => false, 'errors' => $errors, 'reconcile_tickets' => null];
             }
 
-            if (empty($customerUser['UserLogin'])) {
+            $login = trim((string) ($customerUser['Login'] ?? $customerUser['UserLogin'] ?? ''));
+            if ($login === '') {
                 return [
                     'found' => false,
                     'created' => false,
                     'errors' => array_merge($errors, ['CustomerUser login missing in response.']),
+                    'reconcile_tickets' => null,
+                ];
+            }
+
+            $reconcile = null;
+            if (isset($data['ReconcileTickets']) && is_array($data['ReconcileTickets'])) {
+                $raw = $data['ReconcileTickets'];
+                $reconcile = [
+                    'requested' => (int) ($raw['Requested'] ?? 0),
+                    'found' => (int) ($raw['Found'] ?? 0),
+                    'changed' => (int) ($raw['Changed'] ?? 0),
+                    'skipped' => (int) ($raw['Skipped'] ?? 0),
+                    'failed' => (int) ($raw['Failed'] ?? 0),
+                    'errors' => is_array($raw['Errors'] ?? null) ? $raw['Errors'] : [],
                 ];
             }
 
             return [
                 'found' => true,
                 'created' => true,
-                'login' => trim((string) $customerUser['UserLogin']),
-                'customer_id' => trim((string) ($customerUser['UserCustomerID'] ?? '')),
+                'login' => $login,
+                'customer_id' => trim((string) ($customerUser['CustomerID'] ?? $customerUser['UserCustomerID'] ?? '')),
                 'errors' => $errors,
                 'customer_user' => $customerUser,
+                'reconcile_tickets' => $reconcile,
             ];
         });
     }
@@ -1446,7 +1445,7 @@ class ZnunyClient
                 ];
             }
 
-            if (empty($customerUser['UserLogin'])) {
+            if (trim((string) ($customerUser['Login'] ?? $customerUser['UserLogin'] ?? '')) === '') {
                 return [
                     'updated' => false,
                     'errors' => array_merge($errors, ['CustomerUser login missing in response.']),
@@ -1455,8 +1454,8 @@ class ZnunyClient
 
             return [
                 'updated' => true,
-                'login' => trim((string) $customerUser['UserLogin']),
-                'customer_id' => trim((string) ($customerUser['UserCustomerID'] ?? '')),
+                'login' => trim((string) ($customerUser['Login'] ?? $customerUser['UserLogin'] ?? '')),
+                'customer_id' => trim((string) ($customerUser['CustomerID'] ?? $customerUser['UserCustomerID'] ?? '')),
                 'errors' => $errors,
                 'customer_user' => $customerUser,
             ];

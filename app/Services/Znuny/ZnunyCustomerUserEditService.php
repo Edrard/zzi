@@ -19,10 +19,11 @@ class ZnunyCustomerUserEditService
     public function __construct(
         private ZnunyClient $znunyClient,
         private ZnunyLookupCacheReadService $lookupCache,
+        private ZnunyCustomerUserExistenceService $existenceService,
         private ZnunyTicketCacheReconciliationService $reconciliationService
     ) {}
 
-    public function getCustomerUser(string $login): array
+    public function getCustomerUser(string $login, ?int $currentTicketId = null): array
     {
         $requestedLogin = trim($login);
 
@@ -35,7 +36,13 @@ class ZnunyCustomerUserEditService
 
         try {
             $lookupResult = $this->znunyClient->getCustomerUser($requestedLogin);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            Log::error('Znuny Customer User Edit: direct lookup failed.', [
+                'ticket_id' => $currentTicketId,
+                'login' => $requestedLogin,
+                'exception' => get_class($e),
+            ]);
+
             return [
                 'success' => false,
                 'message' => __('zabbix_tickets.details_modal.customer_user_edit.errors.lookup_transport_failure'),
@@ -43,6 +50,11 @@ class ZnunyCustomerUserEditService
         }
 
         if (! ($lookupResult['found'] ?? false)) {
+            Log::warning('CustomerUser marked as registered locally but not found on direct lookup during edit get.', [
+                'ticket_id' => $currentTicketId,
+                'login' => $requestedLogin,
+            ]);
+
             return [
                 'success' => false,
                 'message' => __('zabbix_tickets.details_modal.customer_user_edit.errors.not_found'),
@@ -59,6 +71,19 @@ class ZnunyCustomerUserEditService
                 'success' => false,
                 'message' => __('zabbix_tickets.details_modal.customer_user_edit.errors.lookup_identity_invalid'),
             ];
+        }
+
+        try {
+            $this->existenceService->cacheShortExistence(
+                $this->existenceService->getActiveGeneration(),
+                $authoritativeLogin,
+                true,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Znuny Customer User Edit: short existence cache update failed', [
+                'ticket_id' => $currentTicketId,
+                'exception' => get_class($e),
+            ]);
         }
 
         return [
@@ -113,6 +138,11 @@ class ZnunyCustomerUserEditService
         }
 
         if (! ($lookupResult['found'] ?? false)) {
+            Log::warning('CustomerUser disappeared between edit form load and submit.', [
+                'ticket_id' => $currentTicketId,
+                'login' => $requestedLogin,
+            ]);
+
             $this->writeFailureAudit(
                 login: $requestedLogin,
                 currentTicketId: $currentTicketId,
@@ -312,27 +342,20 @@ class ZnunyCustomerUserEditService
             ];
         }
 
-        try {
-            $this->reconciliationService->reconcileCustomerUser(
-                $requestedLogin,
-                $returnedLogin,
-                $returnedCustomerId,
-                $currentTicketId,
-            );
-        } catch (\Throwable) {
-            $this->writeFailureAudit(
-                login: $authoritativeLogin,
-                currentTicketId: $currentTicketId,
-                changedFields: $changedFields,
-                failureStage: 'reconciliation',
-                failureReason: 'cache_reconciliation_failed',
-            );
+        $identityChanged = in_array('Login', $changedFields, true) || in_array('CustomerID', $changedFields, true);
 
-            return [
-                'success' => false,
-                'message' => __('zabbix_tickets.details_modal.customer_user_edit.errors.reconciliation_failed'),
-            ];
-        }
+        $localExistenceReconciled = $this->reconcileAuthoritativeExistenceAfterUpdate(
+            $requestedLogin,
+            $returnedLogin,
+            $returnedCustomerId,
+            $currentTicketId,
+            $identityChanged,
+        );
+
+        $ticketSyncContext = [
+            'local_existence_reconciliation' => $localExistenceReconciled ? 'full' : 'failed',
+        ];
+        $hasLocalCacheWarning = ! $localExistenceReconciled;
 
         $this->writeSuccessAudit(
             login: $returnedLogin,
@@ -340,13 +363,83 @@ class ZnunyCustomerUserEditService
             changedFields: $changedFields,
             oldValues: $oldChanged,
             newValues: $newChanged,
+            noChanges: false,
+            extraContext: $ticketSyncContext
         );
+
+        if ($hasLocalCacheWarning) {
+            return [
+                'success' => true,
+                'warning' => true,
+                'no_changes' => false,
+                'message' => __('zabbix_tickets.details_modal.customer_user_edit.errors.reconciliation_failed'),
+            ];
+        }
 
         return [
             'success' => true,
             'no_changes' => false,
             'message' => __('zabbix_tickets.details_modal.customer_user_edit.notifications.updated_success'),
         ];
+    }
+
+    private function reconcileAuthoritativeExistenceAfterUpdate(
+        string $requestedLogin,
+        string $returnedLogin,
+        string $returnedCustomerId,
+        ?int $currentTicketId,
+        bool $identityChanged,
+    ): bool {
+        $success = true;
+        $generation = null;
+
+        try {
+            $generation = $this->existenceService->getActiveGeneration();
+        } catch (\Throwable $e) {
+            $success = false;
+            Log::warning('Znuny Customer User Edit: active existence generation lookup failed', ['exception' => get_class($e)]);
+        }
+
+        if (strcasecmp($requestedLogin, $returnedLogin) !== 0) {
+            if (! $this->attemptLocalReconciliation(
+                fn () => $this->existenceService->cacheShortExistence($generation, $requestedLogin, false),
+                'old_login_existence_cache',
+            )) {
+                $success = false;
+            }
+        }
+
+        if (! $this->attemptLocalReconciliation(
+            fn () => $this->existenceService->cacheShortExistence($generation, $returnedLogin, true),
+            'new_login_existence_cache',
+        )) {
+            $success = false;
+        }
+
+        if ($identityChanged && ! $this->attemptLocalReconciliation(
+            fn () => $this->reconciliationService->reconcileKnownCustomerUserIdentity($requestedLogin, $returnedLogin, $returnedCustomerId, $currentTicketId),
+            'ticket_cache_reconciliation',
+        )) {
+            $success = false;
+        }
+
+        return $success;
+    }
+
+    private function attemptLocalReconciliation(callable $operation, string $stage): bool
+    {
+        try {
+            $operation();
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::warning('Znuny Customer User Edit: local reconciliation step failed', [
+                'stage' => $stage,
+                'exception' => get_class($e),
+            ]);
+
+            return false;
+        }
     }
 
     private function validateValues(array $values): ?array
@@ -411,15 +504,16 @@ class ZnunyCustomerUserEditService
         array $oldValues,
         array $newValues,
         bool $noChanges = false,
+        array $extraContext = []
     ): void {
-        $context = [
+        $context = array_merge([
             'source' => 'ticket_customer_user_edit',
             'znuny_ticket_id' => $currentTicketId,
             'customer_user_login' => $login,
             'changed_fields' => $changedFields,
             'old' => $oldValues,
             'new' => $newValues,
-        ];
+        ], $extraContext);
 
         if ($noChanges) {
             $context['no_changes'] = true;
@@ -456,7 +550,7 @@ class ZnunyCustomerUserEditService
             );
         } catch (\Throwable $e) {
             Log::error('Failed to write Audit Log for Znuny Customer User Edit', [
-                'exception' => $e,
+                'exception' => get_class($e),
             ]);
         }
     }

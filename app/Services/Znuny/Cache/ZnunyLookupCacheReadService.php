@@ -45,18 +45,18 @@ class ZnunyLookupCacheReadService
 
     private function getValidCustomerCompanies(array $payload): array
     {
-        if (!isset($payload['customer_companies']) || !is_array($payload['customer_companies'])) {
+        if (! isset($payload['customer_companies']) || ! is_array($payload['customer_companies'])) {
             return [];
         }
 
         foreach ($payload['customer_companies'] as $key => $value) {
-            if (!is_string($key) && !is_int($key)) {
+            if (! is_string($key) && ! is_int($key)) {
                 return [];
             }
-            if ((string)$key === '') {
+            if ((string) $key === '') {
                 return [];
             }
-            if (!is_string($value) || $value === '') {
+            if (! is_string($value) || $value === '') {
                 return [];
             }
         }
@@ -67,24 +67,51 @@ class ZnunyLookupCacheReadService
     public function getStates(): array
     {
         $snapshot = $this->getSnapshot();
+
         return $snapshot !== null ? $snapshot['states'] : [];
     }
 
     public function getPriorities(): array
     {
         $snapshot = $this->getSnapshot();
+
         return $snapshot !== null ? $snapshot['priorities'] : [];
     }
 
     public function getTypes(): array
     {
         $snapshot = $this->getSnapshot();
+
         return $snapshot !== null ? $snapshot['types'] : [];
+    }
+
+    public function getAuthoritativeCustomerCompanies(): ?array
+    {
+        $snapshot = $this->snapshotManager->readActiveSnapshot();
+
+        if (! $snapshot || ! isset($snapshot['payload']) || ! is_array($snapshot['payload'])) {
+            return null;
+        }
+
+        $payload = $snapshot['payload'];
+
+        if (! array_key_exists('customer_companies', $payload) || ! is_array($payload['customer_companies'])) {
+            return null;
+        }
+
+        $companies = $this->getValidCustomerCompanies($payload);
+
+        if ($payload['customer_companies'] !== [] && $companies === []) {
+            return null;
+        }
+
+        return $companies;
     }
 
     public function getCustomerCompanies(): array
     {
         $snapshot = $this->getSnapshot();
+
         return $snapshot !== null ? $snapshot['customer_companies'] : [];
     }
 

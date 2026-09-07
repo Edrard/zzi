@@ -24,4 +24,6 @@ return [
         min(100, (int) env('ZNUNY_CUSTOMER_COMPANY_PAGE_SIZE', 100))
     ),
 
+    'reconcile_tickets_on_create' => env('ZNUNY_RECONCILE_TICKETS', true),
+
 ];

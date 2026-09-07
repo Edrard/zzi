@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Services\Znuny\Cache\ZnunyLookupCacheReadService;
 use App\Services\Znuny\ZnunyClient;
 use App\Services\Znuny\ZnunyCustomerUserEditService;
+use App\Services\Znuny\ZnunyCustomerUserExistenceService;
 use App\Services\Znuny\ZnunyTicketCacheReconciliationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
@@ -24,6 +25,8 @@ class ZnunyCustomerUserEditServiceTest extends TestCase
 
     private ZnunyTicketCacheReconciliationService $reconciliationService;
 
+    private ZnunyCustomerUserExistenceService $existenceService;
+
     private ZnunyCustomerUserEditService $service;
 
     protected function setUp(): void
@@ -34,21 +37,24 @@ class ZnunyCustomerUserEditServiceTest extends TestCase
         $this->lookupCache = $this->createMock(ZnunyLookupCacheReadService::class);
         $this->reconciliationService = $this->createMock(ZnunyTicketCacheReconciliationService::class);
 
+        $this->existenceService = $this->createMock(ZnunyCustomerUserExistenceService::class);
+
         $this->service = new ZnunyCustomerUserEditService(
             $this->client,
             $this->lookupCache,
+            $this->existenceService,
             $this->reconciliationService,
         );
 
         $this->auditBaselineId = (int) (AuditLog::query()->max('id') ?? 0);
     }
 
-    public function test_authoritative_prefill_success_does_not_write_audit(): void
+    public function test_direct_prefill_success_does_not_write_audit(): void
     {
         $this->client->expects($this->once())
             ->method('getCustomerUser')
             ->with('user1')
-            ->willReturn($this->authoritativeUser());
+            ->willReturn($this->directUser());
 
         $result = $this->service->getCustomerUser('user1');
 
@@ -83,7 +89,6 @@ class ZnunyCustomerUserEditServiceTest extends TestCase
             ->with('comp1')
             ->willReturn(true);
         $this->client->expects($this->never())->method('updateCustomerUser');
-        $this->reconciliationService->expects($this->never())->method('reconcileCustomerUser');
 
         $result = $this->service->updateCustomerUser('user1', $this->submittedValues(), 59360);
 
@@ -140,7 +145,7 @@ class ZnunyCustomerUserEditServiceTest extends TestCase
             ]);
 
         $this->reconciliationService->expects($this->once())
-            ->method('reconcileCustomerUser')
+            ->method('reconcileKnownCustomerUserIdentity')
             ->with('user1', 'renamed@example.com', 'comp1', 59360);
 
         $result = $this->service->updateCustomerUser('user1', [
@@ -175,9 +180,7 @@ class ZnunyCustomerUserEditServiceTest extends TestCase
                 'errors' => [],
             ]);
 
-        $this->reconciliationService->expects($this->once())
-            ->method('reconcileCustomerUser')
-            ->with('user1', 'User1', 'comp1', 59360);
+        $this->reconciliationService->expects($this->never())->method('reconcileKnownCustomerUserIdentity');
 
         $result = $this->service->updateCustomerUser('user1', [
             ...$this->submittedValues(),
@@ -212,7 +215,7 @@ class ZnunyCustomerUserEditServiceTest extends TestCase
             ]);
 
         $this->reconciliationService->expects($this->once())
-            ->method('reconcileCustomerUser')
+            ->method('reconcileKnownCustomerUserIdentity')
             ->with('user1', 'User1', 'comp2', 59360);
 
         $result = $this->service->updateCustomerUser('user1', [
@@ -302,8 +305,6 @@ class ZnunyCustomerUserEditServiceTest extends TestCase
                 'errors' => ['Rejected'],
             ]);
 
-        $this->reconciliationService->expects($this->never())->method('reconcileCustomerUser');
-
         $result = $this->service->updateCustomerUser('user1', [
             ...$this->submittedValues(),
             'FirstName' => 'New',
@@ -317,66 +318,94 @@ class ZnunyCustomerUserEditServiceTest extends TestCase
         $this->assertArrayNotHasKey('raw_response', $log->context);
     }
 
-    public function test_response_identity_mismatch_writes_one_failure_audit(): void
+    public function test_direct_prefill_success_survives_short_cache_failure(): void
     {
-        $this->expectAuthoritativeLookup();
         $this->lookupCache->method('hasCustomerCompany')->willReturn(true);
 
         $this->client->expects($this->once())
-            ->method('updateCustomerUser')
+            ->method('getCustomerUser')
+            ->with('user1')
+            ->willReturn($this->directUser());
+
+        $this->existenceService->expects($this->once())
+            ->method('getActiveGeneration')
+            ->willThrowException(new \RuntimeException('cache down'));
+
+        $result = $this->service->getCustomerUser('user1', 59360);
+
+        $this->assertTrue($result['success']);
+    }
+
+    public function test_submit_not_found_is_non_destructive(): void
+    {
+        $this->client->expects($this->once())
+            ->method('getCustomerUser')
+            ->with('user1')
             ->willReturn([
-                'updated' => true,
-                'login' => 'different-user',
-                'customer_id' => 'comp1',
+                'found' => false,
                 'errors' => [],
             ]);
 
-        $this->reconciliationService->expects($this->never())->method('reconcileCustomerUser');
+        $this->client->expects($this->never())
+            ->method('updateCustomerUser');
 
-        $result = $this->service->updateCustomerUser('user1', [
-            ...$this->submittedValues(),
-            'FirstName' => 'New',
-        ], 59360);
+        $this->existenceService->expects($this->never())
+            ->method('cacheShortExistence');
+
+        $this->reconciliationService->expects($this->never())
+            ->method('reconcileKnownCustomerUserIdentity');
+
+        $result = $this->service->updateCustomerUser(
+            'user1',
+            $this->submittedValues(),
+            59360,
+        );
 
         $this->assertFalse($result['success']);
-
-        $log = $this->singleNewAudit();
-        $this->assertSame('response_validation', $log->context['failure_stage']);
-        $this->assertSame('updated_identity_invalid', $log->context['failure_reason']);
+        $this->assertSame(
+            __('zabbix_tickets.details_modal.customer_user_edit.errors.not_found'),
+            $result['message'],
+        );
     }
 
-    public function test_reconciliation_failure_writes_one_failure_audit(): void
+    public function test_successful_update_with_local_reconciliation_failure_returns_warning(): void
     {
-        $this->expectAuthoritativeLookup();
         $this->lookupCache->method('hasCustomerCompany')->willReturn(true);
+
+        $this->client->expects($this->once())
+            ->method('getCustomerUser')
+            ->with('user1')
+            ->willReturn($this->directUser());
 
         $this->client->expects($this->once())
             ->method('updateCustomerUser')
             ->willReturn([
                 'updated' => true,
                 'login' => 'User1',
-                'customer_id' => 'comp1',
+                'customer_id' => 'comp2',
                 'errors' => [],
             ]);
 
         $this->reconciliationService->expects($this->once())
-            ->method('reconcileCustomerUser')
+            ->method('reconcileKnownCustomerUserIdentity')
+            ->with('user1', 'User1', 'comp2', 59360)
             ->willThrowException(new \RuntimeException('cache failure'));
 
-        $result = $this->service->updateCustomerUser('user1', [
-            ...$this->submittedValues(),
-            'FirstName' => 'New',
-        ], 59360);
+        $result = $this->service->updateCustomerUser(
+            'user1',
+            [
+                ...$this->submittedValues(),
+                'CustomerID' => 'comp2',
+            ],
+            59360,
+        );
 
-        $this->assertFalse($result['success']);
-
-        $log = $this->singleNewAudit();
-        $this->assertSame('reconciliation', $log->context['failure_stage']);
-        $this->assertSame('cache_reconciliation_failed', $log->context['failure_reason']);
-        $this->assertStringNotContainsString('cache failure', json_encode($log->context));
+        $this->assertTrue($result['success']);
+        $this->assertTrue($result['warning']);
+        $this->assertFalse($result['no_changes']);
     }
 
-    private function authoritativeUser(array $overrides = []): array
+    private function directUser(array $overrides = []): array
     {
         return array_merge([
             'found' => true,
@@ -404,7 +433,7 @@ class ZnunyCustomerUserEditServiceTest extends TestCase
         $this->client->expects($this->once())
             ->method('getCustomerUser')
             ->with('user1')
-            ->willReturn($this->authoritativeUser());
+            ->willReturn($this->directUser());
     }
 
     private function newAuditRows()

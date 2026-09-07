@@ -349,14 +349,17 @@ class ZnunyAdvancedLookupTest extends TestCase
     public function test_customer_user_found()
     {
         Http::fake([
-            'https://example.invalid/api/CustomerUser/TestCompanyClients*' => Http::response([
+            'https://example.invalid/api/CustomerUserLookup*' => Http::response([
+                'Found' => 1,
                 'CustomerUser' => [
-                    'UserLogin' => 'TestCompanyClients',
-                    'UserCustomerID' => 'testcompany',
-                    'UserFirstname' => 'Test',
-                    'UserLastname' => 'User',
-                    'UserEmail' => 'test@example.invalid',
+                    'Login' => 'TestCompanyClients',
+                    'CustomerID' => 'testcompany',
+                    'FirstName' => 'Test',
+                    'LastName' => 'User',
+                    'Email' => 'test@example.invalid',
+                    'Status' => 'active',
                 ],
+                'Errors' => [],
             ], 200),
         ]);
 
@@ -366,14 +369,18 @@ class ZnunyAdvancedLookupTest extends TestCase
         $this->assertTrue($response['found']);
         $this->assertEquals('TestCompanyClients', $response['login']);
         $this->assertEquals('testcompany', $response['customer_id']);
+        $this->assertEquals('active', $response['status']);
         $this->assertEquals('Test User <TestCompanyClients>', $response['label']);
+        $this->assertSame([], $response['errors']);
     }
 
     public function test_customer_user_not_found()
     {
         Http::fake([
-            'https://example.invalid/api/CustomerUser/Unknown*' => Http::response([
+            'https://example.invalid/api/CustomerUserLookup*' => Http::response([
+                'Found' => 0,
                 'CustomerUser' => [],
+                'Errors' => [],
             ], 200),
         ]);
 
@@ -381,7 +388,7 @@ class ZnunyAdvancedLookupTest extends TestCase
         $response = $client->getCustomerUser('Unknown');
 
         $this->assertFalse($response['found']);
-        $this->assertContains('CustomerUser not found.', $response['warnings']);
+        $this->assertSame([], $response['errors']);
     }
 
     public function test_resolve_defaults_full_success()

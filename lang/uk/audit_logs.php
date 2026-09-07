@@ -139,6 +139,8 @@ return [
                 'create_failed' => 'Не вдалося створити користувача клієнта Znuny',
                 'updated' => 'Користувача клієнта Znuny оновлено',
                 'update_failed' => 'Не вдалося оновити користувача клієнта Znuny',
+                'self_healed' => 'Користувача Znuny відновлено через self-heal',
+                'not_found' => 'Користувача Znuny не знайдено під час перевірки',
             ],
             'standalone_ticket' => [
                 'created' => 'Окрему заявку Znuny створено',

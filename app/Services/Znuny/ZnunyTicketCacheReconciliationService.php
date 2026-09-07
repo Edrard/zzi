@@ -8,58 +8,76 @@ class ZnunyTicketCacheReconciliationService
 {
     public function __construct(
         private readonly ZnunyTicketCacheService $activeCacheService,
-        private readonly ClosedTicketCacheService $closedCacheService
+        private readonly ClosedTicketCacheService $closedCacheService,
     ) {}
 
-    public function reconcileCustomerUser(
-        string $oldLogin,
-        string $authoritativeLogin,
-        string $authoritativeCustomerId,
+    public function reconcileKnownCustomerUserIdentity(
+        string $requestedLogin,
+        string $returnedLogin,
+        string $returnedCustomerId,
         ?int $currentZnunyTicketId = null
     ): void {
-        $oldLogin = strtolower(trim($oldLogin));
-        if ($oldLogin === '') {
+        $requestedLogin = strtolower(trim($requestedLogin));
+        $returnedLogin = trim($returnedLogin);
+        $returnedCustomerId = trim($returnedCustomerId);
+
+        if ($requestedLogin === '' || $returnedLogin === '' || $returnedCustomerId === '') {
             return;
         }
 
-        $activeTicketIds = $this->getActiveTicketIds($oldLogin);
-        $closedTicketIds = $this->getClosedTicketIds($oldLogin);
+        [$activeIds, $closedIds] = $this->knownTicketIds($requestedLogin, $currentZnunyTicketId);
 
-        if ($currentZnunyTicketId) {
-            $activeTicketIds[] = (string) $currentZnunyTicketId;
-            $closedTicketIds[] = (string) $currentZnunyTicketId;
-        }
-
-        $activeTicketIds = array_unique($activeTicketIds);
-        $closedTicketIds = array_unique($closedTicketIds);
-
-        foreach ($activeTicketIds as $ticketId) {
+        foreach ($activeIds as $ticketId) {
             $ticket = $this->activeCacheService->getTicket($ticketId);
-            if ($ticket && strtolower(trim((string) ($ticket['CustomerUserID'] ?? ''))) === $oldLogin) {
-                $this->activeCacheService->updateTicketIdentity($ticketId, $authoritativeLogin, $authoritativeCustomerId);
+            if ($this->ticketMatchesLogin($ticket, $requestedLogin)) {
+                $this->activeCacheService->mirrorConfirmedTicketIdentity(
+                    $ticketId,
+                    $returnedLogin,
+                    $returnedCustomerId,
+                );
             }
         }
 
-        foreach ($closedTicketIds as $ticketId) {
+        foreach ($closedIds as $ticketId) {
             $ticket = $this->closedCacheService->getTicket($ticketId);
-            if ($ticket && strtolower(trim((string) ($ticket['CustomerUserID'] ?? ''))) === $oldLogin) {
-                $this->closedCacheService->updateTicketIdentity($ticketId, $authoritativeLogin, $authoritativeCustomerId);
+            if ($this->ticketMatchesLogin($ticket, $requestedLogin)) {
+                $this->closedCacheService->mirrorConfirmedTicketIdentity(
+                    $ticketId,
+                    $returnedLogin,
+                    $returnedCustomerId,
+                );
             }
         }
     }
 
+    private function ticketMatchesLogin(mixed $ticket, string $login): bool
+    {
+        return is_array($ticket)
+            && strtolower(trim((string) ($ticket['CustomerUserID'] ?? ''))) === $login;
+    }
+
+    private function knownTicketIds(string $login, ?int $currentZnunyTicketId): array
+    {
+        $activeIds = $this->getActiveTicketIds($login);
+        $closedIds = $this->getClosedTicketIds($login);
+        if ($currentZnunyTicketId) {
+            $activeIds[] = (string) $currentZnunyTicketId;
+            $closedIds[] = (string) $currentZnunyTicketId;
+        }
+
+        return [array_values(array_unique($activeIds)), array_values(array_unique($closedIds))];
+    }
+
     private function getActiveTicketIds(string $login): array
     {
-        $key = "znuny:index:customer_user:{$login}";
-        $ids = Redis::zrange($key, 0, -1);
+        $ids = Redis::zrange("znuny:index:customer_user:{$login}", 0, -1);
 
         return is_array($ids) ? $ids : [];
     }
 
     private function getClosedTicketIds(string $login): array
     {
-        $key = "znuny:closed_ticket:customer_user_index:{$login}";
-        $ids = Redis::zrange($key, 0, -1);
+        $ids = Redis::zrange("znuny:closed_ticket:customer_user_index:{$login}", 0, -1);
 
         return is_array($ids) ? $ids : [];
     }
