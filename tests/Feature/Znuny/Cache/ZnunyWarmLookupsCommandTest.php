@@ -2,7 +2,11 @@
 
 namespace Tests\Feature\Znuny\Cache;
 
+use App\Services\SettingsService;
 use App\Services\Znuny\Cache\ZnunyLookupCacheReadService;
+use Illuminate\Console\Command;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -13,7 +17,7 @@ class ZnunyWarmLookupsCommandTest extends TestCase
     {
         parent::setUp();
         Cache::clear();
-        app(\App\Services\SettingsService::class)->clearRequestCache();
+        app(SettingsService::class)->clearRequestCache();
         Cache::put('app_settings_all', [
             'znuny_api_url' => ['key' => 'znuny_api_url', 'value' => 'http://test', 'type' => 'string'],
             'znuny_username' => ['key' => 'znuny_username', 'value' => 'u', 'type' => 'string'],
@@ -30,22 +34,22 @@ class ZnunyWarmLookupsCommandTest extends TestCase
                     'scalar open',
                     ['name' => 'closed'],
                     ['Label' => 'merged'],
-                ]
+                ],
             ]),
             '*/TicketPriority*' => Http::response([
                 'TicketPriorities' => [
                     'Data' => [
                         ['value' => 'low'],
                         ['name' => 'high'],
-                    ]
-                ]
+                    ],
+                ],
             ]),
             '*/TicketType*' => Http::response([
                 'TicketTypes' => [
                     ['Name' => 'Incident'],
                     ['Label' => 'RfC'],
                     ['Value' => 'Problem'],
-                ]
+                ],
             ]),
             '*/CustomerCompany*' => Http::response([
                 'Errors' => [],
@@ -125,7 +129,7 @@ class ZnunyWarmLookupsCommandTest extends TestCase
         $this->assertEquals($expectedStates, $payload['states']);
 
         // Prove reader can read it
-        $reader = new ZnunyLookupCacheReadService();
+        $reader = new ZnunyLookupCacheReadService;
         $snapshot = $reader->getSnapshot();
         $this->assertNotNull($snapshot);
         $this->assertEquals($expectedStates, $snapshot['states']);
@@ -337,10 +341,10 @@ class ZnunyWarmLookupsCommandTest extends TestCase
             '*/TicketType*' => Http::response(['TicketTypes' => ['Incident']]),
         ]);
 
-        $exitCode = \Illuminate\Support\Facades\Artisan::call('znuny:cache:warm-lookups');
-        $output = \Illuminate\Support\Facades\Artisan::output();
+        $exitCode = Artisan::call('znuny:cache:warm-lookups');
+        $output = Artisan::output();
 
-        $this->assertEquals(\Illuminate\Console\Command::FAILURE, $exitCode);
+        $this->assertEquals(Command::FAILURE, $exitCode);
 
         $meta = Cache::get('znuny_prewarm_lookups_meta');
         $this->assertNotEmpty($meta['last_error']);
@@ -396,7 +400,7 @@ class ZnunyWarmLookupsCommandTest extends TestCase
 
         $companyRequests = collect(Http::recorded())
             ->map(fn ($record) => $record[0])
-            ->filter(fn (\Illuminate\Http\Client\Request $req) => str_contains(parse_url($req->url(), PHP_URL_PATH), '/CustomerCompany'))
+            ->filter(fn (Request $req) => str_contains(parse_url($req->url(), PHP_URL_PATH), '/CustomerCompany'))
             ->values();
 
         $this->assertCount(1, $companyRequests);
@@ -404,11 +408,12 @@ class ZnunyWarmLookupsCommandTest extends TestCase
         $this->assertEquals(100, $companyRequests[0]['Limit']);
         $this->assertFalse(isset($companyRequests[0]['Search']));
     }
+
     public function test_sentinel_failed_emits_correct_output()
     {
-        \Illuminate\Support\Facades\Http::preventStrayRequests();
-        \Illuminate\Support\Facades\Http::fake([
-            '*' => \Illuminate\Support\Facades\Http::response('Server Error', 500)
+        Http::preventStrayRequests();
+        Http::fake([
+            '*' => Http::response('Server Error', 500),
         ]);
 
         $this->artisan('znuny:cache:warm-lookups')
@@ -442,7 +447,7 @@ class ZnunyWarmLookupsCommandTest extends TestCase
     public function test_sentinel_skipped_locked_emits_correct_output()
     {
         // Acquire the lock to force skip
-        $lock = \Illuminate\Support\Facades\Cache::lock('znuny_prewarm_lookups_lock', 60);
+        $lock = Cache::lock('znuny_prewarm_lookups_lock', 60);
         $lock->get();
 
         $this->artisan('znuny:cache:warm-lookups')
@@ -533,7 +538,7 @@ class ZnunyWarmLookupsCommandTest extends TestCase
 
         $companyRequests = collect(Http::recorded())
             ->map(fn ($record) => $record[0])
-            ->filter(fn (\Illuminate\Http\Client\Request $req) => str_contains(parse_url($req->url(), PHP_URL_PATH), '/CustomerCompany'))
+            ->filter(fn (Request $req) => str_contains(parse_url($req->url(), PHP_URL_PATH), '/CustomerCompany'))
             ->values();
 
         $this->assertCount(2, $companyRequests);
@@ -755,70 +760,130 @@ class ZnunyWarmLookupsCommandTest extends TestCase
 
     public function test_customer_company_page_size_clamps_49_to_50()
     {
-        putenv('ZNUNY_CUSTOMER_COMPANY_PAGE_SIZE=49');
-        $config = require config_path('znuny.php');
-        config(['znuny' => $config]);
-        putenv('ZNUNY_CUSTOMER_COMPANY_PAGE_SIZE'); // clear
+        $key = 'ZNUNY_CUSTOMER_COMPANY_PAGE_SIZE';
 
-        Http::fake([
-            '*/Session*' => Http::response(['SessionID' => 'test']),
-            '*/TicketState*' => Http::response(['TicketStates' => ['open']]),
-            '*/TicketPriority*' => Http::response(['TicketPriorities' => ['high']]),
-            '*/TicketType*' => Http::response(['TicketTypes' => ['Incident']]),
-            '*/CustomerCompany*' => Http::response([
-                'Errors' => [],
-                'CustomerCompanies' => [],
-                'Count' => 0,
-                'TotalCount' => 0,
-                'Limit' => 50,
-                'Offset' => 0,
-                'HasMore' => 0,
-            ]),
-        ]);
+        $hadEnv = array_key_exists($key, $_ENV);
+        $oldEnv = $_ENV[$key] ?? null;
+        $hadServer = array_key_exists($key, $_SERVER);
+        $oldServer = $_SERVER[$key] ?? null;
+        $oldProcessEnv = getenv($key);
 
-        $this->artisan('znuny:cache:warm-lookups')->assertSuccessful();
+        $_ENV[$key] = '49';
+        $_SERVER[$key] = '49';
+        putenv($key.'=49');
 
-        $companyRequests = collect(Http::recorded())
-            ->map(fn ($record) => $record[0])
-            ->filter(fn (\Illuminate\Http\Client\Request $req) => str_contains(parse_url($req->url(), PHP_URL_PATH), '/CustomerCompany'))
-            ->values();
+        try {
+            $config = require config_path('znuny.php');
+            config(['znuny' => $config]);
 
-        $this->assertCount(1, $companyRequests);
-        $this->assertEquals(50, $companyRequests[0]['Limit']);
+            Http::fake([
+                '*/Session*' => Http::response(['SessionID' => 'test']),
+                '*/TicketState*' => Http::response(['TicketStates' => ['open']]),
+                '*/TicketPriority*' => Http::response(['TicketPriorities' => ['high']]),
+                '*/TicketType*' => Http::response(['TicketTypes' => ['Incident']]),
+                '*/CustomerCompany*' => Http::response([
+                    'Errors' => [],
+                    'CustomerCompanies' => [],
+                    'Count' => 0,
+                    'TotalCount' => 0,
+                    'Limit' => 50,
+                    'Offset' => 0,
+                    'HasMore' => 0,
+                ]),
+            ]);
+
+            $this->artisan('znuny:cache:warm-lookups')->assertSuccessful();
+
+            $companyRequests = collect(Http::recorded())
+                ->map(fn ($record) => $record[0])
+                ->filter(fn (Request $req) => str_contains(parse_url($req->url(), PHP_URL_PATH), '/CustomerCompany'))
+                ->values();
+
+            $this->assertCount(1, $companyRequests);
+            $this->assertEquals(50, $companyRequests[0]['Limit']);
+        } finally {
+            if ($hadEnv) {
+                $_ENV[$key] = $oldEnv;
+            } else {
+                unset($_ENV[$key]);
+            }
+
+            if ($hadServer) {
+                $_SERVER[$key] = $oldServer;
+            } else {
+                unset($_SERVER[$key]);
+            }
+
+            if ($oldProcessEnv === false) {
+                putenv($key);
+            } else {
+                putenv($key.'='.$oldProcessEnv);
+            }
+        }
     }
 
     public function test_customer_company_page_size_clamps_101_to_100()
     {
-        putenv('ZNUNY_CUSTOMER_COMPANY_PAGE_SIZE=101');
-        $config = require config_path('znuny.php');
-        config(['znuny' => $config]);
-        putenv('ZNUNY_CUSTOMER_COMPANY_PAGE_SIZE'); // clear
+        $key = 'ZNUNY_CUSTOMER_COMPANY_PAGE_SIZE';
 
-        Http::fake([
-            '*/Session*' => Http::response(['SessionID' => 'test']),
-            '*/TicketState*' => Http::response(['TicketStates' => ['open']]),
-            '*/TicketPriority*' => Http::response(['TicketPriorities' => ['high']]),
-            '*/TicketType*' => Http::response(['TicketTypes' => ['Incident']]),
-            '*/CustomerCompany*' => Http::response([
-                'Errors' => [],
-                'CustomerCompanies' => [],
-                'Count' => 0,
-                'TotalCount' => 0,
-                'Limit' => 100,
-                'Offset' => 0,
-                'HasMore' => 0,
-            ]),
-        ]);
+        $hadEnv = array_key_exists($key, $_ENV);
+        $oldEnv = $_ENV[$key] ?? null;
+        $hadServer = array_key_exists($key, $_SERVER);
+        $oldServer = $_SERVER[$key] ?? null;
+        $oldProcessEnv = getenv($key);
 
-        $this->artisan('znuny:cache:warm-lookups')->assertSuccessful();
+        $_ENV[$key] = '101';
+        $_SERVER[$key] = '101';
+        putenv($key.'=101');
 
-        $companyRequests = collect(Http::recorded())
-            ->map(fn ($record) => $record[0])
-            ->filter(fn (\Illuminate\Http\Client\Request $req) => str_contains(parse_url($req->url(), PHP_URL_PATH), '/CustomerCompany'))
-            ->values();
+        try {
+            $config = require config_path('znuny.php');
+            config(['znuny' => $config]);
 
-        $this->assertCount(1, $companyRequests);
-        $this->assertEquals(100, $companyRequests[0]['Limit']);
+            Http::fake([
+                '*/Session*' => Http::response(['SessionID' => 'test']),
+                '*/TicketState*' => Http::response(['TicketStates' => ['open']]),
+                '*/TicketPriority*' => Http::response(['TicketPriorities' => ['high']]),
+                '*/TicketType*' => Http::response(['TicketTypes' => ['Incident']]),
+                '*/CustomerCompany*' => Http::response([
+                    'Errors' => [],
+                    'CustomerCompanies' => [],
+                    'Count' => 0,
+                    'TotalCount' => 0,
+                    'Limit' => 100,
+                    'Offset' => 0,
+                    'HasMore' => 0,
+                ]),
+            ]);
+
+            $this->artisan('znuny:cache:warm-lookups')->assertSuccessful();
+
+            $companyRequests = collect(Http::recorded())
+                ->map(fn ($record) => $record[0])
+                ->filter(fn (Request $req) => str_contains(parse_url($req->url(), PHP_URL_PATH), '/CustomerCompany'))
+                ->values();
+
+            $this->assertCount(1, $companyRequests);
+            $this->assertEquals(100, $companyRequests[0]['Limit']);
+        } finally {
+            if ($hadEnv) {
+                $_ENV[$key] = $oldEnv;
+            } else {
+                unset($_ENV[$key]);
+            }
+
+            if ($hadServer) {
+                $_SERVER[$key] = $oldServer;
+            } else {
+                unset($_SERVER[$key]);
+            }
+
+            if ($oldProcessEnv === false) {
+                putenv($key);
+            } else {
+                putenv($key.'='.$oldProcessEnv);
+            }
+        }
     }
 
     public function test_customer_company_configurable_page_size_50_with_87_companies()
@@ -874,7 +939,7 @@ class ZnunyWarmLookupsCommandTest extends TestCase
 
         $companyRequests = collect(Http::recorded())
             ->map(fn ($record) => $record[0])
-            ->filter(fn (\Illuminate\Http\Client\Request $req) => str_contains(parse_url($req->url(), PHP_URL_PATH), '/CustomerCompany'))
+            ->filter(fn (Request $req) => str_contains(parse_url($req->url(), PHP_URL_PATH), '/CustomerCompany'))
             ->values();
 
         $this->assertCount(2, $companyRequests);
@@ -882,7 +947,6 @@ class ZnunyWarmLookupsCommandTest extends TestCase
         $this->assertEquals(0, $companyRequests[0]['Offset']);
         $this->assertEquals(50, $companyRequests[0]['Limit']);
         $this->assertFalse(isset($companyRequests[0]['Search']));
-
 
         $this->assertEquals(50, $companyRequests[1]['Offset']);
         $this->assertEquals(50, $companyRequests[1]['Limit']);

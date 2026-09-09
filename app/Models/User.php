@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password', 'role', 'is_active', 'show_current_problems_status_panel', 'show_znuny_closed_ticket_status_panel', 'show_scheduled_tasks_status_panel', 'default_landing_page', 'ui_locale', 'track_new_tickets', 'ticket_tracking_since'])]
+#[Fillable(['name', 'email', 'password', 'role', 'is_active', 'show_current_problems_status_panel', 'show_znuny_closed_ticket_status_panel', 'show_scheduled_tasks_status_panel', 'default_landing_page', 'ui_locale', 'track_new_tickets', 'ticket_tracking_since', 'new_ticket_subject_ignore_regexes'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements FilamentUser
 {
@@ -70,6 +70,7 @@ class User extends Authenticatable implements FilamentUser
             'show_scheduled_tasks_status_panel' => 'boolean',
             'track_new_tickets' => 'boolean',
             'ticket_tracking_since' => 'datetime',
+            'new_ticket_subject_ignore_regexes' => 'array',
         ];
     }
 }

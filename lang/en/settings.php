@@ -62,6 +62,15 @@ return [
                 'label' => 'Track new tickets',
                 'helper_text' => 'Show a star next to new unlinked tickets you have not opened yet.',
             ],
+            'new_ticket_subject_ignore_regexes' => [
+                'label' => 'Ignore new tickets by subject',
+                'helper_text' => 'Each item is a separate regular expression. Enter patterns without delimiters or modifiers. Ticket subjects are matched case-insensitively with UTF-8 support.',
+                'add_action_label' => 'Add regular expression',
+                'placeholder' => '^Postmaster::',
+                'validation' => [
+                    'invalid_regex' => 'Invalid regular expression.',
+                ],
+            ],
             'show_current_problems_status_panel' => [
                 'label' => 'Show Current Problems polling status panel',
             ],

@@ -5,6 +5,8 @@ namespace App\Filament\Pages;
 use App\Models\User;
 use App\Services\Support\ApplicationLocaleService;
 use App\Services\UserLandingPageService;
+use App\Services\Znuny\TicketTrackingService;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -15,7 +17,9 @@ use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class MySettings extends Page implements HasForms
 {
@@ -53,6 +57,7 @@ class MySettings extends Page implements HasForms
             'show_scheduled_tasks_status_panel' => $user->show_scheduled_tasks_status_panel,
             'ui_locale' => $user->ui_locale ?? '__system__',
             'track_new_tickets' => $user->track_new_tickets,
+            'new_ticket_subject_ignore_regexes' => $user->new_ticket_subject_ignore_regexes ?? [],
         ]);
     }
 
@@ -90,7 +95,48 @@ class MySettings extends Page implements HasForms
                     ->schema([
                         Toggle::make('track_new_tickets')
                             ->label(__('settings.my_settings.fields.track_new_tickets.label'))
-                            ->helperText(__('settings.my_settings.fields.track_new_tickets.helper_text')),
+                            ->helperText(__('settings.my_settings.fields.track_new_tickets.helper_text'))
+                            ->live(),
+                        Repeater::make('new_ticket_subject_ignore_regexes')
+                            ->label(__('settings.my_settings.fields.new_ticket_subject_ignore_regexes.label'))
+                            ->helperText(__('settings.my_settings.fields.new_ticket_subject_ignore_regexes.helper_text'))
+                            ->addActionLabel(__('settings.my_settings.fields.new_ticket_subject_ignore_regexes.add_action_label'))
+                            ->simple(
+                                TextInput::make('regex')
+                                    ->placeholder(__('settings.my_settings.fields.new_ticket_subject_ignore_regexes.placeholder'))
+                                    ->rules([
+                                        fn () => function (string $attribute, $value, \Closure $fail) {
+                                            if ($value === null || trim((string) $value) === '') {
+                                                return;
+                                            }
+                                            if (TicketTrackingService::compilePattern(trim((string) $value)) === null) {
+                                                $fail(__('settings.my_settings.fields.new_ticket_subject_ignore_regexes.validation.invalid_regex'));
+                                            }
+                                        },
+                                    ])
+                            )
+                            ->rules([
+                                fn () => function (string $attribute, $value, \Closure $fail) {
+                                    if (! is_array($value)) {
+                                        return;
+                                    }
+                                    foreach ($value as $item) {
+                                        $pattern = is_array($item) ? ($item['regex'] ?? '') : $item;
+                                        if ($pattern === null || trim((string) $pattern) === '') {
+                                            continue;
+                                        }
+                                        if (TicketTrackingService::compilePattern(trim((string) $pattern)) === null) {
+                                            $fail(__('settings.my_settings.fields.new_ticket_subject_ignore_regexes.validation.invalid_regex'));
+
+                                            return;
+                                        }
+                                    }
+                                },
+                            ])
+                            ->reorderable(false)
+                            ->deletable(true)
+                            ->compact()
+                            ->visible(fn ($get) => (bool) $get('track_new_tickets')),
                         Select::make('ui_locale')
                             ->label(__('settings.my_settings.ui_locale.label'))
                             ->helperText(__('settings.my_settings.ui_locale.helper_text'))
@@ -173,7 +219,28 @@ class MySettings extends Page implements HasForms
         $user->track_new_tickets = $isTrackingNow;
 
         if ($isTrackingNow && ! $wasTracking) {
-            $user->ticket_tracking_since = \Illuminate\Support\Carbon::now();
+            $user->ticket_tracking_since = Carbon::now();
+        }
+
+        if ($isTrackingNow && array_key_exists('new_ticket_subject_ignore_regexes', $data)) {
+            $rawList = is_array($data['new_ticket_subject_ignore_regexes'])
+                ? $data['new_ticket_subject_ignore_regexes']
+                : [];
+            $normalized = [];
+            foreach ($rawList as $item) {
+                $pattern = is_array($item) ? ($item['regex'] ?? '') : $item;
+                $trimmed = trim((string) $pattern);
+                if ($trimmed === '') {
+                    continue;
+                }
+                if (TicketTrackingService::compilePattern($trimmed) === null) {
+                    throw ValidationException::withMessages([
+                        'data.new_ticket_subject_ignore_regexes' => __('settings.my_settings.fields.new_ticket_subject_ignore_regexes.validation.invalid_regex'),
+                    ]);
+                }
+                $normalized[] = $trimmed;
+            }
+            $user->new_ticket_subject_ignore_regexes = array_values($normalized);
         }
 
         $user->save();
@@ -190,6 +257,7 @@ class MySettings extends Page implements HasForms
             'show_scheduled_tasks_status_panel' => $user->show_scheduled_tasks_status_panel,
             'ui_locale' => $user->ui_locale ?? '__system__',
             'track_new_tickets' => $user->track_new_tickets,
+            'new_ticket_subject_ignore_regexes' => $user->new_ticket_subject_ignore_regexes ?? [],
             'current_password' => null,
             'new_password' => null,
             'new_password_confirmation' => null,

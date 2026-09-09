@@ -6,6 +6,7 @@ use App\Filament\Pages\MySettings;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -159,5 +160,169 @@ class MySettingsTest extends TestCase
         }
 
         $this->assertTrue($found, 'My Settings is not registered in the Filament user menu.');
+    }
+
+    public function test_regex_repeater_visibility_depends_on_track_new_tickets(): void
+    {
+        $userOff = User::factory()->create([
+            'track_new_tickets' => false,
+            'new_ticket_subject_ignore_regexes' => ['^Postmaster::'],
+        ]);
+
+        Livewire::actingAs($userOff)
+            ->test(MySettings::class)
+            ->assertFormFieldHidden('new_ticket_subject_ignore_regexes');
+
+        $userOn = User::factory()->create([
+            'track_new_tickets' => true,
+            'new_ticket_subject_ignore_regexes' => ['^Postmaster::'],
+        ]);
+
+        Livewire::actingAs($userOn)
+            ->test(MySettings::class)
+            ->assertFormFieldVisible('new_ticket_subject_ignore_regexes');
+    }
+
+    public function test_user_can_save_personal_ignore_regexes_and_blank_rows_are_removed(): void
+    {
+        $user = User::factory()->create([
+            'track_new_tickets' => true,
+            'new_ticket_subject_ignore_regexes' => null,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(MySettings::class)
+            ->fillForm([
+                'track_new_tickets' => true,
+                'new_ticket_subject_ignore_regexes' => [
+                    ['regex' => '  ^Postmaster::  '],
+                    ['regex' => ''],
+                    ['regex' => '   '],
+                    ['regex' => 'Alert::.*'],
+                ],
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $user->refresh();
+        $this->assertSame(['^Postmaster::', 'Alert::.*'], $user->new_ticket_subject_ignore_regexes);
+    }
+
+    public function test_turning_tracking_off_does_not_erase_saved_regexes(): void
+    {
+        $user = User::factory()->create([
+            'track_new_tickets' => true,
+            'new_ticket_subject_ignore_regexes' => ['^Postmaster::', 'Alert::.*'],
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(MySettings::class)
+            ->fillForm([
+                'track_new_tickets' => false,
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $user->refresh();
+        $this->assertFalse($user->track_new_tickets);
+        $this->assertSame(['^Postmaster::', 'Alert::.*'], $user->new_ticket_subject_ignore_regexes);
+    }
+
+    public function test_turning_tracking_on_again_exposes_saved_regexes(): void
+    {
+        $user = User::factory()->create([
+            'track_new_tickets' => false,
+            'new_ticket_subject_ignore_regexes' => ['^Postmaster::'],
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(MySettings::class)
+            ->assertFormFieldHidden('new_ticket_subject_ignore_regexes')
+            ->fillForm([
+                'track_new_tickets' => true,
+            ])
+            ->assertFormFieldVisible('new_ticket_subject_ignore_regexes')
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $user->refresh();
+        $this->assertTrue($user->track_new_tickets);
+        $this->assertSame(['^Postmaster::'], $user->new_ticket_subject_ignore_regexes);
+    }
+
+    public function test_editing_regexes_while_tracking_remains_on_does_not_reset_ticket_tracking_since(): void
+    {
+        $trackingSince = Carbon::parse('2026-09-01 10:00:00');
+        $user = User::factory()->create([
+            'track_new_tickets' => true,
+            'ticket_tracking_since' => $trackingSince,
+            'new_ticket_subject_ignore_regexes' => ['^Old::'],
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(MySettings::class)
+            ->fillForm([
+                'track_new_tickets' => true,
+                'new_ticket_subject_ignore_regexes' => [
+                    ['regex' => '^New::'],
+                ],
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $user->refresh();
+        $this->assertEquals($trackingSince->toDateTimeString(), $user->ticket_tracking_since->toDateTimeString());
+        $this->assertSame(['^New::'], $user->new_ticket_subject_ignore_regexes);
+    }
+
+    public function test_invalid_regex_rejects_save_and_leaves_persisted_regexes_unchanged(): void
+    {
+        $user = User::factory()->create([
+            'track_new_tickets' => true,
+            'new_ticket_subject_ignore_regexes' => ['^Valid::'],
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(MySettings::class)
+            ->fillForm([
+                'track_new_tickets' => true,
+                'new_ticket_subject_ignore_regexes' => [
+                    ['regex' => '[unclosed_class'],
+                ],
+            ])
+            ->call('save')
+            ->assertHasFormErrors(['new_ticket_subject_ignore_regexes']);
+
+        $user->refresh();
+        $this->assertSame(['^Valid::'], $user->new_ticket_subject_ignore_regexes);
+    }
+
+    public function test_translation_keys_exist_for_uk_and_en(): void
+    {
+        $uk = __('settings.my_settings.fields.new_ticket_subject_ignore_regexes', [], 'uk');
+        $en = __('settings.my_settings.fields.new_ticket_subject_ignore_regexes', [], 'en');
+
+        $this->assertIsArray($uk);
+        $this->assertIsArray($en);
+        $this->assertNotEmpty($uk['label']);
+        $this->assertNotEmpty($en['label']);
+        $this->assertNotEmpty($uk['helper_text']);
+        $this->assertNotEmpty($en['helper_text']);
+        $this->assertNotEmpty($uk['add_action_label']);
+        $this->assertNotEmpty($en['add_action_label']);
+        $this->assertNotEmpty($uk['placeholder']);
+        $this->assertNotEmpty($en['placeholder']);
+        $this->assertNotEmpty($uk['validation']['invalid_regex']);
+        $this->assertNotEmpty($en['validation']['invalid_regex']);
+    }
+
+    public function test_user_model_casts_new_ticket_subject_ignore_regexes_to_array(): void
+    {
+        $user = new User;
+        $this->assertNull($user->new_ticket_subject_ignore_regexes);
+
+        $user->new_ticket_subject_ignore_regexes = ['^Test::', 'Alert'];
+        $this->assertIsArray($user->new_ticket_subject_ignore_regexes);
+        $this->assertSame(['^Test::', 'Alert'], $user->new_ticket_subject_ignore_regexes);
     }
 }

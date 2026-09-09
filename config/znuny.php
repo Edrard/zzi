@@ -26,4 +26,14 @@ return [
 
     'reconcile_tickets_on_create' => env('ZNUNY_RECONCILE_TICKETS', true),
 
+    'new_ticket_max_age_days' => (function () {
+        $value = env('ZNUNY_NEW_TICKET_MAX_AGE_DAYS', 3);
+        if ($value === false) {
+            return false;
+        }
+        $intVal = (int) $value;
+
+        return $intVal >= 1 ? $intVal : 3;
+    })(),
+
 ];
