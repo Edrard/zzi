@@ -63,7 +63,7 @@ class ZnunyCustomerUserExistenceService
             return ['registered' => false, 'source' => self::SOURCE_SHORT_CACHE, 'generation' => $generation];
         }
 
-        return ['registered' => false, 'source' => 'cache_miss', 'generation' => $generation];
+        return $this->lookupLive($login, $generation, false);
     }
 
     public function lookupDirectly(?string $login, ?string $customerId): array

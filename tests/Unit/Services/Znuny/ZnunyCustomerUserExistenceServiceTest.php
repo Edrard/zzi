@@ -120,28 +120,62 @@ class ZnunyCustomerUserExistenceServiceTest extends TestCase
         $this->assertEquals(ZnunyCustomerUserExistenceService::SOURCE_PREWARM, $result['source']);
     }
 
-    public function test_prewarm_miss_returns_false_and_cache_miss(): void
+    public function test_prewarm_miss_no_short_cache_live_found_returns_true_and_writes_short_cache(): void
     {
         $this->cacheReadMock->shouldReceive('getSnapshot')->andReturn(['generation' => 'gen1']);
 
-        $this->clientMock->shouldNotReceive('getCustomerUser');
+        $this->clientMock->shouldReceive('getCustomerUser')
+            ->once()
+            ->with('user1')
+            ->andReturn([
+                'found' => 1,
+                'login' => 'user1',
+                'customer_id' => 'CUST1',
+            ]);
 
         $result = $this->service->checkCustomerUserExistence('user1', 'CUST1');
 
-        $this->assertFalse($result['registered']);
-        $this->assertEquals('cache_miss', $result['source']);
+        $this->assertTrue($result['registered']);
+        $this->assertSame(ZnunyCustomerUserExistenceService::SOURCE_LIVE, $result['source']);
+        $this->assertSame('gen1', $result['generation']);
+
+        $hash = hash('sha256', 'user1');
+        $this->assertTrue(Cache::get("znuny_customer_user_exists:gen1:{$hash}"));
     }
 
-    public function test_prewarm_miss_returns_false_no_live_call_and_no_temp_false_write(): void
+    public function test_prewarm_miss_no_short_cache_live_authoritative_not_found_returns_false_and_writes_short_cache(): void
     {
         $this->cacheReadMock->shouldReceive('getSnapshot')->andReturn(['generation' => 'gen1']);
 
-        $this->clientMock->shouldNotReceive('getCustomerUser');
+        $this->clientMock->shouldReceive('getCustomerUser')
+            ->once()
+            ->with('user1')
+            ->andReturn(['found' => 0]);
 
         $result = $this->service->checkCustomerUserExistence('user1', 'CUST1');
 
         $this->assertFalse($result['registered']);
-        $this->assertEquals('cache_miss', $result['source']);
+        $this->assertSame(ZnunyCustomerUserExistenceService::SOURCE_LIVE, $result['source']);
+        $this->assertSame('gen1', $result['generation']);
+
+        $hash = hash('sha256', 'user1');
+        $this->assertFalse(Cache::get("znuny_customer_user_exists:gen1:{$hash}"));
+    }
+
+    public function test_prewarm_miss_no_short_cache_live_transport_failure_returns_unavailable_no_short_cache_false(): void
+    {
+        $this->cacheReadMock->shouldReceive('getSnapshot')->andReturn(['generation' => 'gen1']);
+
+        $this->clientMock->shouldReceive('getCustomerUser')
+            ->once()
+            ->with('user1')
+            ->andThrow(new \RuntimeException('Connection timeout'));
+
+        $result = $this->service->checkCustomerUserExistence('user1', 'CUST1');
+
+        $this->assertNull($result['registered']);
+        $this->assertSame(ZnunyCustomerUserExistenceService::SOURCE_UNAVAILABLE, $result['source']);
+        $this->assertSame('gen1', $result['generation']);
 
         $hash = hash('sha256', 'user1');
         $this->assertNull(Cache::get("znuny_customer_user_exists:gen1:{$hash}"));
@@ -165,22 +199,32 @@ class ZnunyCustomerUserExistenceServiceTest extends TestCase
         $this->assertTrue(Cache::get("znuny_customer_user_exists:gen1:{$hash}"));
     }
 
-    public function test_new_generation_ignores_old_temp_and_misses_cache(): void
+    public function test_new_generation_ignores_old_generation_short_value_and_performs_live_lookup(): void
     {
         // Set temp for gen1
         $hash = hash('sha256', 'user1');
         Cache::put("znuny_customer_user_exists:gen1:{$hash}", false);
 
-        // Snapshot returns gen2
+        // Snapshot returns gen2 (which has no short cache and no prewarm match)
         $this->cacheReadMock->shouldReceive('getSnapshot')->andReturn(['generation' => 'gen2']);
 
-        $this->clientMock->shouldNotReceive('getCustomerUser');
+        $this->clientMock->shouldReceive('getCustomerUser')
+            ->once()
+            ->with('user1')
+            ->andReturn([
+                'found' => 1,
+                'login' => 'user1',
+                'customer_id' => 'CUST1',
+            ]);
 
-        // Since checkCustomerUserExistence no longer calls live, it should return cache_miss
         $result = $this->service->checkCustomerUserExistence('user1', 'CUST1');
 
-        $this->assertFalse($result['registered']);
-        $this->assertEquals('cache_miss', $result['source']);
+        $this->assertTrue($result['registered']);
+        $this->assertSame(ZnunyCustomerUserExistenceService::SOURCE_LIVE, $result['source']);
+        $this->assertSame('gen2', $result['generation']);
+
+        $this->assertTrue(Cache::get("znuny_customer_user_exists:gen2:{$hash}"));
+        $this->assertFalse(Cache::get("znuny_customer_user_exists:gen1:{$hash}"));
     }
 
     public function test_forced_verify_bypasses_temp_false(): void
