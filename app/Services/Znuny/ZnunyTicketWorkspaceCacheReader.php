@@ -96,119 +96,57 @@ class ZnunyTicketWorkspaceCacheReader
             $closedStIds = [];
         }
 
-        // 2. Faceted IDs for Options
-        $qIds = ! empty($filters['queue']) ? $redis->zrange("znuny:index:queue:{$filters['queue']}", 0, -1) : null;
-        $oIds = ! empty($filters['owner']) ? $redis->zrange("znuny:index:owner:{$filters['owner']}", 0, -1) : null;
+        $activeCandidateIds = array_values(array_unique($activeStIds));
+        $closedCandidateIds = array_values(array_unique($closedStIds));
 
-        $queueFacetIds = $activeStIds;
-        if ($oIds !== null) {
-            $queueFacetIds = array_intersect($queueFacetIds, $oIds);
-        }
-
-        $ownerFacetIds = $activeStIds;
-        if ($qIds !== null) {
-            $ownerFacetIds = array_intersect($ownerFacetIds, $qIds);
-        }
-
-        // Apply both Queue & Owner to final results
-        $filteredActiveIds = $activeStIds;
-        if ($qIds !== null) {
-            $filteredActiveIds = array_intersect($filteredActiveIds, $qIds);
-        }
-        if ($oIds !== null) {
-            $filteredActiveIds = array_intersect($filteredActiveIds, $oIds);
-        }
-
-        // Build filter options (use a sample of both facets)
-        $optionIdsActiveQueue = array_slice($queueFacetIds, 0, 500);
-        $optionIdsActiveOwner = array_slice($ownerFacetIds, 0, 500);
-        $optionIdsClosed = array_slice($closedStIds, 0, 500);
-
-        $optionKeysQueue = array_map(fn ($id) => "znuny:ticket:{$id}", $optionIdsActiveQueue);
-        $optionKeysOwner = array_map(fn ($id) => "znuny:ticket:{$id}", $optionIdsActiveOwner);
-        $optionKeysClosed = array_map(fn ($id) => "znuny:closed_ticket:ticket:{$id}", $optionIdsClosed);
-
-        $optionKeys = array_unique(array_merge($optionKeysQueue, $optionKeysOwner, $optionKeysClosed));
-        $optionTickets = [];
-        if (! empty($optionKeys)) {
-            $payloads = $redis->mget(array_values($optionKeys));
-            foreach ($payloads as $p) {
-                if ($p) {
-                    $t = json_decode($p, true);
-                    if (is_array($t)) {
-                        $optionTickets[] = $t;
-                    }
-                }
-            }
-        }
-        $filterOptions = $this->extractFilterOptions($optionTickets, $filters);
-
-        // 3. Decide if we can paginate before mget
-        $hasTextSearch = ! empty($filters['search']);
-        $hasLinkFilter = ! empty($filters['link_status']) && $filters['link_status'] !== 'all';
-        $hasQueueFilter = ! empty($filters['queue']);
-        $hasOwnerFilter = ! empty($filters['owner']);
-
-        $hasClosedTickets = ! empty($closedStIds);
-        $needsPostFetchFilterForClosed = $hasClosedTickets && ($hasQueueFilter || $hasOwnerFilter);
-
-        $needsPostFetchFilter = $hasTextSearch || $hasLinkFilter || $needsPostFetchFilterForClosed || $hasClosedTickets;
-
-        $fetchActiveKeys = [];
-        $fetchClosedKeys = [];
-        $totalActive = count($filteredActiveIds);
-
-        if (! $needsPostFetchFilter) {
-            $total = $totalActive;
-            $lastPage = max(1, (int) ceil($total / $perPage));
-            if ($page > $lastPage) {
-                $page = 1;
-            }
-            $offset = ($page - 1) * $perPage;
-
-            $fetchIds = array_values($filteredActiveIds);
-            if (strtolower($sortDirection) === 'desc') {
-                rsort($fetchIds);
-            } else {
-                sort($fetchIds);
-            }
-
-            $fetchIds = array_slice($fetchIds, $offset, $perPage);
-            $fetchActiveKeys = array_map(fn ($id) => "znuny:ticket:{$id}", $fetchIds);
+        if (strtolower($sortDirection) === 'desc') {
+            rsort($activeCandidateIds);
+            rsort($closedCandidateIds);
         } else {
-            $fetchIdsActive = array_values($filteredActiveIds);
-            $fetchIdsClosed = array_values($closedStIds);
-
-            if (count($fetchIdsActive) > 5000) {
-                $fetchIdsActive = array_slice($fetchIdsActive, 0, 5000);
-            }
-            if (count($fetchIdsClosed) > 5000) {
-                $fetchIdsClosed = array_slice($fetchIdsClosed, 0, 5000);
-            }
-
-            $fetchActiveKeys = array_map(fn ($id) => "znuny:ticket:{$id}", $fetchIdsActive);
-            $fetchClosedKeys = array_map(fn ($id) => "znuny:closed_ticket:ticket:{$id}", $fetchIdsClosed);
+            sort($activeCandidateIds);
+            sort($closedCandidateIds);
         }
 
-        // 4. Fetch payload
-        $tickets = [];
-        $allKeysToFetch = array_merge($fetchActiveKeys, $fetchClosedKeys);
+        // 2. Fetch live payloads (MGET in batches) - only existing, valid payloads participate in UI
+        $liveTickets = [];
 
-        if (! empty($allKeysToFetch)) {
-            $payloads = $redis->mget($allKeysToFetch);
-            foreach ($payloads as $payload) {
-                if ($payload) {
-                    $ticket = json_decode($payload, true);
-                    if (is_array($ticket) && isset($ticket['TicketID'])) {
-                        $tickets[] = $this->normalizeTicket($ticket);
+        if (! empty($activeCandidateIds)) {
+            foreach (array_chunk($activeCandidateIds, 500) as $chunk) {
+                $activeKeys = array_map(fn ($id) => "znuny:ticket:{$id}", $chunk);
+                $activePayloads = $redis->mget($activeKeys);
+                foreach ($activePayloads as $idx => $p) {
+                    if (! $p || ! is_string($p)) {
+                        continue;
+                    }
+                    $t = json_decode($p, true);
+                    $candidateId = (string) $chunk[$idx];
+                    if (is_array($t) && ! empty($t['TicketID']) && (string) $t['TicketID'] === $candidateId) {
+                        $liveTickets[] = $this->normalizeTicket($t);
                     }
                 }
             }
         }
 
-        // Deduplicate
+        if (! empty($closedCandidateIds)) {
+            foreach (array_chunk($closedCandidateIds, 500) as $chunk) {
+                $closedKeys = array_map(fn ($id) => "znuny:closed_ticket:ticket:{$id}", $chunk);
+                $closedPayloads = $redis->mget($closedKeys);
+                foreach ($closedPayloads as $idx => $p) {
+                    if (! $p || ! is_string($p)) {
+                        continue;
+                    }
+                    $t = json_decode($p, true);
+                    $candidateId = (string) $chunk[$idx];
+                    if (is_array($t) && ! empty($t['TicketID']) && (string) $t['TicketID'] === $candidateId) {
+                        $liveTickets[] = $this->normalizeTicket($t);
+                    }
+                }
+            }
+        }
+
+        // 3. Deduplicate live tickets
         $dedupedTickets = [];
-        foreach ($tickets as $t) {
+        foreach ($liveTickets as $t) {
             $id = $t['TicketID'] ?? null;
             if (! $id) {
                 continue;
@@ -227,18 +165,20 @@ class ZnunyTicketWorkspaceCacheReader
                 $dedupedTickets[$id] = $t;
             }
         }
-        $tickets = array_values($dedupedTickets);
+        $liveTickets = array_values($dedupedTickets);
 
-        $tickets = $this->enrichWithZabbixLinks($tickets);
+        // 4. Calculate filter options strictly from live tickets
+        $filterOptions = $this->extractFilterOptions($liveTickets, $filters);
 
-        if ($needsPostFetchFilter) {
-            $tickets = $this->applyFilters($tickets, $filters);
-            $total = count($tickets);
-        } else {
-            $total = $totalActive;
-        }
+        // 5. Enrich with Zabbix links
+        $liveTickets = $this->enrichWithZabbixLinks($liveTickets);
 
-        usort($tickets, function ($a, $b) use ($sortField, $sortDirection) {
+        // 6. Apply search and filters to live tickets
+        $filteredTickets = $this->applyFilters($liveTickets, $filters);
+        $total = count($filteredTickets);
+
+        // 7. Sort
+        usort($filteredTickets, function ($a, $b) use ($sortField, $sortDirection) {
             $valA = $a[$sortField] ?? null;
             $valB = $b[$sortField] ?? null;
             if ($valA === $valB) {
@@ -249,17 +189,13 @@ class ZnunyTicketWorkspaceCacheReader
             return strtolower($sortDirection) === 'asc' ? $cmp : -$cmp;
         });
 
-        if ($needsPostFetchFilter) {
-            $lastPage = max(1, (int) ceil($total / $perPage));
-            if ($page > $lastPage) {
-                $page = 1;
-            }
-            $offset = ($page - 1) * $perPage;
-            $rows = array_slice($tickets, $offset, $perPage);
-        } else {
-            $lastPage = max(1, (int) ceil($total / $perPage));
-            $rows = $tickets;
+        // 8. Paginate live rows
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        if ($page > $lastPage) {
+            $page = 1;
         }
+        $offset = ($page - 1) * $perPage;
+        $rows = array_slice($filteredTickets, $offset, $perPage);
 
         return [
             'rows' => $rows,
@@ -277,8 +213,13 @@ class ZnunyTicketWorkspaceCacheReader
         $ownerIds = [];
         $selectedQueue = $filters['queue'] ?? null;
         $selectedOwner = $filters['owner'] ?? null;
+        $stateTypes = $filters['state_types'] ?? null;
 
         foreach ($tickets as $ticket) {
+            if (! $this->matchesStateType($ticket, $stateTypes)) {
+                continue;
+            }
+
             $matchesOwner = empty($selectedOwner) || ((string) ($ticket['OwnerID'] ?? '') === (string) $selectedOwner);
             if ($matchesOwner && ! empty($ticket['QueueID'])) {
                 $queues[$ticket['QueueID']] = $ticket['Queue'] ?? ('Queue '.$ticket['QueueID']);
@@ -287,6 +228,37 @@ class ZnunyTicketWorkspaceCacheReader
             $matchesQueue = empty($selectedQueue) || ((string) ($ticket['QueueID'] ?? '') === (string) $selectedQueue);
             if ($matchesQueue && ! empty($ticket['OwnerID'])) {
                 $ownerIds[(int) $ticket['OwnerID']] = $ticket['Owner'] ?? ('Owner '.$ticket['OwnerID']);
+            }
+        }
+
+        // Keep selected options stable/visible
+        if (! empty($selectedQueue) && ! isset($queues[$selectedQueue])) {
+            foreach ($tickets as $ticket) {
+                if (! $this->matchesStateType($ticket, $stateTypes)) {
+                    continue;
+                }
+                if ((string) ($ticket['QueueID'] ?? '') === (string) $selectedQueue) {
+                    $queues[$ticket['QueueID']] = $ticket['Queue'] ?? ('Queue '.$ticket['QueueID']);
+                    break;
+                }
+            }
+            if (! isset($queues[$selectedQueue])) {
+                $queues[$selectedQueue] = 'Queue '.$selectedQueue;
+            }
+        }
+
+        if (! empty($selectedOwner) && ! isset($ownerIds[(int) $selectedOwner])) {
+            foreach ($tickets as $ticket) {
+                if (! $this->matchesStateType($ticket, $stateTypes)) {
+                    continue;
+                }
+                if ((string) ($ticket['OwnerID'] ?? '') === (string) $selectedOwner) {
+                    $ownerIds[(int) $ticket['OwnerID']] = $ticket['Owner'] ?? ('Owner '.$ticket['OwnerID']);
+                    break;
+                }
+            }
+            if (! isset($ownerIds[(int) $selectedOwner])) {
+                $ownerIds[(int) $selectedOwner] = 'Owner '.$selectedOwner;
             }
         }
 
@@ -320,6 +292,22 @@ class ZnunyTicketWorkspaceCacheReader
                 'merged' => 'Merged',
             ],
         ];
+    }
+
+    protected function matchesStateType(array $ticket, mixed $stateTypes): bool
+    {
+        if (! is_array($stateTypes) || empty($stateTypes)) {
+            return true;
+        }
+
+        $ticketStateType = strtolower($ticket['StateType'] ?? '');
+        foreach ($stateTypes as $st) {
+            if ($ticketStateType === strtolower($st)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected function applyFilters(array $tickets, array $filters): array
@@ -361,17 +349,8 @@ class ZnunyTicketWorkspaceCacheReader
                 continue;
             }
 
-            if (is_array($stateTypes) && ! empty($stateTypes)) {
-                $matchesState = false;
-                foreach ($stateTypes as $st) {
-                    if (strtolower($ticket['StateType'] ?? '') === strtolower($st)) {
-                        $matchesState = true;
-                        break;
-                    }
-                }
-                if (! $matchesState) {
-                    continue;
-                }
+            if (! $this->matchesStateType($ticket, $stateTypes)) {
+                continue;
             }
 
             if ($queue && (string) ($ticket['QueueID'] ?? '') !== (string) $queue) {

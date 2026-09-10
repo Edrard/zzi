@@ -28,6 +28,7 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
 
         $this->client = $this->mock(ZnunyClient::class);
         $this->cacheService = $this->mock(ZnunyTicketCacheService::class);
+        $this->cacheService->shouldReceive('cleanStaleActiveIndexMembers')->byDefault()->andReturn(0);
         Redis::del('znuny:ticket_workspace:last_warm_at');
     }
 
@@ -703,6 +704,29 @@ class WarmZnunyTicketWorkspaceCacheCommandTest extends TestCase
                 ['errors', 0],
                 ['warnings', 0],
             ])
+            ->assertSuccessful();
+    }
+
+    public function test_warmer_cleans_stale_active_index_members_and_outputs_count(): void
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
+        Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_active_state_type_ids'], ['value' => '["new"]']);
+        SettingsService::clearAllCaches();
+
+        $this->client->shouldReceive('searchTicketsWithMetadata')
+            ->once()
+            ->andReturn([
+                'total_count' => 0,
+                'warnings' => [],
+            ]);
+
+        $this->cacheService->shouldReceive('cleanStaleActiveIndexMembers')
+            ->once()
+            ->with(['new'])
+            ->andReturn(5);
+
+        $this->artisan('znuny:warm-ticket-workspace-cache')
+            ->expectsOutput('Cleaned 5 stale active index member(s).')
             ->assertSuccessful();
     }
 }

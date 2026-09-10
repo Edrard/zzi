@@ -173,14 +173,17 @@ class ZnunyTicketCacheService
             // refresh TTLs
             Redis::expire($key, max(1, $ttl));
 
+            $graceTtl = (int) ceil($ttl * 1.5);
             $reverseKey = "znuny:ticket_indexes:{$ticketId}";
-            Redis::expire($reverseKey, max($ttl, 86400 * 7));
+            Redis::expire($reverseKey, $graceTtl);
 
             $keysRaw = Redis::get($reverseKey);
             if ($keysRaw) {
                 $keys = json_decode($keysRaw, true);
-                foreach ($keys as $k) {
-                    Redis::expire($k, max($ttl, 86400 * 7));
+                if (is_array($keys)) {
+                    foreach ($keys as $k) {
+                        $this->extendIndexTtl($k, $graceTtl);
+                    }
                 }
             }
 
@@ -280,6 +283,7 @@ class ZnunyTicketCacheService
 
         $keys = $this->indexKeysForTicket($ticket);
         $timestamp = time();
+        $graceTtl = (int) ceil($ttl * 1.5);
 
         // Maintain a reverse lookup to easily clear later
         $reverseKey = "znuny:ticket_indexes:{$ticketId}";
@@ -295,10 +299,111 @@ class ZnunyTicketCacheService
         // Add ticket to current index keys
         foreach ($keys as $k) {
             Redis::zadd($k, $timestamp, $ticketId);
-            Redis::expire($k, max($ttl, 86400 * 7)); // keep index around a bit longer
+            $this->extendIndexTtl($k, $graceTtl);
         }
 
-        Redis::setex($reverseKey, max($ttl, 86400 * 7), json_encode($keys));
+        Redis::setex($reverseKey, $graceTtl, json_encode($keys));
+    }
+
+    public function extendIndexTtl(string $key, int $requiredTtl): void
+    {
+        if ($requiredTtl <= 0) {
+            return;
+        }
+
+        $currentTtl = Redis::ttl($key);
+
+        if ($currentTtl === -1 || $currentTtl === -2 || $currentTtl < $requiredTtl) {
+            Redis::expire($key, $requiredTtl);
+        }
+    }
+
+    public function cleanStaleActiveIndexMembers(array $activeStateTypes = []): int
+    {
+        if (empty($activeStateTypes)) {
+            $activeStateTypeIdsJson = SettingsService::string('znuny_ticket_workspace_active_state_type_ids', '[]');
+            $activeStateTypeIds = json_decode($activeStateTypeIdsJson, true) ?? [];
+            if (is_array($activeStateTypeIds) && ! empty($activeStateTypeIds)) {
+                $activeStateTypes = app(ZnunyTicketWorkspaceStateTypeMapper::class)->mapInternalIdsToZnunyTypes($activeStateTypeIds);
+            }
+        }
+
+        if (empty($activeStateTypes)) {
+            $activeStateTypes = ['new', 'open', 'pending reminder', 'pending auto'];
+        }
+
+        $candidateIndexMap = [];
+        foreach ($activeStateTypes as $st) {
+            if (empty($st)) {
+                continue;
+            }
+            $indexKey = 'znuny:index:statetype:'.strtolower($st);
+            $ids = Redis::zrange($indexKey, 0, -1);
+            if (is_array($ids)) {
+                foreach ($ids as $id) {
+                    $idStr = (string) $id;
+                    $candidateIndexMap[$idStr][] = $indexKey;
+                }
+            }
+        }
+
+        $candidateIds = array_keys($candidateIndexMap);
+        if (empty($candidateIds)) {
+            return 0;
+        }
+
+        $staleCount = 0;
+        $chunks = array_chunk($candidateIds, 500);
+        foreach ($chunks as $chunk) {
+            $keys = array_map(fn ($id) => "znuny:ticket:{$id}", $chunk);
+            $payloads = Redis::mget($keys);
+
+            foreach ($chunk as $idx => $id) {
+                $payload = $payloads[$idx] ?? null;
+                $isLive = false;
+
+                if ($payload && is_string($payload)) {
+                    $decoded = json_decode($payload, true);
+                    if (is_array($decoded) && ! empty($decoded['TicketID']) && (string) $decoded['TicketID'] === (string) $id) {
+                        $isLive = true;
+                    }
+                }
+
+                if ($isLive) {
+                    continue;
+                }
+
+                $staleCount++;
+
+                $cleanupKeys = $candidateIndexMap[$id] ?? [];
+
+                $reverseKey = "znuny:ticket_indexes:{$id}";
+                $reverseRaw = Redis::get($reverseKey);
+
+                if ($reverseRaw !== null && $reverseRaw !== false) {
+                    $indexes = json_decode((string) $reverseRaw, true);
+                    if (is_array($indexes)) {
+                        foreach ($indexes as $idxKey) {
+                            if (is_string($idxKey) && $idxKey !== '') {
+                                $cleanupKeys[] = $idxKey;
+                            }
+                        }
+                    }
+                    Redis::del($reverseKey);
+                }
+
+                $cleanupKeys = array_values(array_unique($cleanupKeys));
+                foreach ($cleanupKeys as $idxKey) {
+                    Redis::zrem($idxKey, $id);
+                }
+
+                if ($payload && ! $isLive) {
+                    Redis::del("znuny:ticket:{$id}");
+                }
+            }
+        }
+
+        return $staleCount;
     }
 
     public function clearTicketIndexes(int|string $ticketId): void

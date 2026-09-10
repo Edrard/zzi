@@ -173,13 +173,16 @@ class ClosedTicketCacheServiceTest extends TestCase
         $retentionSeconds = $retentionDays * 86400;
         $timestamp = strtotime($ticket['Created']);
 
+        $indexGraceSeconds = $retentionSeconds + 86400;
+
         Redis::shouldReceive('setex')->once()->with(
             'znuny:closed_ticket:ticket:125',
             $retentionSeconds,
             json_encode(array_merge($ticket, ['customer_user_registered' => true]))
         );
         Redis::shouldReceive('zadd')->once()->with('znuny:closed_ticket:index:2023-10-01', $timestamp, 125);
-        Redis::shouldReceive('expire')->once()->with('znuny:closed_ticket:index:2023-10-01', $retentionSeconds);
+        Redis::shouldReceive('ttl')->once()->with('znuny:closed_ticket:index:2023-10-01')->andReturn(-1);
+        Redis::shouldReceive('expire')->once()->with('znuny:closed_ticket:index:2023-10-01', $indexGraceSeconds);
         Redis::shouldReceive('zadd')->once()->with(
             'znuny:closed_ticket:customer_user_index:user125@example.com',
             $timestamp,
@@ -191,7 +194,7 @@ class ClosedTicketCacheServiceTest extends TestCase
             ->andReturn(-1);
         Redis::shouldReceive('expire')->once()->with(
             'znuny:closed_ticket:customer_user_index:user125@example.com',
-            $retentionSeconds
+            $indexGraceSeconds
         );
 
         $service->upsertTicket($ticket, $retentionDays);
@@ -219,8 +222,10 @@ class ClosedTicketCacheServiceTest extends TestCase
             $retentionSeconds,
             json_encode(array_merge($ticket, ['customer_user_registered' => false]))
         );
+        $indexGraceSeconds = $retentionSeconds + 86400;
         Redis::shouldReceive('zadd')->once()->with('znuny:closed_ticket:index:2023-10-01', $timestamp, 126);
-        Redis::shouldReceive('expire')->once()->with('znuny:closed_ticket:index:2023-10-01', $retentionSeconds);
+        Redis::shouldReceive('ttl')->once()->with('znuny:closed_ticket:index:2023-10-01')->andReturn(-1);
+        Redis::shouldReceive('expire')->once()->with('znuny:closed_ticket:index:2023-10-01', $indexGraceSeconds);
 
         $service->upsertTicket($ticket, $retentionDays);
     }
@@ -407,5 +412,45 @@ class ClosedTicketCacheServiceTest extends TestCase
         $this->service->mirrorConfirmedTicketIdentity(9104, 'user@example.com', 'comp');
 
         $this->assertNull(Redis::get($ticketKey));
+    }
+
+    public function test_closed_index_ttl_grace_retention_plus_one_day_and_shorter_update_does_not_shorten(): void
+    {
+        $ticket = [
+            'TicketID' => 7777,
+            'Created' => '2023-10-01 12:00:00',
+            'CustomerUserID' => 'client@example.com',
+            'CustomerID' => 'company-x',
+        ];
+
+        $retentionDays = 30;
+        $retentionSeconds = 30 * 86400;
+        $expectedIndexGrace = $retentionSeconds + 86400;
+
+        $this->service->upsertTicket($ticket, $retentionDays);
+
+        // 1. Ticket payload TTL is R
+        $payloadTtl = Redis::ttl('znuny:closed_ticket:ticket:7777');
+        $this->assertGreaterThan(0, $payloadTtl);
+        $this->assertLessThanOrEqual($retentionSeconds, $payloadTtl);
+
+        // 2. Closed date index TTL gets at least R + 86400
+        $dateIndexTtl = Redis::ttl('znuny:closed_ticket:index:2023-10-01');
+        $this->assertGreaterThan($retentionSeconds, $dateIndexTtl);
+        $this->assertLessThanOrEqual($expectedIndexGrace, $dateIndexTtl);
+
+        // 3. Closed CustomerUser index TTL gets at least R + 86400
+        $userIndexTtl = Redis::ttl('znuny:closed_ticket:customer_user_index:client@example.com');
+        $this->assertGreaterThan($retentionSeconds, $userIndexTtl);
+        $this->assertLessThanOrEqual($expectedIndexGrace, $userIndexTtl);
+
+        // 4. Shorter remaining TTL update does not shorten a longer shared closed index
+        $indexKey = 'znuny:closed_ticket:customer_user_index:client@example.com';
+        $ttlBefore = Redis::ttl($indexKey);
+
+        $this->service->extendIndexTtl($indexKey, 500);
+        $ttlAfter = Redis::ttl($indexKey);
+
+        $this->assertSame($ttlBefore, $ttlAfter);
     }
 }

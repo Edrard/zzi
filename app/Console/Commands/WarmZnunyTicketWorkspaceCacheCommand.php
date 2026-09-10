@@ -9,6 +9,7 @@ use App\Services\Znuny\ZnunyTicketCacheService;
 use App\Services\Znuny\ZnunyTicketWorkspaceStateTypeMapper;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
 use Throwable;
 
@@ -180,6 +181,17 @@ class WarmZnunyTicketWorkspaceCacheCommand extends Command
         } catch (Throwable $e) {
             $this->error('Error warming cache: '.$e->getMessage());
             $counters['errors']++;
+        }
+
+        $cleanedStale = 0;
+        try {
+            $cleanedStale = $cacheService->cleanStaleActiveIndexMembers($mappedStateTypes);
+            if ($cleanedStale > 0) {
+                $this->info("Cleaned {$cleanedStale} stale active index member(s).");
+                Log::info("Ticket workspace cache warmer: cleaned {$cleanedStale} stale active index member(s).");
+            }
+        } catch (Throwable $e) {
+            $this->warn('Error cleaning stale active index members: '.$e->getMessage());
         }
 
         $this->info('Cache warming complete.');

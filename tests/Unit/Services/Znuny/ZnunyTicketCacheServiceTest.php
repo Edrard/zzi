@@ -30,6 +30,7 @@ class ZnunyTicketCacheServiceTest extends TestCase
         Redis::shouldReceive('zrem')->byDefault();
         Redis::shouldReceive('expire')->byDefault();
         Redis::shouldReceive('exists')->andReturn(false)->byDefault();
+        Redis::shouldReceive('ttl')->andReturn(-1)->byDefault();
 
         // Ensure settings pretend cache is enabled
         Setting::updateOrCreate(['key' => 'znuny_ticket_workspace_enabled'], ['value' => 'true']);
@@ -641,6 +642,7 @@ class ZnunyTicketCacheServiceTest extends TestCase
 
         Redis::shouldReceive('get')->with('znuny:ticket:2005')->andReturn($existing);
         Redis::shouldReceive('ttl')->with('znuny:ticket:2005')->andReturn(300);
+        Redis::shouldReceive('ttl')->with('znuny:index:customer_user:new_user')->andReturn(-1);
 
         Redis::shouldReceive('get')->with('znuny:ticket_indexes:2005')->andReturn(json_encode([
             'znuny:index:customer_user:old_user',
@@ -771,5 +773,199 @@ class ZnunyTicketCacheServiceTest extends TestCase
         $result = $this->service->upsertOrRefreshFromSearchResult($incoming);
 
         $this->assertSame('updated_changed', $result);
+    }
+
+    public function test_active_ttl_payload_t_reverse_and_shared_grace_and_shorter_update_does_not_shorten_shared_index(): void
+    {
+        Setting::updateOrCreate(['key' => 'znuny_ticket_cache_ttl_minutes'], ['value' => '10']); // T = 600s
+        config(['app.ui_poll_interval_seconds' => 60]);
+
+        $ticket = [
+            'TicketID' => 9001,
+            'StateType' => 'open',
+            'QueueID' => 10,
+        ];
+
+        // 1. Ticket payload receives T = 600s
+        Redis::shouldReceive('setex')
+            ->once()
+            ->with('znuny:ticket:9001', 600, \Mockery::any());
+
+        // 2. Reverse metadata receives ceil(600 * 1.5) = 900s
+        Redis::shouldReceive('setex')
+            ->once()
+            ->with('znuny:ticket_indexes:9001', 900, \Mockery::any());
+
+        // 3. Shared indexes checked via extendIndexTtl
+        // For state index: current TTL is -1 (no expiry set), so it gets set to 900
+        Redis::shouldReceive('ttl')->with('znuny:index:statetype:open')->andReturn(-1);
+        Redis::shouldReceive('expire')->once()->with('znuny:index:statetype:open', 900);
+
+        // For queue index: current TTL is already 1200 (longer than required 900), so expire should NOT be called!
+        Redis::shouldReceive('ttl')->with('znuny:index:queue:10')->andReturn(1200);
+        Redis::shouldReceive('expire')->with('znuny:index:queue:10', \Mockery::any())->never();
+
+        $this->service->upsertTicket($ticket);
+
+        // 4. Test extendIndexTtl directly: shorter required TTL must never shorten longer existing TTL
+        $key = 'znuny:index:queue:99';
+        Redis::shouldReceive('ttl')->with($key)->andReturn(800, 50);
+        Redis::shouldReceive('expire')->once()->with($key, 150);
+
+        // First call with current TTL 800: expire is NOT called because 800 >= 150
+        $this->service->extendIndexTtl($key, 150);
+
+        // Second call with current TTL 50: expire IS called with 150 because 50 < 150
+        $this->service->extendIndexTtl($key, 150);
+    }
+
+    public function test_active_warmer_cleanup_prunes_stale_id_preserves_live_and_cleans_reverse_indexes(): void
+    {
+        Redis::shouldReceive('zrange')
+            ->once()
+            ->with('znuny:index:statetype:open', 0, -1)
+            ->andReturn(['1001', '1002', '1003']);
+
+        // Batch MGET
+        Redis::shouldReceive('mget')
+            ->once()
+            ->with(['znuny:ticket:1001', 'znuny:ticket:1002', 'znuny:ticket:1003'])
+            ->andReturn([
+                json_encode(['TicketID' => 1001, 'Title' => 'Live Ticket']), // 1001 is LIVE
+                null, // 1002 is STALE with reverse index
+                'corrupt-payload', // 1003 is LEGACY STALE without reverse index
+            ]);
+
+        // 1001 is live: no cleanup calls for 1001
+        // 1002 has reverse metadata
+        Redis::shouldReceive('get')
+            ->once()
+            ->with('znuny:ticket_indexes:1002')
+            ->andReturn(json_encode(['znuny:index:statetype:open', 'znuny:index:queue:5']));
+
+        Redis::shouldReceive('zrem')->once()->with('znuny:index:statetype:open', '1002');
+        Redis::shouldReceive('zrem')->once()->with('znuny:index:queue:5', '1002');
+        Redis::shouldReceive('del')->once()->with('znuny:ticket_indexes:1002');
+
+        // 1003 has no reverse metadata (legacy stale)
+        Redis::shouldReceive('get')
+            ->once()
+            ->with('znuny:ticket_indexes:1003')
+            ->andReturn(null);
+
+        // Fallback: removes from the active state type index where it was found
+        Redis::shouldReceive('zrem')->once()->with('znuny:index:statetype:open', '1003');
+        // And cleans corrupt payload
+        Redis::shouldReceive('del')->once()->with('znuny:ticket:1003');
+
+        $cleanedCount = $this->service->cleanStaleActiveIndexMembers(['open']);
+
+        $this->assertSame(2, $cleanedCount);
+    }
+
+    public function test_clean_stale_active_index_members_treats_mismatched_payload_ticket_id_as_stale_and_corrupt(): void
+    {
+        Redis::shouldReceive('zrange')
+            ->once()
+            ->with('znuny:index:statetype:open', 0, -1)
+            ->andReturn(['1001']);
+
+        Redis::shouldReceive('mget')
+            ->once()
+            ->with(['znuny:ticket:1001'])
+            ->andReturn([
+                json_encode(['TicketID' => 9999, 'Title' => 'Mismatched Ticket']), // Candidate 1001, but payload TicketID is 9999
+            ]);
+
+        Redis::shouldReceive('get')
+            ->once()
+            ->with('znuny:ticket_indexes:1001')
+            ->andReturn(null);
+
+        Redis::shouldReceive('zrem')->once()->with('znuny:index:statetype:open', '1001');
+        Redis::shouldReceive('del')->once()->with('znuny:ticket:1001');
+
+        $cleanedCount = $this->service->cleanStaleActiveIndexMembers(['open']);
+
+        $this->assertSame(1, $cleanedCount);
+    }
+
+    public function test_clean_stale_active_index_members_removes_state_type_when_reverse_metadata_is_empty(): void
+    {
+        Redis::shouldReceive('zrange')
+            ->once()
+            ->with('znuny:index:statetype:open', 0, -1)
+            ->andReturn(['1001']);
+
+        Redis::shouldReceive('mget')
+            ->once()
+            ->with(['znuny:ticket:1001'])
+            ->andReturn([null]);
+
+        Redis::shouldReceive('get')
+            ->once()
+            ->with('znuny:ticket_indexes:1001')
+            ->andReturn(json_encode([])); // Empty reverse list
+
+        // State-type index membership must still be removed
+        Redis::shouldReceive('zrem')->once()->with('znuny:index:statetype:open', '1001');
+        Redis::shouldReceive('del')->once()->with('znuny:ticket_indexes:1001');
+
+        $cleanedCount = $this->service->cleanStaleActiveIndexMembers(['open']);
+
+        $this->assertSame(1, $cleanedCount);
+    }
+
+    public function test_clean_stale_active_index_members_removes_both_queue_and_state_type_when_reverse_metadata_is_incomplete(): void
+    {
+        Redis::shouldReceive('zrange')
+            ->once()
+            ->with('znuny:index:statetype:open', 0, -1)
+            ->andReturn(['1001']);
+
+        Redis::shouldReceive('mget')
+            ->once()
+            ->with(['znuny:ticket:1001'])
+            ->andReturn([null]);
+
+        Redis::shouldReceive('get')
+            ->once()
+            ->with('znuny:ticket_indexes:1001')
+            ->andReturn(json_encode(['znuny:index:queue:5'])); // Incomplete: missing state-type index
+
+        // Both queue membership and discovered state-type membership must be removed
+        Redis::shouldReceive('zrem')->once()->with('znuny:index:statetype:open', '1001');
+        Redis::shouldReceive('zrem')->once()->with('znuny:index:queue:5', '1001');
+        Redis::shouldReceive('del')->once()->with('znuny:ticket_indexes:1001');
+
+        $cleanedCount = $this->service->cleanStaleActiveIndexMembers(['open']);
+
+        $this->assertSame(1, $cleanedCount);
+    }
+
+    public function test_clean_stale_active_index_members_handles_malformed_reverse_json(): void
+    {
+        Redis::shouldReceive('zrange')
+            ->once()
+            ->with('znuny:index:statetype:open', 0, -1)
+            ->andReturn(['1001']);
+
+        Redis::shouldReceive('mget')
+            ->once()
+            ->with(['znuny:ticket:1001'])
+            ->andReturn([null]);
+
+        Redis::shouldReceive('get')
+            ->once()
+            ->with('znuny:ticket_indexes:1001')
+            ->andReturn('malformed-json');
+
+        // State-type index membership must still be removed and reverse key deleted
+        Redis::shouldReceive('zrem')->once()->with('znuny:index:statetype:open', '1001');
+        Redis::shouldReceive('del')->once()->with('znuny:ticket_indexes:1001');
+
+        $cleanedCount = $this->service->cleanStaleActiveIndexMembers(['open']);
+
+        $this->assertSame(1, $cleanedCount);
     }
 }

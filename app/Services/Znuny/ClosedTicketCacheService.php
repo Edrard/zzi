@@ -115,9 +115,11 @@ class ClosedTicketCacheService
 
         Redis::setex($ticketKey, $retentionSeconds, json_encode($ticket));
 
+        $indexGraceSeconds = $retentionSeconds + 86400;
+
         $indexKey = "znuny:closed_ticket:index:{$date}";
         Redis::zadd($indexKey, $timestamp, $ticketId);
-        Redis::expire($indexKey, $retentionSeconds);
+        $this->extendIndexTtl($indexKey, $indexGraceSeconds);
 
         $newLogin = '';
         if (! empty($ticket['CustomerUserID'])) {
@@ -125,7 +127,7 @@ class ClosedTicketCacheService
             if ($newLogin !== '') {
                 $userIndexKey = "znuny:closed_ticket:customer_user_index:{$newLogin}";
                 Redis::zadd($userIndexKey, $timestamp, $ticketId);
-                $this->extendIndexTtl($userIndexKey, $retentionSeconds);
+                $this->extendIndexTtl($userIndexKey, $indexGraceSeconds);
             }
         }
 
@@ -184,7 +186,7 @@ class ClosedTicketCacheService
                 if ($newLogin !== '') {
                     $newIndexKey = "znuny:closed_ticket:customer_user_index:{$newLogin}";
                     Redis::zadd($newIndexKey, $timestamp, $ticketId);
-                    $this->extendIndexTtl($newIndexKey, $ttl);
+                    $this->extendIndexTtl($newIndexKey, $ttl + 86400);
                 }
 
                 $oldLogin = strtolower($oldCustomerUserId);
@@ -223,7 +225,7 @@ class ClosedTicketCacheService
         }
     }
 
-    private function extendIndexTtl(string $key, int $requiredTtl): void
+    public function extendIndexTtl(string $key, int $requiredTtl): void
     {
         if ($requiredTtl <= 0) {
             return;
