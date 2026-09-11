@@ -32,10 +32,17 @@ class ZnunyTicketArticleWriteService
      *   raw: array<string, mixed>
      * }
      */
-    public function createTicketArticle(int|string $ticketId, string $subject, string $body, bool $visibleForCustomer): array
-    {
+    public function createTicketArticle(
+        int|string $ticketId,
+        string $subject,
+        string $body,
+        bool $visibleForCustomer,
+        ?bool $sendToCustomer = null
+    ): array {
         try {
-            $response = $this->client->createTicketArticle($ticketId, $subject, $body, $visibleForCustomer);
+            $response = $sendToCustomer !== null
+                ? $this->client->createTicketArticle($ticketId, $subject, $body, $visibleForCustomer, $sendToCustomer)
+                : $this->client->createTicketArticle($ticketId, $subject, $body, $visibleForCustomer);
 
             if ($response['success']) {
                 $this->cacheService->forget($ticketId);
@@ -49,6 +56,7 @@ class ZnunyTicketArticleWriteService
                 'ticket_id' => $ticketId,
                 'subject' => $subject,
                 'visible_for_customer' => $visibleForCustomer,
+                'send_to_customer' => $sendToCustomer,
                 'exception' => $e,
             ]);
 

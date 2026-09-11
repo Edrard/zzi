@@ -1562,53 +1562,72 @@ class ZnunyClient
     }
 
     /**
-     * Call PATCH /Ticket/{TicketID} to create an article/note on an existing ticket.
+     * Call POST /TicketArticle to create an article/note on an existing ticket.
      */
-    public function createTicketArticle(int|string $ticketId, string $subject, string $body, bool $visibleForCustomer): array
-    {
-        return $this->withSessionRetry(function ($session) use ($ticketId, $subject, $body, $visibleForCustomer) {
+    public function createTicketArticle(
+        int|string $ticketId,
+        string $subject,
+        string $body,
+        bool $visibleForCustomer,
+        bool $sendToCustomer = false
+    ): array {
+        return $this->withSessionRetry(function ($session) use ($ticketId, $subject, $body, $visibleForCustomer, $sendToCustomer) {
             $normalizedId = $this->normalizeTicketId($ticketId);
+            $kind = $visibleForCustomer ? 'reply' : 'internal_note';
 
             $payload = [
                 'SessionID' => $session,
-                'Ticket' => [
-                    'TicketID' => $normalizedId,
-                ],
-                'Article' => [
-                    'Subject' => $subject,
-                    'Body' => $body,
-                    'ContentType' => 'text/plain; charset=utf-8',
-                    'MimeType' => 'text/plain',
-                    'Charset' => 'utf-8',
-                    'IsVisibleForCustomer' => $visibleForCustomer ? 1 : 0,
-                ],
+                'TicketID' => $normalizedId,
+                'Kind' => $kind,
+                'Subject' => $subject,
+                'Body' => $body,
+                'ContentType' => 'text/plain; charset=utf-8',
             ];
 
-            $response = $this->buildPendingRequest()->patch($this->apiUrl().'/Ticket/'.$normalizedId, $payload);
+            if ($kind === 'reply') {
+                $payload['SendToCustomer'] = $sendToCustomer ? 1 : 0;
+            }
+
+            $response = $this->buildPendingRequest()->post($this->apiUrl().'/TicketArticle', $payload);
 
             $data = $this->processResponse($response);
 
-            if (empty($data['ArticleID']) || empty($data['TicketID'])) {
+            $errors = $data['Errors'] ?? [];
+            if (! empty($errors) || empty($data['ArticleID']) || empty($data['TicketID'])) {
+                $errorList = $errors;
+                if (empty($data['ArticleID']) || empty($data['TicketID'])) {
+                    $errorList[] = 'Missing ArticleID or TicketID in response';
+                }
+
                 return [
                     'success' => false,
-                    'article_id' => null,
-                    'ticket_id' => null,
-                    'ticket_number' => null,
+                    'article_id' => $data['ArticleID'] ?? null,
+                    'ticket_id' => $data['TicketID'] ?? null,
+                    'ticket_number' => $data['TicketNumber'] ?? null,
                     'warnings' => $data['Warnings'] ?? [],
-                    'errors' => array_merge($data['Errors'] ?? [], ['Missing ArticleID or TicketID in response']),
+                    'errors' => $errorList,
                     'raw' => $data,
                 ];
             }
 
-            return [
+            $result = [
                 'success' => true,
                 'article_id' => $data['ArticleID'],
                 'ticket_id' => $data['TicketID'],
                 'ticket_number' => $data['TicketNumber'] ?? null,
                 'warnings' => $data['Warnings'] ?? [],
-                'errors' => $data['Errors'] ?? [],
+                'errors' => [],
                 'raw' => $data,
             ];
+
+            if (isset($data['SendRequested'])) {
+                $result['send_requested'] = (bool) $data['SendRequested'];
+            }
+            if (isset($data['QueueStatus'])) {
+                $result['queue_status'] = $data['QueueStatus'];
+            }
+
+            return $result;
         });
     }
 

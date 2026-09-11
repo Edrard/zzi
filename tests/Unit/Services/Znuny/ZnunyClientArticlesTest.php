@@ -215,7 +215,7 @@ class ZnunyClientArticlesTest extends TestCase
     {
         Http::fake([
             'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
-            'https://example.invalid/api/Ticket/123*' => Http::response([
+            'https://example.invalid/api/TicketArticle*' => Http::response([
                 'ArticleID' => 456,
                 'TicketID' => 123,
                 'TicketNumber' => '12345678',
@@ -231,48 +231,82 @@ class ZnunyClientArticlesTest extends TestCase
         $this->assertEquals('12345678', $response['ticket_number']);
 
         Http::assertSent(function (Request $request) {
-            if ($request->method() === 'PATCH' && str_contains($request->url(), 'api/Ticket/123')) {
-                return $request['Ticket']['TicketID'] == 123 &&
-                       $request['Article']['Subject'] === 'Test Subject' &&
-                       $request['Article']['Body'] === 'Test Body' &&
-                       $request['Article']['ContentType'] === 'text/plain; charset=utf-8' &&
-                       $request['Article']['MimeType'] === 'text/plain' &&
-                       $request['Article']['Charset'] === 'utf-8' &&
-                       $request['Article']['IsVisibleForCustomer'] === 0;
+            if ($request->method() === 'POST' && str_contains($request->url(), 'api/TicketArticle')) {
+                return $request['TicketID'] == 123 &&
+                       $request['Kind'] === 'internal_note' &&
+                       $request['Subject'] === 'Test Subject' &&
+                       $request['Body'] === 'Test Body' &&
+                       $request['ContentType'] === 'text/plain; charset=utf-8' &&
+                       ! isset($request['SendToCustomer']);
             }
 
             return true;
         });
     }
 
-    public function test_create_ticket_article_sends_correct_payload_for_article()
+    public function test_create_ticket_article_sends_correct_payload_for_reply_with_send_to_customer_enabled()
     {
         Http::fake([
             'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
-            'https://example.invalid/api/Ticket/123*' => Http::response([
+            'https://example.invalid/api/TicketArticle*' => Http::response([
                 'ArticleID' => 457,
+                'TicketID' => 123,
+                'TicketNumber' => '12345678',
+                'SendRequested' => 1,
+                'QueueStatus' => 'queued',
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $response = $client->createTicketArticle(123, 'Test Article Subject', 'Test Article Body', true, true);
+
+        $this->assertTrue($response['success']);
+        $this->assertEquals(457, $response['article_id']);
+        $this->assertEquals(123, $response['ticket_id']);
+        $this->assertEquals('12345678', $response['ticket_number']);
+        $this->assertTrue($response['send_requested']);
+        $this->assertEquals('queued', $response['queue_status']);
+
+        Http::assertSent(function (Request $request) {
+            if ($request->method() === 'POST' && str_contains($request->url(), 'api/TicketArticle')) {
+                return $request['TicketID'] == 123 &&
+                       $request['Kind'] === 'reply' &&
+                       $request['Subject'] === 'Test Article Subject' &&
+                       $request['Body'] === 'Test Article Body' &&
+                       $request['ContentType'] === 'text/plain; charset=utf-8' &&
+                       $request['SendToCustomer'] === 1;
+            }
+
+            return true;
+        });
+    }
+
+    public function test_create_ticket_article_sends_correct_payload_for_reply_with_send_to_customer_disabled()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/TicketArticle*' => Http::response([
+                'ArticleID' => 458,
                 'TicketID' => 123,
                 'TicketNumber' => '12345678',
             ], 200),
         ]);
 
         $client = new ZnunyClient;
-        $response = $client->createTicketArticle(123, 'Test Article Subject', 'Test Article Body', true);
+        $response = $client->createTicketArticle(123, 'Test Article Subject', 'Test Article Body', true, false);
 
         $this->assertTrue($response['success']);
-        $this->assertEquals(457, $response['article_id']);
+        $this->assertEquals(458, $response['article_id']);
         $this->assertEquals(123, $response['ticket_id']);
-        $this->assertEquals('12345678', $response['ticket_number']);
 
         Http::assertSent(function (Request $request) {
-            if ($request->method() === 'PATCH' && str_contains($request->url(), 'api/Ticket/123')) {
-                return $request['Ticket']['TicketID'] == 123 &&
-                       $request['Article']['Subject'] === 'Test Article Subject' &&
-                       $request['Article']['Body'] === 'Test Article Body' &&
-                       $request['Article']['ContentType'] === 'text/plain; charset=utf-8' &&
-                       $request['Article']['MimeType'] === 'text/plain' &&
-                       $request['Article']['Charset'] === 'utf-8' &&
-                       $request['Article']['IsVisibleForCustomer'] === 1;
+            if ($request->method() === 'POST' && str_contains($request->url(), 'api/TicketArticle')) {
+                return $request['TicketID'] == 123 &&
+                       $request['Kind'] === 'reply' &&
+                       $request['Subject'] === 'Test Article Subject' &&
+                       $request['Body'] === 'Test Article Body' &&
+                       $request['ContentType'] === 'text/plain; charset=utf-8' &&
+                       $request['SendToCustomer'] === 0;
             }
 
             return true;
@@ -283,7 +317,7 @@ class ZnunyClientArticlesTest extends TestCase
     {
         Http::fake([
             'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
-            'https://example.invalid/api/Ticket/123*' => Http::response([
+            'https://example.invalid/api/TicketArticle*' => Http::response([
                 'Errors' => ['Something went wrong'],
             ], 200),
         ]);
@@ -294,6 +328,40 @@ class ZnunyClientArticlesTest extends TestCase
         $this->assertFalse($response['success']);
         $this->assertContains('Something went wrong', $response['errors']);
         $this->assertContains('Missing ArticleID or TicketID in response', $response['errors']);
+    }
+
+    public function test_create_ticket_article_fails_when_ticket_id_is_missing_in_response()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/TicketArticle*' => Http::response([
+                'ArticleID' => 459,
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $response = $client->createTicketArticle(123, 'Subject', 'Body', true, true);
+
+        $this->assertFalse($response['success']);
+        $this->assertContains('Missing ArticleID or TicketID in response', $response['errors']);
+        $this->assertNull($response['ticket_id']);
+    }
+
+    public function test_create_ticket_article_fails_when_article_id_is_missing_in_response()
+    {
+        Http::fake([
+            'https://example.invalid/api/Session*' => Http::response(['SessionID' => 'fake_session'], 200),
+            'https://example.invalid/api/TicketArticle*' => Http::response([
+                'TicketID' => 123,
+            ], 200),
+        ]);
+
+        $client = new ZnunyClient;
+        $response = $client->createTicketArticle(123, 'Subject', 'Body', true, true);
+
+        $this->assertFalse($response['success']);
+        $this->assertContains('Missing ArticleID or TicketID in response', $response['errors']);
+        $this->assertNull($response['article_id']);
     }
 
     public function test_get_ticket_articles_invalid_html_alternative_falls_back_to_original_body(): void

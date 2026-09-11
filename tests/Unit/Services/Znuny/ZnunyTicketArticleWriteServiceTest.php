@@ -82,4 +82,54 @@ class ZnunyTicketArticleWriteServiceTest extends TestCase
         $this->assertFalse($result['success']);
         $this->assertContains('Network timeout', $result['errors']);
     }
+
+    public function test_create_ticket_article_forwards_send_to_customer_true()
+    {
+        $clientMock = $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldReceive('createTicketArticle')
+                ->once()
+                ->with(123, 'Subject', 'Body', true, true)
+                ->andReturn([
+                    'success' => true,
+                    'article_id' => 789,
+                    'ticket_id' => 123,
+                ]);
+        });
+
+        $cacheMock = $this->mock(ZnunyTicketArticleCacheService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('forget')->once()->with(123);
+        });
+
+        $service = new ZnunyTicketArticleWriteService($clientMock, $cacheMock);
+
+        $result = $service->createTicketArticle(123, 'Subject', 'Body', true, true);
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals(789, $result['article_id']);
+    }
+
+    public function test_create_ticket_article_forwards_send_to_customer_false()
+    {
+        $clientMock = $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldReceive('createTicketArticle')
+                ->once()
+                ->with(123, 'Subject', 'Body', true, false)
+                ->andReturn([
+                    'success' => true,
+                    'article_id' => 790,
+                    'ticket_id' => 123,
+                ]);
+        });
+
+        $cacheMock = $this->mock(ZnunyTicketArticleCacheService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('forget')->once()->with(123);
+        });
+
+        $service = new ZnunyTicketArticleWriteService($clientMock, $cacheMock);
+
+        $result = $service->createTicketArticle(123, 'Subject', 'Body', true, false);
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals(790, $result['article_id']);
+    }
 }

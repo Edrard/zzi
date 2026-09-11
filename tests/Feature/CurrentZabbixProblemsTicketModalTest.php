@@ -1113,7 +1113,7 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
         $serviceMock = $this->mock(ZnunyTicketArticleWriteService::class);
         $serviceMock->shouldReceive('createTicketArticle')
             ->once()
-            ->with('50001', 'Test Article Subject', 'Test Article Body', true)
+            ->with('50001', 'Test Article Subject', 'Test Article Body', true, true)
             ->andReturn([
                 'success' => true,
                 'article_id' => 124,

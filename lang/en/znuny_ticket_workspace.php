@@ -152,6 +152,7 @@ return [
         'add_note_article' => 'Reply',
         'add_note_heading' => 'Add Note / Article',
         'add_note_desc' => 'Write a message to append to this ticket.',
+        'send_to_customer' => 'Send to customer',
         'subject' => 'Subject',
         'body' => 'Body',
         'create_note' => 'Create Note',

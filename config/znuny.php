@@ -36,4 +36,5 @@ return [
         return $intVal >= 1 ? $intVal : 3;
     })(),
 
+    'article_send_to_customer_default' => filter_var(env('ZNUNY_ARTICLE_SEND_TO_CUSTOMER_DEFAULT', true), FILTER_VALIDATE_BOOLEAN),
 ];

@@ -14,6 +14,7 @@ use App\Services\Znuny\ZnunyLinkedTicketReopenService;
 use App\Services\Znuny\ZnunyTicketArticleWriteService;
 use App\Services\Znuny\ZnunyTicketWorkspaceTicketRefreshService;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -319,6 +320,9 @@ class ZnunyTicketManagementActions
                     ->required()
                     ->maxLength(65535)
                     ->rows(6),
+                Checkbox::make('send_to_customer')
+                    ->label(__('znuny_ticket_workspace.management_actions.send_to_customer'))
+                    ->default(fn () => (bool) config('znuny.article_send_to_customer_default', true)),
             ])
             ->visible(function (array $arguments, $record = null) {
                 if (auth()->user()?->canManageZnunyTickets() !== true) {
@@ -339,13 +343,24 @@ class ZnunyTicketManagementActions
             ->modalSubmitAction(false)
             ->action(function (array $arguments, array $data, Action $action, $record = null) {
                 abort_unless(auth()->user()?->canManageZnunyTickets(), 403);
-                $visibleForCustomer = $arguments['visible_for_customer'] ?? false;
-                static::executeCreateTicketArticle($arguments, $data, $action, $record, $visibleForCustomer);
+                $visibleForCustomer = (bool) ($arguments['visible_for_customer'] ?? false);
+
+                $sendToCustomer = $visibleForCustomer
+                    ? (bool) ($data['send_to_customer'] ?? config('znuny.article_send_to_customer_default', true))
+                    : null;
+
+                static::executeCreateTicketArticle($arguments, $data, $action, $record, $visibleForCustomer, $sendToCustomer);
             });
     }
 
-    protected static function executeCreateTicketArticle(array $arguments, array $data, Action $action, $record, bool $visibleForCustomer): void
-    {
+    protected static function executeCreateTicketArticle(
+        array $arguments,
+        array $data,
+        Action $action,
+        $record,
+        bool $visibleForCustomer,
+        ?bool $sendToCustomer = null
+    ): void {
         abort_unless(auth()->user()?->canManageZnunyTickets(), 403);
         $payload = TicketDetailsPayload::fromRecord($record, $arguments);
 
@@ -357,12 +372,20 @@ class ZnunyTicketManagementActions
         }
 
         $service = app(ZnunyTicketArticleWriteService::class);
-        $result = $service->createTicketArticle(
-            $payload->znuny_ticket_id,
-            $data['subject'],
-            $data['body'],
-            $visibleForCustomer
-        );
+        $result = ($visibleForCustomer && $sendToCustomer !== null)
+            ? $service->createTicketArticle(
+                $payload->znuny_ticket_id,
+                $data['subject'],
+                $data['body'],
+                true,
+                $sendToCustomer
+            )
+            : $service->createTicketArticle(
+                $payload->znuny_ticket_id,
+                $data['subject'],
+                $data['body'],
+                $visibleForCustomer
+            );
 
         if ($result['success']) {
             Notification::make()
