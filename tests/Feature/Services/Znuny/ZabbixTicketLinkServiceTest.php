@@ -133,6 +133,10 @@ class ZabbixTicketLinkServiceTest extends TestCase
             'manual_flap_count' => 3,
         ]);
 
+        $initial->created_at = now()->subWeeks(2);
+        $initial->save();
+        $oldCreatedAt = $initial->fresh()->created_at;
+
         $replacementData = [
             'zabbix_event_id' => 'evt_123',
             'znuny_ticket_id' => 222,
@@ -165,6 +169,8 @@ class ZabbixTicketLinkServiceTest extends TestCase
         $this->assertNull($updated->zabbix_problem_resolved_at);
         $this->assertNull($updated->znuny_ticket_snapshot_hash);
         $this->assertEquals(0, $updated->manual_flap_count);
+        $this->assertTrue($updated->created_at->greaterThan($oldCreatedAt));
+        $this->assertLessThan(5, abs(now()->diffInSeconds($updated->created_at)));
 
         $this->assertDatabaseHas('audit_logs', [
             'action' => 'zabbix_ticket.link_replaced',

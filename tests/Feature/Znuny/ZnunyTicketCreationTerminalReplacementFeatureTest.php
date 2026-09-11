@@ -54,6 +54,10 @@ class ZnunyTicketCreationTerminalReplacementFeatureTest extends TestCase
             'manual_flap_count' => 2,
         ]);
 
+        $initial->created_at = now()->subWeeks(2);
+        $initial->save();
+        $oldCreatedAt = $initial->fresh()->created_at;
+
         $mockClient = $this->createMock(ZnunyClient::class);
         $mockClient->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID_123']);
         $mockClient->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
@@ -62,6 +66,17 @@ class ZnunyTicketCreationTerminalReplacementFeatureTest extends TestCase
             'ticket_id' => 902,
             'ticket_number' => 'TN902',
             'warnings' => [],
+        ]);
+        $mockClient->expects($this->once())->method('getTicket')->with(902)->willReturn([
+            'TicketID' => 902,
+            'TicketNumber' => 'TN902',
+            'State' => 'new',
+            'StateType' => 'new',
+            'Queue' => 'NewQueue',
+            'QueueID' => 1,
+            'Owner' => 'agent1',
+            'OwnerID' => 15,
+            'Title' => 'Ticket Title',
         ]);
         $this->app->instance(ZnunyClient::class, $mockClient);
 
@@ -93,8 +108,15 @@ class ZnunyTicketCreationTerminalReplacementFeatureTest extends TestCase
         $this->assertEquals('NewQueue', $updated->znuny_queue_name);
         $this->assertEquals(15, $updated->znuny_owner_id);
 
+        // created_at must be updated to now
+        $this->assertTrue($updated->created_at->greaterThan($oldCreatedAt));
+        $this->assertLessThan(5, abs(now()->diffInSeconds($updated->created_at)));
+
+        // Immediate sync must have run and set last_synced_at and fresh state
+        $this->assertNotNull($updated->znuny_ticket_last_synced_at);
+        $this->assertEquals('new', $updated->znuny_ticket_state_type);
+
         // Stale fields must be reset
-        $this->assertNull($updated->znuny_ticket_state_type);
         $this->assertNull($updated->znuny_ticket_closed_at);
         $this->assertNull($updated->manual_lifecycle_status);
         $this->assertNull($updated->manual_lifecycle_closed_at);
@@ -102,7 +124,6 @@ class ZnunyTicketCreationTerminalReplacementFeatureTest extends TestCase
         $this->assertNull($updated->manual_reopened_at);
         $this->assertNull($updated->manual_lifecycle_last_checked_at);
         $this->assertNull($updated->zabbix_problem_resolved_at);
-        $this->assertNull($updated->znuny_ticket_snapshot_hash);
         $this->assertEquals(0, $updated->manual_flap_count);
 
         // Audit log must exist
@@ -143,6 +164,17 @@ class ZnunyTicketCreationTerminalReplacementFeatureTest extends TestCase
             'ticket_number' => 'TN903',
             'warnings' => [],
         ]);
+        $mockClient->expects($this->once())->method('getTicket')->with(903)->willReturn([
+            'TicketID' => 903,
+            'TicketNumber' => 'TN903',
+            'State' => 'new',
+            'StateType' => 'new',
+            'Queue' => 'Support',
+            'QueueID' => 2,
+            'Owner' => 'agent2',
+            'OwnerID' => 20,
+            'Title' => 'Title Beta',
+        ]);
         $this->app->instance(ZnunyClient::class, $mockClient);
 
         $service = app(ZnunyTicketCreationService::class);
@@ -166,6 +198,66 @@ class ZnunyTicketCreationTerminalReplacementFeatureTest extends TestCase
         $updated = ZabbixTicket::where('zabbix_event_id', '10098')->first();
         $this->assertEquals($initial->id, $updated->id);
         $this->assertEquals(903, $updated->znuny_ticket_id);
+        $this->assertNotNull($updated->znuny_ticket_last_synced_at);
+        $this->assertEquals('new', $updated->znuny_ticket_state_type);
+    }
+
+    public function test_manual_creation_for_closed_ticket_succeeds_even_if_immediate_sync_fails()
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $initial = ZabbixTicket::create([
+            'zabbix_event_id' => '10095',
+            'zabbix_host_name' => 'Host Epsilon',
+            'zabbix_problem_name' => 'CPU High',
+            'znuny_ticket_id' => 502,
+            'znuny_ticket_number' => 'TN502',
+            'znuny_queue_name' => 'OldQueue',
+            'znuny_owner_id' => 10,
+            'znuny_state_name' => 'closed successful',
+            'znuny_ticket_state_type' => 'closed',
+        ]);
+
+        $mockClient = $this->createMock(ZnunyClient::class);
+        $mockClient->expects($this->once())->method('getCustomerUser')->willReturn(['found' => true, 'customer_id' => 'CID_999']);
+        $mockClient->expects($this->once())->method('validateTicketCreate')->willReturn(['valid' => true]);
+        $mockClient->expects($this->once())->method('createTicket')->willReturn([
+            'success' => true,
+            'ticket_id' => 904,
+            'ticket_number' => 'TN904',
+            'warnings' => [],
+        ]);
+        // Simulate immediate sync failing with an exception
+        $mockClient->expects($this->once())->method('getTicket')->with(904)->willThrowException(new \RuntimeException('Connection timeout to Znuny'));
+        $this->app->instance(ZnunyClient::class, $mockClient);
+
+        $service = app(ZnunyTicketCreationService::class);
+        $result = $service->createTicketForProblem(
+            '10095',
+            'Host Epsilon',
+            'CPU High',
+            10,
+            'OldQueue',
+            'customer5',
+            'Title Epsilon',
+            'Subj Epsilon',
+            'Body Epsilon'
+        );
+
+        // Result MUST remain success and NOT orphaned
+        $this->assertTrue($result['success']);
+        $this->assertFalse($result['orphaned'] ?? false);
+        $this->assertEquals(904, $result['ticket_id']);
+        $this->assertEquals('TN904', $result['ticket_number']);
+
+        // Row was still replaced successfully with new ticket link and updated created_at
+        $this->assertEquals(1, ZabbixTicket::where('zabbix_event_id', '10095')->count());
+        $updated = ZabbixTicket::where('zabbix_event_id', '10095')->first();
+        $this->assertEquals($initial->id, $updated->id);
+        $this->assertEquals(904, $updated->znuny_ticket_id);
+        $this->assertEquals('TN904', $updated->znuny_ticket_number);
+        $this->assertNull($updated->znuny_ticket_last_synced_at);
     }
 
     public function test_manual_creation_for_open_ticket_blocks_as_duplicate_and_makes_no_znuny_create_call()

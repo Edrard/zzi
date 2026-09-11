@@ -3,6 +3,8 @@
 namespace Tests\Unit\Filament\Support;
 
 use App\Filament\Support\TicketDetailsPayload;
+use App\Models\ZabbixTicket;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class TicketDetailsPayloadTest extends TestCase
@@ -50,5 +52,17 @@ class TicketDetailsPayloadTest extends TestCase
         $payload = TicketDetailsPayload::fromRecord($arr);
 
         $this->assertNull($payload->customer_user_registered);
+    }
+
+    public function test_it_uses_record_created_at_for_zabbix_ticket_model()
+    {
+        $timestamp = Carbon::parse('2026-09-11 15:30:00');
+        $record = new ZabbixTicket;
+        $record->created_at = $timestamp;
+        $record->manual_flap_count = 0;
+
+        $payload = TicketDetailsPayload::fromRecord($record);
+
+        $this->assertEquals($timestamp, $payload->created_at);
     }
 }

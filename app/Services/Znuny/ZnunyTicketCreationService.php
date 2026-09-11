@@ -15,8 +15,11 @@ class ZnunyTicketCreationService
     public function __construct(
         protected ZnunyClient $client,
         protected ZabbixTicketLinkService $linkService,
-        protected OwnerSuggestionObservationRecorder $observationRecorder
-    ) {}
+        protected OwnerSuggestionObservationRecorder $observationRecorder,
+        protected ?ZnunyLinkedTicketSyncService $linkedTicketSyncService = null
+    ) {
+        $this->linkedTicketSyncService = $linkedTicketSyncService ?? app(ZnunyLinkedTicketSyncService::class);
+    }
 
     private function auditLog(
         string $action,
@@ -386,6 +389,27 @@ class ZnunyTicketCreationService
                 $this->auditLog('znuny.manual_ticket_create.orphaned', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, $ticketId, $ticketNumber, $result['errors'], [], false, false, true);
 
                 return $result;
+            }
+
+            if ($existingLink !== null) {
+                try {
+                    $syncStats = $this->linkedTicketSyncService->sync(ticketId: (int) $ticketId);
+                    if (! empty($syncStats['failed'])) {
+                        Log::warning('Immediate post-replacement linked ticket sync returned failed stats', [
+                            'zabbix_event_id' => $eventId,
+                            'ticket_id' => $ticketId,
+                            'ticket_number' => $ticketNumber,
+                            'stats' => $syncStats,
+                        ]);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('Immediate post-replacement linked ticket sync failed', [
+                        'zabbix_event_id' => $eventId,
+                        'ticket_id' => $ticketId,
+                        'ticket_number' => $ticketNumber,
+                        'exception' => $e->getMessage(),
+                    ]);
+                }
             }
 
             $result['success'] = true;

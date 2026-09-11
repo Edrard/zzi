@@ -6,6 +6,7 @@ use App\Exceptions\ZabbixTicketAlreadyLinkedException;
 use App\Models\ZabbixTicket;
 use App\Services\AuditLogger;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -203,6 +204,8 @@ class ZabbixTicketLinkService
             $ticket->zabbix_last_counted_flap_event_id = null;
             $ticket->zabbix_last_counted_flap_started_at = null;
             $ticket->manual_last_flap_counted_at = null;
+
+            $ticket->created_at = Carbon::now();
 
             $ticket->save();
 
