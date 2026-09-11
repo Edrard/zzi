@@ -177,7 +177,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
 
         $clientMock->shouldReceive('validateTicketCreate')
             ->once()
-            ->andThrow(new \Exception('Validation failed token=secret-value in ' . $appPath . '/file.php'));
+            ->andThrow(new \Exception('Validation failed token=secret-value in '.$appPath.'/file.php'));
 
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
         $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
@@ -245,7 +245,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
         $clientMock = $this->mock(ZnunyClient::class);
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
 
-        $linkServiceMock->shouldReceive('existsForEventId')->once()->with('123')->andReturn(false);
+        $linkServiceMock->shouldReceive('findByEventId')->once()->with('123')->andReturn(null);
         $clientMock->shouldReceive('getCustomerUser')->once()->with('CU')->andReturn(['found' => false]);
         $clientMock->shouldNotReceive('validateTicketCreate');
         $clientMock->shouldNotReceive('createTicket');
@@ -265,7 +265,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
         $clientMock = $this->mock(ZnunyClient::class);
         $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
 
-        $linkServiceMock->shouldReceive('existsForEventId')->once()->with('123')->andReturn(false);
+        $linkServiceMock->shouldReceive('findByEventId')->once()->with('123')->andReturn(null);
         $clientMock->shouldReceive('getCustomerUser')->once()->with('CU')->andReturn(['found' => true, 'customer_id' => '  ']);
         $clientMock->shouldNotReceive('validateTicketCreate');
         $clientMock->shouldNotReceive('createTicket');
@@ -303,10 +303,30 @@ class ZnunyTicketCreationServiceTest extends TestCase
 
         $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
 
-        $linkServiceMock->shouldReceive('existsForEventId')->once()->with('123')->andReturn(true);
         $linkServiceMock->shouldReceive('findByEventId')->once()->with('123')->andReturn(
-            new ZabbixTicket(['znuny_ticket_id' => 99, 'znuny_ticket_number' => 'TN99'])
+            new ZabbixTicket(['znuny_ticket_id' => 99, 'znuny_ticket_number' => 'TN99', 'znuny_ticket_state_type' => 'open'])
         );
+        $clientMock->shouldNotReceive('createTicket');
+
+        $result = $service->createTicketForProblem('123', 'Host', 'Prob', 10, 'Q', 'CU', 'T', 'S', 'B');
+
+        $this->assertFalse($result['success']);
+        $this->assertTrue($result['duplicate']);
+        $this->assertEquals(99, $result['ticket_id']);
+        $this->assertEquals('TN99', $result['ticket_number']);
+    }
+
+    public function test_create_ticket_duplicate_link_when_unknown_or_blank_state()
+    {
+        $clientMock = $this->mock(ZnunyClient::class);
+        $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
+
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
+
+        $linkServiceMock->shouldReceive('findByEventId')->once()->with('123')->andReturn(
+            new ZabbixTicket(['znuny_ticket_id' => 99, 'znuny_ticket_number' => 'TN99', 'znuny_ticket_state_type' => ''])
+        );
+        $clientMock->shouldNotReceive('createTicket');
 
         $result = $service->createTicketForProblem('123', 'Host', 'Prob', 10, 'Q', 'CU', 'T', 'S', 'B');
 
@@ -330,7 +350,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
         });
 
         $clientMock->shouldReceive('getCustomerUser')->once()->with('CU')->andReturn(['found' => true, 'customer_id' => 'CUST_123']);
-        $linkServiceMock->shouldReceive('existsForEventId')->once()->with('123')->andReturn(false);
+        $linkServiceMock->shouldReceive('findByEventId')->once()->with('123')->andReturn(null);
         $clientMock->shouldReceive('validateTicketCreate')->once()->andReturn([
             'valid' => 0, 'errors' => ['ValErr'],
         ]);
@@ -357,7 +377,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
         });
 
         $clientMock->shouldReceive('getCustomerUser')->once()->with('CU')->andReturn(['found' => true, 'customer_id' => 'CUST_123']);
-        $linkServiceMock->shouldReceive('existsForEventId')->once()->with('123')->andReturn(false);
+        $linkServiceMock->shouldReceive('findByEventId')->once()->with('123')->andReturn(null);
         $clientMock->shouldReceive('validateTicketCreate')->once()->andReturn(['valid' => 1]);
         $clientMock->shouldReceive('createTicket')->once()->andReturn([
             'success' => false, 'errors' => ['ApiErr'],
@@ -385,7 +405,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
         });
 
         $clientMock->shouldReceive('getCustomerUser')->once()->with('CU')->andReturn(['found' => true, 'customer_id' => 'CUST_123']);
-        $linkServiceMock->shouldReceive('existsForEventId')->once()->with('123')->andReturn(false);
+        $linkServiceMock->shouldReceive('findByEventId')->once()->with('123')->andReturn(null);
         $clientMock->shouldReceive('validateTicketCreate')->once()->andReturn(['valid' => 1]);
 
         $clientMock->shouldReceive('createTicket')->once()->with(\Mockery::on(function ($payload) {
@@ -440,7 +460,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
         });
 
         $clientMock->shouldReceive('getCustomerUser')->once()->with('CU')->andReturn(['found' => true, 'customer_id' => 'CUST_123']);
-        $linkServiceMock->shouldReceive('existsForEventId')->once()->with('123')->andReturn(false);
+        $linkServiceMock->shouldReceive('findByEventId')->once()->with('123')->andReturn(null);
         $clientMock->shouldReceive('validateTicketCreate')->once()->andReturn(['valid' => 1]);
 
         $clientMock->shouldReceive('createTicket')->once()->andReturn([
@@ -491,7 +511,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
         });
 
         $clientMock->shouldReceive('getCustomerUser')->once()->with('CU')->andReturn(['found' => true, 'customer_id' => 'CUST_123']);
-        $linkServiceMock->shouldReceive('existsForEventId')->once()->with('123')->andReturn(false);
+        $linkServiceMock->shouldReceive('findByEventId')->once()->with('123')->andReturn(null);
         $clientMock->shouldReceive('validateTicketCreate')->once()->andReturn(['valid' => 1]);
         $clientMock->shouldReceive('createTicket')->once()->andReturn([
             'success' => true, 'ticket_id' => 55, 'ticket_number' => null,
@@ -520,7 +540,7 @@ class ZnunyTicketCreationServiceTest extends TestCase
         });
 
         $clientMock->shouldReceive('getCustomerUser')->once()->with('CU')->andReturn(['found' => true, 'customer_id' => 'CUST_123']);
-        $linkServiceMock->shouldReceive('existsForEventId')->once()->with('123')->andReturn(false);
+        $linkServiceMock->shouldReceive('findByEventId')->once()->with('123')->andReturn(null);
         $clientMock->shouldReceive('validateTicketCreate')->once()->andReturn(['valid' => 1]);
         $clientMock->shouldReceive('createTicket')->once()->andReturn([
             'success' => true, 'ticket_id' => 55, 'ticket_number' => 'TN55',
@@ -538,6 +558,153 @@ class ZnunyTicketCreationServiceTest extends TestCase
         $this->assertTrue($result['orphaned']);
         $this->assertEquals(55, $result['ticket_id']);
         $this->assertEquals('TN55', $result['ticket_number']);
+        $this->assertContains('Znuny ticket was created but linking to Zabbix problem failed locally.', $result['errors']);
+    }
+
+    public function test_create_ticket_allowed_when_existing_ticket_is_closed()
+    {
+        $clientMock = $this->mock(ZnunyClient::class);
+        $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
+
+        $this->mock(ZnunyTicketAdvancedDefaultsService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getDefaults')->andReturn([
+                'priority' => '3 normal',
+                'state' => 'new',
+                'lock' => 'lock',
+            ]);
+        });
+
+        $existing = new ZabbixTicket([
+            'zabbix_event_id' => '123',
+            'znuny_ticket_id' => 99,
+            'znuny_ticket_number' => 'TN99',
+            'znuny_ticket_state_type' => 'closed',
+        ]);
+
+        $linkServiceMock->shouldReceive('findByEventId')->once()->with('123')->andReturn($existing);
+        $clientMock->shouldReceive('getCustomerUser')->once()->with('CU')->andReturn(['found' => true, 'customer_id' => 'CUST_123']);
+        $clientMock->shouldReceive('validateTicketCreate')->once()->andReturn(['valid' => 1]);
+        $clientMock->shouldReceive('createTicket')->once()->andReturn([
+            'success' => true,
+            'ticket_id' => 101,
+            'ticket_number' => 'TN101',
+        ]);
+
+        $linkServiceMock->shouldReceive('replaceTerminalTicketLink')
+            ->once()
+            ->with($existing, \Mockery::on(function ($payload) {
+                return $payload['zabbix_event_id'] === '123'
+                    && $payload['znuny_ticket_id'] === 101
+                    && $payload['znuny_ticket_number'] === 'TN101';
+            }))
+            ->andReturn($existing);
+
+        $observationRecorderMock = $this->mock(OwnerSuggestionObservationRecorder::class);
+        $observationRecorderMock->shouldReceive('recordManualTicketCreated')->once();
+
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $observationRecorderMock);
+
+        $result = $service->createTicketForProblem('123', 'Host', 'Prob', 10, 'Q', 'CU', 'T', 'S', 'B');
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals(101, $result['ticket_id']);
+        $this->assertEquals('TN101', $result['ticket_number']);
+    }
+
+    public function test_create_ticket_allowed_when_existing_ticket_is_merged()
+    {
+        $clientMock = $this->mock(ZnunyClient::class);
+        $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
+
+        $this->mock(ZnunyTicketAdvancedDefaultsService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getDefaults')->andReturn([
+                'priority' => '3 normal',
+                'state' => 'new',
+                'lock' => 'lock',
+            ]);
+        });
+
+        $existing = new ZabbixTicket([
+            'zabbix_event_id' => '123',
+            'znuny_ticket_id' => 88,
+            'znuny_ticket_number' => 'TN88',
+            'znuny_ticket_state_type' => 'merged',
+        ]);
+
+        $linkServiceMock->shouldReceive('findByEventId')->once()->with('123')->andReturn($existing);
+        $clientMock->shouldReceive('getCustomerUser')->once()->with('CU')->andReturn(['found' => true, 'customer_id' => 'CUST_123']);
+        $clientMock->shouldReceive('validateTicketCreate')->once()->andReturn(['valid' => 1]);
+        $clientMock->shouldReceive('createTicket')->once()->andReturn([
+            'success' => true,
+            'ticket_id' => 202,
+            'ticket_number' => 'TN202',
+        ]);
+
+        $linkServiceMock->shouldReceive('replaceTerminalTicketLink')
+            ->once()
+            ->with($existing, \Mockery::on(function ($payload) {
+                return $payload['zabbix_event_id'] === '123'
+                    && $payload['znuny_ticket_id'] === 202
+                    && $payload['znuny_ticket_number'] === 'TN202';
+            }))
+            ->andReturn($existing);
+
+        $observationRecorderMock = $this->mock(OwnerSuggestionObservationRecorder::class);
+        $observationRecorderMock->shouldReceive('recordManualTicketCreated')->once();
+
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $observationRecorderMock);
+
+        $result = $service->createTicketForProblem('123', 'Host', 'Prob', 10, 'Q', 'CU', 'T', 'S', 'B');
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals(202, $result['ticket_id']);
+        $this->assertEquals('TN202', $result['ticket_number']);
+    }
+
+    public function test_create_ticket_orphaned_when_terminal_replacement_fails()
+    {
+        $clientMock = $this->mock(ZnunyClient::class);
+        $linkServiceMock = $this->mock(ZabbixTicketLinkService::class);
+
+        $this->mock(ZnunyTicketAdvancedDefaultsService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getDefaults')->andReturn([
+                'priority' => '3 normal',
+                'state' => 'new',
+                'lock' => 'lock',
+            ]);
+        });
+
+        $existing = new ZabbixTicket([
+            'zabbix_event_id' => '123',
+            'znuny_ticket_id' => 99,
+            'znuny_ticket_number' => 'TN99',
+            'znuny_ticket_state_type' => 'closed',
+        ]);
+
+        $linkServiceMock->shouldReceive('findByEventId')->once()->with('123')->andReturn($existing);
+        $clientMock->shouldReceive('getCustomerUser')->once()->with('CU')->andReturn(['found' => true, 'customer_id' => 'CUST_123']);
+        $clientMock->shouldReceive('validateTicketCreate')->once()->andReturn(['valid' => 1]);
+        $clientMock->shouldReceive('createTicket')->once()->andReturn([
+            'success' => true,
+            'ticket_id' => 303,
+            'ticket_number' => 'TN303',
+        ]);
+
+        $linkServiceMock->shouldReceive('replaceTerminalTicketLink')
+            ->once()
+            ->andThrow(new \Exception('DB failure during replacement'));
+
+        Log::shouldReceive('critical')->once();
+        Log::shouldReceive('error')->zeroOrMoreTimes();
+
+        $service = new ZnunyTicketCreationService($clientMock, $linkServiceMock, $this->mock(OwnerSuggestionObservationRecorder::class));
+
+        $result = $service->createTicketForProblem('123', 'Host', 'Prob', 10, 'Q', 'CU', 'T', 'S', 'B');
+
+        $this->assertFalse($result['success']);
+        $this->assertTrue($result['orphaned']);
+        $this->assertEquals(303, $result['ticket_id']);
+        $this->assertEquals('TN303', $result['ticket_number']);
         $this->assertContains('Znuny ticket was created but linking to Zabbix problem failed locally.', $result['errors']);
     }
 }

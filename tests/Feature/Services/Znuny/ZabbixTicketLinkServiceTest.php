@@ -4,6 +4,7 @@ namespace Tests\Feature\Services\Znuny;
 
 use App\Exceptions\ZabbixTicketAlreadyLinkedException;
 use App\Models\AuditLog;
+use App\Models\User;
 use App\Models\ZabbixTicket;
 use App\Services\Znuny\ZabbixTicketLinkService;
 use Exception;
@@ -105,5 +106,165 @@ class ZabbixTicketLinkServiceTest extends TestCase
             $this->assertDatabaseEmpty('zabbix_tickets');
             throw $e;
         }
+    }
+
+    public function test_replace_terminal_ticket_link_updates_same_row_and_creates_audit_log()
+    {
+        $user = User::factory()->create();
+
+        $initial = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt_123',
+            'zabbix_host_name' => 'Host 1',
+            'zabbix_problem_name' => 'CPU high',
+            'znuny_ticket_id' => 111,
+            'znuny_ticket_number' => 'TN111111',
+            'znuny_queue_name' => 'OldQueue',
+            'znuny_owner_id' => 5,
+            'znuny_state_name' => 'closed successful',
+            'znuny_ticket_state_type' => 'closed',
+            'znuny_ticket_closed_at' => now()->subDay(),
+            'manual_lifecycle_status' => 'closed',
+            'manual_lifecycle_closed_at' => now()->subDay(),
+            'manual_close_eligible_at' => now()->subDay(),
+            'manual_reopened_at' => now()->subDays(2),
+            'manual_lifecycle_last_checked_at' => now()->subHours(5),
+            'zabbix_problem_resolved_at' => now()->subDay(),
+            'znuny_ticket_snapshot_hash' => 'old_hash',
+            'manual_flap_count' => 3,
+        ]);
+
+        $replacementData = [
+            'zabbix_event_id' => 'evt_123',
+            'znuny_ticket_id' => 222,
+            'znuny_ticket_number' => 'TN222222',
+            'znuny_queue_name' => 'NewQueue',
+            'znuny_owner_id' => 10,
+            'creation_source' => 'manual',
+            'created_by' => $user->id,
+        ];
+
+        $updated = $this->service->replaceTerminalTicketLink($initial, $replacementData);
+
+        $this->assertEquals($initial->id, $updated->id);
+        $this->assertEquals(1, ZabbixTicket::where('zabbix_event_id', 'evt_123')->count());
+        $this->assertEquals(1, ZabbixTicket::count());
+
+        $updated->refresh();
+        $this->assertEquals(222, $updated->znuny_ticket_id);
+        $this->assertEquals('TN222222', $updated->znuny_ticket_number);
+        $this->assertEquals('NewQueue', $updated->znuny_queue_name);
+        $this->assertEquals(10, $updated->znuny_owner_id);
+        $this->assertNull($updated->znuny_ticket_state_type);
+        $this->assertNull($updated->znuny_state_name);
+        $this->assertNull($updated->znuny_ticket_closed_at);
+        $this->assertNull($updated->manual_lifecycle_status);
+        $this->assertNull($updated->manual_lifecycle_closed_at);
+        $this->assertNull($updated->manual_close_eligible_at);
+        $this->assertNull($updated->manual_reopened_at);
+        $this->assertNull($updated->manual_lifecycle_last_checked_at);
+        $this->assertNull($updated->zabbix_problem_resolved_at);
+        $this->assertNull($updated->znuny_ticket_snapshot_hash);
+        $this->assertEquals(0, $updated->manual_flap_count);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'zabbix_ticket.link_replaced',
+            'entity_type' => 'zabbix_ticket',
+            'entity_id' => $initial->id,
+        ]);
+
+        $auditLog = AuditLog::where('action', 'zabbix_ticket.link_replaced')->first();
+        $this->assertNotNull($auditLog);
+        $this->assertEquals('evt_123', $auditLog->context['zabbix_event_id']);
+        $this->assertEquals(111, $auditLog->context['old_ticket_id']);
+        $this->assertEquals('TN111111', $auditLog->context['old_ticket_number']);
+        $this->assertEquals('closed', $auditLog->context['old_state_type']);
+        $this->assertEquals('closed successful', $auditLog->context['old_state_name']);
+        $this->assertEquals(222, $auditLog->context['new_ticket_id']);
+        $this->assertEquals('TN222222', $auditLog->context['new_ticket_number']);
+    }
+
+    public function test_replace_terminal_ticket_link_works_for_merged_state()
+    {
+        $initial = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt_456',
+            'zabbix_host_name' => 'Host 2',
+            'zabbix_problem_name' => 'Disk full',
+            'znuny_ticket_id' => 333,
+            'znuny_ticket_number' => 'TN333333',
+            'znuny_ticket_state_type' => 'merged',
+        ]);
+
+        $updated = $this->service->replaceTerminalTicketLink($initial, [
+            'zabbix_event_id' => 'evt_456',
+            'znuny_ticket_id' => 444,
+            'znuny_ticket_number' => 'TN444444',
+        ]);
+
+        $this->assertEquals($initial->id, $updated->id);
+        $this->assertEquals(1, ZabbixTicket::where('zabbix_event_id', 'evt_456')->count());
+        $this->assertEquals(444, $updated->znuny_ticket_id);
+    }
+
+    public function test_replace_terminal_ticket_link_throws_when_not_terminal()
+    {
+        $initial = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt_789',
+            'zabbix_host_name' => 'Host 3',
+            'zabbix_problem_name' => 'Network down',
+            'znuny_ticket_id' => 555,
+            'znuny_ticket_number' => 'TN555555',
+            'znuny_ticket_state_type' => 'open',
+        ]);
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('is not in a terminal state');
+
+        $this->service->replaceTerminalTicketLink($initial, [
+            'zabbix_event_id' => 'evt_789',
+            'znuny_ticket_id' => 666,
+            'znuny_ticket_number' => 'TN666666',
+        ]);
+    }
+
+    public function test_replace_terminal_ticket_link_throws_when_event_id_mismatched()
+    {
+        $initial = ZabbixTicket::create([
+            'zabbix_event_id' => 'evt_abc',
+            'zabbix_host_name' => 'Host 4',
+            'zabbix_problem_name' => 'Mem leak',
+            'znuny_ticket_id' => 777,
+            'znuny_ticket_number' => 'TN777777',
+            'znuny_ticket_state_type' => 'closed',
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Cannot replace link for mismatched Zabbix Event ID.');
+
+        $this->service->replaceTerminalTicketLink($initial, [
+            'zabbix_event_id' => 'evt_different',
+            'znuny_ticket_id' => 888,
+            'znuny_ticket_number' => 'TN888888',
+        ]);
+    }
+
+    public function test_ordinary_create_still_rejects_duplicate_even_if_terminal()
+    {
+        ZabbixTicket::create([
+            'zabbix_event_id' => 'evt_term',
+            'zabbix_host_name' => 'Host Term',
+            'zabbix_problem_name' => 'Problem Term',
+            'znuny_ticket_id' => 123,
+            'znuny_ticket_number' => 'TN123',
+            'znuny_ticket_state_type' => 'closed',
+        ]);
+
+        $this->expectException(ZabbixTicketAlreadyLinkedException::class);
+        $this->service->create([
+            'zabbix_event_id' => 'evt_term',
+            'zabbix_host_name' => 'Host Term',
+            'zabbix_problem_name' => 'Problem Term',
+            'znuny_ticket_id' => 456,
+            'znuny_ticket_number' => 'TN456',
+        ]);
     }
 }

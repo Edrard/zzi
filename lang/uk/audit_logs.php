@@ -127,6 +127,7 @@ return [
         'znuny_ticket_sync_failed' => 'Помилка синхронізації заявок Znuny',
         'zabbix_ticket' => [
             'link_created' => 'Створено посилання на заявку Zabbix',
+            'link_replaced' => 'Замінено посилання на заявку Zabbix',
         ],
         'scheduled_znuny_attempt_manual_retry_created' => 'Створено повторну спробу вручну',
         'scheduled_znuny_attempt_manually_linked' => 'Спробу створення вручну пов’язано зі зверненням',

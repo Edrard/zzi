@@ -166,6 +166,45 @@ class CurrentZabbixProblemsTicketModalTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_admin_cannot_open_modal_when_active_ticket_linked()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        ZabbixTicket::create([
+            'zabbix_event_id' => '1001',
+            'zabbix_host_name' => 'TestCompany swiss test01',
+            'zabbix_problem_name' => 'TestCompany CPU Load',
+            'znuny_ticket_id' => 999,
+            'znuny_ticket_number' => 'TN999',
+            'znuny_ticket_state_type' => 'open',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001')
+            ->assertSet('ticketModalEventId', null)
+            ->assertNotified(__('current_zabbix_problems.tooltips.ticket_already_linked', ['ticket' => 'TN999']));
+    }
+
+    public function test_admin_can_open_modal_when_terminal_ticket_linked()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        ZabbixTicket::create([
+            'zabbix_event_id' => '1001',
+            'zabbix_host_name' => 'TestCompany swiss test01',
+            'zabbix_problem_name' => 'TestCompany CPU Load',
+            'znuny_ticket_id' => 999,
+            'znuny_ticket_number' => 'TN999',
+            'znuny_ticket_state_type' => 'closed',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CurrentZabbixProblems::class)
+            ->call('openCreateTicketModal', '1001')
+            ->assertSet('ticketModalEventId', '1001');
+    }
+
     public function test_admin_can_open_modal_and_see_defaults()
     {
         $admin = User::factory()->create(['role' => 'admin']);

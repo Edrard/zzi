@@ -127,6 +127,7 @@ return [
         'znuny_ticket_sync_failed' => 'Znuny Ticket Sync Failed',
         'zabbix_ticket' => [
             'link_created' => 'Zabbix Ticket Link Created',
+            'link_replaced' => 'Zabbix Ticket Link Replaced',
         ],
         'scheduled_znuny_attempt_manual_retry_created' => 'Manual retry created',
         'scheduled_znuny_attempt_manually_linked' => 'Creation attempt manually linked',

@@ -88,6 +88,13 @@ class ZabbixTicket extends Model
         return strtolower($this->znuny_ticket_state_type ?? '') === 'closed' || str_contains(strtolower((string) $this->znuny_state_name), 'closed');
     }
 
+    public function isTerminalInZnuny(): bool
+    {
+        $stateType = strtolower(trim((string) $this->znuny_ticket_state_type));
+
+        return in_array($stateType, ['closed', 'merged'], true);
+    }
+
     public function isReopenCandidate(): bool
     {
         return $this->manual_lifecycle_status === 'reopen_candidate';

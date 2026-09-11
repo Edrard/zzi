@@ -261,13 +261,11 @@ class ZnunyTicketCreationService
         }
 
         try {
-            if ($this->linkService->existsForEventId($eventId)) {
+            $existingLink = $this->linkService->findByEventId($eventId);
+            if ($existingLink !== null && ! $existingLink->isTerminalInZnuny()) {
                 $result['duplicate'] = true;
-                $existing = $this->linkService->findByEventId($eventId);
-                if ($existing) {
-                    $result['ticket_id'] = $existing->znuny_ticket_id;
-                    $result['ticket_number'] = $existing->znuny_ticket_number;
-                }
+                $result['ticket_id'] = $existingLink->znuny_ticket_id;
+                $result['ticket_number'] = $existingLink->znuny_ticket_number;
                 $result['errors'][] = 'A ticket is already linked to this Zabbix event.';
 
                 $this->auditLog('znuny.manual_ticket_create.duplicate', $eventId, $hostName, $problemName, $queue, $ownerId, $customerUser, $result['ticket_id'] ?? null, $result['ticket_number'] ?? null, $result['errors'], [], true, false, false);
@@ -352,7 +350,7 @@ class ZnunyTicketCreationService
             }
 
             try {
-                $this->linkService->create([
+                $linkPayload = [
                     'zabbix_event_id' => $eventId,
                     'zabbix_host_id' => $hostId,
                     'zabbix_trigger_id' => $triggerId,
@@ -365,7 +363,13 @@ class ZnunyTicketCreationService
                     'znuny_queue_name' => $queue,
                     'znuny_owner_id' => $ownerId,
                     'created_by' => auth()->id() ?? null,
-                ]);
+                ];
+
+                if ($existingLink !== null) {
+                    $this->linkService->replaceTerminalTicketLink($existingLink, $linkPayload);
+                } else {
+                    $this->linkService->create($linkPayload);
+                }
             } catch (\Throwable $e) {
                 Log::critical('Ticket created in Znuny but local DB write failed', [
                     'zabbix_event_id' => $eventId,

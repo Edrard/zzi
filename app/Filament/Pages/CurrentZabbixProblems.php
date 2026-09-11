@@ -454,7 +454,7 @@ class CurrentZabbixProblems extends Page
 
         $linkService = app(ZabbixTicketLinkService::class);
         $existing = $linkService->findByEventId($eventId);
-        if ($existing && $existing->manual_lifecycle_status !== ZnunyManualTicketLifecycleService::STATUS_REOPEN_CANDIDATE && $existing->manual_lifecycle_status !== ZnunyManualTicketLifecycleService::STATUS_CLOSED) {
+        if ($existing && ! $existing->isTerminalInZnuny() && $existing->manual_lifecycle_status !== ZnunyManualTicketLifecycleService::STATUS_REOPEN_CANDIDATE && $existing->manual_lifecycle_status !== ZnunyManualTicketLifecycleService::STATUS_CLOSED) {
             Notification::make()
                 ->title(__('current_zabbix_problems.tooltips.ticket_already_linked', ['ticket' => $existing->znuny_ticket_number]))
                 ->info()
