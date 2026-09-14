@@ -9,6 +9,15 @@
 
         <x-filament::actions alignment="end" class="mt-4">
             <x-filament::button
+                type="submit"
+                color="primary"
+                wire:loading.attr="disabled"
+                wire:target="createAndStay, createAndRedirect, create"
+            >
+                {{ __('create_ticket.actions.create') }}
+            </x-filament::button>
+
+            <x-filament::button
                 type="button"
                 color="gray"
                 outlined
@@ -17,15 +26,6 @@
                 wire:target="createAndStay, createAndRedirect, create"
             >
                 {{ __('create_ticket.actions.create_and_stay') }}
-            </x-filament::button>
-
-            <x-filament::button
-                type="submit"
-                color="primary"
-                wire:loading.attr="disabled"
-                wire:target="createAndStay, createAndRedirect, create"
-            >
-                {{ __('create_ticket.actions.create') }}
             </x-filament::button>
         </x-filament::actions>
     </form>

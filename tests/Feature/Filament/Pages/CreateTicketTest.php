@@ -568,21 +568,25 @@ class CreateTicketTest extends TestCase
         $this->assertStringContainsString('Створити', $ukFormMatches[1]);
         $this->assertStringNotContainsString('Створити звернення', $ukFormMatches[1]);
 
-        // Right-alignment of actions container
+        // Right-alignment of actions container (applies flex-row-reverse in Filament)
         $this->assertStringContainsString('fi-align-end', $ukFormMatches[1]);
 
-        // Secondary button has native outlined/transparent style and appears before primary button
+        // Secondary button has native outlined/transparent style
         preg_match('/<button\b[^>]*wire:click="createAndStay"[^>]*>/s', $ukFormMatches[1], $stayButtonMatch);
         $this->assertNotEmpty($stayButtonMatch);
         $this->assertStringContainsString('fi-outlined', $stayButtonMatch[0]);
 
+        // Primary button does not have outlined style
         preg_match('/<button\b[^>]*type="submit"[^>]*>/s', $ukFormMatches[1], $submitButtonMatch);
         $this->assertNotEmpty($submitButtonMatch);
         $this->assertStringNotContainsString('fi-outlined', $submitButtonMatch[0]);
 
-        $stayPos = strpos($ukFormMatches[1], 'wire:click="createAndStay"');
+        // In the DOM, primary submit button precedes secondary button so that under
+        // Filament's fi-align-end (flex-row-reverse), the primary button renders as the RIGHTMOST button
+        // and the secondary button renders immediately to its left.
         $submitPos = strpos($ukFormMatches[1], 'type="submit"');
-        $this->assertTrue($stayPos !== false && $submitPos !== false && $stayPos < $submitPos);
+        $stayPos = strpos($ukFormMatches[1], 'wire:click="createAndStay"');
+        $this->assertTrue($submitPos !== false && $stayPos !== false && $submitPos < $stayPos);
 
         // Test in EN locale
         app()->setLocale('en');
@@ -599,6 +603,11 @@ class CreateTicketTest extends TestCase
         $this->assertStringContainsString('Create and stay', $enFormMatches[1]);
         $this->assertStringContainsString('Create', $enFormMatches[1]);
         $this->assertStringNotContainsString('Create ticket', $enFormMatches[1]);
+
+        $this->assertStringContainsString('fi-align-end', $enFormMatches[1]);
+        $submitPosEn = strpos($enFormMatches[1], 'type="submit"');
+        $stayPosEn = strpos($enFormMatches[1], 'wire:click="createAndStay"');
+        $this->assertTrue($submitPosEn !== false && $stayPosEn !== false && $submitPosEn < $stayPosEn);
     }
 
     public function test_create_and_stay_creates_ticket_and_does_not_redirect()
