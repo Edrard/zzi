@@ -140,62 +140,102 @@ class CreateTicket extends Page implements HasForms
         return auth()->user()?->canManageZnunyTickets() ?? false;
     }
 
-    public function create(ZnunyStandaloneTicketCreationService $creationService, ZnunyInlineImagePayloadService $imageService): void
-    {
+    public bool $isCreating = false;
+
+    public function create(
+        ZnunyStandaloneTicketCreationService $creationService,
+        ZnunyInlineImagePayloadService $imageService
+    ): void {
+        $this->performCreate($creationService, $imageService, false);
+    }
+
+    public function createAndStay(
+        ZnunyStandaloneTicketCreationService $creationService,
+        ZnunyInlineImagePayloadService $imageService
+    ): void {
+        $this->performCreate($creationService, $imageService, false);
+    }
+
+    public function createAndRedirect(
+        ZnunyStandaloneTicketCreationService $creationService,
+        ZnunyInlineImagePayloadService $imageService
+    ): void {
+        $this->performCreate($creationService, $imageService, true);
+    }
+
+    protected function performCreate(
+        ZnunyStandaloneTicketCreationService $creationService,
+        ZnunyInlineImagePayloadService $imageService,
+        bool $redirectAfterSuccess
+    ): void {
         abort_unless(auth()->user()?->canManageZnunyTickets(), 403);
 
-        $data = $this->form->getState();
-        $userId = auth()->id() ?? 'guest';
-        $draftDirectory = "znuny-ticket-inline/{$userId}/{$this->draftToken}";
+        if ($this->isCreating) {
+            return;
+        }
+
+        $this->isCreating = true;
 
         try {
-            $processed = $imageService->processHtml($data['body'] ?? '', $draftDirectory);
-        } catch (\InvalidArgumentException $e) {
+            $data = $this->form->getState();
+            $userId = auth()->id() ?? 'guest';
+            $draftDirectory = "znuny-ticket-inline/{$userId}/{$this->draftToken}";
+
+            try {
+                $processed = $imageService->processHtml($data['body'] ?? '', $draftDirectory);
+            } catch (\InvalidArgumentException $e) {
+                Notification::make()
+                    ->title(__('create_ticket.notifications.creation_failed.title'))
+                    ->body($e->getMessage())
+                    ->danger()
+                    ->send();
+
+                return;
+            }
+
+            $result = $creationService->createTicket(
+                ownerId: $data['owner'] ?? '',
+                queue: $data['queue'] ?? '',
+                customerUser: $data['customer_user'] ?? '',
+                title: $data['title'] ?? '',
+                articleBody: $processed['html'],
+                state: $data['state'] ?? null,
+                priority: $data['priority'] ?? null,
+                lock: $data['lock'] ?? null,
+                attachments: $processed['attachments'],
+                articleContentType: 'text/html; charset=utf-8'
+            );
+
+            if (! $result['success']) {
+                $localizedErrors = array_map(fn ($error) => self::errorMessage($error), $result['errors']);
+
+                Notification::make()
+                    ->title(__('create_ticket.notifications.creation_failed.title'))
+                    ->body(implode('<br>', $localizedErrors))
+                    ->danger()
+                    ->persistent()
+                    ->send();
+
+                return;
+            }
+
             Notification::make()
-                ->title(__('create_ticket.notifications.creation_failed.title'))
-                ->body($e->getMessage())
-                ->danger()
+                ->title(__('create_ticket.notifications.created.title'))
+                ->body(__('create_ticket.notifications.created.body', ['ticket_number' => $result['ticket_number']]))
+                ->success()
                 ->send();
 
-            return;
+            // Cleanup temporary files on success
+            Storage::disk('local')->deleteDirectory($draftDirectory);
+
+            $this->form->fill();
+            $this->draftToken = Str::uuid()->toString();
+
+            if ($redirectAfterSuccess) {
+                $this->redirect(ZnunyTicketWorkspace::getUrl());
+            }
+        } finally {
+            $this->isCreating = false;
         }
-
-        $result = $creationService->createTicket(
-            ownerId: $data['owner'] ?? '',
-            queue: $data['queue'] ?? '',
-            customerUser: $data['customer_user'] ?? '',
-            title: $data['title'] ?? '',
-            articleBody: $processed['html'],
-            state: $data['state'] ?? null,
-            priority: $data['priority'] ?? null,
-            lock: $data['lock'] ?? null,
-            attachments: $processed['attachments'],
-            articleContentType: 'text/html; charset=utf-8'
-        );
-
-        if (! $result['success']) {
-            $localizedErrors = array_map(fn ($error) => self::errorMessage($error), $result['errors']);
-
-            Notification::make()
-                ->title(__('create_ticket.notifications.creation_failed.title'))
-                ->body(implode('<br>', $localizedErrors))
-                ->danger()
-                ->persistent()
-                ->send();
-
-            return;
-        }
-
-        Notification::make()
-            ->title(__('create_ticket.notifications.created.title'))
-            ->body(__('create_ticket.notifications.created.body', ['ticket_number' => $result['ticket_number']]))
-            ->success()
-            ->send();
-
-        // Cleanup temporary files on success
-        Storage::disk('local')->deleteDirectory($draftDirectory);
-
-        $this->form->fill();
-        $this->draftToken = Str::uuid()->toString();
     }
 }

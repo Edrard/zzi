@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament\Pages;
 
 use App\Filament\Pages\CreateTicket;
+use App\Filament\Pages\ZnunyTicketWorkspace;
 use App\Models\User;
 use App\Services\Znuny\ZnunyCachedLookupService;
 use App\Services\Znuny\ZnunyClient;
@@ -110,6 +111,7 @@ class CreateTicketTest extends TestCase
             ])
             ->call('create')
             ->assertHasNoFormErrors()
+            ->assertNoRedirect()
             ->assertNotified('Ticket Created');
     }
 
@@ -537,5 +539,306 @@ class CreateTicketTest extends TestCase
     {
         $operator = User::factory()->create(['role' => 'operator', 'is_active' => false]);
         $this->assertFalse($operator->canManageZnunyTickets());
+    }
+
+    public function test_both_actions_are_rendered_and_old_submit_label_is_not_used()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
+            $mock->shouldReceive('getTicketStates')->andReturn(['new' => 'new'])->byDefault();
+            $mock->shouldReceive('getTicketPriorities')->andReturn(['3 normal' => '3 normal'])->byDefault();
+        });
+
+        // Test in UK locale
+        app()->setLocale('uk');
+
+        $ukComponent = Livewire::actingAs($admin)->test(CreateTicket::class);
+        $ukComponent->assertSuccessful();
+
+        $ukHtml = $ukComponent->html();
+        $this->assertStringContainsString('Створити і залишитися', $ukHtml);
+        $this->assertStringContainsString('Створити', $ukHtml);
+
+        // Form submit action area must contain new labels and not the old submit label
+        preg_match('/<form[^>]*>(.*?)<\/form>/s', $ukHtml, $ukFormMatches);
+        $this->assertNotEmpty($ukFormMatches);
+        $this->assertStringContainsString('Створити і залишитися', $ukFormMatches[1]);
+        $this->assertStringContainsString('Створити', $ukFormMatches[1]);
+        $this->assertStringNotContainsString('Створити звернення', $ukFormMatches[1]);
+
+        // Right-alignment of actions container
+        $this->assertStringContainsString('fi-align-end', $ukFormMatches[1]);
+
+        // Secondary button has native outlined/transparent style and appears before primary button
+        preg_match('/<button\b[^>]*wire:click="createAndStay"[^>]*>/s', $ukFormMatches[1], $stayButtonMatch);
+        $this->assertNotEmpty($stayButtonMatch);
+        $this->assertStringContainsString('fi-outlined', $stayButtonMatch[0]);
+
+        preg_match('/<button\b[^>]*type="submit"[^>]*>/s', $ukFormMatches[1], $submitButtonMatch);
+        $this->assertNotEmpty($submitButtonMatch);
+        $this->assertStringNotContainsString('fi-outlined', $submitButtonMatch[0]);
+
+        $stayPos = strpos($ukFormMatches[1], 'wire:click="createAndStay"');
+        $submitPos = strpos($ukFormMatches[1], 'type="submit"');
+        $this->assertTrue($stayPos !== false && $submitPos !== false && $stayPos < $submitPos);
+
+        // Test in EN locale
+        app()->setLocale('en');
+
+        $enComponent = Livewire::actingAs($admin)->test(CreateTicket::class);
+        $enComponent->assertSuccessful();
+
+        $enHtml = $enComponent->html();
+        $this->assertStringContainsString('Create and stay', $enHtml);
+        $this->assertStringContainsString('Create', $enHtml);
+
+        preg_match('/<form[^>]*>(.*?)<\/form>/s', $enHtml, $enFormMatches);
+        $this->assertNotEmpty($enFormMatches);
+        $this->assertStringContainsString('Create and stay', $enFormMatches[1]);
+        $this->assertStringContainsString('Create', $enFormMatches[1]);
+        $this->assertStringNotContainsString('Create ticket', $enFormMatches[1]);
+    }
+
+    public function test_create_and_stay_creates_ticket_and_does_not_redirect()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
+            $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['Raw' => 'Raw']);
+            $mock->shouldReceive('getAssignableHumanOwnerOptionsForQueue')->andReturn([1 => 'John Doe <johndoe>']);
+            $mock->shouldReceive('getCustomerUserPrimaryOptionsForQueue')->andReturn(['johndoe' => 'John Doe <johndoe>']);
+            $mock->shouldReceive('resolveTemplateCandidate')->andReturn('johndoe');
+            $mock->shouldReceive('getTicketStates')->andReturn(['open' => 'open']);
+            $mock->shouldReceive('getTicketPriorities')->andReturn(['3 normal' => '3 normal']);
+        });
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldReceive('searchCustomerUsers')->andReturn([['login' => 'johndoe', 'label' => 'John Doe <johndoe>']]);
+            $mock->shouldReceive('getCustomerUser')->andReturn(['found' => true, 'login' => 'johndoe', 'label' => 'John Doe <johndoe>']);
+        });
+
+        $this->mock(ZnunyStandaloneTicketCreationService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('createTicket')
+                ->once()
+                ->with(
+                    1,
+                    'Raw',
+                    'johndoe',
+                    'Test Subject',
+                    '<p>Test Body</p>',
+                    'open',
+                    '3 normal',
+                    'unlock',
+                    [],
+                    'text/html; charset=utf-8'
+                )
+                ->andReturn([
+                    'success' => true,
+                    'ticket_id' => 12345,
+                    'ticket_number' => '2023010112345',
+                    'errors' => [],
+                    'warnings' => [],
+                ]);
+        });
+
+        Livewire::actingAs($admin)
+            ->test(CreateTicket::class)
+            ->fillForm([
+                'queue' => 'Raw',
+                'owner' => 1,
+                'customer_user' => 'johndoe',
+                'title' => 'Test Subject',
+                'body' => 'Test Body',
+                'state' => 'open',
+                'priority' => '3 normal',
+                'lock' => 'unlock',
+            ])
+            ->call('createAndStay')
+            ->assertHasNoFormErrors()
+            ->assertNoRedirect()
+            ->assertNotified('Ticket Created');
+    }
+
+    public function test_create_and_redirect_creates_ticket_and_redirects_to_workspace()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
+            $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['Raw' => 'Raw']);
+            $mock->shouldReceive('getAssignableHumanOwnerOptionsForQueue')->andReturn([1 => 'John Doe <johndoe>']);
+            $mock->shouldReceive('getCustomerUserPrimaryOptionsForQueue')->andReturn(['johndoe' => 'John Doe <johndoe>']);
+            $mock->shouldReceive('resolveTemplateCandidate')->andReturn('johndoe');
+            $mock->shouldReceive('getTicketStates')->andReturn(['open' => 'open']);
+            $mock->shouldReceive('getTicketPriorities')->andReturn(['3 normal' => '3 normal']);
+        });
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldReceive('searchCustomerUsers')->andReturn([['login' => 'johndoe', 'label' => 'John Doe <johndoe>']]);
+            $mock->shouldReceive('getCustomerUser')->andReturn(['found' => true, 'login' => 'johndoe', 'label' => 'John Doe <johndoe>']);
+        });
+
+        $this->mock(ZnunyStandaloneTicketCreationService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('createTicket')
+                ->once()
+                ->with(
+                    1,
+                    'Raw',
+                    'johndoe',
+                    'Test Subject',
+                    '<p>Test Body</p>',
+                    'open',
+                    '3 normal',
+                    'unlock',
+                    [],
+                    'text/html; charset=utf-8'
+                )
+                ->andReturn([
+                    'success' => true,
+                    'ticket_id' => 12345,
+                    'ticket_number' => '2023010112345',
+                    'errors' => [],
+                    'warnings' => [],
+                ]);
+        });
+
+        Livewire::actingAs($admin)
+            ->test(CreateTicket::class)
+            ->fillForm([
+                'queue' => 'Raw',
+                'owner' => 1,
+                'customer_user' => 'johndoe',
+                'title' => 'Test Subject',
+                'body' => 'Test Body',
+                'state' => 'open',
+                'priority' => '3 normal',
+                'lock' => 'unlock',
+            ])
+            ->call('createAndRedirect')
+            ->assertHasNoFormErrors()
+            ->assertRedirect(ZnunyTicketWorkspace::getUrl())
+            ->assertNotified('Ticket Created');
+    }
+
+    public function test_failed_creation_or_validation_does_not_redirect_to_workspace()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->mock(ZnunyCachedLookupService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getPrewarmDatasetState')->andReturn(['available' => true, 'status' => 'ready'])->byDefault();
+            $mock->shouldReceive('getFilteredQueueOptions')->andReturn(['Raw' => 'Raw']);
+            $mock->shouldReceive('getAssignableHumanOwnerOptionsForQueue')->andReturn([1 => 'John Doe <johndoe>']);
+            $mock->shouldReceive('getCustomerUserPrimaryOptionsForQueue')->andReturn(['johndoe' => 'John Doe <johndoe>']);
+            $mock->shouldReceive('resolveTemplateCandidate')->andReturn('johndoe');
+            $mock->shouldReceive('getTicketStates')->andReturn(['open' => 'open']);
+            $mock->shouldReceive('getTicketPriorities')->andReturn(['3 normal' => '3 normal']);
+        });
+
+        $this->mock(ZnunyClient::class, function (MockInterface $mock) {
+            $mock->shouldReceive('searchCustomerUsers')->andReturn([['login' => 'johndoe', 'label' => 'John Doe <johndoe>']]);
+            $mock->shouldReceive('getCustomerUser')->andReturn(['found' => true, 'login' => 'johndoe', 'label' => 'John Doe <johndoe>']);
+        });
+
+        // Validation failure case
+        $this->mock(ZnunyStandaloneTicketCreationService::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('createTicket');
+        });
+
+        Livewire::actingAs($admin)
+            ->test(CreateTicket::class)
+            ->fillForm([
+                'queue' => null,
+            ])
+            ->call('createAndRedirect')
+            ->assertHasFormErrors(['queue'])
+            ->assertNoRedirect();
+
+        // API failure case
+        $this->mock(ZnunyStandaloneTicketCreationService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('createTicket')
+                ->once()
+                ->andReturn([
+                    'success' => false,
+                    'ticket_id' => null,
+                    'ticket_number' => null,
+                    'errors' => ['Znuny creation failed'],
+                    'warnings' => [],
+                ]);
+        });
+
+        Livewire::actingAs($admin)
+            ->test(CreateTicket::class)
+            ->fillForm([
+                'queue' => 'Raw',
+                'owner' => 1,
+                'customer_user' => 'johndoe',
+                'title' => 'Test Subject',
+                'body' => 'Test Body',
+                'state' => 'open',
+                'priority' => '3 normal',
+                'lock' => 'unlock',
+            ])
+            ->call('createAndRedirect')
+            ->assertHasNoFormErrors()
+            ->assertNoRedirect()
+            ->assertNotified('Ticket Creation Failed');
+    }
+
+    public function test_no_duplicate_ticket_creation_with_is_creating_guard()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->mock(ZnunyStandaloneTicketCreationService::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('createTicket');
+        });
+
+        $component = Livewire::actingAs($admin)->test(CreateTicket::class);
+        $component->instance()->isCreating = true;
+        $component->call('create');
+    }
+
+    public function test_action_method_signatures_do_not_contain_union_types_or_string_redirect_parsers()
+    {
+        $reflection = new \ReflectionClass(CreateTicket::class);
+
+        // create()
+        $create = $reflection->getMethod('create');
+        $this->assertTrue($create->isPublic());
+        $this->assertSame('void', (string) $create->getReturnType());
+        $createParams = $create->getParameters();
+        $this->assertCount(2, $createParams);
+        $this->assertSame(ZnunyStandaloneTicketCreationService::class, $createParams[0]->getType()?->getName());
+        $this->assertSame(ZnunyInlineImagePayloadService::class, $createParams[1]->getType()?->getName());
+
+        // createAndStay()
+        $createAndStay = $reflection->getMethod('createAndStay');
+        $this->assertTrue($createAndStay->isPublic());
+        $this->assertSame('void', (string) $createAndStay->getReturnType());
+        $stayParams = $createAndStay->getParameters();
+        $this->assertCount(2, $stayParams);
+        $this->assertSame(ZnunyStandaloneTicketCreationService::class, $stayParams[0]->getType()?->getName());
+        $this->assertSame(ZnunyInlineImagePayloadService::class, $stayParams[1]->getType()?->getName());
+
+        // createAndRedirect()
+        $createAndRedirect = $reflection->getMethod('createAndRedirect');
+        $this->assertTrue($createAndRedirect->isPublic());
+        $this->assertSame('void', (string) $createAndRedirect->getReturnType());
+        $redirectParams = $createAndRedirect->getParameters();
+        $this->assertCount(2, $redirectParams);
+        $this->assertSame(ZnunyStandaloneTicketCreationService::class, $redirectParams[0]->getType()?->getName());
+        $this->assertSame(ZnunyInlineImagePayloadService::class, $redirectParams[1]->getType()?->getName());
+
+        // performCreate()
+        $performCreate = $reflection->getMethod('performCreate');
+        $this->assertTrue($performCreate->isProtected());
+        $this->assertSame('void', (string) $performCreate->getReturnType());
+        $performParams = $performCreate->getParameters();
+        $this->assertCount(3, $performParams);
+        $this->assertSame(ZnunyStandaloneTicketCreationService::class, $performParams[0]->getType()?->getName());
+        $this->assertSame(ZnunyInlineImagePayloadService::class, $performParams[1]->getType()?->getName());
+        $this->assertSame('bool', (string) $performParams[2]->getType()?->getName());
     }
 }

@@ -22,6 +22,8 @@ return [
 
     'actions' => [
         'submit' => 'Створити звернення',
+        'create_and_stay' => 'Створити і залишитися',
+        'create' => 'Створити',
     ],
 
     'messages' => [

@@ -22,6 +22,8 @@ return [
 
     'actions' => [
         'submit' => 'Create ticket',
+        'create_and_stay' => 'Create and stay',
+        'create' => 'Create',
     ],
 
     'messages' => [
